@@ -166,7 +166,27 @@ export const PayslipViewer: React.FC<PayslipViewerProps> = ({
       {showActions && (
         <div className="flex gap-3 mb-6 print:hidden">
           <Button
-            onClick={onDownloadPDF}
+            onClick={async () => {
+              if (onDownloadPDF) {
+                onDownloadPDF();
+                return;
+              }
+              // Fallback internal generation using @react-pdf/renderer
+              try {
+                const { pdf } = await import('@react-pdf/renderer');
+                const { PayslipPDF } = await import('./PayslipPDF');
+                const blob = await pdf(<PayslipPDF data={data} />).toBlob();
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = `Payslip_${data.payslip_id}.pdf`;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+              } catch (err) {
+                console.error('Failed to generate PDF', err);
+              }
+            }}
             className="flex-1 h-14 text-lg font-semibold rounded-xl"
             size="lg"
           >

@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
-import { format, startOfMonth, endOfMonth, subMonths, addMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths, addMonths, parseISO } from "date-fns";
+import { useRealtime } from "@/hooks/use-realtime";
 import { apiRequest } from "@/lib/queryClient";
 import { isManager } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
@@ -12,8 +13,6 @@ import {
   Box,
   Typography,
   Button,
-  Card,
-  CardContent,
   Avatar,
   Chip,
   IconButton,
@@ -30,10 +29,9 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogActions,
   DialogContentText,
+  DialogActions,
   Divider,
-  Skeleton,
   Tabs,
   Tab,
   Table,
@@ -50,8 +48,6 @@ import {
   Snackbar,
   Fab,
   Zoom,
-  ToggleButton,
-  ToggleButtonGroup,
   Collapse,
   CircularProgress,
   Badge,
@@ -75,8 +71,6 @@ import {
   AttachMoney as DollarIcon,
   TrendingUp as TrendingUpIcon,
   VerifiedUser as VerifiedIcon,
-  GridView as GridViewIcon,
-  TableRows as TableRowsIcon,
   FilterList as FilterIcon,
   MoreVert as MoreVertIcon,
   CheckCircle as CheckCircleIcon,
@@ -113,6 +107,8 @@ import {
 
 // Custom Components
 import { EmployeeShiftModal } from "@/components/employees/employee-shift-modal";
+import { DeletionOptionsModal } from "@/components/employees/deletion-options-modal";
+import { isAdmin, getCurrentUser } from "@/lib/auth";
 
 // Types
 interface Employee {
@@ -177,7 +173,7 @@ export default function MuiEmployees() {
   const managerRole = isManager();
 
   // State
-  const [viewMode, setViewMode] = useState<"grid" | "table">("table");
+
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [roleFilter, setRoleFilter] = useState<string>("all");
@@ -208,6 +204,11 @@ export default function MuiEmployees() {
   // Context menu
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; employee: Employee } | null>(null);
 
+  // Deletion modal state
+  const [deletionModalOpen, setDeletionModalOpen] = useState(false);
+  const [employeeRelatedData, setEmployeeRelatedData] = useState<{ hasShifts: boolean; hasPayroll: boolean; totalRecords: number } | null>(null);
+  const userIsAdmin = isAdmin();
+
   // Redirect non-managers
   useEffect(() => {
     if (!managerRole) {
@@ -236,6 +237,19 @@ export default function MuiEmployees() {
     enabled: managerRole,
     refetchInterval: 30000, // Branches don't change often
     refetchOnWindowFocus: true,
+  });
+
+  // Enable real-time updates
+  useRealtime({
+    queryKeys: ["/api/hours/all-employees", "/api/employees"],
+    onEvent: (event, data) => {
+      // Directly refetch employees when any employee event occurs
+      if (event.startsWith('employee:')) {
+        console.log('🔄 Refetching employees due to event:', event);
+        refetchEmployees();
+        refetchStats();
+      }
+    }
   });
 
   const { data: employeeStats, refetch: refetchStats } = useQuery({
@@ -327,27 +341,95 @@ export default function MuiEmployees() {
   });
 
   const deleteEmployee = useMutation({
-    mutationFn: async (id: string) => {
-      const response = await apiRequest("DELETE", `/api/employees/${id}`);
+    mutationFn: async ({ id, force }: { id: string; force?: boolean }) => {
+      const url = force ? `/api/employees/${id}?force=true` : `/api/employees/${id}`;
+      const response = await apiRequest("DELETE", url);
       if (!response.ok) {
         const error = await response.json();
+        // Check if it's a "has related data" response
+        if (error.hasRelatedData) {
+          return { hasRelatedData: true, relatedData: error.relatedData };
+        }
         throw new Error(error.message || "Failed to delete employee");
       }
       return response.json();
     },
-    onSuccess: () => {
-      // Invalidate all employee-related queries for real-time sync
-      queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
-      queryClient.invalidateQueries({ queryKey: ["employees"] }); // Schedule page roster
-      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
-      toast({ title: "Success", description: "Employee deleted successfully" });
+    onSuccess: (data) => {
+      if (data?.hasRelatedData) {
+        // Show deletion options modal instead
+        setEmployeeRelatedData({
+          hasShifts: data.relatedData.hasShifts,
+          hasPayroll: data.relatedData.hasPayroll,
+          totalRecords: data.relatedData.totalRecords,
+        });
+        setDeleteDialogOpen(false);
+        setDeletionModalOpen(true);
+        return;
+      }
+      // Force immediate refetch of all employee-related queries
+      queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
+      queryClient.refetchQueries({ queryKey: ["employees"] }); // Schedule page roster
+      queryClient.refetchQueries({ queryKey: ["/api/employees"] });
+      queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+      toast({ title: "Success", description: data?.forceDeleted ? "Employee and all data permanently deleted" : "Employee deleted successfully" });
       setDeleteDialogOpen(false);
+      setDeletionModalOpen(false);
       setCurrentEmployee(null);
+      setEmployeeRelatedData(null);
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
+
+  // Check for related data before deletion
+  const checkRelatedData = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("GET", `/api/employees/${id}/related-data`);
+      if (!response.ok) throw new Error("Failed to check related data");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.hasShifts || data.hasPayroll) {
+        setEmployeeRelatedData({
+          hasShifts: data.hasShifts,
+          hasPayroll: data.hasPayroll,
+          totalRecords: data.hasTotal,
+        });
+        setDeletionModalOpen(true);
+      } else {
+        // No related data, show simple delete confirmation
+        setDeleteDialogOpen(true);
+      }
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Export employee data
+  const exportEmployeeData = async (id: string) => {
+    try {
+      const response = await apiRequest("GET", `/api/employees/${id}/export`);
+      if (!response.ok) throw new Error("Failed to export data");
+      const data = await response.json();
+      
+      // Create and download JSON file
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `employee_${data.employee.firstName}_${data.employee.lastName}_${new Date().toISOString().split('T')[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      
+      toast({ title: "Success", description: "Employee data exported successfully" });
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
 
   const updateDeductions = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: typeof deductionsFormData }) => {
@@ -383,6 +465,9 @@ export default function MuiEmployees() {
       queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
       const action = isActive ? "activated" : "deactivated";
       toast({ title: "Success", description: `Employee ${action} successfully` });
+      // Close the deletion modal if open
+      setDeletionModalOpen(false);
+      setEmployeeRelatedData(null);
       // Update current employee if viewing
       if (currentEmployee) {
         setCurrentEmployee({ ...currentEmployee, isActive });
@@ -461,7 +546,8 @@ export default function MuiEmployees() {
 
   const handleOpenDeleteDialog = (employee: Employee) => {
     setCurrentEmployee(employee);
-    setDeleteDialogOpen(true);
+    // Check for related data first
+    checkRelatedData.mutate(employee.id);
   };
 
   const handleOpenDeductionsDialog = (employee: Employee) => {
@@ -648,7 +734,7 @@ export default function MuiEmployees() {
     {
       field: "actions",
       headerName: "Actions",
-      width: 160,
+      width: 200,
       sortable: false,
       filterable: false,
       renderCell: (params: GridRenderCellParams<Employee>) => (
@@ -857,22 +943,7 @@ export default function MuiEmployees() {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid size={{ xs: 6, md: 2 }}>
-                <ToggleButtonGroup
-                  value={viewMode}
-                  exclusive
-                  onChange={(e, newMode) => newMode && setViewMode(newMode)}
-                  size="small"
-                  fullWidth
-                >
-                  <ToggleButton value="table">
-                    <TableRowsIcon fontSize="small" />
-                  </ToggleButton>
-                  <ToggleButton value="grid">
-                    <GridViewIcon fontSize="small" />
-                  </ToggleButton>
-                </ToggleButtonGroup>
-              </Grid>
+
             </Grid>
 
             {/* Bulk Actions */}
@@ -904,171 +975,50 @@ export default function MuiEmployees() {
           </Paper>
 
           {/* Employee List */}
-          {viewMode === "table" ? (
-            <Paper elevation={0} sx={{ borderRadius: 3, overflow: "hidden" }}>
-              <DataGrid
-                rows={filteredEmployees}
-                columns={columns}
-                loading={employeesLoading}
-                checkboxSelection
-                disableRowSelectionOnClick
-                rowHeight={65}
-                getRowHeight={() => 65}
-                onRowSelectionModelChange={(newSelection) => {
-                  setSelectedEmployees(Array.from(newSelection.ids || []).map(String));
-                }}
-                slots={{ toolbar: GridToolbar }}
-                slotProps={{
-                  toolbar: {
-                    showQuickFilter: true,
-                    quickFilterProps: { debounceMs: 300 },
-                  },
-                }}
-                initialState={{
-                  pagination: { paginationModel: { pageSize: 10 } },
-                  sorting: { sortModel: [{ field: "employee", sort: "asc" }] },
-                }}
-                pageSizeOptions={[5, 10, 25, 50]}
-                sx={{
-                  border: "none",
-                  minHeight: 500,
-                  "& .MuiDataGrid-cell": { 
-                    py: 1,
-                    display: "flex",
-                    alignItems: "center",
-                  },
-                  "& .MuiDataGrid-cell:focus": { outline: "none" },
-                  "& .MuiDataGrid-columnHeader:focus": { outline: "none" },
-                  "& .MuiDataGrid-columnHeaders": {
-                    bgcolor: "action.hover",
-                    borderRadius: 0,
-                  },
-                  "& .MuiDataGrid-columnHeaderTitle": {
-                    fontWeight: 600,
-                  },
-                }}
-              />
-            </Paper>
-          ) : (
-            // Grid View
-            <Grid container spacing={3}>
-              {employeesLoading
-                ? Array(8)
-                    .fill(0)
-                    .map((_, i) => (
-                      <Grid size={{ xs: 12, sm: 6, lg: 4, xl: 3 }} key={i}>
-                        <Skeleton variant="rounded" height={200} />
-                      </Grid>
-                    ))
-                : filteredEmployees.map((employee) => (
-                    <Grid size={{ xs: 12, sm: 6, lg: 4, xl: 3 }} key={employee.id}>
-                      <Card
-                        sx={{
-                          cursor: "pointer",
-                          transition: "all 0.2s",
-                          "&:hover": { transform: "translateY(-4px)", boxShadow: 4 },
-                        }}
-                        onContextMenu={(e) => handleContextMenu(e, employee)}
-                      >
-                        <CardContent sx={{ p: 3 }}>
-                          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 2 }}>
-                            <Avatar
-                              sx={{
-                                width: 56,
-                                height: 56,
-                                bgcolor: employee.role === "manager" ? "primary.main" : "success.main",
-                                fontSize: "1.2rem",
-                                fontWeight: 600,
-                              }}
-                            >
-                              {employee.firstName?.charAt(0)}
-                              {employee.lastName?.charAt(0)}
-                            </Avatar>
-                            <IconButton size="small" onClick={(e) => handleContextMenu(e, employee)}>
-                              <MoreVertIcon />
-                            </IconButton>
-                          </Box>
-
-                          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
-                            <Typography variant="h6" sx={{ fontWeight: 600 }}>
-                              {employee.firstName} {employee.lastName}
-                            </Typography>
-                            {employee.blockchainVerified && (
-                              <VerifiedIcon sx={{ fontSize: 16, color: "success.main" }} />
-                            )}
-                          </Box>
-
-                          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                            {employee.position}
-                          </Typography>
-
-                          <Stack direction="row" spacing={1} sx={{ mb: 2 }}>
-                            <Chip size="small" label={employee.role} color={getRoleColor(employee.role)} />
-                            <Chip
-                              size="small"
-                              label={employee.isActive ? "Active" : "Inactive"}
-                              color={employee.isActive ? "success" : "error"}
-                              variant="outlined"
-                            />
-                          </Stack>
-
-                          <Divider sx={{ my: 2 }} />
-
-                          <Grid container spacing={1}>
-                            <Grid size={{ xs: 6 }}>
-                              <Typography variant="caption" color="text.secondary">
-                                Rate
-                              </Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                ₱{parseFloat(employee.hourlyRate).toFixed(0)}/hr
-                              </Typography>
-                            </Grid>
-                            <Grid size={{ xs: 6 }}>
-                              <Typography variant="caption" color="text.secondary">
-                                Hours
-                              </Typography>
-                              <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                                {employee.hoursThisMonth?.toFixed(1) || "0.0"}h
-                              </Typography>
-                            </Grid>
-                          </Grid>
-
-                          <Divider sx={{ my: 2 }} />
-
-                          {/* Activate/Deactivate Buttons */}
-                          <Stack direction="row" spacing={1}>
-                            {employee.isActive ? (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                color="error"
-                                fullWidth
-                                startIcon={<CancelIcon />}
-                                onClick={() => toggleEmployeeStatus.mutate({ id: employee.id, isActive: false })}
-                                disabled={toggleEmployeeStatus.isPending}
-                              >
-                                {toggleEmployeeStatus.isPending ? "..." : "Deactivate"}
-                              </Button>
-                            ) : (
-                              <Button
-                                size="small"
-                                variant="outlined"
-                                color="success"
-                                fullWidth
-                                startIcon={<CheckCircleIcon />}
-                                onClick={() => toggleEmployeeStatus.mutate({ id: employee.id, isActive: true })}
-                                disabled={toggleEmployeeStatus.isPending}
-                              >
-                                {toggleEmployeeStatus.isPending ? "..." : "Activate"}
-                              </Button>
-                            )}
-                          </Stack>
-                        </CardContent>
-                      </Card>
-                    </Grid>
-                  ))}
-            </Grid>
-          )}
+          <Paper elevation={0} sx={{ borderRadius: 3, overflow: "hidden" }}>
+            <DataGrid
+              rows={filteredEmployees}
+              columns={columns}
+              loading={employeesLoading}
+              checkboxSelection
+              disableRowSelectionOnClick
+              rowHeight={65}
+              getRowHeight={() => 65}
+              onRowSelectionModelChange={(newSelection) => {
+                setSelectedEmployees(Array.from(newSelection.ids || []).map(String));
+              }}
+              slots={{ toolbar: GridToolbar }}
+              slotProps={{
+                toolbar: {
+                  showQuickFilter: true,
+                  quickFilterProps: { debounceMs: 300 },
+                },
+              }}
+              initialState={{
+                pagination: { paginationModel: { pageSize: 10 } },
+                sorting: { sortModel: [{ field: "employee", sort: "asc" }] },
+              }}
+              pageSizeOptions={[5, 10, 25, 50]}
+              autoHeight
+              sx={{
+                border: "none",
+                "& .MuiDataGrid-cell": { 
+                  py: 1,
+                  display: "flex",
+                  alignItems: "center",
+                },
+                "& .MuiDataGrid-cell:focus": { outline: "none" },
+                "& .MuiDataGrid-columnHeader:focus": { outline: "none" },
+                "& .MuiDataGrid-columnHeaders": {
+                  bgcolor: "action.hover",
+                  borderRadius: 0,
+                },
+                "& .MuiDataGrid-columnHeaderTitle": {
+                  fontWeight: 600,
+                },
+              }}
+            />
+          </Paper>
 
           {filteredEmployees.length === 0 && !employeesLoading && (
             <EmptyState
@@ -1380,7 +1330,7 @@ export default function MuiEmployees() {
           </DialogActions>
         </Dialog>
 
-        {/* Delete Confirmation Dialog */}
+        {/* Delete Confirmation Dialog (for employees without data) */}
         <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="xs" fullWidth>
           <DialogTitle>Delete Employee</DialogTitle>
           <DialogContent>
@@ -1397,7 +1347,7 @@ export default function MuiEmployees() {
             <Button
               variant="contained"
               color="error"
-              onClick={() => currentEmployee && deleteEmployee.mutate(currentEmployee.id)}
+              onClick={() => currentEmployee && deleteEmployee.mutate({ id: currentEmployee.id })}
               disabled={deleteEmployee.isPending}
               startIcon={deleteEmployee.isPending ? <CircularProgress size={16} /> : <DeleteIcon />}
             >
@@ -1405,6 +1355,35 @@ export default function MuiEmployees() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Deletion Options Modal (for employees with data) */}
+        <DeletionOptionsModal
+          open={deletionModalOpen}
+          employee={currentEmployee}
+          relatedData={employeeRelatedData}
+          isAdmin={userIsAdmin}
+          onClose={() => {
+            setDeletionModalOpen(false);
+            setCurrentEmployee(null);
+            setEmployeeRelatedData(null);
+          }}
+          onDeactivate={() => {
+            if (currentEmployee) {
+              toggleEmployeeStatus.mutate({ id: currentEmployee.id, isActive: false });
+            }
+          }}
+          onForceDelete={(reason) => {
+            if (currentEmployee) {
+              deleteEmployee.mutate({ id: currentEmployee.id, force: true });
+            }
+          }}
+          onExportData={() => {
+            if (currentEmployee) {
+              exportEmployeeData(currentEmployee.id);
+            }
+          }}
+          isLoading={deleteEmployee.isPending || toggleEmployeeStatus.isPending}
+        />
 
         {/* Deductions Dialog - Redesigned with Mandatories Preview + Extras */}
         <Dialog open={deductionsDialogOpen} onClose={() => setDeductionsDialogOpen(false)} maxWidth="sm" fullWidth>

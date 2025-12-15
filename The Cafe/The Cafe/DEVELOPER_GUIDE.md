@@ -131,6 +131,23 @@ Authorization: Bearer {token}
 }
 ```
 
+### Holidays API
+```bash
+GET /api/holidays?startDate=2025-01-01&endDate=2025-12-31
+POST /api/holidays/seed-2025
+```
+
+**Holiday Object**:
+```typescript
+interface Holiday {
+  id: string;
+  name: string;
+  date: Date;
+  type: "regular" | "special_non_working" | "special_working";
+  workAllowed: boolean; // blocks scheduling if false
+}
+```
+
 ## Data Flow Diagram
 
 ```
@@ -362,6 +379,7 @@ useEffect(() => {
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0.0 | 2025-12 | Initial implementation with DELETE endpoint and modern UI |
+| 1.1.0 | 2025-12 | Added Holiday Calendar, Shift Blocking, and Premium Pay |
 
 ## Contact & Support
 

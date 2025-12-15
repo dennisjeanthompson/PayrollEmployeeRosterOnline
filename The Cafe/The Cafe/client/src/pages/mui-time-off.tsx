@@ -5,6 +5,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { capitalizeFirstLetter } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { toast as notify } from 'react-toastify';
 
 // MUI Components
 import Box from "@mui/material/Box";
@@ -31,13 +32,15 @@ import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
 import Divider from "@mui/material/Divider";
-import Table from "@mui/material/Table";
-import TableBody from "@mui/material/TableBody";
-import TableCell from "@mui/material/TableCell";
-import TableContainer from "@mui/material/TableContainer";
-import TableHead from "@mui/material/TableHead";
-import TableRow from "@mui/material/TableRow";
-import TablePagination from "@mui/material/TablePagination";
+
+
+// FullCalendar
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import listPlugin from '@fullcalendar/list';
+import { addDays } from 'date-fns';
 
 // MUI Icons
 import AddIcon from "@mui/icons-material/Add";
@@ -49,6 +52,7 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import PersonIcon from "@mui/icons-material/Person";
+import WarningIcon from "@mui/icons-material/Warning";
 
 interface TimeOffRequest {
   id: string;
@@ -65,10 +69,11 @@ interface TimeOffRequest {
 }
 
 const timeOffTypes = [
-  { value: "vacation", label: "Vacation" },
-  { value: "sick", label: "Sick Leave" },
-  { value: "personal", label: "Personal Day" },
-  { value: "other", label: "Other" },
+  { value: "vacation", label: "Vacation Leave", minAdvance: 7 },
+  { value: "sick", label: "Sick Leave", minAdvance: 0 },
+  { value: "emergency", label: "Emergency Leave", minAdvance: 0 },
+  { value: "personal", label: "Personal Day", minAdvance: 3 },
+  { value: "other", label: "Other", minAdvance: 3 },
 ];
 
 const getStatusColor = (status: string): "error" | "warning" | "success" | "default" | "primary" | "secondary" | "info" => {
@@ -105,8 +110,6 @@ export default function MuiTimeOff() {
 
   const [openDialog, setOpenDialog] = useState(false);
   const [editingRequest, setEditingRequest] = useState<TimeOffRequest | null>(null);
-  const [page, setPage] = useState(0);
-  const [rowsPerPage, setRowsPerPage] = useState(10);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<string>("");
 
@@ -116,6 +119,8 @@ export default function MuiTimeOff() {
     endDate: format(new Date(), "yyyy-MM-dd"),
     reason: "",
   });
+
+  const [calendarView, setCalendarView] = useState("dayGridMonth");
 
   // Fetch time off requests
   const { data: requestsData, isLoading, refetch } = useQuery({
@@ -140,23 +145,36 @@ export default function MuiTimeOff() {
       });
       return response.json();
     },
-    onSuccess: () => {
+    onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
-      toast({
-        title: "Success",
-        description: editingRequest
-          ? "Time off request updated successfully"
-          : "Time off request submitted successfully",
-      });
+      
+      // Use react-toastify for conditional feedback based on leave type and advance notice
+      if (editingRequest) {
+        notify.success("Time off request updated successfully");
+      } else {
+        const leaveType = formData.type;
+        const { shortNotice, advanceDays } = response;
+        
+        // Sick/Emergency: Always success toast, no warning
+        if (['sick', 'emergency'].includes(leaveType)) {
+          notify.success(`${capitalizeFirstLetter(leaveType)} leave request submitted`);
+        } else if (shortNotice) {
+          // Vacation/Personal/Other with short notice: Warning toast
+          notify.warning(
+            `${capitalizeFirstLetter(leaveType)} request submitted with short notice (only ${advanceDays} day${advanceDays !== 1 ? 's' : ''} advance). Manager may request adjustment.`,
+            { autoClose: 8000 }
+          );
+        } else {
+          // Normal submission
+          notify.success("Time off request submitted successfully");
+        }
+      }
+      
       handleCloseDialog();
       refetch();
     },
     onError: (error: any) => {
-      toast({
-        title: "Error",
-        description: error.message || "Failed to submit request",
-        variant: "destructive",
-      });
+      notify.error(error.message || "Failed to submit request");
     },
   });
 
@@ -231,6 +249,27 @@ export default function MuiTimeOff() {
       endDate: format(new Date(), "yyyy-MM-dd"),
       reason: "",
     });
+
+  };
+
+  const handleDateClick = (arg: any) => {
+    // If user is Employee, clicking a date opens new request
+    if (!isManagerRole) {
+      setFormData({
+        ...formData,
+        startDate: arg.dateStr,
+        endDate: arg.dateStr,
+      });
+      setOpenDialog(true);
+    }
+  };
+
+  const handleEventClick = (info: any) => {
+    const requestId = info.event.id;
+    const request = requests.find(r => r.id === requestId);
+    if (request) {
+      handleOpenDialog(request);
+    }
   };
 
   const handleSubmit = () => {
@@ -258,14 +297,7 @@ export default function MuiTimeOff() {
     submitMutation.mutate(formData);
   };
 
-  const handleChangePage = (_event: unknown, newPage: number) => {
-    setPage(newPage);
-  };
 
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
-    setPage(0);
-  };
 
   const requests: TimeOffRequest[] = requestsData?.requests || [];
 
@@ -276,10 +308,7 @@ export default function MuiTimeOff() {
     return statusMatch && typeMatch;
   });
 
-  const paginatedRequests = filteredRequests.slice(
-    page * rowsPerPage,
-    page * rowsPerPage + rowsPerPage
-  );
+
 
   const getDaysDifference = (start: string, end: string) => {
     return differenceInDays(parseISO(end), parseISO(start)) + 1;
@@ -378,7 +407,6 @@ export default function MuiTimeOff() {
               label="Filter by Status"
               onChange={(e) => {
                 setStatusFilter(e.target.value);
-                setPage(0);
               }}
             >
               <MenuItem value="">All Statuses</MenuItem>
@@ -395,7 +423,6 @@ export default function MuiTimeOff() {
               label="Filter by Type"
               onChange={(e) => {
                 setTypeFilter(e.target.value);
-                setPage(0);
               }}
             >
               <MenuItem value="">All Types</MenuItem>
@@ -428,145 +455,57 @@ export default function MuiTimeOff() {
             </CardContent>
           ) : (
             <>
-              <TableContainer>
-                <Table>
-                  <TableHead>
-                    <TableRow sx={{ bgcolor: "action.hover" }}>
-                      {isManagerRole && <TableCell>Employee</TableCell>}
-                      <TableCell>Type</TableCell>
-                      <TableCell>Start Date</TableCell>
-                      <TableCell>End Date</TableCell>
-                      <TableCell align="center">Days</TableCell>
-                      <TableCell>Reason</TableCell>
-                      <TableCell align="center">Status</TableCell>
-                      <TableCell align="right">Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {paginatedRequests.map((request) => (
-                      <TableRow
-                        key={request.id}
-                        sx={{
-                          "&:hover": { bgcolor: "action.hover" },
-                          borderBottom: "1px solid",
-                          borderColor: "divider",
-                        }}
-                      >
-                        {isManagerRole && (
-                          <TableCell>
-                            <Stack direction="row" alignItems="center" spacing={1}>
-                              <PersonIcon sx={{ fontSize: 18, color: "text.secondary" }} />
-                              <Typography variant="body2">{request.userName || "Unknown"}</Typography>
-                            </Stack>
-                          </TableCell>
-                        )}
-                        <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {timeOffTypes.find((t) => t.value === request.type)?.label ||
-                              request.type}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>{format(parseISO(request.startDate), "MMM d, yyyy")}</TableCell>
-                        <TableCell>{format(parseISO(request.endDate), "MMM d, yyyy")}</TableCell>
-                        <TableCell align="center">
-                          <Chip
-                            label={`${getDaysDifference(request.startDate, request.endDate)} day${getDaysDifference(request.startDate, request.endDate) !== 1 ? "s" : ""}`}
-                            size="small"
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              maxWidth: 200,
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {request.reason}
-                          </Typography>
-                        </TableCell>
-                        <TableCell align="center">
-                          <Chip
-                            icon={getStatusIcon(request.status)}
-                            label={capitalizeFirstLetter(request.status)}
-                            color={getStatusColor(request.status)}
-                            variant="outlined"
-                            size="small"
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Stack direction="row" spacing={1} justifyContent="flex-end">
-                            {!isManagerRole && request.status === "pending" && (
-                              <>
-                                <IconButton
-                                  size="small"
-                                  color="primary"
-                                  onClick={() => handleOpenDialog(request)}
-                                  title="Edit"
-                                >
-                                  <EditIcon fontSize="small" />
-                                </IconButton>
-                                <IconButton
-                                  size="small"
-                                  color="error"
-                                  onClick={() => deleteMutation.mutate(request.id)}
-                                  title="Delete"
-                                >
-                                  <DeleteIcon fontSize="small" />
-                                </IconButton>
-                              </>
-                            )}
+            <>
+              <Box sx={{ p: 2, height: '700px', '& .fc-event': { cursor: 'pointer' } }}>
+                <FullCalendar
+                  plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
+                  initialView={isManagerRole ? "dayGridMonth" : "dayGridMonth"}
+                  headerToolbar={{
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,listMonth'
+                  }}
+                  events={filteredRequests.map(req => {
+                    // FullCalendar end date is exclusive for all-day events
+                    const endDate = addDays(parseISO(req.endDate), 1).toISOString().split('T')[0];
+                    
+                    // Calculate advance days for this request (from requestedAt to startDate)
+                    const reqStartDate = parseISO(req.startDate);
+                    const reqRequestedAt = parseISO(req.requestedAt);
+                    const advanceDays = Math.ceil((reqStartDate.getTime() - reqRequestedAt.getTime()) / (1000 * 60 * 60 * 24));
+                    
+                    // Check if this is a short notice request based on type
+                    const typeConfig = timeOffTypes.find(t => t.value === req.type);
+                    const minAdvance = typeConfig?.minAdvance ?? 0;
+                    const isShortNotice = advanceDays < minAdvance && !['sick', 'emergency'].includes(req.type) && req.status === 'pending';
+                    
+                    let color = 'gray';
+                    if (req.status === 'approved') color = '#10B981'; // Success Green
+                    if (req.status === 'pending') color = '#F59E0B'; // Warning Orange
+                    if (req.status === 'rejected') color = '#EF4444'; // Error Red
 
-                            {isManagerRole && request.status === "pending" && (
-                              <>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  color="success"
-                                  onClick={() =>
-                                    approveMutation.mutate({
-                                      requestId: request.id,
-                                      status: "approved",
-                                    })
-                                  }
-                                >
-                                  Approve
-                                </Button>
-                                <Button
-                                  size="small"
-                                  variant="outlined"
-                                  color="error"
-                                  onClick={() =>
-                                    approveMutation.mutate({
-                                      requestId: request.id,
-                                      status: "rejected",
-                                    })
-                                  }
-                                >
-                                  Reject
-                                </Button>
-                              </>
-                            )}
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
+                    // Add short notice indicator for managers
+                    const shortNoticeLabel = isManagerRole && isShortNotice ? ` ⚠️` : '';
 
-              <TablePagination
-                rowsPerPageOptions={[5, 10, 25, 50]}
-                component="div"
-                count={filteredRequests.length}
-                rowsPerPage={rowsPerPage}
-                page={page}
-                onPageChange={handleChangePage}
-                onRowsPerPageChange={handleChangeRowsPerPage}
-              />
+                    return {
+                       id: req.id,
+                       title: isManagerRole && req.userName 
+                         ? `${req.userName} - ${capitalizeFirstLetter(req.type)}${shortNoticeLabel}` 
+                         : capitalizeFirstLetter(req.type),
+                       start: req.startDate,
+                       end: endDate,
+                       backgroundColor: color,
+                       borderColor: color,
+                       allDay: true,
+                       extendedProps: { ...req, advanceDays, isShortNotice }
+                    };
+                  })}
+                  dateClick={handleDateClick}
+                  eventClick={handleEventClick}
+                  height="100%"
+                />
+              </Box>
+            </>
             </>
           )}
         </Card>
@@ -613,11 +552,40 @@ export default function MuiTimeOff() {
             />
 
             {formData.startDate && formData.endDate && (
-              <Paper sx={{ p: 2, bgcolor: "primary.lighter" }}>
-                <Typography variant="body2" color="primary">
-                  Duration: {getDaysDifference(formData.startDate, formData.endDate)} day(s)
-                </Typography>
-              </Paper>
+              <>
+                <Paper sx={{ p: 2, bgcolor: "action.hover" }}>
+                  <Typography variant="body2" color="textSecondary">
+                    Duration: {getDaysDifference(formData.startDate, formData.endDate)} day(s)
+                  </Typography>
+                </Paper>
+                
+                {/* Live advance notice indicator */}
+                {(() => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const startDateObj = new Date(formData.startDate);
+                  startDateObj.setHours(0, 0, 0, 0);
+                  const advanceDays = Math.ceil((startDateObj.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+                  const typeConfig = timeOffTypes.find(t => t.value === formData.type);
+                  const minAdvance = typeConfig?.minAdvance ?? 0;
+                  const isSickOrEmergency = ['sick', 'emergency'].includes(formData.type);
+                  const isShortNotice = advanceDays < minAdvance && !isSickOrEmergency;
+                  
+                  return (
+                    <Alert 
+                      severity={isSickOrEmergency ? "info" : (isShortNotice ? "warning" : "success")}
+                      icon={isShortNotice ? <WarningIcon /> : undefined}
+                    >
+                      <Typography variant="body2">
+                        Advance Notice: <strong>{advanceDays} day(s)</strong>
+                        {isSickOrEmergency && " — Same-day allowed for Sick/Emergency"}
+                        {isShortNotice && ` — Below policy minimum (${minAdvance} days)`}
+                        {!isSickOrEmergency && !isShortNotice && " — Within policy"}
+                      </Typography>
+                    </Alert>
+                  );
+                })()}
+              </>
             )}
 
             <TextField
@@ -631,15 +599,52 @@ export default function MuiTimeOff() {
             />
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ p: 2 }}>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button
-            onClick={handleSubmit}
-            variant="contained"
-            disabled={submitMutation.isPending}
-          >
-            {submitMutation.isPending ? "Submitting..." : "Submit"}
-          </Button>
+        <DialogActions sx={{ p: 2, justifyContent: 'space-between' }}>
+          <Box>
+             {editingRequest && !isManagerRole && editingRequest.status === 'pending' && (
+                <Button 
+                  onClick={() => {
+                    deleteMutation.mutate(editingRequest.id);
+                    handleCloseDialog();
+                  }}
+                  color="error"
+                >
+                  Delete
+                </Button>
+             )}
+             {editingRequest && isManagerRole && editingRequest.status === 'pending' && (
+               <>
+                 <Button
+                   color="success"
+                   onClick={() => {
+                     approveMutation.mutate({ requestId: editingRequest.id, status: 'approved' });
+                     handleCloseDialog();
+                   }}
+                 >
+                   Approve
+                 </Button>
+                 <Button
+                   color="error"
+                   onClick={() => {
+                     approveMutation.mutate({ requestId: editingRequest.id, status: 'rejected' });
+                     handleCloseDialog();
+                   }}
+                 >
+                   Reject
+                 </Button>
+               </>
+             )}
+          </Box>
+          <Box>
+            <Button onClick={handleCloseDialog} sx={{ mr: 1 }}>Cancel</Button>
+            <Button
+              onClick={handleSubmit}
+              variant="contained"
+              disabled={submitMutation.isPending}
+            >
+              {submitMutation.isPending ? "Submitting..." : (editingRequest ? "Update" : "Submit")}
+            </Button>
+          </Box>
         </DialogActions>
       </Dialog>
     </Box>

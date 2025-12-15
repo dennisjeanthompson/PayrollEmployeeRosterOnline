@@ -563,14 +563,14 @@ function ManagerDashboard({
 
       {/* Analytics Quick Access */}
       <InfoCard
-        title="Analytics & Reports"
-        subtitle="Quick insights and report generation"
+        title="Analytics & Forecasting"
+        subtitle="Predictive insights and labor forecasting"
         icon={<AnalyticsIcon />}
         color="secondary"
         headerAction={
-          <Link href="/reports">
+          <Link href="/analytics">
             <Button size="small" endIcon={<ArrowRightIcon />} sx={{ color: "primary.main" }}>
-              View All
+              View Forecasts
             </Button>
           </Link>
         }
@@ -658,7 +658,7 @@ function ManagerDashboard({
             </Link>
           </Grid>
           <Grid size={{ xs: 6, md: 3 }}>
-            <Link href="/reports">
+            <Link href="/analytics">
               <Paper
                 elevation={0}
                 sx={{
@@ -676,10 +676,10 @@ function ManagerDashboard({
               >
                 <TrendingUpIcon sx={{ color: "secondary.main", mb: 1 }} />
                 <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  Cost Analysis
+                  Forecasting
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Labor costs
+                  Labor predictions
                 </Typography>
               </Paper>
             </Link>

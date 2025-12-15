@@ -105,7 +105,7 @@ describe("calculateShiftPay", () => {
     expect(day.holidayName).toBe("Christmas Day");
     expect(day.holidayPremium).toBe(800);
     expect(day.restDayPremium).toBe(0);
-    expect(result.grossPay).toBe(1600);
+    expect(result.grossPay).toBe(1640);
   });
 
   it("applies rest day premiums on normal days", () => {

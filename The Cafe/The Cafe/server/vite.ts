@@ -46,8 +46,8 @@ export async function setupVite(app: Express, server: Server) {
   
   // SPA fallback: serve index.html for non-API routes
   app.use((req, res, next) => {
-    // Don't intercept API calls
-    if (req.path.startsWith("/api")) {
+    // Don't intercept API calls or .well-known requests
+    if (req.path.startsWith("/api") || req.path.startsWith("/.well-known")) {
       return next();
     }
 
@@ -92,8 +92,8 @@ export function serveStatic(app: Express) {
 
   // SPA fallback: serve index.html for all non-API routes
   app.use((req, res, next) => {
-    // Don't intercept API calls
-    if (req.path.startsWith("/api")) {
+    // Don't intercept API calls or .well-known requests
+    if (req.path.startsWith("/api") || req.path.startsWith("/.well-known")) {
       return next();
     }
     // Serve index.html for all other routes (SPA routing) but inject a

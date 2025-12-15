@@ -3,7 +3,7 @@
   "configurations": [
     {
       "name": "Launch Chrome (Vite)",
-      "type": "pwa-chrome",
+      "type": "chrome",
       "request": "launch",
       "url": "http://localhost:5173",
       "webRoot": "${workspaceFolder}/The Cafe/The Cafe/client",
@@ -19,7 +19,7 @@
     },
     {
       "name": "Launch Chrome (Production)",
-      "type": "pwa-chrome",
+      "type": "chrome",
       "request": "launch",
       "url": "http://localhost:5000",
       "webRoot": "${workspaceFolder}/The Cafe/The Cafe/client",
@@ -32,6 +32,14 @@
         "--user-data-dir=${workspaceFolder}/.vscode/.chrome-temp-prod"
       ],
       "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Launch Firefox",
+      "type": "firefox",
+      "request": "launch",
+      "reAttach": true,
+      "url": "http://localhost:5000",
+      "webRoot": "${workspaceFolder}/The Cafe/The Cafe/client"
     }
   ]
 }

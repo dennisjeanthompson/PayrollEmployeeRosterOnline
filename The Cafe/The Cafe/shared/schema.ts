@@ -30,6 +30,7 @@ export const users = pgTable("users", {
   sssLoanDeduction: text("sss_loan_deduction").default("0"),
   pagibigLoanDeduction: text("pagibig_loan_deduction").default("0"),
   cashAdvanceDeduction: text("cash_advance_deduction").default("0"),
+  philhealthDeduction: text("philhealth_deduction").default("0"),
   otherDeductions: text("other_deductions").default("0"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -179,9 +180,12 @@ export const holidays = pgTable("holidays", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   date: timestamp("date").notNull(),
-  type: text("type").notNull(),
+  type: text("type").notNull(), // 'regular', 'special_non_working', 'special_working', 'company'
   year: integer("year").notNull(),
   isRecurring: boolean("is_recurring").default(false),
+  workAllowed: boolean("work_allowed").default(true), // If false, blocks shift creation
+  notes: text("notes"), // Admin notes for this holiday
+  premiumOverride: text("premium_override"), // JSON: { "worked": 2.0, "overtime": 2.6 }
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -211,6 +215,17 @@ export const auditLogs = pgTable("audit_logs", {
   reason: text("reason"), // Optional reason/note for the change
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Time off policy settings per branch (configurable advance notice requirements)
+export const timeOffPolicy = pgTable("time_off_policy", {
+  id: text("id").primaryKey(),
+  branchId: text("branch_id").references(() => branches.id).notNull(),
+  leaveType: text("leave_type").notNull(), // 'vacation', 'sick', 'emergency', 'personal', 'other'
+  minimumAdvanceDays: integer("minimum_advance_days").notNull().default(0),
+  isActive: boolean("is_active").default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -308,6 +323,12 @@ export const insertAuditLogSchema = createInsertSchema(auditLogs).omit({
   createdAt: true,
 });
 
+export const insertTimeOffPolicySchema = createInsertSchema(timeOffPolicy).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export interface DashboardStats {
   stats: {
     late: number;
@@ -331,6 +352,7 @@ export type DeductionRate = typeof deductionRates.$inferSelect;
 export type Holiday = typeof holidays.$inferSelect;
 export type ArchivedPayrollPeriod = typeof archivedPayrollPeriods.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
+export type TimeOffPolicy = typeof timeOffPolicy.$inferSelect;
 
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -346,3 +368,4 @@ export type InsertDeductionRate = z.infer<typeof insertDeductionRatesSchema>;
 export type InsertHoliday = z.infer<typeof insertHolidaySchema>;
 export type InsertArchivedPayrollPeriod = z.infer<typeof insertArchivedPayrollPeriodSchema>;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
+export type InsertTimeOffPolicy = z.infer<typeof insertTimeOffPolicySchema>;

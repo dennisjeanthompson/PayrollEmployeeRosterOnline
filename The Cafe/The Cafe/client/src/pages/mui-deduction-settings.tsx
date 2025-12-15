@@ -40,11 +40,11 @@ const mandatoryDeductions = [
   {
     key: "philhealth",
     label: "PhilHealth Contribution",
-    description: "Philippine Health Insurance Corporation - 2.5% employee share",
-    details: "Salary Floor: ₱10,000 | Ceiling: ₱100,000",
+    description: "Philippine Health Insurance Corporation - 5% total (2.5% EE + 2.5% ER)",
+    details: "Floor: ₱10,000 | Ceiling: ₱100,000 | Premium: ₱500-₱5,000",
     icon: LocalHospital,
     color: "#10b981",
-    rate: "2.5%",
+    rate: "5%",
   },
   {
     key: "pagibig",

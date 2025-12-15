@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager, getCurrentUser } from "@/lib/auth";
 import { format, parseISO, isFuture } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
-import { getInitials } from "@/lib/utils";
+import { getInitials, capitalizeFirstLetter } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 
@@ -49,6 +49,17 @@ import PendingActionsIcon from "@mui/icons-material/PendingActions";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import ViewListIcon from "@mui/icons-material/ViewList";
+
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
+
+// FullCalendar
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import timeGridPlugin from '@fullcalendar/timegrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import listPlugin from '@fullcalendar/list';
 
 // Safe date formatter
 const safeFormatDate = (dateString: string | undefined | null, formatStr: string): string => {
@@ -113,6 +124,8 @@ export default function MuiShiftTrading() {
     reason: "",
     urgency: "normal" as "low" | "normal" | "urgent",
   });
+
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("calendar");
 
   // Enable real-time updates via WebSocket
   useRealtime({
@@ -457,7 +470,36 @@ export default function MuiShiftTrading() {
             >
               New Trade Request
             </Button>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => setCreateDialogOpen(true)}
+            >
+              New Trade Request
+            </Button>
           </Stack>
+        </Box>
+
+        {/* View Toggle */}
+        <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
+          <ToggleButtonGroup
+            value={viewMode}
+            exclusive
+            onChange={(_, newView) => {
+              if (newView) setViewMode(newView);
+            }}
+            aria-label="view mode"
+            size="small"
+          >
+            <ToggleButton value="calendar" aria-label="calendar view">
+              <CalendarMonthIcon sx={{ mr: 1 }} />
+              Calendar
+            </ToggleButton>
+            <ToggleButton value="list" aria-label="list view">
+              <ViewListIcon sx={{ mr: 1 }} />
+              List
+            </ToggleButton>
+          </ToggleButtonGroup>
         </Box>
 
         {isLoading && <LinearProgress sx={{ mb: 3, borderRadius: 1 }} />}
@@ -580,91 +622,164 @@ export default function MuiShiftTrading() {
         </Grid>
 
         {/* Tabs */}
-        <Paper sx={{ borderRadius: 3 }}>
-          <Tabs
-            value={activeTab}
-            onChange={(_, v) => setActiveTab(v)}
-            sx={{ borderBottom: 1, borderColor: "divider", px: 2 }}
-          >
-            <Tab label="My Requests" />
-            <Tab
-              label={
-                <Stack direction="row" alignItems="center" spacing={1}>
-                  <span>Incoming</span>
-                  {incomingRequests.filter((r) => r.status === "pending").length > 0 && (
-                    <Chip
-                      label={incomingRequests.filter((r) => r.status === "pending").length}
-                      size="small"
-                      color="primary"
-                    />
-                  )}
-                </Stack>
-              }
+
+
+        {viewMode === 'calendar' ? (
+          <Paper sx={{ p: 2, height: '700px', borderRadius: 3, '& .fc-event': { cursor: 'pointer' } }}>
+            <FullCalendar
+              plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
+              initialView="dayGridMonth"
+              headerToolbar={{
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,listWeek'
+              }}
+              events={[
+                // My Shifts (Potential to trade)
+                ...myShifts.map((shift: any) => ({
+                    id: `shift-${shift.id}`,
+                    groupId: 'my-shifts',
+                    title: `My Shift: ${format(parseISO(shift.startTime), 'h:mm a')}`,
+                    start: shift.startTime,
+                    end: shift.endTime,
+                    backgroundColor: theme.palette.primary.main, // Green/Primary
+                    extendedProps: { type: 'shift', ...shift }
+                })),
+                // Trades (Visualized)
+                ...trades.map((trade: any) => {
+                   let color = theme.palette.warning.main; // Pending
+                   if (trade.status === 'approved') color = theme.palette.success.main;
+                   if (trade.status === 'accepted') color = theme.palette.info.main;
+                   if (trade.status === 'rejected') color = theme.palette.error.main;
+                   
+                   const isIncoming = trade.targetUserId === currentUser?.id;
+                   const isOutgoing = trade.requesterId === currentUser?.id;
+                   
+                   // Use shift data if available
+                   const start = trade.shift?.startTime;
+                   const end = trade.shift?.endTime;
+                   
+                   if (!start) return null;
+
+                   return {
+                     id: `trade-${trade.id}`,
+                     title: `${isIncoming ? 'Incoming' : (isOutgoing ? 'My Req' : 'Trade')}: ${capitalizeFirstLetter(trade.status)}`,
+                     start: start,
+                     end: end,
+                     backgroundColor: color,
+                     borderColor: color,
+                     extendedProps: { type: 'trade', ...trade }
+                   };
+                }).filter(Boolean) as any[]
+              ]}
+              eventClick={(info) => {
+                const props = info.event.extendedProps;
+                if (props.type === 'shift') {
+                  // Pre-fill creation dialog
+                  setFormData({
+                    ...formData,
+                    shiftId: props.id,
+                  });
+                  setCreateDialogOpen(true);
+                } else {
+                   // Navigate to list view tab relevant to this trade?
+                   // Or just toast info
+                   toast({
+                     title: "Trade Details",
+                     description: `${info.event.title} - Switch to List View for actions.`,
+                   });
+                }
+              }}
+              height="100%"
             />
-            {isManagerRole && (
+          </Paper>
+        ) : (
+          <Paper sx={{ borderRadius: 3 }}>
+            <Tabs
+              value={activeTab}
+              onChange={(_, v) => setActiveTab(v)}
+              sx={{ borderBottom: 1, borderColor: "divider", px: 2 }}
+            >
+              <Tab label="My Requests" />
               <Tab
                 label={
                   <Stack direction="row" alignItems="center" spacing={1}>
-                    <span>Manager Approvals</span>
-                    {pendingApprovals.length > 0 && (
-                      <Chip label={pendingApprovals.length} size="small" color="warning" />
+                    <span>Incoming</span>
+                    {incomingRequests.filter((r) => r.status === "pending").length > 0 && (
+                      <Chip
+                        label={incomingRequests.filter((r) => r.status === "pending").length}
+                        size="small"
+                        color="primary"
+                      />
                     )}
                   </Stack>
                 }
               />
-            )}
-          </Tabs>
-
-          <TabPanel value={activeTab} index={0}>
-            <Box sx={{ px: 3 }}>
-              {myRequests.length === 0 ? (
-                <Box sx={{ py: 8, textAlign: "center" }}>
-                  <SwapHorizIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
-                  <Typography variant="h6" color="text.secondary">
-                    No trade requests yet
-                  </Typography>
-                  <Typography variant="body2" color="text.disabled" sx={{ mb: 2 }}>
-                    Use the "New Trade Request" button above to get started
-                  </Typography>
-                </Box>
-              ) : (
-                myRequests.map((trade) => <TradeCard key={trade.id} trade={trade} type="outgoing" />)
+              {isManagerRole && (
+                <Tab
+                  label={
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <span>Manager Approvals</span>
+                      {pendingApprovals.length > 0 && (
+                        <Chip label={pendingApprovals.length} size="small" color="warning" />
+                      )}
+                    </Stack>
+                  }
+                />
               )}
-            </Box>
-          </TabPanel>
+            </Tabs>
 
-          <TabPanel value={activeTab} index={1}>
-            <Box sx={{ px: 3 }}>
-              {incomingRequests.length === 0 ? (
-                <Box sx={{ py: 8, textAlign: "center" }}>
-                  <SwapHorizIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
-                  <Typography variant="h6" color="text.secondary">
-                    No incoming requests
-                  </Typography>
-                </Box>
-              ) : (
-                incomingRequests.map((trade) => <TradeCard key={trade.id} trade={trade} type="incoming" />)
-              )}
-            </Box>
-          </TabPanel>
-
-          {isManagerRole && (
-            <TabPanel value={activeTab} index={2}>
+            <TabPanel value={activeTab} index={0}>
               <Box sx={{ px: 3 }}>
-                {pendingApprovals.length === 0 ? (
+                {myRequests.length === 0 ? (
                   <Box sx={{ py: 8, textAlign: "center" }}>
-                    <CheckIcon sx={{ fontSize: 64, color: "success.main", mb: 2 }} />
+                    <SwapHorizIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
                     <Typography variant="h6" color="text.secondary">
-                      All trades reviewed
+                      No trade requests yet
+                    </Typography>
+                    <Typography variant="body2" color="text.disabled" sx={{ mb: 2 }}>
+                      Use the "New Trade Request" button above to get started
                     </Typography>
                   </Box>
                 ) : (
-                  pendingApprovals.map((trade) => <TradeCard key={trade.id} trade={trade} type="approval" />)
+                  myRequests.map((trade) => <TradeCard key={trade.id} trade={trade} type="outgoing" />)
                 )}
               </Box>
             </TabPanel>
-          )}
-        </Paper>
+
+            <TabPanel value={activeTab} index={1}>
+              <Box sx={{ px: 3 }}>
+                {incomingRequests.length === 0 ? (
+                  <Box sx={{ py: 8, textAlign: "center" }}>
+                    <SwapHorizIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
+                    <Typography variant="h6" color="text.secondary">
+                      No incoming requests
+                    </Typography>
+                  </Box>
+                ) : (
+                  incomingRequests.map((trade) => <TradeCard key={trade.id} trade={trade} type="incoming" />)
+                )}
+              </Box>
+            </TabPanel>
+
+            {isManagerRole && (
+              <TabPanel value={activeTab} index={2}>
+                <Box sx={{ px: 3 }}>
+                  {pendingApprovals.length === 0 ? (
+                    <Box sx={{ py: 8, textAlign: "center" }}>
+                      <CheckIcon sx={{ fontSize: 64, color: "success.main", mb: 2 }} />
+                      <Typography variant="h6" color="text.secondary">
+                        All trades reviewed
+                      </Typography>
+                    </Box>
+                  ) : (
+                    pendingApprovals.map((trade) => <TradeCard key={trade.id} trade={trade} type="approval" />)
+                  )}
+                </Box>
+              </TabPanel>
+            )}
+          </Paper>
+        )}
 
         {/* Create Trade Dialog */}
         <Dialog

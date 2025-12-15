@@ -7,13 +7,17 @@ import { getAuthState, setAuthState, subscribeToAuth } from "./lib/auth";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
+// React-Toastify for modern toast notifications
+import { ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
+
 // Theme Providers
 import { ThemeProvider } from "@/components/theme-provider";
 import { MuiThemeProvider } from "@/components/mui/mui-theme-provider";
 
 // MUI Components
 import { Box, CircularProgress, Typography, Button, alpha } from "@mui/material";
-import { LocalCafe as CoffeeIcon } from "@mui/icons-material";
+import CoffeeIcon from "@mui/icons-material/LocalCafe";
 
 // MUI Layout Components
 import MuiSidebar from "@/components/mui/mui-sidebar";
@@ -28,12 +32,16 @@ const MuiNotifications = lazy(() => import("@/pages/mui-notifications"));
 const MuiShiftTrading = lazy(() => import("@/pages/mui-shift-trading"));
 const MuiBranches = lazy(() => import("@/pages/mui-branches"));
 const MuiReports = lazy(() => import("@/pages/mui-reports"));
+const MuiAnalytics = lazy(() => import("@/pages/mui-analytics"));
 const MuiLogin = lazy(() => import("@/pages/mui-login"));
 const MuiTimeOff = lazy(() => import("@/pages/mui-time-off"));
 const MuiDeductionSettings = lazy(() => import("@/pages/mui-deduction-settings"));
 const MuiPayrollManagement = lazy(() => import("@/pages/mui-payroll-management"));
 const MuiAdminDeductionRates = lazy(() => import("@/pages/mui-admin-deduction-rates"));
-const PayslipDemo = lazy(() => import("@/pages/payslip-demo"));
+const MuiAuditLogs = lazy(() => import("@/pages/mui-audit-logs"));
+const MuiHolidayCalendar = lazy(() => import("@/pages/mui-holiday-calendar"));
+const MuiComplianceDashboard = lazy(() => import("@/pages/mui-compliance-dashboard"));
+
 const Setup = lazy(() => import("@/pages/setup"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
@@ -96,6 +104,12 @@ function RouteLoader({ children }: { children: React.ReactNode }) {
 
 // Desktop Layout with MUI Components
 function DesktopLayout({ children }: { children: React.ReactNode }) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  const handleDrawerToggle = () => {
+    setMobileOpen(!mobileOpen);
+  };
+
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
       <Box sx={{ position: "fixed", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 0 }}>
@@ -137,17 +151,12 @@ function DesktopLayout({ children }: { children: React.ReactNode }) {
         />
       </Box>
 
-      <MuiSidebar />
-      <Box sx={{ 
-        flex: 1, 
-        display: "flex", 
-        flexDirection: "column", 
-        position: "relative", 
-        zIndex: 1,
-        minWidth: 0, // Prevent flex overflow
-        overflow: "hidden", // Prevent horizontal stretching
-      }}>
-        <MuiHeader />
+      <MuiSidebar
+        mobileOpen={mobileOpen}
+        onMobileClose={() => setMobileOpen(false)}
+      />
+      <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+        <MuiHeader onMenuClick={handleDrawerToggle} />
         <Box component="main" sx={{ flex: 1, overflow: "auto", minWidth: 0 }}>
           {children}
         </Box>
@@ -238,24 +247,13 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
         </DesktopLayout>
       </Route>
 
+      {/* UNIFIED SCHEDULE: Redirect old pages to new unified schedule */}
       <Route path="/shift-trading">
-        <DesktopLayout>
-          <RouteLoader>
-            <ErrorBoundary>
-              <MuiShiftTrading />
-            </ErrorBoundary>
-          </RouteLoader>
-        </DesktopLayout>
+        <Redirect to="/schedule" />
       </Route>
 
       <Route path="/time-off">
-        <DesktopLayout>
-          <RouteLoader>
-            <ErrorBoundary>
-              <MuiTimeOff />
-            </ErrorBoundary>
-          </RouteLoader>
-        </DesktopLayout>
+        <Redirect to="/schedule" />
       </Route>
 
       <Route path="/payroll">
@@ -308,6 +306,18 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
         </DesktopLayout>
       </Route>
 
+      <Route path="/analytics">
+        <RequireManagerOrAdmin>
+          <DesktopLayout>
+            <RouteLoader>
+              <ErrorBoundary>
+                <MuiAnalytics />
+              </ErrorBoundary>
+            </RouteLoader>
+          </DesktopLayout>
+        </RequireManagerOrAdmin>
+      </Route>
+
       <Route path="/branches">
         <DesktopLayout>
           <RouteLoader>
@@ -340,15 +350,43 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
         </RequireAdmin>
       </Route>
 
-      <Route path="/payslip-demo">
-        <DesktopLayout>
-          <RouteLoader>
-            <ErrorBoundary>
-              <PayslipDemo />
-            </ErrorBoundary>
-          </RouteLoader>
-        </DesktopLayout>
+      <Route path="/audit-logs">
+        <RequireAdmin>
+          <DesktopLayout>
+            <RouteLoader>
+              <ErrorBoundary>
+                <MuiAuditLogs />
+              </ErrorBoundary>
+            </RouteLoader>
+          </DesktopLayout>
+        </RequireAdmin>
       </Route>
+
+      <Route path="/compliance">
+        <RequireAdmin>
+          <DesktopLayout>
+            <RouteLoader>
+              <ErrorBoundary>
+                <MuiComplianceDashboard />
+              </ErrorBoundary>
+            </RouteLoader>
+          </DesktopLayout>
+        </RequireAdmin>
+      </Route>
+
+      <Route path="/holiday-calendar">
+        <RequireManagerOrAdmin>
+          <DesktopLayout>
+            <RouteLoader>
+              <ErrorBoundary>
+                <MuiHolidayCalendar />
+              </ErrorBoundary>
+            </RouteLoader>
+          </DesktopLayout>
+        </RequireManagerOrAdmin>
+      </Route>
+
+
 
       <Route>
         <DesktopLayout>
@@ -505,38 +543,13 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
         )}
       </Route>
 
+      {/* UNIFIED SCHEDULE: Redirect old employee pages to unified schedule */}
       <Route path="/employee/time-off">
-        {isMobile ? (
-          <RouteLoader>
-            <ErrorBoundary>
-              <MobileTimeOff />
-            </ErrorBoundary>
-          </RouteLoader>
-        ) : (
-          <DesktopLayout>
-            <RouteLoader>
-              <MuiTimeOff />
-            </RouteLoader>
-          </DesktopLayout>
-        )}
+        <Redirect to="/employee/schedule" />
       </Route>
 
       <Route path="/employee/shift-trading">
-        {isMobile ? (
-          <RouteLoader>
-            <ErrorBoundary>
-              <MobileShiftTrading />
-            </ErrorBoundary>
-          </RouteLoader>
-        ) : (
-          <DesktopLayout>
-            <RouteLoader>
-              <ErrorBoundary>
-                <MuiShiftTrading />
-              </ErrorBoundary>
-            </RouteLoader>
-          </DesktopLayout>
-        )}
+        <Redirect to="/employee/schedule" />
       </Route>
 
       <Route path="/employee/profile">
@@ -617,6 +630,7 @@ function App() {
     checkAuth();
     const unsubscribe = subscribeToAuth(setLocalAuthState);
 
+    // Auth polling - backup to subscription (reduced to 60s from 5s for performance)
     const authPollInterval = setInterval(async () => {
       if (setupComplete) {
         try {
@@ -633,7 +647,7 @@ function App() {
           setAuthState({ user: null, isAuthenticated: false });
         }
       }
-    }, 5000);
+    }, 60000); // 60 seconds (was 5 seconds - way too aggressive)
 
     return () => {
       unsubscribe();
@@ -719,6 +733,25 @@ function App() {
           </TooltipProvider>
         </QueryClientProvider>
       </MuiThemeProvider>
+      
+      {/* Global Toast Notifications - Dark Theme */}
+      <ToastContainer
+        position="bottom-right"
+        autoClose={3000}
+        hideProgressBar={false}
+        newestOnTop
+        closeOnClick
+        rtl={false}
+        pauseOnFocusLoss
+        draggable
+        pauseOnHover
+        theme="dark"
+        toastStyle={{
+          backgroundColor: '#1e1e1e',
+          color: '#fff',
+          borderRadius: '8px',
+        }}
+      />
     </ThemeProvider>
   );
 }

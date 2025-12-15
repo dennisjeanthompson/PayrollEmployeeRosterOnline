@@ -40,9 +40,11 @@ import {
   LocalHospital,
   Home,
   Receipt,
+  Refresh as RefreshIcon,
 } from "@mui/icons-material";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import SSSContributionTable from "@/components/sss/sss-contribution-table";
 
 interface DeductionRate {
   id: string;
@@ -130,6 +132,23 @@ export default function MuiAdminDeductionRates() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/deduction-rates"] });
       toast({ title: "Success", description: "Deduction rate deleted successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const seedAllRatesMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/admin/seed-all-rates");
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/admin/deduction-rates"] });
+      toast({ 
+        title: "Success", 
+        description: data.message || "All 2025 rates seeded successfully!" 
+      });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -227,29 +246,54 @@ export default function MuiAdminDeductionRates() {
           </Box>
         </Box>
 
-        <Button
-          variant="contained"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            setEditingRate(null);
-            resetForm();
-            setIsDialogOpen(true);
-          }}
-          sx={{
-            borderRadius: 3,
-            px: 3,
-            fontWeight: 600,
-            textTransform: "none",
-            boxShadow: `0 4px 16px ${alpha(theme.palette.primary.main, 0.3)}`,
-          }}
-        >
-          Add Rate
-        </Button>
+        <Stack direction="row" spacing={2}>
+          <Button
+            variant="outlined"
+            color="warning"
+            startIcon={seedAllRatesMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
+            onClick={() => {
+              if (confirm("This will replace ALL existing rates with official 2025 Philippine deduction rates (SSS, PhilHealth, Pag-IBIG, Tax). Continue?")) {
+                seedAllRatesMutation.mutate();
+              }
+            }}
+            disabled={seedAllRatesMutation.isPending}
+            sx={{
+              borderRadius: 3,
+              px: 3,
+              fontWeight: 600,
+              textTransform: "none",
+            }}
+          >
+            Seed 2025 Rates
+          </Button>
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setEditingRate(null);
+              resetForm();
+              setIsDialogOpen(true);
+            }}
+            sx={{
+              borderRadius: 3,
+              px: 3,
+              fontWeight: 600,
+              textTransform: "none",
+              boxShadow: `0 4px 16px ${alpha(theme.palette.primary.main, 0.3)}`,
+            }}
+          >
+            Add Rate
+          </Button>
+        </Stack>
       </Box>
 
       {/* Rate Tables by Type */}
       <Stack spacing={3}>
-        {deductionTypes.map((typeConfig) => {
+        {/* SSS gets its own dedicated table component */}
+        <SSSContributionTable />
+        
+        {/* Other deduction types use the accordion format */}
+        {deductionTypes.filter(t => t.value !== "sss").map((typeConfig) => {
           const rates = groupedRates[typeConfig.value] || [];
           const Icon = typeConfig.icon;
 
@@ -328,15 +372,28 @@ export default function MuiAdminDeductionRates() {
                   </Box>
                 ) : (
                   <TableContainer>
-                    <Table>
+                    <Table size="small">
                       <TableHead>
                         <TableRow sx={{ bgcolor: alpha(theme.palette.action.hover, 0.3) }}>
-                          <TableCell>Min Salary</TableCell>
-                          <TableCell>Max Salary</TableCell>
-                          <TableCell>Rate (%)</TableCell>
-                          <TableCell>Fixed Amount</TableCell>
-                          <TableCell>Description</TableCell>
-                          <TableCell align="right">Actions</TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>
+                            {typeConfig.value === "sss" ? "Compensation Range" : "Min Salary"}
+                          </TableCell>
+                          <TableCell sx={{ fontWeight: 600 }}>
+                            {typeConfig.value === "sss" ? "Max Range" : "Max Salary"}
+                          </TableCell>
+                          {typeConfig.value === "sss" ? (
+                            <>
+                              <TableCell sx={{ fontWeight: 600, color: "success.main" }}>EE Share (Fixed)</TableCell>
+                              <TableCell sx={{ fontWeight: 600 }}>Details (MSC/ER/Total)</TableCell>
+                            </>
+                          ) : (
+                            <>
+                              <TableCell sx={{ fontWeight: 600 }}>Rate (%)</TableCell>
+                              <TableCell sx={{ fontWeight: 600 }}>Fixed Amount</TableCell>
+                              <TableCell sx={{ fontWeight: 600 }}>Description</TableCell>
+                            </>
+                          )}
+                          <TableCell align="right" sx={{ fontWeight: 600 }}>Actions</TableCell>
                         </TableRow>
                       </TableHead>
                       <TableBody>
@@ -357,38 +414,64 @@ export default function MuiAdminDeductionRates() {
                                   })}
                                 </Typography>
                               ) : (
-                                <Chip label="Unlimited" size="small" variant="outlined" />
+                                <Chip label="& Above" size="small" variant="outlined" color="warning" />
                               )}
                             </TableCell>
-                            <TableCell>
-                              {rate.employeeRate ? (
-                                <Typography variant="body2" fontWeight={500}>
-                                  {rate.employeeRate}%
-                                </Typography>
-                              ) : (
-                                <Typography variant="body2" color="text.secondary">
-                                  -
-                                </Typography>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              {rate.employeeContribution ? (
-                                <Typography variant="body2" fontWeight={500}>
-                                  ₱{parseFloat(rate.employeeContribution).toLocaleString(undefined, {
-                                    minimumFractionDigits: 2,
-                                  })}
-                                </Typography>
-                              ) : (
-                                <Typography variant="body2" color="text.secondary">
-                                  -
-                                </Typography>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 200 }}>
-                                {rate.description || "-"}
-                              </Typography>
-                            </TableCell>
+                            {typeConfig.value === "sss" ? (
+                              <>
+                                <TableCell>
+                                  {rate.employeeContribution ? (
+                                    <Chip
+                                      label={`₱${parseFloat(rate.employeeContribution).toLocaleString(undefined, {
+                                        minimumFractionDigits: 2,
+                                      })}`}
+                                      color="success"
+                                      size="small"
+                                      sx={{ fontWeight: 700 }}
+                                    />
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary">-</Typography>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="caption" color="text.secondary" sx={{ display: "block", maxWidth: 280 }}>
+                                    {rate.description || "-"}
+                                  </Typography>
+                                </TableCell>
+                              </>
+                            ) : (
+                              <>
+                                <TableCell>
+                                  {rate.employeeRate ? (
+                                    <Chip
+                                      label={`${rate.employeeRate}%`}
+                                      size="small"
+                                      color="info"
+                                      variant="outlined"
+                                      sx={{ fontWeight: 600 }}
+                                    />
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary">-</Typography>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  {rate.employeeContribution ? (
+                                    <Typography variant="body2" fontWeight={500}>
+                                      ₱{parseFloat(rate.employeeContribution).toLocaleString(undefined, {
+                                        minimumFractionDigits: 2,
+                                      })}
+                                    </Typography>
+                                  ) : (
+                                    <Typography variant="body2" color="text.secondary">Calculated</Typography>
+                                  )}
+                                </TableCell>
+                                <TableCell>
+                                  <Typography variant="body2" color="text.secondary" sx={{ maxWidth: 200 }}>
+                                    {rate.description || "-"}
+                                  </Typography>
+                                </TableCell>
+                              </>
+                            )}
                             <TableCell align="right">
                               <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                                 <Tooltip title="Edit">

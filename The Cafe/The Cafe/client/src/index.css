@@ -1115,6 +1115,291 @@ html {
   display: none !important;
 }
 
+/* ===== DRAG AND DROP STYLING ===== */
+/* Draggable employee cards in roster */
+.draggable-employee {
+  cursor: grab !important;
+  user-select: none !important;
+  transition: transform 0.15s ease, box-shadow 0.15s ease !important;
+}
+
+.draggable-employee:hover {
+  transform: translateX(4px) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15) !important;
+}
+
+.draggable-employee:active {
+  cursor: grabbing !important;
+  transform: scale(0.98) !important;
+}
+
+/* Drag preview/ghost element */
+.drag-preview-shift,
+.fc-event-dragging {
+  opacity: 0.9 !important;
+  transform: scale(1.02) !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3) !important;
+  z-index: 9999 !important;
+}
+
+/* FullCalendar external element being dragged */
+.fc .fc-event-mirror {
+  opacity: 0.85 !important;
+  background: linear-gradient(135deg, #10B981 0%, #059669 100%) !important;
+  border-radius: 6px !important;
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  box-shadow: 0 8px 24px rgba(16, 185, 129, 0.4) !important;
+}
+
+/* Drop highlight on calendar cells */
+.fc .fc-highlight {
+  background: hsl(var(--primary) / 0.15) !important;
+}
+
+/* FullCalendar Event Styling - 2025 Premium UI Fix */
+
+/* ===== WEEK & DAY VIEW EVENTS ===== */
+.fc .fc-timegrid-event {
+  margin: 1px 2px !important;
+  padding: 3px 5px !important;
+  border-radius: 4px !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  min-height: 20px !important;
+  border-width: 0 !important;
+  border-left: 2px solid rgba(255,255,255,0.4) !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
+  overflow: hidden !important;
+  line-height: 1.2 !important;
+}
+
+/* ===== MONTH VIEW EVENTS ===== */
+.fc .fc-daygrid-event {
+  margin: 1px 2px !important;
+  padding: 2px 4px !important;
+  border-radius: 3px !important;
+  font-size: 10px !important;
+  font-weight: 500 !important;
+  border-width: 0 !important;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.15) !important;
+}
+
+/* Month view "+X more" link styling */
+.fc .fc-daygrid-more-link {
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  color: hsl(var(--primary)) !important;
+  background: hsl(var(--primary) / 0.1) !important;
+  padding: 2px 6px !important;
+  border-radius: 10px !important;
+  margin-top: 2px !important;
+}
+
+.fc .fc-daygrid-more-link:hover {
+  background: hsl(var(--primary) / 0.2) !important;
+}
+
+/* ===== TEXT STYLING ===== */
+.fc .fc-event-title {
+  font-weight: 600 !important;
+  font-size: 10px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+  line-height: 1.2 !important;
+}
+
+.fc .fc-event-time {
+  font-size: 9px !important;
+  opacity: 0.85 !important;
+  font-weight: 500 !important;
+}
+
+/* ===== COLUMN & GRID LAYOUT ===== */
+/* ===== COLUMN & GRID LAYOUT ===== */
+/* Wider columns for week view */
+.fc .fc-timegrid-col {
+  min-width: 100px !important;
+}
+
+/* Force events to stack vertically when overlapping (instead of side-by-side cramping) */
+.fc .fc-timegrid-event-harness {
+  /* overflow: hidden !important;  <-- REMOVED to fix hidden events */
+  max-width: 100% !important;
+}
+
+/* Let FullCalendar handle parallel event layout naturally */
+.fc .fc-timegrid-event-harness-inset {
+  inset-inline-end: 0 !important;
+}
+
+/* Event container */
+.fc .fc-timegrid-col-events {
+  margin: 0 2px !important;
+  /* overflow: hidden !important; <-- REMOVED to fix hidden events */
+}
+
+/* ===== DAY VIEW SPECIFIC ===== */
+.fc-timeGridDay-view .fc-timegrid-col {
+  min-width: 200px !important;
+}
+
+.fc-timeGridDay-view .fc-timegrid-event-harness {
+  min-width: 45% !important;
+}
+
+.fc-timeGridDay-view .fc-timegrid-event {
+  font-size: 11px !important;
+  padding: 4px 6px !important;
+}
+
+/* ===== HOVER & INTERACTION ===== */
+.fc .fc-event:hover {
+  transform: scale(1.02) !important;
+  box-shadow: 0 3px 8px rgba(0,0,0,0.3) !important;
+  z-index: 100 !important;
+}
+
+/* ===== DAY HEADERS ===== */
+.fc .fc-col-header-cell {
+  padding: 10px 4px !important;
+  font-weight: 600 !important;
+  font-size: 11px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.3px !important;
+  background: hsl(var(--muted) / 0.3) !important;
+}
+
+/* ===== TIME SLOTS ===== */
+.fc .fc-timegrid-slot {
+  height: 2.2em !important;
+  border-bottom: 1px solid rgba(128,128,128,0.08) !important;
+}
+
+.fc .fc-timegrid-slot-label {
+  font-size: 10px !important;
+  color: hsl(var(--muted-foreground)) !important;
+  font-weight: 500 !important;
+  padding-right: 8px !important;
+}
+
+/* ===== MONTH VIEW GRID ===== */
+.fc .fc-daygrid-day {
+  min-height: 80px !important;
+}
+
+.fc .fc-daygrid-day-frame {
+  padding: 2px !important;
+}
+
+.fc .fc-daygrid-day-top {
+  padding: 4px 6px !important;
+}
+
+.fc .fc-daygrid-day-number {
+  font-weight: 600 !important;
+  font-size: 12px !important;
+}
+
+/* ===== POPOVER STYLING ===== */
+.fc .fc-popover {
+  border-radius: 8px !important;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.25) !important;
+  background: hsl(var(--card)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+}
+
+.fc .fc-popover-header {
+  padding: 10px 12px !important;
+  font-weight: 600 !important;
+  font-size: 12px !important;
+  background: hsl(var(--muted) / 0.5) !important;
+  border-radius: 8px 8px 0 0 !important;
+}
+
+.fc .fc-popover-body {
+  padding: 8px !important;
+}
+
+/* ===== TODAY HIGHLIGHT ===== */
+.fc .fc-day-today {
+  background: hsl(var(--primary) / 0.12) !important;
+}
+
+.fc .fc-day-today .fc-col-header-cell-cushion {
+  color: hsl(var(--primary)) !important;
+  font-weight: 700 !important;
+}
+
+/* ===== WEEKEND COLUMNS - VISUAL DIFFERENTIATION ===== */
+/* Saturday */
+.fc .fc-day-sat,
+.fc .fc-col-header-cell.fc-day-sat {
+  background: rgba(139, 92, 246, 0.08) !important; /* Purple tint for Saturday */
+}
+
+.fc .fc-day-sat .fc-col-header-cell-cushion {
+  color: #8b5cf6 !important;
+}
+
+/* Sunday */
+.fc .fc-day-sun,
+.fc .fc-col-header-cell.fc-day-sun {
+  background: rgba(239, 68, 68, 0.08) !important; /* Red tint for Sunday */
+}
+
+.fc .fc-day-sun .fc-col-header-cell-cushion {
+  color: #ef4444 !important;
+}
+
+/* ===== ALTERNATING DAY COLUMNS - WEEK VIEW ===== */
+.fc-timeGridWeek-view .fc-day-mon,
+.fc-timeGridWeek-view .fc-day-wed,
+.fc-timeGridWeek-view .fc-day-fri {
+  background: rgba(128, 128, 128, 0.03) !important;
+}
+
+/* ===== IMPROVED DAY HEADERS ===== */
+.fc .fc-col-header-cell-cushion {
+  padding: 8px 4px !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  gap: 2px !important;
+}
+
+/* Day name (Mon, Tue, etc) */
+.fc .fc-col-header-cell .fc-scrollgrid-sync-inner {
+  text-align: center !important;
+}
+
+/* Current time indicator */
+.fc .fc-timegrid-now-indicator-arrow {
+  border-color: hsl(var(--primary)) !important;
+  border-width: 5px !important;
+}
+
+.fc .fc-timegrid-now-indicator-line {
+  border-color: hsl(var(--primary)) !important;
+  border-width: 2px !important;
+}
+
+/* ===== MONTH VIEW DAY DIFFERENTIATION ===== */
+.fc-dayGridMonth-view .fc-day-sat .fc-daygrid-day-top,
+.fc-dayGridMonth-view .fc-day-sun .fc-daygrid-day-top {
+  background: transparent !important;
+}
+
+.fc-dayGridMonth-view .fc-day-sat .fc-daygrid-day-number {
+  color: #8b5cf6 !important;
+}
+
+.fc-dayGridMonth-view .fc-day-sun .fc-daygrid-day-number {
+  color: #ef4444 !important;
+}
+
 /* React Big Calendar - Borderless */
 .rbc-today {
   background: hsl(var(--primary) / 0.05) !important;
@@ -1176,4 +1461,21 @@ html {
 .MuiDrawer-docked .MuiDrawer-paper {
   position: fixed !important;
   border-right: 1px solid hsl(var(--border)) !important;
+}
+
+/* ============================================
+   MOBILE RESPONSIVENESS TWEAKS
+   ============================================ */
+@media (max-width: 768px) {
+  /* Force tables to scroll horizontally on mobile */
+  .MuiTable-root {
+    display: block !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+  }
+  
+  /* Ensure main content has padding safe for touch */
+  main {
+    padding-bottom: 80px !important; /* Safety for bottom nav/drawers */
+  }
 }

@@ -4,67 +4,71 @@ import crypto from 'crypto';
 
 const storage = dbStorage;
 
-export const router = Router();
+import RealTimeManager from '../services/realtime-manager';
 
-// Auth middleware
-const requireAuth = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.session || !req.session.user) {
-    return res.status(401).json({ message: "Authentication required" });
-  }
-  next();
-};
+export function createEmployeeRouter(realTimeManager: RealTimeManager) {
+  const router = Router();
 
-const requireRole = (roles: string[]) => (req: Request, res: Response, next: NextFunction) => {
-  if (!req.session || !req.session.user) {
-    return res.status(401).json({ message: "Authentication required" });
-  }
+  // Auth middleware
+  const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session || !req.session.user) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
+    next();
+  };
 
-  // Admin has access to all manager routes
-  const effectiveRoles = [...roles];
-  if (roles.includes('manager') && !roles.includes('admin')) {
-    effectiveRoles.push('admin');
-  }
+  const requireRole = (roles: string[]) => (req: Request, res: Response, next: NextFunction) => {
+    if (!req.session || !req.session.user) {
+      return res.status(401).json({ message: "Authentication required" });
+    }
 
-  if (!effectiveRoles.includes(req.session.user.role)) {
-    return res.status(403).json({ message: "Insufficient permissions" });
-  }
+    // Admin has access to all manager routes
+    const effectiveRoles = [...roles];
+    if (roles.includes('manager') && !roles.includes('admin')) {
+      effectiveRoles.push('admin');
+    }
 
-  next();
-};
+    if (!effectiveRoles.includes(req.session.user.role)) {
+      return res.status(403).json({ message: "Insufficient permissions" });
+    }
 
-// Get all employees in the same branch (accessible to all authenticated users for shift trading)
-router.get('/api/employees', requireAuth, async (req, res) => {
-  try {
-    const branchId = req.session.user?.branchId;
-    if (!branchId) return res.status(400).json({ message: 'Branch ID not found in session' });
+    next();
+  };
 
-    // Return only employee role users from the same branch (for shift trading purposes)
-    const employees = await storage.getEmployees(branchId);
-    
-    // Return ALL employees from the same branch with isActive status
-    // Let the frontend handle filtering/display of inactive employees
-    const sanitizedEmployees = employees.map(emp => ({
-        id: emp.id,
-        firstName: emp.firstName,
-        lastName: emp.lastName,
-        email: emp.email,
-        position: emp.position,
-        branchId: emp.branchId,
-        role: emp.role,
-        isActive: emp.isActive ?? true, // Include isActive for client-side filtering
-      }));
-    
-    res.json({ employees: sanitizedEmployees });
-  } catch (error) {
-    console.error('Error fetching employees:', error);
-    res.status(500).json({ message: 'Failed to fetch employees' });
-  }
-});
+  // Get all employees in the same branch (accessible to all authenticated users for shift trading)
+  router.get('/api/employees', requireAuth, async (req, res) => {
+    try {
+      const branchId = req.session.user?.branchId;
+      if (!branchId) return res.status(400).json({ message: 'Branch ID not found in session' });
+
+      // Return only employee role users from the same branch (for shift trading purposes)
+      const employees = await storage.getEmployees(branchId);
+      
+      // Return ALL employees from the same branch with isActive status
+      // Let the frontend handle filtering/display of inactive employees
+      const sanitizedEmployees = employees.map(emp => ({
+          id: emp.id,
+          firstName: emp.firstName,
+          lastName: emp.lastName,
+          email: emp.email,
+          position: emp.position,
+          branchId: emp.branchId,
+          role: emp.role,
+          isActive: emp.isActive ?? true, // Include isActive for client-side filtering
+        }));
+      
+      res.json({ employees: sanitizedEmployees });
+    } catch (error) {
+      console.error('Error fetching employees:', error);
+      res.status(500).json({ message: 'Failed to fetch employees' });
+    }
+  });
 
 // Get employee stats (must be before /:id route)
 router.get('/api/employees/stats', requireAuth, requireRole(['manager']), async (req, res) => {
   try {
     const branchId = req.session.user?.branchId;
+    if (!branchId) return res.status(400).json({ message: 'Branch ID not found in session' });
     const users = await storage.getUsersByBranch(branchId);
 
     // Calculate statistics
@@ -90,6 +94,7 @@ router.get('/api/employees/stats', requireAuth, requireRole(['manager']), async 
     for (const user of users) {
       const entries = await storage.getPayrollEntriesByUser(user.id);
       for (const entry of entries) {
+        if (!entry.createdAt) continue;
         const entryDate = new Date(entry.createdAt);
         if (entryDate >= monthStart && entryDate <= monthEnd) {
           totalPayrollThisMonth += parseFloat(entry.grossPay);
@@ -130,6 +135,7 @@ router.get('/api/employees/stats', requireAuth, requireRole(['manager']), async 
 router.get('/api/employees/performance', requireAuth, requireRole(['manager']), async (req, res) => {
   try {
     const branchId = req.session.user?.branchId;
+    if (!branchId) return res.status(400).json({ message: 'Branch ID not found in session' });
     const users = await storage.getUsersByBranch(branchId);
 
     // Calculate real performance data from shifts
@@ -255,6 +261,7 @@ router.post('/api/employees', requireAuth, requireRole(['manager']), async (req,
     // Don't send back the password
     const { password: _, ...result } = newEmployee;
 
+    realTimeManager.broadcastEmployeeCreated(result);
     res.status(201).json(result);
   } catch (error: any) {
     console.error('Error creating employee:', error);
@@ -314,6 +321,7 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager']), async (r
     // Don't send back the password
     const { password, ...result } = updatedEmployee;
 
+    realTimeManager.broadcastEmployeeUpdated(result);
     res.json(result);
   } catch (error) {
     console.error('Error updating employee:', error);
@@ -321,33 +329,7 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager']), async (r
   }
 });
 
-// Delete an employee
-router.delete('/api/employees/:id', requireAuth, requireRole(['manager']), async (req, res) => {
-  try {
-    const { id } = req.params;
-    
-    // Get the existing employee
-    const existingEmployee = await storage.getUser(id);
-    if (!existingEmployee) {
-      return res.status(404).json({ message: 'Employee not found' });
-    }
-    
-    // Only managers from the same branch can delete the employee
-    if (req.session.user?.role === 'manager' && 
-        req.session.user?.branchId !== existingEmployee.branchId) {
-      return res.status(403).json({ message: 'Unauthorized to delete this employee' });
-    }
-    
-    // In a real app, you might want to soft delete or archive the employee
-    // instead of actually deleting them
-    // For this example, we'll just return success
-    
-    res.json({ message: 'Employee deleted successfully' });
-  } catch (error) {
-    console.error('Error deleting employee:', error);
-    res.status(500).json({ message: 'Failed to delete employee' });
-  }
-});
+
 
 // Verify employee on blockchain
 router.post('/api/employees/:id/verify', requireAuth, requireRole(['manager']), async (req, res) => {
@@ -393,6 +375,8 @@ router.post('/api/employees/:id/verify', requireAuth, requireRole(['manager']), 
         verifiedAt: updatedEmployee.verifiedAt,
       }
     });
+    
+    realTimeManager.broadcastEmployeeUpdated(updatedEmployee);
   } catch (error) {
     console.error('Error verifying employee:', error);
     res.status(500).json({ message: 'Failed to verify employee' });
@@ -432,6 +416,7 @@ router.put('/api/employees/:id/deductions', requireAuth, requireRole(['manager']
     // Don't send back the password
     const { password, ...result } = updatedEmployee;
 
+    realTimeManager.broadcastEmployeeUpdated(result);
     res.json(result);
   } catch (error) {
     console.error('Error updating employee deductions:', error);
@@ -467,6 +452,7 @@ router.patch('/api/employees/:id/status', requireAuth, requireRole(['manager']),
     // Don't send back the password
     const { password, ...result } = updatedEmployee;
 
+    realTimeManager.broadcastEmployeeUpdated(result);
     res.json(result);
   } catch (error) {
     console.error('Error updating employee status:', error);
@@ -474,10 +460,52 @@ router.patch('/api/employees/:id/status', requireAuth, requireRole(['manager']),
   }
 });
 
+// Check if employee has related data (for UI decision making)
+router.get('/api/employees/:id/related-data', requireAuth, requireRole(['manager']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const relatedData = await storage.employeeHasRelatedData(id);
+    res.json(relatedData);
+  } catch (error) {
+    console.error('Error checking related data:', error);
+    res.status(500).json({ message: 'Failed to check related data' });
+  }
+});
+
+// Export employee data (for GDPR compliance / pre-deletion backup)
+router.get('/api/employees/:id/export', requireAuth, requireRole(['manager']), async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const exportData = await storage.getEmployeeDataForExport(id);
+    if (!exportData) {
+      return res.status(404).json({ message: 'Employee not found' });
+    }
+    
+    // Remove sensitive data from export
+    const { password, ...safeEmployee } = exportData.employee;
+    
+    res.json({
+      exportedAt: new Date().toISOString(),
+      employee: safeEmployee,
+      shifts: exportData.shifts,
+      payrollEntries: exportData.payrollEntries,
+      timeOffRequests: exportData.timeOffRequests,
+      shiftTrades: exportData.shiftTrades,
+    });
+  } catch (error) {
+    console.error('Error exporting employee data:', error);
+    res.status(500).json({ message: 'Failed to export employee data' });
+  }
+});
+
 // Delete employee (Manager/Admin only)
+// Supports ?force=true for cascade delete (Admin only)
 router.delete('/api/employees/:id', requireAuth, requireRole(['manager']), async (req, res) => {
   try {
     const { id } = req.params;
+    const force = req.query.force === 'true';
 
     // Get the existing employee
     const existingEmployee = await storage.getUser(id);
@@ -501,7 +529,49 @@ router.delete('/api/employees/:id', requireAuth, requireRole(['manager']), async
       return res.status(403).json({ message: 'Only admins can delete admin accounts' });
     }
 
-    // Delete the employee
+    // Check for related data
+    const relatedData = await storage.employeeHasRelatedData(id);
+
+    if (force) {
+      // Force delete is admin-only
+      if (req.session.user?.role !== 'admin') {
+        return res.status(403).json({ 
+          message: 'Force delete is only available for administrators',
+          requiresAdmin: true 
+        });
+      }
+
+      // Perform cascade delete
+      const reason = req.query.reason as string || 'Force deletion by admin';
+      await storage.forceDeleteUser(id, req.session.user.id, reason);
+      
+      console.log(`🗑️ FORCE deleted employee: ${existingEmployee.firstName} ${existingEmployee.lastName} (${id}) by ${req.session.user.username}`);
+      
+      realTimeManager.broadcastEmployeeDeleted(id);
+      return res.json({ 
+        message: 'Employee and all related data permanently deleted',
+        forceDeleted: true 
+      });
+    }
+
+    // Standard delete - check for related data first
+    if (relatedData.hasShifts || relatedData.hasPayroll) {
+      return res.status(409).json({ 
+        message: 'Cannot delete employee with existing data. Use deactivation or force delete.',
+        hasRelatedData: true,
+        relatedData: {
+          hasShifts: relatedData.hasShifts,
+          hasPayroll: relatedData.hasPayroll,
+          totalRecords: relatedData.hasTotal,
+        },
+        options: {
+          deactivate: 'Set employee as inactive (recommended)',
+          forceDelete: req.session.user?.role === 'admin' ? 'Permanently delete all data (admin only)' : null,
+        }
+      });
+    }
+
+    // No related data - safe to delete normally
     const deleted = await storage.deleteUser(id);
 
     if (!deleted) {
@@ -510,11 +580,13 @@ router.delete('/api/employees/:id', requireAuth, requireRole(['manager']), async
 
     console.log(`🗑️ Employee deleted: ${existingEmployee.firstName} ${existingEmployee.lastName} (${existingEmployee.id})`);
 
+    realTimeManager.broadcastEmployeeDeleted(id);
     res.json({ message: 'Employee deleted successfully' });
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error deleting employee:', error);
-    res.status(500).json({ message: 'Failed to delete employee' });
+    res.status(500).json({ message: error.message || 'Failed to delete employee' });
   }
 });
 
-export default router;
+  return router;
+}

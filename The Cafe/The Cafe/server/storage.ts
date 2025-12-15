@@ -1,16 +1,7 @@
-import { type User, type InsertUser, type Branch, type InsertBranch, type Shift, type InsertShift, type ShiftTrade, type InsertShiftTrade, type PayrollPeriod, type InsertPayrollPeriod, type PayrollEntry, type InsertPayrollEntry, type Approval, type InsertApproval, type InsertTimeOffRequest, type InsertNotification, type DeductionSettings, type InsertDeductionSettings, type DeductionRate, type InsertDeductionRate } from "@shared/schema";
+import { type User, type InsertUser, type Branch, type InsertBranch, type Shift, type InsertShift, type ShiftTrade, type InsertShiftTrade, type PayrollPeriod, type InsertPayrollPeriod, type PayrollEntry, type InsertPayrollEntry, type Approval, type InsertApproval, type TimeOffRequest, type InsertTimeOffRequest, type Notification, type InsertNotification, type DeductionSettings, type InsertDeductionSettings, type DeductionRate, type InsertDeductionRate, type AuditLog, type InsertAuditLog, type Holiday, type InsertHoliday } from "@shared/schema";
 import { randomUUID } from "crypto";
 
-type Notification = {
-  id: string;
-  userId: string;
-  type: string;
-  title: string;
-  message: string;
-  isRead: boolean;
-  data?: any;
-  createdAt: Date;
-};
+
 
 export interface IStorage {
   // Users
@@ -20,6 +11,7 @@ export interface IStorage {
   updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined>;
   getUsersByBranch(branchId: string): Promise<User[]>;
   getEmployees(branchId: string): Promise<User[]>;
+  deleteUser(id: string): Promise<boolean>;
 
   // Branches
   getBranch(id: string): Promise<Branch | undefined>;
@@ -91,6 +83,34 @@ export interface IStorage {
   createDeductionRate(rate: InsertDeductionRate): Promise<DeductionRate>;
   updateDeductionRate(id: string, rate: Partial<InsertDeductionRate>): Promise<DeductionRate | undefined>;
   deleteDeductionRate(id: string): Promise<boolean>;
+
+  // Audit Logs
+  createAuditLog(log: InsertAuditLog & { id: string }): Promise<AuditLog>;
+  getAuditLogs(params: {
+    entityType?: string;
+    action?: string;
+    entityId?: string;
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditLog[]>;
+  getAuditLogStats(): Promise<{ totalLogs: number; byAction: Record<string, number>; byEntityType: Record<string, number> }>;
+
+  // Reports helpers
+  getPayrollEntriesForDateRange(branchId: string, startDate: Date, endDate: Date): Promise<PayrollEntry[]>;
+  getEmployees(branchId: string): Promise<User[]>;
+
+
+  // Holidays
+  createHoliday(holiday: InsertHoliday): Promise<Holiday>;
+  getHolidays(startDate?: Date, endDate?: Date): Promise<Holiday[]>;
+  getHolidaysByYear(year: number): Promise<Holiday[]>;
+  getHoliday(id: string): Promise<Holiday | undefined>;
+  getHolidayByDate(date: Date): Promise<Holiday | undefined>;
+  updateHoliday(id: string, holiday: Partial<InsertHoliday>): Promise<Holiday | undefined>;
+  deleteHoliday(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -104,7 +124,11 @@ export class MemStorage implements IStorage {
   private timeOffRequests: Map<string, TimeOffRequest> = new Map();
   private notifications: Map<string, Notification> = new Map();
   private deductionSettings: Map<string, DeductionSettings> = new Map();
+  private holidays: Map<string, Holiday> = new Map();
   private deductionRates: Map<string, DeductionRate> = new Map();
+  private auditLogs: Map<string, AuditLog> = new Map();
+
+
 
   constructor() {
     this.initializeData();
@@ -136,6 +160,14 @@ export class MemStorage implements IStorage {
       branchId: branch.id,
       isActive: true,
       createdAt: new Date(),
+      blockchainVerified: false,
+      blockchainHash: null,
+      verifiedAt: null,
+      sssLoanDeduction: null,
+      pagibigLoanDeduction: null,
+      cashAdvanceDeduction: null,
+      otherDeductions: null,
+      philhealthDeduction: null,
     };
     this.users.set(manager.id, manager);
 
@@ -153,6 +185,14 @@ export class MemStorage implements IStorage {
       branchId: branch.id,
       isActive: true,
       createdAt: new Date(),
+      blockchainVerified: false,
+      blockchainHash: null,
+      verifiedAt: null,
+      sssLoanDeduction: null,
+      pagibigLoanDeduction: null,
+      cashAdvanceDeduction: null,
+      otherDeductions: null,
+      philhealthDeduction: null,
     };
     this.users.set(employee.id, employee);
 
@@ -173,6 +213,8 @@ export class MemStorage implements IStorage {
       isRecurring: false,
       recurringPattern: null,
       createdAt: new Date(),
+      actualStartTime: null,
+      actualEndTime: null,
     };
     this.shifts.set(todayShift.id, todayShift);
     
@@ -188,6 +230,8 @@ export class MemStorage implements IStorage {
       isRecurring: false,
       recurringPattern: null,
       createdAt: new Date(),
+      actualStartTime: null,
+      actualEndTime: null,
     };
     this.shifts.set(managerShift.id, managerShift);
     
@@ -203,6 +247,8 @@ export class MemStorage implements IStorage {
       isRecurring: false,
       recurringPattern: null,
       createdAt: new Date(),
+      actualStartTime: null,
+      actualEndTime: null,
     };
     this.shifts.set(tomorrowShift.id, tomorrowShift);
   }
@@ -222,10 +268,22 @@ export class MemStorage implements IStorage {
       id, 
       createdAt: new Date(),
       role: insertUser.role || 'employee',
-      isActive: insertUser.isActive ?? true 
+      isActive: insertUser.isActive ?? true,
+      blockchainVerified: false,
+      blockchainHash: null,
+      verifiedAt: null,
+      sssLoanDeduction: null,
+      pagibigLoanDeduction: null,
+      cashAdvanceDeduction: null,
+      otherDeductions: null,
+      philhealthDeduction: null,
     };
     this.users.set(id, user);
     return user;
+  }
+
+  async deleteUser(id: string): Promise<boolean> {
+    return this.users.delete(id);
   }
 
   async updateUser(id: string, userData: Partial<InsertUser>): Promise<User | undefined> {
@@ -239,6 +297,12 @@ export class MemStorage implements IStorage {
 
   async getUsersByBranch(branchId: string): Promise<User[]> {
     return Array.from(this.users.values()).filter(user => user.branchId === branchId);
+  }
+
+  async getEmployees(branchId: string): Promise<User[]> {
+    return Array.from(this.users.values()).filter(user => 
+      user.branchId === branchId && user.role === 'employee'
+    );
   }
 
   async getBranch(id: string): Promise<Branch | undefined> {
@@ -279,7 +343,9 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       status: insertShift.status || 'scheduled',
       isRecurring: insertShift.isRecurring ?? false,
-      recurringPattern: insertShift.recurringPattern || null
+      recurringPattern: insertShift.recurringPattern || null,
+      actualStartTime: null,
+      actualEndTime: null,
     };
     this.shifts.set(id, shift);
     return shift;
@@ -325,7 +391,7 @@ export class MemStorage implements IStorage {
     const trade: ShiftTrade = {
       ...insertTrade,
       id,
-      fromUserId: insertTrade.fromUserId,
+      fromUserId: insertTrade.fromUserId!,
       toUserId: insertTrade.toUserId || null,
       reason: insertTrade.reason || '',
       requestedAt: new Date(),
@@ -384,7 +450,12 @@ export class MemStorage implements IStorage {
       totalPay: insertPeriod.totalPay || null
     };
     this.payrollPeriods.set(id, period);
+    this.payrollPeriods.set(id, period);
     return period;
+  }
+
+  async getPayrollPeriod(id: string): Promise<PayrollPeriod | undefined> {
+    return this.payrollPeriods.get(id);
   }
 
   async createPayrollEntry(insertEntry: InsertPayrollEntry): Promise<PayrollEntry> {
@@ -395,7 +466,26 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       status: insertEntry.status || 'pending',
       overtimeHours: insertEntry.overtimeHours || '0',
-      deductions: insertEntry.deductions || '0'
+      nightDiffHours: insertEntry.nightDiffHours || '0',
+      holidayPay: (insertEntry.holidayPay ?? null) as string | null,
+      overtimePay: (insertEntry.overtimePay ?? null) as string | null,
+      nightDiffPay: (insertEntry.nightDiffPay ?? null) as string | null,
+      restDayPay: (insertEntry.restDayPay ?? null) as string | null,
+      withholdingTax: (insertEntry.withholdingTax ?? null) as string | null,
+      sssLoan: (insertEntry.sssLoan ?? null) as string | null,
+      pagibigLoan: (insertEntry.pagibigLoan ?? null) as string | null,
+      sssContribution: insertEntry.sssContribution || '0',
+      philHealthContribution: insertEntry.philHealthContribution || '0',
+      pagibigContribution: insertEntry.pagibigContribution || '0',
+      totalDeductions: insertEntry.totalDeductions || '0',
+      otherDeductions: insertEntry.otherDeductions || '0',
+      deductions: insertEntry.deductions || '0',
+      advances: (insertEntry.advances ?? null) as string | null,
+      payBreakdown: (insertEntry.payBreakdown ?? null) as string | null,
+      blockNumber: (insertEntry.blockNumber ?? null) as number | null,
+      transactionHash: (insertEntry.transactionHash ?? null) as string | null,
+      blockchainHash: (insertEntry.blockchainHash ?? null) as string | null,
+      verified: false
     };
     this.payrollEntries.set(id, entry);
     return entry;
@@ -403,6 +493,10 @@ export class MemStorage implements IStorage {
 
   async getPayrollEntry(id: string): Promise<PayrollEntry | undefined> {
     return this.payrollEntries.get(id);
+  }
+
+  async getPayrollEntriesByPeriod(periodId: string): Promise<PayrollEntry[]> {
+    return Array.from(this.payrollEntries.values()).filter(entry => entry.payrollPeriodId === periodId);
   }
 
   async getPayrollEntriesByUser(userId: string, periodId?: string): Promise<PayrollEntry[]> {
@@ -413,9 +507,7 @@ export class MemStorage implements IStorage {
     });
   }
 
-  async getPayrollPeriod(id: string): Promise<PayrollPeriod | undefined> {
-    return this.payrollPeriods.get(id);
-  }
+
 
   async getPayrollPeriodsByBranch(branchId: string): Promise<PayrollPeriod[]> {
     return Array.from(this.payrollPeriods.values()).filter(period => 
@@ -550,7 +642,11 @@ export class MemStorage implements IStorage {
   async getNotificationsByUser(userId: string): Promise<Notification[]> {
     return Array.from(this.notifications.values())
       .filter(notification => notification.userId === userId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      .sort((a, b) => {
+        const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return dateB - dateA;
+      });
   }
 
   async markAllNotificationsAsRead(userId: string): Promise<void> {
@@ -584,6 +680,10 @@ export class MemStorage implements IStorage {
     const settings: DeductionSettings = {
       ...insertSettings,
       id,
+      deductSSS: insertSettings.deductSSS ?? null,
+      deductPhilHealth: insertSettings.deductPhilHealth ?? null,
+      deductPagibig: insertSettings.deductPagibig ?? null,
+      deductWithholdingTax: insertSettings.deductWithholdingTax ?? null,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -625,6 +725,10 @@ export class MemStorage implements IStorage {
     const rate: DeductionRate = {
       ...rateData,
       id,
+      maxSalary: rateData.maxSalary ?? null,
+      employeeRate: rateData.employeeRate ?? null,
+      employeeContribution: rateData.employeeContribution ?? null,
+      description: rateData.description ?? null,
       isActive: rateData.isActive ?? true,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -648,6 +752,137 @@ export class MemStorage implements IStorage {
 
   async deleteDeductionRate(id: string): Promise<boolean> {
     return this.deductionRates.delete(id);
+  }
+
+  // Audit Log methods
+  async createAuditLog(logData: InsertAuditLog & { id: string }): Promise<AuditLog> {
+    const log: AuditLog = {
+      ...logData,
+      createdAt: new Date(),
+      oldValues: logData.oldValues ?? null,
+      newValues: logData.newValues ?? null,
+      ipAddress: logData.ipAddress ?? null,
+      userAgent: logData.userAgent ?? null,
+      reason: logData.reason ?? null,
+    };
+    this.auditLogs.set(logData.id, log);
+    return log;
+  }
+
+  async getAuditLogs(params: {
+    entityType?: string;
+    action?: string;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditLog[]> {
+    let logs = Array.from(this.auditLogs.values());
+    
+    if (params.entityType) {
+      logs = logs.filter(log => log.entityType === params.entityType);
+    }
+    if (params.action) {
+      logs = logs.filter(log => log.action === params.action);
+    }
+    if (params.startDate) {
+      logs = logs.filter(log => log.createdAt && new Date(log.createdAt) >= params.startDate!);
+    }
+    if (params.endDate) {
+      logs = logs.filter(log => log.createdAt && new Date(log.createdAt) <= params.endDate!);
+    }
+    
+    // Sort by date descending
+    logs.sort((a, b) => {
+      const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+      const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      return dateB - dateA;
+    });
+    
+    const offset = params.offset || 0;
+    const limit = params.limit || 50;
+    return logs.slice(offset, offset + limit);
+  }
+
+  async getAuditLogStats(): Promise<{ totalLogs: number; byAction: Record<string, number>; byEntityType: Record<string, number> }> {
+    const logs = Array.from(this.auditLogs.values());
+    const byAction: Record<string, number> = {};
+    const byEntityType: Record<string, number> = {};
+    
+    for (const log of logs) {
+      byAction[log.action] = (byAction[log.action] || 0) + 1;
+      byEntityType[log.entityType] = (byEntityType[log.entityType] || 0) + 1;
+    }
+    
+    return { totalLogs: logs.length, byAction, byEntityType };
+  }
+
+  async getPayrollEntriesForDateRange(branchId: string, startDate: Date, endDate: Date): Promise<PayrollEntry[]> {
+    const users = await this.getUsersByBranch(branchId);
+    const userIds = new Set(users.map(u => u.id));
+    
+    return Array.from(this.payrollEntries.values()).filter(entry => {
+      if (!userIds.has(entry.userId)) return false;
+      if (!entry.createdAt) return false;
+      const entryDate = new Date(entry.createdAt);
+      return entryDate >= startDate && entryDate <= endDate;
+    });
+  }
+
+  async getPayrollPeriods(branchId: string): Promise<PayrollPeriod[]> {
+    return this.getPayrollPeriodsByBranch(branchId);
+  }
+
+  // Holidays
+  async createHoliday(holiday: InsertHoliday): Promise<Holiday> {
+    const id = randomUUID();
+    const newHoliday: Holiday = { 
+      id,
+      name: holiday.name,
+      date: new Date(holiday.date),
+      type: holiday.type,
+      year: holiday.year,
+      notes: holiday.notes ?? null,
+      workAllowed: holiday.workAllowed ?? true,
+      premiumOverride: holiday.premiumOverride ?? null,
+      isRecurring: holiday.isRecurring ?? false,
+      createdAt: new Date() 
+    };
+    this.holidays.set(id, newHoliday);
+    return newHoliday;
+  }
+
+  async getHolidays(startDate?: Date, endDate?: Date): Promise<Holiday[]> {
+    let holidays = Array.from(this.holidays.values());
+    if (startDate && endDate) {
+      holidays = holidays.filter(h => new Date(h.date) >= startDate && new Date(h.date) <= endDate);
+    }
+    return holidays;
+  }
+
+  async getHolidaysByYear(year: number): Promise<Holiday[]> {
+    return Array.from(this.holidays.values()).filter(h => h.year === year);
+  }
+
+  async getHoliday(id: string): Promise<Holiday | undefined> {
+    return this.holidays.get(id);
+  }
+
+  async getHolidayByDate(date: Date): Promise<Holiday | undefined> {
+    const targetDate = new Date(date).toISOString().split('T')[0];
+    return Array.from(this.holidays.values()).find(h => new Date(h.date).toISOString().split('T')[0] === targetDate);
+  }
+
+  async updateHoliday(id: string, holiday: Partial<InsertHoliday>): Promise<Holiday | undefined> {
+    const existing = this.holidays.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...holiday };
+    this.holidays.set(id, updated);
+    return updated;
+  }
+
+  async deleteHoliday(id: string): Promise<boolean> {
+    return this.holidays.delete(id);
   }
 }
 

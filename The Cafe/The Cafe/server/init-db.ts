@@ -43,6 +43,7 @@ export async function initializeDatabase() {
         sss_loan_deduction TEXT DEFAULT '0',
         pagibig_loan_deduction TEXT DEFAULT '0',
         cash_advance_deduction TEXT DEFAULT '0',
+        philhealth_deduction TEXT DEFAULT '0',
         other_deductions TEXT DEFAULT '0',
         created_at TIMESTAMP DEFAULT NOW()
       )
@@ -217,9 +218,28 @@ export async function initializeDatabase() {
         type TEXT NOT NULL,
         year INTEGER NOT NULL,
         is_recurring BOOLEAN DEFAULT false,
+        work_allowed BOOLEAN DEFAULT true,
+        notes TEXT,
+        premium_override TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
+
+    // Add new columns to holidays if they don't exist (migration for existing databases)
+    await db.execute(sql`
+      ALTER TABLE holidays ADD COLUMN IF NOT EXISTS work_allowed BOOLEAN DEFAULT true
+    `).catch(() => {});
+    await db.execute(sql`
+      ALTER TABLE holidays ADD COLUMN IF NOT EXISTS notes TEXT
+    `).catch(() => {});
+    await db.execute(sql`
+      ALTER TABLE holidays ADD COLUMN IF NOT EXISTS premium_override TEXT
+    `).catch(() => {});
+
+    // Add new columns to users if they don't exist
+    await db.execute(sql`
+      ALTER TABLE users ADD COLUMN IF NOT EXISTS philhealth_deduction TEXT DEFAULT '0'
+    `).catch(() => {});
 
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS archived_payroll_periods (
@@ -375,13 +395,15 @@ export async function seedDeductionRates() {
 
     // PhilHealth rate (2025: 5% of salary, employee pays half = 2.5%)
     // Floor: ₱10,000, Ceiling: ₱100,000
+    // Monthly premium range: ₱500 (at floor) to ₱5,000 (at ceiling)
+    // Employee share: ₱250 to ₱2,500
     await db.insert(deductionRates).values({
       id: randomUUID(),
       type: 'philhealth',
       minSalary: '10000',  // 2025 floor
       maxSalary: '100000', // 2025 ceiling
       employeeRate: '2.5',
-      description: '2.5% of monthly salary (employee share), floor ₱10k, ceiling ₱100k',
+      description: 'PhilHealth 2025: 5% total (2.5% EE + 2.5% ER). Floor ₱10k, Ceiling ₱100k. Premium ₱500-₱5,000.',
       isActive: true,
     });
 
@@ -469,24 +491,52 @@ export async function seedPhilippineHolidays() {
       return;
     }
 
-    const year = new Date().getFullYear();
-    const holidayList = [
-      { name: "New Year's Day", date: `${year}-01-01`, type: 'regular', isRecurring: true },
-      { name: 'Araw ng Kagitingan', date: `${year}-04-09`, type: 'regular', isRecurring: true },
-      { name: 'Labor Day', date: `${year}-05-01`, type: 'regular', isRecurring: true },
-      { name: 'Independence Day', date: `${year}-06-12`, type: 'regular', isRecurring: true },
-      { name: 'National Heroes Day', date: `${year}-08-26`, type: 'regular', isRecurring: false },
-      { name: 'Bonifacio Day', date: `${year}-11-30`, type: 'regular', isRecurring: true },
-      { name: 'Christmas Day', date: `${year}-12-25`, type: 'regular', isRecurring: true },
-      { name: 'Rizal Day', date: `${year}-12-30`, type: 'regular', isRecurring: true },
-      { name: 'Ninoy Aquino Day', date: `${year}-08-21`, type: 'special_non_working', isRecurring: true },
-      { name: 'All Saints Day', date: `${year}-11-01`, type: 'special_non_working', isRecurring: true },
-      { name: 'All Souls Day', date: `${year}-11-02`, type: 'special_non_working', isRecurring: true },
-      { name: 'Christmas Eve', date: `${year}-12-24`, type: 'special_non_working', isRecurring: true },
-      { name: "New Year's Eve", date: `${year}-12-31`, type: 'special_non_working', isRecurring: true },
+    // 2025 Philippine Holidays (Proclamation 727)
+    const holidays2025 = [
+      // Regular Holidays (200% pay if worked)
+      { name: "New Year's Day", date: '2025-01-01', type: 'regular', isRecurring: true },
+      { name: 'Araw ng Kagitingan', date: '2025-04-09', type: 'regular', isRecurring: true },
+      { name: 'Maundy Thursday', date: '2025-04-17', type: 'regular', isRecurring: false },
+      { name: 'Good Friday', date: '2025-04-18', type: 'regular', isRecurring: false },
+      { name: 'Eid\'l Fitr (TBD)', date: '2025-03-30', type: 'regular', isRecurring: false, notes: 'Date subject to NCMF announcement' },
+      { name: 'Labor Day', date: '2025-05-01', type: 'regular', isRecurring: true },
+      { name: 'Eid\'l Adha (TBD)', date: '2025-06-06', type: 'regular', isRecurring: false, notes: 'Date subject to NCMF announcement' },
+      { name: 'Independence Day', date: '2025-06-12', type: 'regular', isRecurring: true },
+      { name: 'National Heroes Day', date: '2025-08-25', type: 'regular', isRecurring: false },
+      { name: 'Bonifacio Day', date: '2025-11-30', type: 'regular', isRecurring: true },
+      { name: 'Christmas Day', date: '2025-12-25', type: 'regular', isRecurring: true },
+      { name: 'Rizal Day', date: '2025-12-30', type: 'regular', isRecurring: true },
+      
+      // Special Non-Working Days (130% pay if worked)
+      { name: 'Chinese New Year', date: '2025-01-29', type: 'special_non_working', isRecurring: false },
+      { name: 'EDSA Revolution Anniversary', date: '2025-02-25', type: 'special_non_working', isRecurring: true },
+      { name: 'Black Saturday', date: '2025-04-19', type: 'special_non_working', isRecurring: false },
+      { name: 'Ninoy Aquino Day', date: '2025-08-21', type: 'special_non_working', isRecurring: true },
+      { name: 'All Saints\' Day', date: '2025-11-01', type: 'special_non_working', isRecurring: true },
+      { name: 'All Souls\' Day', date: '2025-11-02', type: 'special_non_working', isRecurring: true },
+      { name: 'Feast of Immaculate Conception', date: '2025-12-08', type: 'special_non_working', isRecurring: true },
+      { name: 'Christmas Eve', date: '2025-12-24', type: 'special_non_working', isRecurring: true },
+      { name: "New Year's Eve", date: '2025-12-31', type: 'special_non_working', isRecurring: true },
     ];
 
-    for (const holiday of holidayList) {
+    // 2026 Skeleton (forward planning)
+    const holidays2026 = [
+      { name: "New Year's Day", date: '2026-01-01', type: 'regular', isRecurring: true },
+      { name: 'Araw ng Kagitingan', date: '2026-04-09', type: 'regular', isRecurring: true },
+      { name: 'Maundy Thursday', date: '2026-04-02', type: 'regular', isRecurring: false },
+      { name: 'Good Friday', date: '2026-04-03', type: 'regular', isRecurring: false },
+      { name: 'Labor Day', date: '2026-05-01', type: 'regular', isRecurring: true },
+      { name: 'Independence Day', date: '2026-06-12', type: 'regular', isRecurring: true },
+      { name: 'National Heroes Day', date: '2026-08-31', type: 'regular', isRecurring: false },
+      { name: 'Bonifacio Day', date: '2026-11-30', type: 'regular', isRecurring: true },
+      { name: 'Christmas Day', date: '2026-12-25', type: 'regular', isRecurring: true },
+      { name: 'Rizal Day', date: '2026-12-30', type: 'regular', isRecurring: true },
+    ];
+
+    const allHolidays = [...holidays2025, ...holidays2026];
+
+    for (const holiday of allHolidays) {
+      const year = new Date(holiday.date).getFullYear();
       await db.insert(holidays).values({
         id: randomUUID(),
         name: holiday.name,
@@ -494,10 +544,12 @@ export async function seedPhilippineHolidays() {
         type: holiday.type,
         year: year,
         isRecurring: holiday.isRecurring,
+        workAllowed: true,
+        notes: (holiday as any).notes || null,
       });
     }
 
-    console.log('✅ Philippine holidays seeded');
+    console.log('✅ Philippine holidays seeded (2025 Proclamation 727 + 2026 skeleton)');
   } catch (error) {
     console.error('❌ Error seeding holidays:', error);
     throw error;
@@ -730,7 +782,9 @@ export async function seedSampleSchedulesAndPayroll() {
 
         // Calculate deductions (2025 rates)
         const sssContribution = grossPay >= 20000 ? 900 : grossPay >= 15000 ? 675 : grossPay >= 10000 ? 450 : 225;
-        const philhealthContribution = Math.min(grossPay * 0.025, 500);
+        // PhilHealth 2025: 5% total, 2.5% employee share. Floor ₱10k, ceiling ₱100k
+        const philhealthSalary = Math.max(10000, Math.min(100000, grossPay * 2)); // Monthly salary estimate
+        const philhealthContribution = Math.round(philhealthSalary * 0.025 * 100) / 100; // 2.5% employee share
         const pagibigContribution = Math.min(grossPay * 0.02, 200);
         const withholdingTax = grossPay > 20833 ? (grossPay - 20833) * 0.20 : 0;
 

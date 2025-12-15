@@ -326,7 +326,7 @@ export function splitCrossMidnightShift(startTime: Date, endTime: Date): { start
     segments.push({
       start: segmentStart,
       end: segmentEnd,
-      date: new Date(segmentStart.getFullYear(), segmentStart.getMonth(), segmentStart.getDate())
+      date: new Date(Date.UTC(segmentStart.getUTCFullYear(), segmentStart.getUTCMonth(), segmentStart.getUTCDate()))
     });
 
     current.setTime(nextMidnight.getTime());

@@ -24,9 +24,10 @@ import {
   alpha,
   useTheme,
   Collapse,
+  SwipeableDrawer,
+  useMediaQuery,
 } from "@mui/material";
 
-// MUI Icons
 import {
   Dashboard as DashboardIcon,
   CalendarMonth as CalendarIcon,
@@ -43,6 +44,10 @@ import {
   ChevronLeft as ChevronLeftIcon,
   ChevronRight as ChevronRightIcon,
   AutoAwesome as SparklesIcon,
+  History as HistoryIcon,
+  Verified as VerifiedIcon,
+  Download as DownloadIcon,
+  TrendingUp as TrendingUpIcon,
 } from "@mui/icons-material";
 
 const DRAWER_WIDTH = 280;
@@ -59,8 +64,6 @@ interface NavItem {
 const navigation: NavItem[] = [
   { name: "Dashboard", href: "/", icon: DashboardIcon, roles: ["employee", "manager", "admin"] },
   { name: "Schedule", href: "/schedule", icon: CalendarIcon, roles: ["employee", "manager", "admin"] },
-  { name: "Shift Trading", href: "/shift-trading", icon: SwapIcon, roles: ["employee", "manager", "admin"] },
-  { name: "Time Off", href: "/time-off", icon: EventIcon, roles: ["employee", "manager", "admin"] },
   { name: "Pay Summary", href: "/payroll", icon: MoneyIcon, roles: ["employee", "manager", "admin"] },
   { name: "Notifications", href: "/notifications", icon: NotificationsIcon, roles: ["employee", "manager", "admin"], badge: true },
 ];
@@ -68,21 +71,36 @@ const navigation: NavItem[] = [
 const managementNavigation: NavItem[] = [
   { name: "Employees", href: "/employees", icon: PeopleIcon, roles: ["manager", "admin"] },
   { name: "Payroll", href: "/payroll-management", icon: MoneyIcon, roles: ["manager", "admin"] },
-  { name: "Analytics", href: "/reports", icon: AssessmentIcon, roles: ["manager", "admin"] },
+  { name: "Holidays", href: "/holiday-calendar", icon: CalendarIcon, roles: ["manager", "admin"] },
+  { name: "Forecasting", href: "/analytics", icon: TrendingUpIcon, roles: ["manager", "admin"] },
   { name: "Branches", href: "/branches", icon: StoreIcon, roles: ["manager", "admin"] },
 ];
 
 const settingsNavigation: NavItem[] = [
+  { name: "Compliance", href: "/compliance", icon: VerifiedIcon, roles: ["admin"] },
   { name: "Deductions", href: "/deduction-settings", icon: SettingsIcon, roles: ["manager", "admin"] },
   { name: "Deduction Rates", href: "/admin/deduction-rates", icon: SettingsIcon, roles: ["admin"] },
+  { name: "Audit Logs", href: "/audit-logs", icon: HistoryIcon, roles: ["admin"] },
+  { name: "Export Reports", href: "/reports", icon: DownloadIcon, roles: ["manager", "admin"] },
 ];
 
-export default function MuiSidebar() {
+interface MuiSidebarProps {
+  mobileOpen?: boolean;
+  onMobileClose?: () => void;
+}
+
+export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSidebarProps) {
   const [location, setLocation] = useLocation();
   const currentUser = getCurrentUser();
   const { toast } = useToast();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const theme = useTheme();
+  const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
+
+  // Reset collapse state on mobile (always expanded in drawer)
+  if (!isDesktop && isCollapsed) {
+    setIsCollapsed(false);
+  }
 
   const handleLogout = async () => {
     try {
@@ -226,72 +244,68 @@ export default function MuiSidebar() {
     );
   };
 
-  return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: isCollapsed ? COLLAPSED_WIDTH : DRAWER_WIDTH,
-        flexShrink: 0,
-        transition: "width 0.3s ease-in-out",
-        "& .MuiDrawer-paper": {
-          width: isCollapsed ? COLLAPSED_WIDTH : DRAWER_WIDTH,
-          boxSizing: "border-box",
-          borderRight: `1px solid rgba(255, 255, 255, 0.08)`,
-          background: `rgba(0, 0, 0, 0.4)`,
-          backdropFilter: "blur(20px)",
-          transition: "width 0.3s ease-in-out",
-          overflowX: "hidden",
-        },
-      }}
-    >
+  const drawerContent = (
+    <>
       {/* Collapse Toggle Button */}
-      <IconButton
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        size="small"
-        sx={{
-          position: "absolute",
-          right: -12,
-          top: 72,
-          zIndex: 1,
-          width: 24,
-          height: 24,
-          bgcolor: "background.paper",
-          border: `1px solid ${theme.palette.divider}`,
-          boxShadow: 2,
-          "&:hover": {
+      {isDesktop && ( // Only show collapse button on desktop
+        <IconButton
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          size="small"
+          sx={{
+            position: "absolute",
+            right: -12,
+            top: 72,
+            zIndex: theme.zIndex.drawer + 2,
+            width: 24,
+            height: 24,
             bgcolor: "background.paper",
-          },
-        }}
-      >
-        {isCollapsed ? (
-          <ChevronRightIcon sx={{ fontSize: 14 }} />
-        ) : (
-          <ChevronLeftIcon sx={{ fontSize: 14 }} />
-        )}
-      </IconButton>
+            border: `1px solid ${theme.palette.primary.main}`,
+            color: "primary.main",
+            boxShadow: 3,
+            "&:hover": {
+              bgcolor: alpha(theme.palette.primary.main, 0.1),
+            },
+          }}
+        >
+          {isCollapsed ? (
+            <ChevronRightIcon sx={{ fontSize: 14 }} />
+          ) : (
+            <ChevronLeftIcon sx={{ fontSize: 14 }} />
+          )}
+        </IconButton>
+      )}
 
-      {/* Logo Section */}
+      {/* Sidebar Header */}
       <Box
         sx={{
-          p: 2.5,
+          p: 2,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: isCollapsed ? "center" : "space-between",
+          height: 70,
           borderBottom: `1px solid rgba(255, 255, 255, 0.08)`,
         }}
       >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            gap: 1.5,
+            width: isCollapsed ? "auto" : "100%",
+          }}
+        >
           <Box
             sx={{
-              width: 44,
-              height: 44,
-              borderRadius: 3,
+              width: 38,
+              height: 38,
+              borderRadius: 2,
               background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.3)}`,
-              transition: "transform 0.2s",
-              "&:hover": {
-                transform: "scale(1.05)",
-              },
+              fontSize: 20,
+              boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
+              flexShrink: 0,
             }}
           >
             <CoffeeIcon sx={{ color: "white", fontSize: 22 }} />
@@ -371,7 +385,7 @@ export default function MuiSidebar() {
               <Box sx={{ flex: 1, minWidth: 0 }}>
                 <Typography
                   variant="body2"
-                  sx={{ fontWeight: 600, noWrap: true }}
+                  sx={{ fontWeight: 600 }}
                   noWrap
                 >
                   {currentUser?.firstName} {currentUser?.lastName}
@@ -407,6 +421,53 @@ export default function MuiSidebar() {
           )}
         </Box>
       </Box>
+    </>
+  );
+
+  // Mobile Drawer (Swipeable)
+  if (!isDesktop) {
+    return (
+      <SwipeableDrawer
+        anchor="left"
+        open={mobileOpen}
+        onClose={onMobileClose || (() => {})}
+        onOpen={() => {}}
+        ModalProps={{ keepMounted: true }} // Better open performance on mobile
+        sx={{
+          "& .MuiDrawer-paper": {
+            width: DRAWER_WIDTH,
+            boxSizing: "border-box",
+            borderRight: `1px solid rgba(255, 255, 255, 0.08)`,
+            background: `rgba(20, 20, 20, 0.95)`,
+            backdropFilter: "blur(20px)",
+          },
+        }}
+      >
+        {drawerContent}
+      </SwipeableDrawer>
+    );
+  }
+
+  // Desktop Drawer (Permanent)
+  return (
+    <Drawer
+      variant="permanent"
+      sx={{
+        width: isCollapsed ? COLLAPSED_WIDTH : DRAWER_WIDTH,
+        flexShrink: 0,
+        transition: "width 0.3s ease-in-out",
+        "& .MuiDrawer-paper": {
+          width: isCollapsed ? COLLAPSED_WIDTH : DRAWER_WIDTH,
+          boxSizing: "border-box",
+          borderRight: `1px solid rgba(255, 255, 255, 0.08)`,
+          background: `rgba(0, 0, 0, 0.4)`,
+          backdropFilter: "blur(20px)",
+          transition: "width 0.3s ease-in-out",
+          overflow: "visible", // Allow toggle button to hang off edge
+        },
+      }}
+    >
+      {drawerContent}
     </Drawer>
   );
 }

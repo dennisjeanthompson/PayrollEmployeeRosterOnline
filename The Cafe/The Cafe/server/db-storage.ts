@@ -1,34 +1,12 @@
 import { db } from './db';
-import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods } from '@shared/schema';
+import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, auditLogs, timeOffPolicy } from '@shared/schema';
 import type { IStorage } from './storage';
-import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftTrade, InsertShiftTrade, PayrollPeriod, InsertPayrollPeriod, PayrollEntry, InsertPayrollEntry, Approval, InsertApproval, InsertTimeOffRequest, InsertNotification, DeductionSettings, InsertDeductionSettings, DeductionRate, InsertDeductionRate, Holiday, InsertHoliday, ArchivedPayrollPeriod, InsertArchivedPayrollPeriod } from '@shared/schema';
-import { eq, and, gte, lte, gt, lt, ne, desc, sql } from 'drizzle-orm';
+import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftTrade, InsertShiftTrade, PayrollPeriod, InsertPayrollPeriod, PayrollEntry, InsertPayrollEntry, Approval, InsertApproval, TimeOffRequest, InsertTimeOffRequest, Notification, InsertNotification, DeductionSettings, InsertDeductionSettings, DeductionRate, InsertDeductionRate, Holiday, InsertHoliday, ArchivedPayrollPeriod, InsertArchivedPayrollPeriod, TimeOffPolicy, InsertTimeOffPolicy, AuditLog, InsertAuditLog } from '@shared/schema';
+import { eq, and, gte, lte, gt, lt, ne, desc, or, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcrypt';
 
-type Notification = {
-  id: string;
-  userId: string;
-  type: string;
-  title: string;
-  message: string;
-  isRead: boolean;
-  data?: any;
-  createdAt: Date;
-};
 
-type TimeOffRequest = {
-  id: string;
-  userId: string;
-  startDate: Date;
-  endDate: Date;
-  type: string;
-  reason: string;
-  status: string;
-  requestedAt: Date;
-  approvedAt?: Date | null;
-  approvedBy?: string | null;
-};
 
 export class DatabaseStorage implements IStorage {
   // Setup Status
@@ -98,15 +76,8 @@ export class DatabaseStorage implements IStorage {
       
       // Improve error messages
       if (error.message?.includes('UNIQUE constraint')) {
-        if (error.message?.includes('username')) {
-          throw new Error('Username already exists');
-        } else if (error.message?.includes('email')) {
-          throw new Error('Email already in use');
-        } else if (error.message?.includes('users_username_unique')) {
-          throw new Error('Username already exists');
-        }
+        throw new Error('Username or email already exists');
       }
-      
       throw error;
     }
   }
@@ -125,12 +96,152 @@ export class DatabaseStorage implements IStorage {
 
   async deleteUser(id: string): Promise<boolean> {
     try {
+      // Check for existing shifts
+      const userShifts = await this.getShiftsByUser(id);
+      if (userShifts.length > 0) {
+        throw new Error("Cannot delete employee with existing shifts. Deactivate them instead.");
+      }
+
+      // Check for existing payroll entries
+      const userPayroll = await this.getPayrollEntriesByUser(id);
+      if (userPayroll.length > 0) {
+        throw new Error("Cannot delete employee with existing payroll records. Deactivate them instead.");
+      }
+
       await db.delete(users).where(eq(users.id, id));
       return true;
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error deleting user:', error);
+      // Re-throw specific errors so they can be handled by the route
+      if (error.message.includes("Cannot delete employee")) {
+        throw error;
+      }
       return false;
     }
+  }
+
+  /**
+   * Force delete an employee and ALL their related data.
+   * This is an admin-only operation that should be used with extreme caution.
+   * Creates an audit log entry before deletion for compliance.
+   * Uses a transaction to ensure atomicity.
+   */
+  async forceDeleteUser(id: string, performedBy: string, reason?: string): Promise<void> {
+    // Get user info before deletion for audit log
+    const userToDelete = await this.getUser(id);
+    if (!userToDelete) {
+      throw new Error('Employee not found');
+    }
+
+    // Use a transaction to ensure all deletes succeed or none do
+    await db.transaction(async (tx) => {
+      // 1. Create audit log entry FIRST (before any deletions)
+      await tx.insert(auditLogs).values({
+        id: randomUUID(),
+        action: 'FORCE_DELETE_EMPLOYEE',
+        entityType: 'employee',
+        entityId: id,
+        userId: performedBy,
+        oldValues: JSON.stringify({
+          username: userToDelete.username,
+          firstName: userToDelete.firstName,
+          lastName: userToDelete.lastName,
+          email: userToDelete.email,
+          position: userToDelete.position,
+          branchId: userToDelete.branchId,
+        }),
+        newValues: null,
+        reason: reason || 'Force deletion requested by admin',
+        createdAt: new Date(),
+      });
+
+      // 2. Delete in reverse dependency order (most dependent first)
+      
+      // Delete shift trades (references shifts and users)
+      await tx.delete(shiftTrades).where(
+        or(
+          eq(shiftTrades.fromUserId, id),
+          eq(shiftTrades.toUserId, id),
+          eq(shiftTrades.approvedBy, id)
+        )
+      );
+
+      // Delete shifts
+      await tx.delete(shifts).where(eq(shifts.userId, id));
+
+      // Delete payroll entries
+      await tx.delete(payrollEntries).where(eq(payrollEntries.userId, id));
+
+      // Delete time off requests
+      await tx.delete(timeOffRequests).where(
+        or(
+          eq(timeOffRequests.userId, id),
+          eq(timeOffRequests.approvedBy, id)
+        )
+      );
+
+      // Delete approvals
+      await tx.delete(approvals).where(
+        or(
+          eq(approvals.requestedBy, id),
+          eq(approvals.approvedBy, id)
+        )
+      );
+
+      // Delete notifications
+      await tx.delete(notifications).where(eq(notifications.userId, id));
+
+      // Update archived payroll periods (set archivedBy to null instead of deleting)
+      await tx.update(archivedPayrollPeriods)
+        .set({ archivedBy: null })
+        .where(eq(archivedPayrollPeriods.archivedBy, id));
+
+      // 3. Finally delete the user
+      await tx.delete(users).where(eq(users.id, id));
+    });
+
+    console.log(`🗑️ Force deleted employee: ${userToDelete.firstName} ${userToDelete.lastName} (${id}) by ${performedBy}`);
+  }
+
+  /**
+   * Get all employee data for export before deletion (GDPR compliance)
+   */
+  async getEmployeeDataForExport(id: string): Promise<{
+    employee: User;
+    shifts: Shift[];
+    payrollEntries: PayrollEntry[];
+    timeOffRequests: TimeOffRequest[];
+    shiftTrades: ShiftTrade[];
+  } | null> {
+    const employee = await this.getUser(id);
+    if (!employee) return null;
+
+    const employeeShifts = await this.getShiftsByUser(id);
+    const employeePayroll = await this.getPayrollEntriesByUser(id);
+    const employeeTimeOff = await this.getTimeOffRequestsByUser(id);
+    const employeeShiftTrades = await this.getShiftTradesByUser(id);
+
+    return {
+      employee,
+      shifts: employeeShifts,
+      payrollEntries: employeePayroll,
+      timeOffRequests: employeeTimeOff,
+      shiftTrades: employeeShiftTrades,
+    };
+  }
+
+  /**
+   * Check if an employee has any related data (shifts, payroll, etc.)
+   */
+  async employeeHasRelatedData(id: string): Promise<{ hasShifts: boolean; hasPayroll: boolean; hasTotal: number }> {
+    const shifts = await this.getShiftsByUser(id);
+    const payroll = await this.getPayrollEntriesByUser(id);
+    
+    return {
+      hasShifts: shifts.length > 0,
+      hasPayroll: payroll.length > 0,
+      hasTotal: shifts.length + payroll.length,
+    };
   }
 
   async getUsersByBranch(branchId: string): Promise<User[]> {
@@ -207,20 +318,20 @@ export class DatabaseStorage implements IStorage {
     const dayEnd = new Date(date);
     dayEnd.setHours(23, 59, 59, 999);
     
-    let query = db.select().from(shifts).where(
-      and(
-        eq(shifts.userId, userId),
-        gte(shifts.startTime, dayStart),
-        lte(shifts.startTime, dayEnd)
-      )
-    );
-    
-    // Exclude the current shift if updating
+    const conditions = [
+      eq(shifts.userId, userId),
+      gte(shifts.startTime, dayStart),
+      lte(shifts.startTime, dayEnd)
+    ];
+
     if (excludeShiftId) {
-      query = query.where(sql`${shifts.id} != ${excludeShiftId}`);
+      conditions.push(sql`${shifts.id} != ${excludeShiftId}`);
     }
-    
-    return query.orderBy(shifts.startTime);
+
+    return db.select()
+      .from(shifts)
+      .where(and(...conditions))
+      .orderBy(shifts.startTime);
   }
 
   async createShift(shift: InsertShift): Promise<Shift> {
@@ -509,13 +620,13 @@ export class DatabaseStorage implements IStorage {
 
   async getTimeOffRequest(id: string): Promise<TimeOffRequest | undefined> {
     const result = await db.select().from(timeOffRequests).where(eq(timeOffRequests.id, id)).limit(1);
-    return result[0] as TimeOffRequest | undefined;
+    return result[0] ? (result[0] as TimeOffRequest) : undefined;
   }
 
   async updateTimeOffRequest(id: string, request: Partial<InsertTimeOffRequest>): Promise<TimeOffRequest | undefined> {
     await db.update(timeOffRequests).set(request).where(eq(timeOffRequests.id, id));
     const result = await db.select().from(timeOffRequests).where(eq(timeOffRequests.id, id)).limit(1);
-    return result[0] as TimeOffRequest | undefined;
+    return result[0] ? (result[0] as TimeOffRequest) : undefined;
   }
 
   async getTimeOffRequestsByUser(userId: string): Promise<TimeOffRequest[]> {
@@ -528,8 +639,9 @@ export class DatabaseStorage implements IStorage {
 
   async deleteTimeOffRequest(id: string): Promise<boolean> {
     const result = await db.delete(timeOffRequests)
-      .where(eq(timeOffRequests.id, id));
-    return result.changes > 0;
+      .where(eq(timeOffRequests.id, id))
+      .returning();
+    return result.length > 0;
   }
   // Notifications
   async createNotification(notification: InsertNotification): Promise<Notification> {
@@ -563,7 +675,6 @@ export class DatabaseStorage implements IStorage {
       try {
         parsedData = typeof result[0].data === 'string' ? JSON.parse(result[0].data) : result[0].data;
       } catch (e) {
-        console.error('Error parsing notification data:', e, 'Data:', result[0].data);
         parsedData = result[0].data;
       }
     }
@@ -573,6 +684,44 @@ export class DatabaseStorage implements IStorage {
       data: parsedData,
       createdAt: result[0].createdAt instanceof Date ? result[0].createdAt : (result[0].createdAt ? new Date(result[0].createdAt) : new Date()),
     } as Notification;
+  }
+
+
+  async getUserNotifications(userId: string): Promise<Notification[]> {
+    const results = await db.select().from(notifications)
+      .where(eq(notifications.userId, userId))
+      .orderBy(desc(notifications.createdAt))
+      .limit(50); // Limit to last 50 notifications
+
+    return results.map(n => {
+      let parsedData = null;
+      if (n.data) {
+        try {
+          parsedData = typeof n.data === 'string' ? JSON.parse(n.data) : n.data;
+        } catch (e) {
+          parsedData = n.data;
+        }
+      }
+      return {
+        ...n,
+        data: parsedData,
+        createdAt: n.createdAt instanceof Date ? n.createdAt : (n.createdAt ? new Date(n.createdAt) : new Date()),
+      } as Notification;
+    });
+  }
+
+  async markNotificationRead(id: string): Promise<Notification | undefined> {
+    await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.id, id));
+      
+    return this.getNotification(id);
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db.update(notifications)
+      .set({ isRead: true })
+      .where(eq(notifications.userId, userId));
   }
 
   async updateNotification(id: string, notification: Partial<InsertNotification>): Promise<Notification | undefined> {
@@ -751,12 +900,36 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(holidays).where(eq(holidays.year, year));
   }
 
+  async getHoliday(id: string): Promise<Holiday | undefined> {
+    const result = await db.select().from(holidays).where(eq(holidays.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getHolidayByDate(date: Date): Promise<Holiday | undefined> {
+    // Match by date (ignoring time component)
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
+    
+    const result = await db.select().from(holidays).where(
+      and(
+        gte(holidays.date, dayStart),
+        lte(holidays.date, dayEnd)
+      )
+    ).limit(1);
+    return result[0];
+  }
+
   async createHoliday(holidayData: InsertHoliday): Promise<Holiday> {
     const id = randomUUID();
     const holiday: Holiday = {
       ...holidayData,
       id,
       isRecurring: holidayData.isRecurring ?? false,
+      notes: holidayData.notes ?? null,
+      workAllowed: holidayData.workAllowed ?? null,
+      premiumOverride: holidayData.premiumOverride ?? null,
       createdAt: new Date()
     };
     await db.insert(holidays).values(holiday);
@@ -804,6 +977,193 @@ export class DatabaseStorage implements IStorage {
   async getArchivedPayrollPeriod(id: string): Promise<ArchivedPayrollPeriod | undefined> {
     const result = await db.select().from(archivedPayrollPeriods).where(eq(archivedPayrollPeriods.id, id)).limit(1);
     return result[0];
+  }
+
+  // Time Off Policy Settings (with graceful fallback if table doesn't exist)
+  async getTimeOffPolicyByBranch(branchId: string): Promise<TimeOffPolicy[]> {
+    try {
+      return await db.select().from(timeOffPolicy)
+        .where(eq(timeOffPolicy.branchId, branchId));
+    } catch (error: any) {
+      // Table might not exist yet - return empty array
+      console.warn('getTimeOffPolicyByBranch: Table may not exist, using defaults:', error.message);
+      return [];
+    }
+  }
+
+  async getTimeOffPolicyByType(branchId: string, leaveType: string): Promise<TimeOffPolicy | undefined> {
+    try {
+      const result = await db.select().from(timeOffPolicy)
+        .where(and(
+          eq(timeOffPolicy.branchId, branchId),
+          eq(timeOffPolicy.leaveType, leaveType)
+        ))
+        .limit(1);
+      return result[0];
+    } catch (error: any) {
+      // Table might not exist yet - return undefined (will use defaults)
+      console.warn('getTimeOffPolicyByType: Table may not exist, using defaults:', error.message);
+      return undefined;
+    }
+  }
+
+  async upsertTimeOffPolicy(branchId: string, leaveType: string, minimumAdvanceDays: number): Promise<TimeOffPolicy> {
+    try {
+      // Check if policy exists for this branch and leave type
+      const existing = await this.getTimeOffPolicyByType(branchId, leaveType);
+      
+      if (existing) {
+        // Update existing policy
+        await db.update(timeOffPolicy)
+          .set({ minimumAdvanceDays, updatedAt: new Date() })
+          .where(eq(timeOffPolicy.id, existing.id));
+        const updated = await this.getTimeOffPolicyByType(branchId, leaveType);
+        return updated!;
+      } else {
+        // Create new policy
+        const id = randomUUID();
+        await db.insert(timeOffPolicy).values({
+          id,
+          branchId,
+          leaveType,
+          minimumAdvanceDays,
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+        const created = await this.getTimeOffPolicyByType(branchId, leaveType);
+        if (!created) throw new Error('Failed to create time off policy');
+        return created;
+      }
+    } catch (error: any) {
+      // Table might not exist - return a virtual policy object
+      console.warn('upsertTimeOffPolicy: Table may not exist:', error.message);
+      return {
+        id: 'virtual',
+        branchId,
+        leaveType,
+        minimumAdvanceDays,
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as TimeOffPolicy;
+    }
+  }
+
+  async initializeDefaultTimeOffPolicies(branchId: string): Promise<void> {
+    // Default policies based on Philippine cafe practices
+    // This is a no-op if the table doesn't exist - defaults will be used inline
+    try {
+      const defaults = [
+        { leaveType: 'vacation', minimumAdvanceDays: 7 },
+        { leaveType: 'sick', minimumAdvanceDays: 0 },
+        { leaveType: 'emergency', minimumAdvanceDays: 0 },
+        { leaveType: 'personal', minimumAdvanceDays: 3 },
+        { leaveType: 'other', minimumAdvanceDays: 3 },
+      ];
+      
+      for (const policy of defaults) {
+        const existing = await this.getTimeOffPolicyByType(branchId, policy.leaveType);
+        if (!existing) {
+          await this.upsertTimeOffPolicy(branchId, policy.leaveType, policy.minimumAdvanceDays);
+        }
+      }
+    } catch (error: any) {
+      // Table might not exist yet - that's okay, we'll use inline defaults
+      console.warn('initializeDefaultTimeOffPolicies: Table may not exist, using inline defaults:', error.message);
+    }
+  }
+
+  // Archived Payroll Periods - Removing Duplicate
+  // Implementation exists at line 948
+
+  // Audit Logs
+  async createAuditLog(logData: InsertAuditLog & { id: string }): Promise<AuditLog> {
+    const log: AuditLog = {
+      ...logData,
+      createdAt: new Date(),
+      oldValues: logData.oldValues ?? null,
+      newValues: logData.newValues ?? null,
+      ipAddress: logData.ipAddress ?? null,
+      userAgent: logData.userAgent ?? null,
+      reason: logData.reason ?? null,
+    };
+    await db.insert(auditLogs).values(log);
+    return log;
+  }
+
+  async getAuditLogs(params: { branchId?: string; entityType?: string; action?: string; entityId?: string; userId?: string; startDate?: Date; endDate?: Date; limit?: number; offset?: number }): Promise<AuditLog[]> {
+    const conditions = [];
+
+    // Filter by branch via join with users if branchId is provided
+    // For now, simpler implementation: ignore branchId if not strictly required or use subquery
+    // Since we can't easily join in this structure without changing return type significantly or mapping
+    // We'll filter by other params first.
+    
+    if (params.entityType) conditions.push(eq(auditLogs.entityType, params.entityType));
+    if (params.action) conditions.push(eq(auditLogs.action, params.action));
+    if (params.entityId) conditions.push(eq(auditLogs.entityId, params.entityId));
+    if (params.userId) conditions.push(eq(auditLogs.userId, params.userId));
+    if (params.startDate) conditions.push(gte(auditLogs.createdAt, params.startDate));
+    if (params.endDate) conditions.push(lte(auditLogs.createdAt, params.endDate));
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+
+    const logs = await db.select().from(auditLogs)
+      .where(whereClause)
+      .orderBy(desc(auditLogs.createdAt))
+      .limit(params.limit || 50)
+      .offset(params.offset || 0);
+
+    return logs;
+  }
+
+  async getAuditLogStats(): Promise<{ totalLogs: number; byAction: Record<string, number>; byEntityType: Record<string, number> }> {
+    // Global stats if no branchId provided in interface
+    const actionCounts = await db.select({ 
+      action: auditLogs.action, 
+      count: sql<number>`count(*)` 
+    })
+    .from(auditLogs)
+    .groupBy(auditLogs.action);
+
+    const entityTypeCounts = await db.select({ 
+      entityType: auditLogs.entityType, 
+      count: sql<number>`count(*)` 
+    })
+    .from(auditLogs)
+    .groupBy(auditLogs.entityType);
+
+    const byAction: Record<string, number> = {};
+    actionCounts.forEach(row => {
+      byAction[row.action] = Number(row.count);
+    });
+
+    const byEntityType: Record<string, number> = {};
+    entityTypeCounts.forEach(row => {
+      if (row.entityType) byEntityType[row.entityType] = Number(row.count);
+    });
+
+    const totalLogs = actionCounts.reduce((acc, curr) => acc + Number(curr.count), 0);
+
+    return { totalLogs, byAction, byEntityType };
+  }
+
+  async getPayrollEntriesForDateRange(branchId: string, startDate: Date, endDate: Date): Promise<PayrollEntry[]> {
+    const result = await db.select({
+      entry: payrollEntries
+    })
+    .from(payrollEntries)
+    .innerJoin(payrollPeriods, eq(payrollEntries.payrollPeriodId, payrollPeriods.id))
+    .where(
+      and(
+        eq(payrollPeriods.branchId, branchId),
+        gte(payrollPeriods.startDate, startDate),
+        lte(payrollPeriods.endDate, endDate)
+      )
+    );
+    
+    return result.map(r => r.entry);
   }
 }
 

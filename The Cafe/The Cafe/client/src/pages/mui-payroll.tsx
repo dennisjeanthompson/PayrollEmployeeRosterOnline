@@ -4,7 +4,8 @@ import { format, parseISO } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { getCurrentUser } from "@/lib/auth";
-import DigitalPayslipViewer from "@/components/payslip/digital-payslip-viewer";
+import { useRealtime } from "@/hooks/use-realtime";
+import { PayslipPreview as DigitalPayslip } from "@/components/payroll/payslip-preview";
 
 // MUI Components
 import {
@@ -108,6 +109,12 @@ export default function MuiPayroll() {
   const [selectedPayslip, setSelectedPayslip] = useState<PayrollEntry | null>(null);
   const [payslipDialogOpen, setPayslipDialogOpen] = useState(false);
 
+  // Enable real-time updates
+  useRealtime({ 
+    queryKeys: ["payroll-entries", "current-payroll-period"],
+    enabled: !!currentUser
+  });
+
   // Fetch payroll entries for current user with real-time updates
   const { data: payrollData, isLoading: payrollLoading, refetch: refetchPayroll } = useQuery({
     queryKey: ["payroll-entries"],
@@ -133,7 +140,9 @@ export default function MuiPayroll() {
   });
 
   const payrollEntries: PayrollEntry[] = payrollData?.entries || [];
+  
   const currentEntry = payrollEntries.find((e) => e.status === "draft" || e.status === "pending");
+  
   const paidEntries = payrollEntries.filter((e) => e.status === "paid");
 
   // Calculate summary stats
@@ -483,15 +492,10 @@ export default function MuiPayroll() {
 
         {/* Digital Payslip Viewer (PH-Compliant 2025) */}
         {selectedPayslip && (
-          <DigitalPayslipViewer
-            payrollEntryId={selectedPayslip.id}
-            employeeId={currentUser?.id || ''}
-            employeeName={currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : ''}
-            periodStart={selectedPayslip.createdAt}
-            periodEnd={selectedPayslip.createdAt}
+          <DigitalPayslip
+            entryId={selectedPayslip.id}
             open={payslipDialogOpen}
-            onClose={() => setPayslipDialogOpen(false)}
-            isManagerView={false}
+            onOpenChange={setPayslipDialogOpen}
           />
         )}
       </Box>

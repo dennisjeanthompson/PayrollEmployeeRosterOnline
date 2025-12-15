@@ -199,6 +199,17 @@ export const archivedPayrollPeriods = pgTable("archived_payroll_periods", {
   entriesSnapshot: text("entries_snapshot"),
 });
 
+// Time off policy settings per branch (configurable advance notice requirements)
+export const timeOffPolicy = pgTable("time_off_policy", {
+  id: text("id").primaryKey(),
+  branchId: text("branch_id").references(() => branches.id).notNull(),
+  leaveType: text("leave_type").notNull(), // 'vacation', 'sick', 'emergency', 'personal', 'other'
+  minimumAdvanceDays: integer("minimum_advance_days").notNull().default(0),
+  isActive: boolean("is_active").default(true),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert Schemas
 export const insertBranchSchema = createInsertSchema(branches).omit({
   id: true,
@@ -288,6 +299,12 @@ export const insertArchivedPayrollPeriodSchema = createInsertSchema(archivedPayr
   archivedAt: true,
 });
 
+export const insertTimeOffPolicySchema = createInsertSchema(timeOffPolicy).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export interface DashboardStats {
   stats: {
     late: number;
@@ -310,6 +327,7 @@ export type DeductionSettings = typeof deductionSettings.$inferSelect;
 export type DeductionRate = typeof deductionRates.$inferSelect;
 export type Holiday = typeof holidays.$inferSelect;
 export type ArchivedPayrollPeriod = typeof archivedPayrollPeriods.$inferSelect;
+export type TimeOffPolicy = typeof timeOffPolicy.$inferSelect;
 
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -324,3 +342,4 @@ export type InsertDeductionSettings = z.infer<typeof insertDeductionSettingsSche
 export type InsertDeductionRate = z.infer<typeof insertDeductionRatesSchema>;
 export type InsertHoliday = z.infer<typeof insertHolidaySchema>;
 export type InsertArchivedPayrollPeriod = z.infer<typeof insertArchivedPayrollPeriodSchema>;
+export type InsertTimeOffPolicy = z.infer<typeof insertTimeOffPolicySchema>;

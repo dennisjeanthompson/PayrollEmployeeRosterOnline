@@ -228,12 +228,12 @@ export default function ShiftTradingPanel() {
   const employees = employeesData?.employees || [];
 
   // Filter trades by type
-  const myOutgoingTrades = trades.filter((t) => t.fromUserId === currentUser?.id);
-  const incomingTrades = trades.filter((t) => t.toUserId === currentUser?.id && t.status === "pending");
-  const managerPendingTrades = isManagerRole ? trades.filter((t) => t.status === "accepted") : [];
+  const myOutgoingTrades = trades.filter((t: ShiftTrade) => t.fromUserId === currentUser?.id);
+  const incomingTrades = trades.filter((t: ShiftTrade) => t.toUserId === currentUser?.id && t.status === "pending");
+  const managerPendingTrades = isManagerRole ? trades.filter((t: ShiftTrade) => t.status === "accepted") : [];
 
   // Available shifts for creating trade (future shifts only)
-  const availableShifts = shifts.filter((s) => isFuture(parseISO(s.startTime)) && s.userId === currentUser?.id);
+  const availableShifts = shifts.filter((s: Shift) => isFuture(parseISO(s.startTime)) && s.userId === currentUser?.id);
 
   // Status badge helper
   const getStatusChip = (status: string) => {
@@ -508,7 +508,7 @@ export default function ShiftTradingPanel() {
         ) : myOutgoingTrades.length === 0 ? (
           <Alert severity="info">No outgoing shift trade requests. Create one to get started!</Alert>
         ) : (
-          myOutgoingTrades.map((trade) => <TradeCard key={trade.id} trade={trade} showActions={false} />)
+          myOutgoingTrades.map((trade: ShiftTrade) => <TradeCard key={trade.id} trade={trade} showActions={false} />)
         )}
       </TabPanel>
 
@@ -521,7 +521,7 @@ export default function ShiftTradingPanel() {
         ) : incomingTrades.length === 0 ? (
           <Alert severity="info">No incoming shift trade requests</Alert>
         ) : (
-          incomingTrades.map((trade) => (
+          incomingTrades.map((trade: ShiftTrade) => (
             <TradeCard key={trade.id} trade={trade} showActions actionType="respond" />
           ))
         )}
@@ -537,7 +537,7 @@ export default function ShiftTradingPanel() {
           ) : managerPendingTrades.length === 0 ? (
             <Alert severity="info">No pending approvals</Alert>
           ) : (
-            managerPendingTrades.map((trade) => (
+            managerPendingTrades.map((trade: ShiftTrade) => (
               <TradeCard key={trade.id} trade={trade} showActions actionType="approve" />
             ))
           )}
@@ -556,7 +556,7 @@ export default function ShiftTradingPanel() {
                 label="Your Shift"
                 onChange={(e) => setSelectedShift(e.target.value)}
               >
-                {availableShifts.map((shift) => (
+                {availableShifts.map((shift: Shift) => (
                   <MenuItem key={shift.id} value={shift.id}>
                     {format(parseISO(shift.startTime), "MMM d")} •{" "}
                     {format(parseISO(shift.startTime), "h:mm a")} - {format(parseISO(shift.endTime), "h:mm a")} •{" "}
@@ -573,7 +573,7 @@ export default function ShiftTradingPanel() {
                 label="Target Employee"
                 onChange={(e) => setTargetEmployee(e.target.value)}
               >
-                {employees.map((emp: any) => (
+                {employees.map((emp: { id: number; firstName: string; lastName: string }) => (
                   <MenuItem key={emp.id} value={emp.id}>
                     {emp.firstName} {emp.lastName}
                   </MenuItem>

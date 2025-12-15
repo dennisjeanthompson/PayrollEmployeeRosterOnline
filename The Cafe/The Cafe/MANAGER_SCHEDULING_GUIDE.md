@@ -25,6 +25,7 @@ The scheduling system is **manager-exclusive** with role-based access control. M
 8. [Real-Time Synchronization](#real-time-synchronization)
 9. [Validation Rules](#validation-rules)
 10. [Error Handling](#error-handling)
+11. [Holiday Calendar Integration](#holiday-calendar-integration)
 
 ---
 
@@ -1090,6 +1091,34 @@ Employees can view shifts in their own calendar
 4. **Night Shift Smart:** Auto-adds day if end < start
 5. **5-Second Polling:** Keeps all managers in sync
 6. **No Hardcoding:** All times calculated from data
+
+---
+
+## 📅 Holiday Calendar Integration
+
+### Overview
+The system now includes a dedicated Holiday Calendar specific to Philippine Labor Standards (DOLE). This ensures accurate premium pay calculations and allows managers to control work availability on specific holidays.
+
+### Managing Holidays
+**Access:** "Holidays" tab in sidebar (Manager/Admin only).
+
+**Features:**
+- **View:** Monthly calendar showing all holidays.
+- **Seed:** One-click import of 2025 standard holidays (Proclamation 727).
+- **Create/Edit:** Custom holidays with specific types:
+  - 🔴 **Regular Holiday** (Double Pay / 200%)
+  - 🟠 **Special Non-Working** (30% Premium / 130%)
+  - 🔵 **Company/Special Working** (Standard Pay, treated as normal work day)
+
+### Scheduling Restrictions
+ADMINs can toggle **"Work Allowed"** for each holiday:
+- **ON (Default):** Shifts allowed. Payroll automatically applies premium rates.
+- **OFF:** Shifts BLOCKED. Managers cannot drag/create shifts on this date.
+  - *Error:* "Cannot schedule shifts on [Holiday Name] - work not allowed."
+
+### Visual Indicators on Schedule
+- **Background Color:** Holidays appear as colored vertical columns on the schedule grid.
+- **Tooltip:** Hovering over the date header shows the holiday name and pay rule.
 
 ---
 

@@ -58,7 +58,8 @@ import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { format, subDays, addDays, startOfMonth, endOfMonth } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import DigitalPayslipViewer from "@/components/payslip/digital-payslip-viewer";
+import { useRealtime } from "@/hooks/use-realtime";
+import { PayslipPreview as DigitalPayslip } from "@/components/payroll/payslip-preview";
 
 interface PayrollPeriod {
   id: string;
@@ -125,6 +126,11 @@ export default function MuiPayrollManagement() {
   // Digital payslip viewer state
   const [payslipViewerOpen, setPayslipViewerOpen] = useState(false);
   const [selectedEntryForPayslip, setSelectedEntryForPayslip] = useState<PayrollEntry | null>(null);
+
+  // Enable real-time updates for payroll management
+  useRealtime({
+    queryKeys: ["payroll-periods", "payroll-entries-branch"]
+  });
   
   // Handle opening digital payslip viewer
   const handleViewPayslip = (entry: PayrollEntry) => {
@@ -157,9 +163,7 @@ export default function MuiPayrollManagement() {
       const response = await apiRequest("GET", "/api/payroll/periods");
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time payroll updates
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   // Fetch payroll entries for selected period with real-time updates
@@ -173,9 +177,7 @@ export default function MuiPayrollManagement() {
       return response.json();
     },
     enabled: !!selectedPeriod,
-    refetchInterval: 5000, // Poll every 5 seconds for real-time entry updates
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   // Mutations
@@ -1151,18 +1153,13 @@ export default function MuiPayrollManagement() {
       
       {/* Digital Payslip Viewer */}
       {selectedEntryForPayslip && selectedPeriod && (
-        <DigitalPayslipViewer
-          payrollEntryId={selectedEntryForPayslip.id}
-          employeeId={selectedEntryForPayslip.userId}
-          employeeName={`${selectedEntryForPayslip.employee?.firstName || ''} ${selectedEntryForPayslip.employee?.lastName || ''}`}
-          periodStart={selectedPeriod.startDate}
-          periodEnd={selectedPeriod.endDate}
+        <DigitalPayslip
+          entryId={selectedEntryForPayslip.id}
           open={payslipViewerOpen}
-          onClose={() => {
-            setPayslipViewerOpen(false);
-            setSelectedEntryForPayslip(null);
+          onOpenChange={(isOpen) => {
+            setPayslipViewerOpen(isOpen);
+            if (!isOpen) setSelectedEntryForPayslip(null);
           }}
-          isManagerView={true}
         />
       )}
     </Box>

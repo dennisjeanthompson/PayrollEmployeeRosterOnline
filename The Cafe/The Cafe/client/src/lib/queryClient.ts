@@ -161,24 +161,22 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
-      // Real-time sync: refetch data every 30 seconds for active queries
-      refetchInterval: 30000,
+      // PERFORMANCE: Disabled global refetch interval - individual queries set if needed
+      refetchInterval: false,
       // Refetch when window regains focus for real-time feel
       refetchOnWindowFocus: true,
-      // Data is considered stale after 10 seconds
-      staleTime: 10000,
+      // PERFORMANCE: Data considered fresh for 30 seconds (was 10s)
+      staleTime: 30000,
       // Retry failed requests once
       retry: 1,
       // Keep data in cache for 5 minutes
       gcTime: 5 * 60 * 1000,
+      // Don't refetch on mount if data is fresh
+      refetchOnMount: "always",
     },
     mutations: {
       retry: false,
-      // After mutation success, automatically refetch related queries
-      onSuccess: () => {
-        // Invalidate common queries that might be affected
-        queryClient.invalidateQueries();
-      },
+      // PERFORMANCE: Removed global invalidation - individual mutations handle this
     },
   },
 });

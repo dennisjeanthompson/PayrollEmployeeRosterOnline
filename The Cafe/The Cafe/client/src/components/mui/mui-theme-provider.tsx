@@ -1,6 +1,7 @@
 import { useMemo, ReactNode } from "react";
 import { ThemeProvider, createTheme, alpha } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
+import type {} from '@mui/x-data-grid/themeAugmentation';
 import { useTheme } from "@/components/theme-provider";
 
 interface MuiThemeProviderProps {

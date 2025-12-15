@@ -1,0 +1,223 @@
+/* Mobile-First Responsive Calendar Styles */
+
+/* CRITICAL: Make FullCalendar responsive on mobile */
+@media (max-width: 600px) {
+  /* Calendar container - allow overflow and scrolling */
+  .fc {
+    width: 100% !important;
+    font-size: 0.75rem !important;
+  }
+  
+  /* Calendar header - stack vertically on mobile */
+  .fc-header-toolbar {
+    flex-direction: column !important;
+    gap: 8px !important;
+    padding: 8px !important;
+  }
+  
+  .fc-toolbar-chunk {
+    display: flex !important;
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+  }
+  
+  /* Buttons - touch-friendly sizes */
+  .fc-button {
+    padding: 8px 12px !important;
+    font-size: 0.75rem !important;
+    min-height: 36px !important;
+  }
+  
+  /* Title - smaller on mobile */
+  .fc-toolbar-title {
+    font-size: 1.1rem !important;
+   margin: 4px 0 !important;
+  }
+  
+  /* Time grid - compact view */
+  .fc-timegrid-slot {
+    height: 2em !important;
+  }
+  
+  .fc-timegrid-slot-label {
+    font-size: 0.7rem !important;
+  }
+  
+  /* Day headers - compact */
+  .fc-col-header-cell {
+    padding: 4px 2px !important;
+    font-size: 0.7rem !important;
+  }
+  
+  /* Events - readable but compact */
+  .fc-event {
+    font-size: 0.7rem !important;
+    padding: 2px 4px !important;
+  }
+  
+  .fc-event-title {
+    font-weight: 600 !important;
+  }
+  
+  /* List view - optimized for mobile */
+  .fc-list-event {
+    padding: 8px !important;
+  }
+  
+  .fc-list-event-time {
+    font-size: 0.7rem !important;
+  }
+  
+  .fc-list-event-title {
+    font-size: 0.8rem !important;
+  }
+  
+  /* Day grid - compact month view */
+  .fc-daygrid-day-number {
+    font-size: 0.75rem !important;
+    padding: 4px !important;
+  }
+  
+  .fc-daygrid-day-events {
+    margin-top: 2px !important;
+  }
+  
+  .fc-daygrid-event {
+    font-size: 0.65rem !important;
+    padding: 1px 2px !important;
+  }
+  
+  /* Scrollable time grid */
+  .fc-scroller {
+    overflow: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  /* More link in day grid */
+  .fc-daygrid-more-link {
+    font-size: 0.7rem !important;
+  }
+}
+
+/* Tablet breakpoint */
+@media (min-width: 601px) and (max-width: 960px) {
+  .fc {
+    font-size: 0.85rem !important;
+  }
+  
+  .fc-button {
+    padding: 6px 14px !important;
+    font-size: 0.85rem !important;
+  }
+  
+  .fc-toolbar-title {
+    font-size: 1.3rem !important;
+  }
+}
+
+/* Always - Touch-friendly improvements */
+.fc-event {
+  cursor: pointer !important;
+  touch-action: manipulation !important;
+}
+
+.fc-daygrid-day,
+.fc-timegrid-slot {
+  cursor: pointer !important;
+  touch-action: manipulation !important;
+}
+
+/* Prevent text selection during drag on touch devices */
+.fc-event-dragging {
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+/* Better click/touch feedback */
+.fc-event:active,
+.fc-daygrid-day:active {
+  opacity: 0.7 !important;
+  transition: opacity 0.1s !important;
+}
+
+/* Hide resource timeline on very small screens (not a paid feature) */
+@media (max-width: 600px) {
+  .fc-resourceTimelineWeek-view .fc-resource-area {
+    min-width: 100px !important;
+    max-width: 120px !important;
+  }
+  
+  .fc-resource-header {
+    font-size: 0.7rem !important;
+  }
+}
+
+/* CRITICAL: Prevent horizontal scroll on mobile - 2025 best practice */
+@media (max-width: 768px) {
+  /* Force calendar to fit screen width */
+  .fc,
+  .fc-view-harness,
+  .fc-view,
+  .fc-daygrid,
+  .fc-timegrid {
+    width: 100% !important;
+    max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+  
+  /* Vertical scroll container */
+  .fc-scroller {
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+  
+  /* Table widths */
+  .fc-scrollgrid,
+  .fc-scrollgrid-sync-table {
+    width: 100% !important;
+    max-width: none !important;
+  }
+  
+  /* Day grid cells - fit screen */
+  .fc-daygrid-day {
+    min-width: unset !important;
+  }
+  
+  /* Larger touch targets for mobile */
+  .fc-button {
+    min-height: 44px !important;
+    min-width: 44px !important;
+    padding: 10px 16px !important;
+  }
+  
+  /* More link padding */
+  .fc-daygrid-more-link {
+    padding: 6px !important;
+    font-size: 0.75rem !important;
+  }
+}
+
+/* Dark Theme Improvements for "+X more" link */
+.fc-daygrid-more-link {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #fff !important;
+  border-radius: 4px !important;
+  padding: 2px 6px !important;
+  font-weight: 600 !important;
+  transition: all 0.2s !important;
+  text-decoration: none !important;
+  display: inline-block !important;
+  margin-top: 2px !important;
+}
+
+.fc-daygrid-more-link:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+  transform: translateY(-1px) !important;
+  text-decoration: none !important;
+}
+
+/* Fix day cell hover highlight */
+.fc-daygrid-day:hover {
+  background-color: rgba(255, 255, 255, 0.02) !important;
+}

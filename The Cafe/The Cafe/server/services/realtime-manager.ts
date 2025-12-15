@@ -9,6 +9,14 @@ export interface RealTimeEvents {
   "trade:updated": { trade: any };
   "trade:status-changed": { tradeId: string; status: string };
   "availability:updated": { employeeId: string; availability: any };
+  "employee:created": { employee: any };
+  "employee:updated": { employee: any };
+  "employee:deleted": { employeeId: string };
+  "payroll:period-created": { period: any };
+  "payroll:period-updated": { period: any };
+  "payroll:processed": { periodId: string; stats: any };
+  "payroll:entry-updated": { entryId: string; status: string; entry?: any };
+  "payroll:sent": { entryId: string; netPay: string | number };
 }
 
 class RealTimeManager {
@@ -102,30 +110,165 @@ class RealTimeManager {
     this.io.to("shifts").emit("shift:deleted", { shiftId });
   }
 
-  public broadcastTradeCreated(trade: any) {
-    // Notify the trade requester and target employee
+  // ENHANCED SHIFT TRADE EVENTS
+  public broadcastTradeCreated(trade: any, shift?: any) {
+    const payload = { trade, shift };
+    
+    // Notify the trade requester
     if (trade.fromUserId) {
-      this.io.to(`user:${trade.fromUserId}:trades`).emit("trade:created", { trade });
+      this.io.to(`user:${trade.fromUserId}:trades`).emit("trade:created", payload);
+      this.io.to(`user:${trade.fromUserId}`).emit("trade:created", payload);
     }
+    
+    // Notify target employee if specified
     if (trade.toUserId) {
-      this.io.to(`user:${trade.toUserId}:trades`).emit("trade:created", { trade });
+      this.io.to(`user:${trade.toUserId}:trades`).emit("trade:created", payload);
+      this.io.to(`user:${trade.toUserId}`).emit("trade:created", payload);
     }
-    // Notify all managers
-    this.io.to("managers").emit("trade:created", { trade });
+    
+    // Notify all managers in the branch
+    this.io.to("managers").emit("trade:created", payload);
+    
+    // Broadcast to shifts room for schedule updates
+    this.io.to("shifts").emit("trade:created", payload);
+  }
+
+  public broadcastTradeAccepted(tradeId: string, trade: any, shift?: any) {
+    const payload = { tradeId, trade, shift, status: "accepted" };
+    
+    // Notify requester
+    if (trade.fromUserId) {
+      this.io.to(`user:${trade.fromUserId}:trades`).emit("trade:status-changed", payload);
+      this.io.to(`user:${trade.fromUserId}`).emit("trade:status-changed", payload);
+    }
+    
+    // Notify target user
+    if (trade.toUserId) {
+      this.io.to(`user:${trade.toUserId}:trades`).emit("trade:status-changed", payload);
+      this.io.to(`user:${trade.toUserId}`).emit("trade:status-changed", payload);
+    }
+    
+    // Notify managers for approval
+    this.io.to("managers").emit("trade:status-changed", payload);
+    
+    // Update shifts view
+    this.io.to("shifts").emit("trade:status-changed", payload);
+  }
+
+  public broadcastTradeRejected(tradeId: string, trade: any, reason?: string) {
+    const payload = { tradeId, trade, status: "rejected", reason };
+    
+    // Notify all relevant parties
+    if (trade.fromUserId) {
+      this.io.to(`user:${trade.fromUserId}:trades`).emit("trade:status-changed", payload);
+      this.io.to(`user:${trade.fromUserId}`).emit("trade:status-changed", payload);
+    }
+    
+    if (trade.toUserId) {
+      this.io.to(`user:${trade.toUserId}:trades`).emit("trade:status-changed", payload);
+      this.io.to(`user:${trade.toUserId}`).emit("trade:status-changed", payload);
+    }
+    
+    this.io.to("managers").emit("trade:status-changed", payload);
+    this.io.to("shifts").emit("trade:status-changed", payload);
+  }
+
+  public broadcastTradeApproved(tradeId: string, trade: any, updatedShift: any) {
+    const payload = { 
+      tradeId, 
+      trade, 
+      updatedShift, 
+      status: "approved",
+      message: "Shift ownership has been transferred"
+    };
+    
+    // Notify requester (they lost the shift)
+    if (trade.fromUserId) {
+      this.io.to(`user:${trade.fromUserId}:trades`).emit("trade:approved", payload);
+      this.io.to(`user:${trade.fromUserId}`).emit("trade:approved", payload);
+    }
+    
+    // Notify target (they gained the shift)
+    if (trade.toUserId) {
+      this.io.to(`user:${trade.toUserId}:trades`).emit("trade:approved", payload);
+      this.io.to(`user:${trade.toUserId}`).emit("trade:approved", payload);
+    }
+    
+    // Notify managers
+    this.io.to("managers").emit("trade:approved", payload);
+    
+    // CRITICAL: Broadcast shift update to all for schedule refresh
+    this.broadcastShiftUpdated(updatedShift);
   }
 
   public broadcastTradeStatusChanged(tradeId: string, status: string, trade: any) {
     // Notify relevant parties
     if (trade.fromUserId) {
-      this.io.to(`user:${trade.fromUserId}:trades`).emit("trade:status-changed", { tradeId, status });
+      this.io.to(`user:${trade.fromUserId}:trades`).emit("trade:status-changed", { tradeId, status, trade });
+      this.io.to(`user:${trade.fromUserId}`).emit("trade:status-changed", { tradeId, status, trade });
     }
     if (trade.toUserId) {
-      this.io.to(`user:${trade.toUserId}:trades`).emit("trade:status-changed", { tradeId, status });
+      this.io.to(`user:${trade.toUserId}:trades`).emit("trade:status-changed", { tradeId, status, trade });
+      this.io.to(`user:${trade.toUserId}`).emit("trade:status-changed", { tradeId, status, trade });
     }
+    
+    // Notify managers and update shifts
+    this.io.to("managers").emit("trade:status-changed", { tradeId, status, trade });
+    this.io.to("shifts").emit("trade:status-changed", { tradeId, status, trade });
+  }
+
+  public broadcastShiftOwnershipChanged(shiftId: string, fromUserId: string, toUserId: string, shift: any) {
+    const payload = { shiftId, fromUserId, toUserId, shift };
+    
+    // Notify both users
+    this.io.to(`user:${fromUserId}`).emit("shift:ownership-changed", payload);
+    this.io.to(`user:${toUserId}`).emit("shift:ownership-changed", payload);
+    
+    // Update all shifts views
+    this.io.to("shifts").emit("shift:ownership-changed", payload);
+    this.broadcastShiftUpdated(shift);
   }
 
   public notifyAvailabilityUpdate(employeeId: string, availability: any) {
     this.io.to("shifts").emit("availability:updated", { employeeId, availability });
+  }
+
+  public broadcastEmployeeCreated(employee: any) {
+    this.io.emit("employee:created", { employee });
+  }
+
+  public broadcastEmployeeUpdated(employee: any) {
+    this.io.emit("employee:updated", { employee });
+  }
+
+  public broadcastEmployeeDeleted(employeeId: string) {
+    this.io.emit("employee:deleted", { employeeId });
+  }
+
+  // PAYROLL EVENTS
+  public broadcastPayrollPeriodCreated(period: any) {
+    this.io.emit("payroll:period-created", { period });
+  }
+
+  public broadcastPayrollPeriodUpdated(period: any) {
+    this.io.emit("payroll:period-updated", { period });
+  }
+
+  public broadcastPayrollProcessed(periodId: string, stats: any) {
+    this.io.emit("payroll:processed", { periodId, stats });
+  }
+
+  public broadcastPayrollEntryUpdated(entryId: string, status: string, entry?: any) {
+    if (entry && entry.userId) {
+      this.io.to(`user:${entry.userId}`).emit("payroll:entry-updated", { entryId, status, entry });
+    }
+    // Also emit to everyone (managers need to see it updated too)
+    this.io.emit("payroll:entry-updated", { entryId, status, entry });
+  }
+
+  public broadcastPayrollSent(entryId: string, userId: string, netPay: string | number) {
+    this.io.to(`user:${userId}`).emit("payroll:sent", { entryId, netPay });
+    this.io.emit("payroll:sent", { entryId, netPay });
   }
 
   public isUserOnline(userId: string): boolean {

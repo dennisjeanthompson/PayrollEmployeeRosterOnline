@@ -1,8 +1,10 @@
+import React, { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getCurrentUser } from "@/lib/auth";
-import { useEffect, useState } from "react";
 import { useLocation, Link } from "wouter";
 import { useTheme as useAppTheme } from "@/components/theme-provider";
+import CommandPalette from "../search/CommandPalette";
+import NotificationBell from "./notification-bell";
 
 // MUI Components
 import {
@@ -23,18 +25,18 @@ import {
 // MUI Icons
 import {
   Search as SearchIcon,
-  Notifications as NotificationsIcon,
   LightMode as SunIcon,
   DarkMode as MoonIcon,
   CalendarMonth as CalendarIcon,
   LocationOn as LocationIcon,
   Keyboard as KeyboardIcon,
+  Menu as MenuIcon,
 } from "@mui/icons-material";
 
 // Styled search component
 const Search = styled("div")(({ theme }) => ({
   position: "relative",
-  borderRadius: theme.shape.borderRadius * 1.5,
+  borderRadius: (theme.shape.borderRadius as number) * 1.5,
   backgroundColor: alpha(theme.palette.action.hover, 0.08),
   border: `1px solid rgba(255, 255, 255, 0.08)`,
   "&:hover": {
@@ -84,12 +86,16 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
   },
 }));
 
-export default function MuiHeader() {
+export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void }) {
   const currentUser = getCurrentUser();
   const [currentTime, setCurrentTime] = useState(new Date());
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const theme = useTheme();
   const { theme: appTheme, setTheme } = useAppTheme();
+  
+  // Global search state (trigger for Command Palette)
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
 
   const { data: branchesData } = useQuery<{ branches?: Array<{ id: string; name: string }> }>({
     queryKey: ["/api/branches"],
@@ -100,6 +106,18 @@ export default function MuiHeader() {
       setCurrentTime(new Date());
     }, 60000);
     return () => clearInterval(timer);
+  }, []);
+  
+  // Global keyboard shortcut for search (Ctrl+K)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "k") {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
   const currentBranch = branchesData?.branches?.find(
@@ -130,6 +148,7 @@ export default function MuiHeader() {
   };
 
   return (
+    <>
     <AppBar
       position="sticky"
       elevation={0}
@@ -141,6 +160,17 @@ export default function MuiHeader() {
       }}
     >
       <Toolbar sx={{ minHeight: { xs: 64, sm: 70 }, px: { xs: 2, sm: 3 } }}>
+        {/* Mobile Menu Toggle */}
+        <IconButton
+          edge="start"
+          color="inherit"
+          aria-label="open drawer"
+          onClick={onMenuClick}
+          sx={{ mr: 2, display: { md: "none" } }}
+        >
+          <MenuIcon />
+        </IconButton>
+
         {/* Page Title */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography
@@ -163,13 +193,17 @@ export default function MuiHeader() {
         </Box>
 
         {/* Search */}
-        <Search sx={{ display: { xs: "none", md: "flex" } }}>
+        {/* Search Trigger (Click to open Command Palette) */}
+        <Search sx={{ display: { xs: "none", md: "flex" } }} onClick={() => setSearchOpen(true)}>
           <SearchIconWrapper>
             <SearchIcon fontSize="small" />
           </SearchIconWrapper>
           <StyledInputBase
-            placeholder="Search…"
-            inputProps={{ "aria-label": "search" }}
+            inputRef={searchInputRef}
+            placeholder="Search… (Ctrl+K)"
+            inputProps={{ "aria-label": "search", readOnly: true }}
+            onClick={() => setSearchOpen(true)}
+            sx={{ cursor: 'pointer' }}
           />
           <Box
             sx={{
@@ -184,6 +218,7 @@ export default function MuiHeader() {
               py: 0.5,
               bgcolor: alpha(theme.palette.action.hover, 0.1),
               borderRadius: 1,
+              pointerEvents: "none",
             }}
           >
             <KeyboardIcon sx={{ fontSize: 12, color: "text.secondary" }} />
@@ -259,34 +294,13 @@ export default function MuiHeader() {
           </IconButton>
         </Tooltip>
 
-        {/* Notifications */}
-        <Tooltip title="Notifications" arrow>
-          <IconButton
-            component={Link}
-            href="/notifications"
-            size="small"
-            sx={{
-              bgcolor: alpha(theme.palette.action.hover, 0.08),
-              "&:hover": {
-                bgcolor: alpha(theme.palette.primary.main, 0.15),
-                color: "primary.main",
-              },
-            }}
-          >
-            <Badge
-              variant="dot"
-              color="error"
-              sx={{
-                "& .MuiBadge-dot": {
-                  animation: "pulse 2s infinite",
-                },
-              }}
-            >
-              <NotificationsIcon fontSize="small" />
-            </Badge>
-          </IconButton>
-        </Tooltip>
+        {/* Notifications - Using dedicated dropdown component */}
+        <NotificationBell />
       </Toolbar>
     </AppBar>
+
+    {/* Global Command Palette */}
+    <CommandPalette open={searchOpen} onClose={() => setSearchOpen(false)} />
+    </>
   );
 }
