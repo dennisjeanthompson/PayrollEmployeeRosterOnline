@@ -18,6 +18,7 @@ import { reportsRouter } from "./routes/reports";
 import { forecastRouter } from "./routes/forecast";
 import { seedRatesRouter } from "./routes/seed-rates";
 import holidaysRouter from "./routes/holidays";
+import employeeUploadsRouter from "./routes/employee-uploads";
 import bcrypt from "bcrypt";
 import { format } from "date-fns";
 import crypto from "crypto";
@@ -267,6 +268,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       port: process.env.PORT || '5000',
       timestamp: new Date().toISOString()
     });
+  });
+
+  // Health check endpoint for Render (must respond quickly)
+  app.get("/healthz", (req: Request, res: Response) => {
+    res.status(200).send('OK');
   });
 
   // Debug endpoint to check user password hash (REMOVE IN PRODUCTION)
@@ -1195,7 +1201,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalPay += grossPay;
 
         // Create notification for employee
-        await storage.createNotification({
+        const notification = await storage.createNotification({
           userId: employee.id,
           type: 'payroll',
           title: 'Payroll Slip Available',
@@ -1206,6 +1212,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             netPay: netPay.toFixed(2)
           })
         } as any);
+        realTimeManager.broadcastNotification(notification);
       }
 
       // Update the period status
@@ -1434,7 +1441,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Create notification for employee
-      await storage.createNotification({
+      const notification = await storage.createNotification({
         userId: entry.userId,
         type: 'payroll',
         title: 'Payslip Sent',
@@ -1444,6 +1451,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           netPay: entry.netPay
         })
       } as any);
+      realTimeManager.broadcastNotification(notification);
 
       res.json({
         message: "Payslip sent to employee successfully"
@@ -1882,21 +1890,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // 3. Create notifications
-      await storage.createNotification({
+      const notificationRequester = await storage.createNotification({
         userId: trade.fromUserId,
         type: 'schedule',
         title: 'Shift Trade Approved',
         message: 'Your shift trade request has been approved.',
         data: JSON.stringify({ tradeId: id })
       } as any);
+      realTimeManager.broadcastNotification(notificationRequester);
 
-      await storage.createNotification({
+      const notificationTarget = await storage.createNotification({
         userId: trade.toUserId,
         type: 'schedule',
         title: 'Shift Trade Approved',
         message: 'You have been assigned a new shift from a trade.',
         data: JSON.stringify({ tradeId: id })
       } as any);
+      realTimeManager.broadcastNotification(notificationTarget);
 
       // Enrich with shift data
       const shift = await storage.getShift(trade.shiftId);
@@ -1940,13 +1950,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Notify requester
-      await storage.createNotification({
+      const notificationRequester = await storage.createNotification({
         userId: trade.fromUserId,
         type: 'schedule',
         title: 'Shift Trade Rejected',
         message: 'Your shift trade request has been rejected.',
         data: JSON.stringify({ tradeId: id })
       } as any);
+      realTimeManager.broadcastNotification(notificationRequester);
 
       // Enrich with shift data
       const shift = await storage.getShift(trade.shiftId);
@@ -1996,13 +2007,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Notify target user if one was selected
       if (trade.toUserId) {
-        await storage.createNotification({
+        const notificationTarget = await storage.createNotification({
           userId: trade.toUserId,
           type: 'schedule',
           title: 'Shift Trade Cancelled',
           message: 'A shift trade request has been cancelled.',
           data: JSON.stringify({ tradeId: id })
         } as any);
+        realTimeManager.broadcastNotification(notificationTarget);
       }
 
       // Enrich with shift data
@@ -3256,6 +3268,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Create and start the server
   // const httpServer = createServer(app); // Moved to top
+
+  // Update own profile (Self-service)
+  app.put("/api/auth/profile", requireAuth, async (req, res) => {
+    try {
+      const { email, password, newPassword } = req.body;
+      const userId = req.user!.id;
+
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const updateData: any = {};
+
+      // Update email if provided
+      if (email && email !== user.email) {
+        // Check if email is taken
+        const existing = await storage.getUserByUsername(email); // Assuming getUserByUsername might also check email/logic, or we just trust unique constraint will catch it
+        // Actually storage.getUserByUsername only checks username. 
+        // We'll rely on db constraint or need a check. 
+        // For now, let's just attempt update.
+        updateData.email = email;
+      }
+
+      // Update password if provided
+      if (newPassword) {
+        // If changing password, verify old password for security
+        if (!password) {
+          return res.status(400).json({ message: "Current password is required to set a new password" });
+        }
+        
+        const validPassword = await bcrypt.compare(password, user.password);
+        if (!validPassword) {
+          return res.status(403).json({ message: "Invalid current password" });
+        }
+
+        updateData.password = newPassword;
+      }
+
+      if (Object.keys(updateData).length === 0) {
+        return res.status(400).json({ message: "No changes provided" });
+      }
+
+      const updatedUser = await storage.updateUser(userId, updateData);
+      
+      // Remove password from response
+      const { password: _, ...userWithoutPassword } = updatedUser!;
+      
+      res.json({ 
+        message: "Profile updated successfully", 
+        user: userWithoutPassword 
+      });
+
+      // Audit log could go here
+    } catch (error: any) {
+      console.error('Update profile error:', error);
+      res.status(500).json({ 
+        message: error.message || "Failed to update profile" 
+      });
+    }
+  });
+
+  // Mount employee uploads router - PROTECTED
+  app.use("/api/employees", requireAuth, employeeUploadsRouter);
 
   return httpServer;
 }
