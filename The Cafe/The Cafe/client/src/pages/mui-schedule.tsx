@@ -72,6 +72,7 @@ import {
   MoreVert as MoreVertIcon,
   BeachAccess as TimeOffIcon,
   AccessTime as ClockIcon,
+  Check as CheckIcon,
 } from '@mui/icons-material';
 import { Badge } from '@mui/material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -373,6 +374,9 @@ const EnhancedScheduler = () => {
   // NEW: Employee Profile Popover State
   const [profilePopoverAnchor, setProfilePopoverAnchor] = useState<HTMLElement | null>(null);
   const [selectedProfileEmployee, setSelectedProfileEmployee] = useState<Employee | null>(null);
+
+  // MOBILE: Tap-to-select employee for schedule assignment (2025 mobile UX best practice)
+  const [mobileSelectedEmployee, setMobileSelectedEmployee] = useState<Employee | null>(null);
 
   // NEW: Role Filter State
   const [roleFilter, setRoleFilter] = useState<string>('all');
@@ -1397,7 +1401,14 @@ const EnhancedScheduler = () => {
     }
 
     // In resourceTimeline view, info.resource contains the employee row
-    const employeeId = info.resource?.id || '';
+    // MOBILE FIX: Use mobileSelectedEmployee if no resource (tap-to-select workflow)
+    let employeeId = info.resource?.id || '';
+    
+    if (!employeeId && !isDesktop && mobileSelectedEmployee) {
+      // Mobile: Use tap-selected employee
+      employeeId = mobileSelectedEmployee.id;
+    }
+    
     const isOwnRow = employeeId === currentUser?.id;
     const selectedDate = new Date(info.startStr);
 
@@ -1423,6 +1434,12 @@ const EnhancedScheduler = () => {
       return;
     }
 
+    // MOBILE: If no employee selected, prompt user
+    if (!employeeId && !isDesktop) {
+      toast.info('👆 First tap an employee from the roster, then tap a date');
+      return;
+    }
+
     setNewShiftData(prev => ({
       ...prev,
       employeeId: employeeId,
@@ -1430,7 +1447,12 @@ const EnhancedScheduler = () => {
       endTime: info.endStr,
     }));
     setCreateModalOpen(true);
-  }, [isPublished, isDateBlocked, isManagerRole, currentUser]);
+    
+    // Clear mobile selection after use
+    if (!isDesktop && mobileSelectedEmployee) {
+      setMobileSelectedEmployee(null);
+    }
+  }, [isPublished, isDateBlocked, isManagerRole, currentUser, isDesktop, mobileSelectedEmployee]);
 
   // Handle external event receive (when create: true)
   const handleEventReceive = useCallback((info: any) => {
@@ -1922,6 +1944,68 @@ const EnhancedScheduler = () => {
         </Box>
       )}
 
+      {/* MOBILE: Floating Selection Indicator */}
+      {!isDesktop && mobileSelectedEmployee && (
+        <Paper
+          elevation={4}
+          sx={{
+            position: 'fixed',
+            bottom: 24,
+            left: '50%',
+            transform: 'translateX(-50%)',
+            zIndex: 1400, // Above everything including drawers
+            p: 1.5,
+            borderRadius: 3,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            bgcolor: 'primary.main',
+            color: 'white',
+            maxWidth: '90%',
+            width: 'auto',
+            animation: 'slideUp 0.3s ease-out',
+            '@keyframes slideUp': {
+              from: { transform: 'translate(-50%, 100%)', opacity: 0 },
+              to: { transform: 'translate(-50%, 0)', opacity: 1 }
+            }
+          }}
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <Avatar 
+              sx={{ 
+                width: 32, 
+                height: 32, 
+                bgcolor: 'white', 
+                color: 'primary.main',
+                fontSize: '0.875rem',
+                fontWeight: 700
+              }}
+            >
+              {mobileSelectedEmployee.firstName[0]}{mobileSelectedEmployee.lastName[0]}
+            </Avatar>
+            <Box>
+              <Typography variant="caption" sx={{ opacity: 0.9, display: 'block' }}>
+                Assigning shifts for:
+              </Typography>
+              <Typography variant="body2" fontWeight={700}>
+                {mobileSelectedEmployee.firstName} {mobileSelectedEmployee.lastName}
+              </Typography>
+            </Box>
+          </Box>
+          <IconButton 
+            size="small" 
+            onClick={() => setMobileSelectedEmployee(null)}
+            sx={{ 
+              color: 'white', 
+              bgcolor: 'rgba(255,255,255,0.2)',
+              '&:hover': { bgcolor: 'rgba(255,255,255,0.3)' }
+            }}
+          >
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        </Paper>
+      )}
+
       {/* Employee Roster Sidebar - Responsive Drawer */}
       {!isDesktop ? (
         <SwipeableDrawer
@@ -1964,84 +2048,113 @@ const EnhancedScheduler = () => {
               const canDrag = isManagerRole && !isPublished && !isInactive;
               
               return (
-                <Tooltip 
-                  key={employee.id} 
-                  title={
-                    isInactive 
-                      ? "This employee is inactive" 
-                      : (!isPublished ? "Drag to calendar to schedule" : "Switch to Draft mode to enable dragging")
-                  } 
-                  arrow 
-                  placement="right"
-                >
-                  <Box
-                    className={canDrag ? "draggable-employee" : ""}
-                    data-employee={canDrag ? JSON.stringify(employee) : undefined}
-                    data-name={`${employee.firstName} ${employee.lastName}`}
-                    aria-label="Drag me to the calendar to create a shift"
-                    sx={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 2,
-                      p: 1.5,
-                      borderRadius: 2,
-                      bgcolor: isInactive ? 'action.disabledBackground' : 'background.paper',
-                      cursor: canDrag ? 'grab' : 'not-allowed',
-                      opacity: isInactive ? 0.5 : (!isPublished ? 1 : 0.6),
-                      transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                      border: '1px solid',
-                      borderColor: isInactive ? 'action.disabled' : 'divider',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
-                      '&:hover': canDrag ? {
-                        bgcolor: 'action.hover',
-                        transform: 'translateX(4px) scale(1.01)',
-                        borderColor: 'primary.main',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-                      } : {},
-                      '&:active': {
-                        cursor: canDrag ? 'grabbing' : 'not-allowed',
-                        transform: canDrag ? 'scale(0.98)' : 'none',
-                      },
-                    }}
+                  <Tooltip 
+                    key={employee.id} 
+                    title={
+                      isInactive 
+                        ? "This employee is inactive" 
+                        : (!isPublished 
+                            ? (!isDesktop ? "Tap to select, then tap calendar" : "Drag to calendar to schedule")
+                            : "Switch to Draft mode to enable dragging")
+                    } 
+                    arrow 
+                    placement="right"
                   >
-                    <Avatar
+                    <Box
+                      className={canDrag && isDesktop ? "draggable-employee" : ""}
+                      onClick={() => {
+                        // MOBILE: Tap to select/deselect
+                        if (!isDesktop && canDrag) {
+                          if (mobileSelectedEmployee?.id === employee.id) {
+                            setMobileSelectedEmployee(null); // Deselect
+                            toast.info('Selection cleared', { autoClose: 1000 });
+                          } else {
+                            setMobileSelectedEmployee(employee); // Select
+                            toast.info('✅ Employee selected! Now tap a date on the calendar.', { autoClose: 3000 });
+                            setRosterOpen(false); // Auto-close drawer on mobile for better UX
+                          }
+                        }
+                      }}
+                      data-employee={canDrag ? JSON.stringify(employee) : undefined}
+                      data-name={`${employee.firstName} ${employee.lastName}`}
+                      aria-label="Drag me to the calendar to create a shift"
                       sx={{
-                        width: 40,
-                        height: 40,
-                        bgcolor: isInactive ? 'action.disabled' : colors.bg,
-                        color: isInactive ? 'text.disabled' : colors.text,
-                        fontSize: '0.875rem',
-                        fontWeight: 600,
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 2,
+                        p: 1.5,
+                        borderRadius: 2,
+                        bgcolor: isInactive 
+                          ? 'action.disabledBackground' 
+                          : (mobileSelectedEmployee?.id === employee.id ? alpha(colors.bg, 0.15) : 'background.paper'),
+                        cursor: canDrag ? (isDesktop ? 'grab' : 'pointer') : 'not-allowed',
+                        opacity: isInactive ? 0.5 : (!isPublished ? 1 : 0.6),
+                        transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                        border: '2px solid', // Thicker border for better visibility
+                        borderColor: isInactive 
+                          ? 'action.disabled' 
+                          : (mobileSelectedEmployee?.id === employee.id ? colors.bg : 'divider'),
+                        boxShadow: mobileSelectedEmployee?.id === employee.id 
+                          ? `0 0 0 4px ${alpha(colors.bg, 0.2)}` // Glow effect for selected
+                          : '0 1px 2px rgba(0,0,0,0.05)',
+                        transform: mobileSelectedEmployee?.id === employee.id ? 'scale(1.02)' : 'none',
+                        '&:hover': canDrag ? {
+                          bgcolor: mobileSelectedEmployee?.id === employee.id ? alpha(colors.bg, 0.2) : 'action.hover',
+                          transform: 'translateX(4px) scale(1.01)',
+                          borderColor: mobileSelectedEmployee?.id === employee.id ? colors.bg : 'primary.main',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        } : {},
+                        '&:active': {
+                          cursor: canDrag ? (isDesktop ? 'grabbing' : 'pointer') : 'not-allowed',
+                          transform: canDrag ? 'scale(0.98)' : 'none',
+                        },
                       }}
                     >
-                      {employee.firstName[0]}{employee.lastName[0]}
-                    </Avatar>
-                    <Box sx={{ flex: 1, minWidth: 0 }}>
-                      <Typography 
-                        variant="body2" 
-                        fontWeight={600} 
-                        noWrap
-                        sx={{ color: isInactive ? 'text.disabled' : 'text.primary' }}
+                      <Avatar
+                        sx={{
+                          width: 40,
+                          height: 40,
+                          bgcolor: isInactive ? 'action.disabled' : colors.bg,
+                          color: isInactive ? 'text.disabled' : colors.text,
+                          fontSize: '0.875rem',
+                          fontWeight: 600,
+                          boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                        }}
                       >
-                        {employee.firstName} {employee.lastName}
-                        {isInactive && ' (Inactive)'}
-                      </Typography>
-                      <Typography variant="caption" color={isInactive ? 'text.disabled' : 'text.secondary'}>
-                        {displayRole}
-                      </Typography>
+                        {employee.firstName[0]}{employee.lastName[0]}
+                      </Avatar>
+                      <Box sx={{ flex: 1, minWidth: 0 }}>
+                        <Typography 
+                          variant="body2" 
+                          fontWeight={600} 
+                          noWrap
+                          sx={{ color: isInactive ? 'text.disabled' : 'text.primary' }}
+                        >
+                          {employee.firstName} {employee.lastName}
+                          {isInactive && ' (Inactive)'}
+                        </Typography>
+                        <Typography variant="caption" color={isInactive ? 'text.disabled' : 'text.secondary'}>
+                          {displayRole}
+                        </Typography>
+                      </Box>
+                      
+                      {/* Selection Checkmark */}
+                      {mobileSelectedEmployee?.id === employee.id && (
+                        <CheckIcon sx={{ color: colors.bg, fontSize: 20 }} />
+                      )}
+                      
+                      <Box
+                        sx={{
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          display: mobileSelectedEmployee?.id === employee.id ? 'none' : 'block', // Hide dot if checkmark shown
+                          bgcolor: isInactive ? 'action.disabled' : colors.bg,
+                          boxShadow: isInactive ? 'none' : `0 0 0 2px ${colors.bg}33`,
+                        }}
+                      />
                     </Box>
-                    <Box
-                      sx={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        bgcolor: isInactive ? 'action.disabled' : colors.bg,
-                        boxShadow: isInactive ? 'none' : `0 0 0 2px ${colors.bg}33`,
-                      }}
-                    />
-                  </Box>
-                </Tooltip>
+                  </Tooltip>
               );
             })}
             </Box>
