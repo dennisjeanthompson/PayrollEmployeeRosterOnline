@@ -677,7 +677,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }));
 
       // Filter out shifts for inactive employees
-      const activeShifts = shiftsWithUsers.filter(shift => shift.user?.isActive);
+      let activeShifts = shiftsWithUsers.filter(shift => shift.user?.isActive);
+      
+      // PRIVACY: If user is an employee, ONLY show their own shifts
+      if (req.user!.role === 'employee') {
+        const userId = req.user!.id;
+        activeShifts = activeShifts.filter(shift => shift.userId === userId);
+        console.log(`🔒 [GET /api/shifts/branch] Filtered shifts for employee ${req.user!.username} (showing ${activeShifts.length} own shifts)`);
+      }
       
       console.log('✅ [GET /api/shifts/branch] Returning shifts:', activeShifts.length);
       if (activeShifts.length > 0) {

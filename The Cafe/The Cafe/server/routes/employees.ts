@@ -46,7 +46,7 @@ export function createEmployeeRouter(realTimeManager: RealTimeManager) {
       
       // Return ALL employees from the same branch with isActive status
       // Let the frontend handle filtering/display of inactive employees
-      const sanitizedEmployees = employees.map(emp => ({
+      let sanitizedEmployees = employees.map(emp => ({
           id: emp.id,
           firstName: emp.firstName,
           lastName: emp.lastName,
@@ -57,6 +57,12 @@ export function createEmployeeRouter(realTimeManager: RealTimeManager) {
           isActive: emp.isActive ?? true, // Include isActive for client-side filtering
         }));
       
+      // PRIVACY: If user is an employee, ONLY show themselves in the list
+      // This prevents them from seeing the full roster of other employees in the schedule view
+      if (req.session.user?.role === 'employee') {
+          sanitizedEmployees = sanitizedEmployees.filter(emp => emp.id === req.session.user!.id);
+      }
+
       res.json({ employees: sanitizedEmployees });
     } catch (error) {
       console.error('Error fetching employees:', error);

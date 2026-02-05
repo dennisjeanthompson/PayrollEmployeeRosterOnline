@@ -1056,7 +1056,12 @@ const EnhancedScheduler = () => {
 
   // Map shifts to FullCalendar events with employee color-coding
   const calendarEvents = useMemo(() => {
-    const shiftEvents = shifts.map(shift => {
+    // UNIFIED SCHEDULE: Filter shifts for non-managers (Privacy)
+    const filteredShifts = (!isManagerRole && currentUser)
+      ? shifts.filter(s => s.userId === currentUser.id)
+      : shifts;
+
+    const shiftEvents = filteredShifts.map(shift => {
       const colors = getEmployeeColor(shift.userId, employees);
       const empName = shift.user 
         ? `${shift.user.firstName} ${shift.user.lastName}` 
@@ -1093,7 +1098,12 @@ const EnhancedScheduler = () => {
     }));
 
     // UNIFIED SCHEDULE: Approved Time-Off (semi-transparent overlay)
-    const approvedTimeOffEvents = timeOffRequests
+    // Filter for non-managers
+    const filteredTimeOff = (!isManagerRole && currentUser)
+      ? timeOffRequests.filter(req => req.userId === currentUser.id)
+      : timeOffRequests;
+
+    const approvedTimeOffEvents = filteredTimeOff
       .filter(req => req.status === 'approved')
       .map(req => ({
         id: `timeoff-approved-${req.id}`,
@@ -1113,7 +1123,7 @@ const EnhancedScheduler = () => {
       }));
 
     // UNIFIED SCHEDULE: Pending Time-Off (dashed/striped)
-    const pendingTimeOffEvents = timeOffRequests
+    const pendingTimeOffEvents = filteredTimeOff
       .filter(req => req.status === 'pending')
       .map(req => ({
         id: `timeoff-pending-${req.id}`,
@@ -1134,6 +1144,13 @@ const EnhancedScheduler = () => {
 
     // UNIFIED SCHEDULE: Shift Trades (special border + tooltip)
     const tradeEvents = shiftTrades
+      .filter(trade => {
+        // Privacy filter for non-managers
+        if (!isManagerRole && currentUser) {
+          return trade.requesterId === currentUser.id || trade.targetUserId === currentUser.id;
+        }
+        return true;
+      })
       .filter(trade => trade.status === 'pending' || trade.status === 'accepted')
       .map(trade => {
         const shift = shifts.find(s => s.id === trade.shiftId);
