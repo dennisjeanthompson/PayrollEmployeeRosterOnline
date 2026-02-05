@@ -10,7 +10,7 @@
 
 import { Cloudinary } from '@cloudinary/url-gen';
 import { auto } from '@cloudinary/url-gen/actions/resize';
-import { autoGravity, face } from '@cloudinary/url-gen/qualifiers/gravity';
+import { autoGravity } from '@cloudinary/url-gen/qualifiers/gravity';
 import { format, quality } from '@cloudinary/url-gen/actions/delivery';
 import { focusOn } from '@cloudinary/url-gen/qualifiers/gravity';
 
@@ -95,6 +95,11 @@ export interface UploadOptions {
   folder: string;
   publicId?: string;
   uploadPreset?: string;
+  // Signed upload params
+  signature?: string;
+  timestamp?: number;
+  apiKey?: string;
+  cloudName?: string;
 }
 
 export interface UploadResult {
@@ -107,19 +112,40 @@ export interface UploadResult {
 }
 
 export async function uploadToCloudinary(options: UploadOptions): Promise<UploadResult> {
-  const { file, folder, publicId, uploadPreset = UPLOAD_PRESETS.EMPLOYEE_PROFILES } = options;
+  const { 
+    file, 
+    folder, 
+    publicId, 
+    uploadPreset = UPLOAD_PRESETS.EMPLOYEE_PROFILES,
+    signature,
+    timestamp,
+    apiKey,
+    cloudName = CLOUDINARY_CLOUD_NAME
+  } = options;
 
   const formData = new FormData();
   formData.append('file', file);
-  formData.append('upload_preset', uploadPreset);
   formData.append('folder', folder);
   
   if (publicId) {
     formData.append('public_id', publicId);
   }
 
+  // Use signed upload if signature is provided
+  if (signature && timestamp && apiKey) {
+    formData.append('api_key', apiKey);
+    formData.append('timestamp', timestamp.toString());
+    formData.append('signature', signature);
+    // Note: We intentionally do NOT append upload_preset for signed uploads 
+    // unless explicitly needed, as it often conflicts with manual signatures 
+    // if the preset is not configured as "signed"
+  } else {
+    // Fallback to unsigned upload
+    formData.append('upload_preset', uploadPreset);
+  }
+
   const response = await fetch(
-    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+    `https://api.cloudinary.com/v1_1/${cloudName}/image/upload`,
     {
       method: 'POST',
       body: formData,

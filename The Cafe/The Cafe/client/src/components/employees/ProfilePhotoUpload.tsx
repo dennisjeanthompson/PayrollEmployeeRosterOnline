@@ -72,12 +72,27 @@ export const ProfilePhotoUpload: React.FC<ProfilePhotoUploadProps> = ({
     setUploading(true);
 
     try {
-      // Upload to Cloudinary
+      // 1. Get Secure Signature from Backend
+      const publicId = `emp-${employeeId}`;
+      const folder = FOLDERS.EMPLOYEE_PROFILES;
+      
+      const sigResponse = await apiRequest(
+        'GET', 
+        `/api/employees/upload-signature?public_id=${publicId}&folder=${folder}`
+      );
+      
+      const { signature, timestamp, apiKey, cloudName } = await sigResponse.json();
+
+      // 2. Upload to Cloudinary with Signature
       const result = await uploadToCloudinary({
         file,
-        folder: FOLDERS.EMPLOYEE_PROFILES,
-        publicId: `emp-${employeeId}`,
-        uploadPreset: UPLOAD_PRESETS.EMPLOYEE_PROFILES,
+        folder,
+        publicId,
+        // Pass signed params to bypass unsigned preset requirement
+        signature,
+        timestamp,
+        apiKey,
+        cloudName,
       });
 
       // Update local state
