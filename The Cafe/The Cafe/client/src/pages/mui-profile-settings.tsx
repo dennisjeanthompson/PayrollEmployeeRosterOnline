@@ -1,15 +1,13 @@
 
 import React, { useState } from "react";
-import { useAuth } from "@/lib/auth"; // Assuming useAuth exists or we use useContext
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/lib/auth";
+import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { ProfilePhotoUpload } from "@/components/employees/ProfilePhotoUpload";
 import { useToast } from "@/hooks/use-toast";
 import {
   Box,
-  Card,
-  CardContent,
-  CardHeader,
+  Paper,
   Typography,
   TextField,
   Button,
@@ -20,17 +18,44 @@ import {
   InputAdornment,
   IconButton,
   Alert,
+  Chip,
+  Container,
 } from "@mui/material";
 import { 
   Visibility, 
   VisibilityOff, 
   Save as SaveIcon,
-  Person as PersonIcon,
-  Security as SecurityIcon,
-  Description as DescriptionIcon
+  PersonOutline as PersonIcon,
+  LockOutlined as SecurityIcon,
+  BadgeOutlined as BadgeIcon,
+  EmailOutlined as EmailIcon,
+  CakeOutlined as DateIcon,
 } from "@mui/icons-material";
 
-// Custom TabPanel component
+// Modern Gradient Header Component
+const ProfileHeader = ({ firstName, lastName, role }: { firstName: string, lastName: string, role: string }) => (
+  <Box 
+    sx={{ 
+      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', 
+      pt: 8, 
+      pb: 12,
+      px: 3,
+      mb: -6,
+      borderRadius: '0 0 24px 24px'
+    }}
+  >
+    <Container maxWidth="lg">
+      <Typography variant="h4" sx={{ color: 'white', fontWeight: 700, mb: 1 }}>
+        Account Settings
+      </Typography>
+      <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.7)' }}>
+        Manage your profile, security, and preferences.
+      </Typography>
+    </Container>
+  </Box>
+);
+
+// Custom TabPanel
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
@@ -39,7 +64,6 @@ interface TabPanelProps {
 
 function CustomTabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
-
   return (
     <div
       role="tabpanel"
@@ -47,14 +71,15 @@ function CustomTabPanel(props: TabPanelProps) {
       id={`profile-tabpanel-${index}`}
       aria-labelledby={`profile-tab-${index}`}
       {...other}
+      style={{ height: '100%' }}
     >
-      {value === index && <Box sx={{ p: 3 }}>{children}</Box>}
+      {value === index && <Box sx={{ p: 0, height: '100%' }}>{children}</Box>}
     </div>
   );
 }
 
 export default function MuiProfileSettings() {
-  const { user, refreshUser } = useAuth(); // Assuming refreshUser exists to update local state
+  const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const [tabValue, setTabValue] = useState(0);
   const queryClient = useQueryClient();
@@ -67,9 +92,7 @@ export default function MuiProfileSettings() {
   const [showPassword, setShowPassword] = useState(false);
 
   React.useEffect(() => {
-    if (user) {
-      setEmail(user.email);
-    }
+    if (user) setEmail(user.email);
   }, [user]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -82,50 +105,28 @@ export default function MuiProfileSettings() {
       return res.json();
     },
     onSuccess: (data) => {
-      toast({
-        title: "Profile Updated",
-        description: data.message,
-      });
-      // Clear password fields
+      toast({ title: "Profile Updated", description: data.message });
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
-      // Refresh user data if available in hook, or invalidate
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      // If useAuth has a refresh method, call it
-      if (refreshUser && typeof refreshUser === 'function') {
-         refreshUser();
-      }
+      if (refreshUser && typeof refreshUser === 'function') refreshUser();
     },
     onError: (error: any) => {
-        toast({
-            title: "Error",
-            description: error.message,
-            variant: "destructive",
-        });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     }
   });
 
-  const handleUpdateGeneral = () => {
-     updateProfileMutation.mutate({ email });
-  };
+  const handleUpdateGeneral = () => updateProfileMutation.mutate({ email });
 
   const handleUpdatePassword = () => {
     if (newPassword !== confirmPassword) {
-      toast({
-        title: "Error",
-        description: "New passwords do not match",
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: "New passwords do not match", variant: "destructive" });
       return;
     }
     if (!currentPassword) {
-        toast({
-            title: "Error",
-            description: "Current password is required",
-            variant: "destructive",
-        });
-        return;
+      toast({ title: "Error", description: "Current password is required", variant: "destructive" });
+      return;
     }
     updateProfileMutation.mutate({ password: currentPassword, newPassword });
   };
@@ -133,17 +134,30 @@ export default function MuiProfileSettings() {
   if (!user) return <Box p={3}>Loading...</Box>;
 
   return (
-    <Box sx={{ p: 3, maxWidth: 1200, mx: "auto" }}>
-      <Typography variant="h4" gutterBottom sx={{ mb: 4, fontWeight: 'bold' }}>
-        Account Settings
-      </Typography>
-
-      <Grid container spacing={3}>
-        {/* Left Column: User Card */}
-        <Grid item xs={12} md={4}>
-          <Card sx={{ textAlign: 'center', p: 3 }}>
-            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
-                <ProfilePhotoUpload
+    <Box sx={{ minHeight: '100vh', bgcolor: '#f8fafc' }}>
+      <ProfileHeader firstName={user.firstName} lastName={user.lastName} role={user.role} />
+      
+      <Container maxWidth="lg" sx={{ mt: 0 }}>
+        <Grid container spacing={3}>
+          
+          {/* Left Column: User Profile Card */}
+          <Grid item xs={12} md={4}>
+            <Paper 
+              elevation={0}
+              sx={{ 
+                p: 4, 
+                borderRadius: 4, 
+                height: { md: '100%', xs: 'auto' },
+                textAlign: 'center',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+                border: '1px solid rgba(0,0,0,0.05)',
+                position: 'relative',
+                overflow: 'hidden'
+              }}
+            >
+              <Box sx={{ position: 'relative', zIndex: 1 }}>
+                <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
+                  <ProfilePhotoUpload
                     employeeId={user.id}
                     employeeName={`${user.firstName} ${user.lastName}`}
                     currentPhotoId={user.photoPublicId}
@@ -153,147 +167,234 @@ export default function MuiProfileSettings() {
                         queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
                         if (refreshUser) refreshUser();
                     }}
-                />
-            </Box>
-            <Typography variant="h6" fontWeight="bold">
-              {user.firstName} {user.lastName}
-            </Typography>
-            <Typography variant="body2" color="text.secondary" gutterBottom>
-              {user.position}
-            </Typography>
-            
-            <Divider sx={{ my: 2 }} />
-            
-            <Box sx={{ textAlign: 'left' }}>
-                <Typography variant="caption" color="text.secondary">Role</Typography>
-                <Typography variant="body2" sx={{ mb: 1, textTransform: 'capitalize' }}>{user.role}</Typography>
+                  />
+                </Box>
                 
-                <Typography variant="caption" color="text.secondary">Joined</Typography>
-                <Typography variant="body2">
-                    {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                <Typography variant="h5" fontWeight={700} sx={{ color: '#0f172a' }}>
+                  {user.firstName} {user.lastName}
                 </Typography>
-            </Box>
-          </Card>
-        </Grid>
+                
+                <Chip 
+                  label={user.role} 
+                  size="small" 
+                  sx={{ 
+                    mt: 1, 
+                    mb: 2, 
+                    textTransform: 'uppercase', 
+                    fontWeight: 600, 
+                    fontSize: '0.7rem',
+                    letterSpacing: '0.05em',
+                    bgcolor: user.role === 'admin' ? '#eef2ff' : '#f0f9ff',
+                    color: user.role === 'admin' ? '#4f46e5' : '#0ea5e9'
+                  }} 
+                />
 
-        {/* Right Column: Settings Tabs */}
-        <Grid item xs={12} md={8}>
-          <Card>
-            <Box sx={{ borderBottom: 1, borderColor: "divider" }}>
-              <Tabs value={tabValue} onChange={handleTabChange} aria-label="profile settings tabs">
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                  {user.position}
+                </Typography>
+                
+                <Divider sx={{ my: 3 }} />
+                
+                <Box sx={{ px: 2 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, color: 'text.secondary' }}>
+                    <BadgeIcon sx={{ fontSize: 20, mr: 2, opacity: 0.7 }} />
+                    <Typography variant="body2">ID: #{user.id.toString().padStart(4, '0')}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, color: 'text.secondary' }}>
+                    <DateIcon sx={{ fontSize: 20, mr: 2, opacity: 0.7 }} />
+                    <Typography variant="body2">
+                      Joined {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
+                    </Typography>
+                  </Box>
+                </Box>
+              </Box>
+            </Paper>
+          </Grid>
+
+          {/* Right Column: Settings Tabs */}
+          <Grid item xs={12} md={8}>
+            <Paper 
+              elevation={0}
+              sx={{ 
+                borderRadius: 4, 
+                minHeight: 500,
+                overflow: 'hidden',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+                border: '1px solid rgba(0,0,0,0.05)'
+              }}
+            >
+              <Tabs 
+                value={tabValue} 
+                onChange={handleTabChange} 
+                aria-label="profile settings tabs"
+                sx={{
+                  borderBottom: 1,
+                  borderColor: 'divider',
+                  px: 3,
+                  bgcolor: 'white',
+                  '& .MuiTab-root': {
+                    textTransform: 'none',
+                    fontWeight: 600,
+                    fontSize: '0.95rem',
+                    minHeight: 64,
+                    mr: 2
+                  }
+                }}
+              >
                 <Tab icon={<PersonIcon />} iconPosition="start" label="General" />
                 <Tab icon={<SecurityIcon />} iconPosition="start" label="Security" />
-                {/* <Tab icon={<DescriptionIcon />} iconPosition="start" label="Documents" /> */} 
-                {/* Re-enable Documents if we implement a view for self-docs specifically */}
               </Tabs>
-            </Box>
 
-            {/* General Tab */}
-            <CustomTabPanel value={tabValue} index={0}>
-              <Typography variant="h6" gutterBottom>Personal Information</Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="First Name"
-                    value={user.firstName}
-                    disabled
-                    helperText="Contact admin to change"
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    label="Last Name"
-                    value={user.lastName}
-                    disabled
-                    helperText="Contact admin to change"
-                  />
-                </Grid>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    label="Email Address"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    helperText="Used for notifications and login"
-                  />
-                </Grid>
-                
-                <Grid item xs={12} sx={{ mt: 2 }}>
-                  <Button 
-                    variant="contained" 
-                    startIcon={<SaveIcon />}
-                    onClick={handleUpdateGeneral}
-                    disabled={updateProfileMutation.isPending || email === user.email}
-                  >
-                    Save Changes
-                  </Button>
-                </Grid>
-              </Grid>
-            </CustomTabPanel>
+              {/* General Tab */}
+              <CustomTabPanel value={tabValue} index={0}>
+                <Box sx={{ p: 4 }}>
+                  <Box sx={{ mb: 4 }}>
+                    <Typography variant="h6" fontWeight={700} gutterBottom>Personal Information</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Update your basic profile details here.
+                    </Typography>
+                  </Box>
 
-            {/* Security Tab */}
-            <CustomTabPanel value={tabValue} index={1}>
-              <Typography variant="h6" gutterBottom>Change Password</Typography>
-              <Alert severity="info" sx={{ mb: 3 }}>
-                Password must be at least 6 characters long.
-              </Alert>
-              
-              <Grid container spacing={3}>
-                <Grid item xs={12}>
-                  <TextField
-                    fullWidth
-                    type={showPassword ? "text" : "password"}
-                    label="Current Password"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    InputProps={{
-                        endAdornment: (
-                            <InputAdornment position="end">
-                                <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
-                                    {showPassword ? <VisibilityOff /> : <Visibility />}
-                                </IconButton>
-                            </InputAdornment>
-                        )
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    type={showPassword ? "text" : "password"}
-                    label="New Password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                  />
-                </Grid>
-                <Grid item xs={12} sm={6}>
-                  <TextField
-                    fullWidth
-                    type={showPassword ? "text" : "password"}
-                    label="Confirm New Password"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                  />
-                </Grid>
-                
-                <Grid item xs={12} sx={{ mt: 2 }}>
-                  <Button 
-                    variant="contained" 
-                    color="primary"
-                    startIcon={<SaveIcon />}
-                    onClick={handleUpdatePassword}
-                    disabled={updateProfileMutation.isPending || !currentPassword || !newPassword}
-                  >
-                    Update Password
-                  </Button>
-                </Grid>
-              </Grid>
-            </CustomTabPanel>
-          </Card>
+                  <Grid container spacing={3}>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="First Name"
+                        value={user.firstName}
+                        disabled
+                        variant="outlined"
+                        InputProps={{ sx: { borderRadius: 2, bgcolor: '#f1f5f9' } }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        label="Last Name"
+                        value={user.lastName}
+                        disabled
+                        variant="outlined"
+                        InputProps={{ sx: { borderRadius: 2, bgcolor: '#f1f5f9' } }}
+                      />
+                    </Grid>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        label="Email Address"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        variant="outlined"
+                        InputProps={{ 
+                          startAdornment: <InputAdornment position="start"><EmailIcon color="action" /></InputAdornment>,
+                          sx: { borderRadius: 2 } 
+                        }}
+                        helperText="Used for notifications and login"
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sx={{ mt: 2 }}>
+                      <Button 
+                        variant="contained" 
+                        size="large"
+                        startIcon={<SaveIcon />}
+                        onClick={handleUpdateGeneral}
+                        disabled={updateProfileMutation.isPending || email === user.email}
+                        sx={{ 
+                          borderRadius: 2, 
+                          px: 4, 
+                          textTransform: 'none', 
+                          fontWeight: 600,
+                          boxShadow: 'none',
+                          ':hover': { boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)' }
+                        }}
+                      >
+                        Save Changes
+                      </Button>
+                    </Grid>
+                  </Grid>
+                </Box>
+              </CustomTabPanel>
+
+              {/* Security Tab */}
+              <CustomTabPanel value={tabValue} index={1}>
+                <Box sx={{ p: 4 }}>
+                  <Box sx={{ mb: 4 }}>
+                    <Typography variant="h6" fontWeight={700} gutterBottom>Password & Security</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Manage your password to keep your account safe.
+                    </Typography>
+                  </Box>
+
+                  <Alert severity="info" sx={{ mb: 4, borderRadius: 2 }}>
+                    Password must be at least 6 characters long and include a mix of letters and numbers.
+                  </Alert>
+                  
+                  <Grid container spacing={3} sx={{ maxWidth: 600 }}>
+                    <Grid item xs={12}>
+                      <TextField
+                        fullWidth
+                        type={showPassword ? "text" : "password"}
+                        label="Current Password"
+                        value={currentPassword}
+                        onChange={(e) => setCurrentPassword(e.target.value)}
+                        InputProps={{
+                            sx: { borderRadius: 2 },
+                            endAdornment: (
+                                <InputAdornment position="end">
+                                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+                                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                                    </IconButton>
+                                </InputAdornment>
+                            )
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        type={showPassword ? "text" : "password"}
+                        label="New Password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        InputProps={{ sx: { borderRadius: 2 } }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <TextField
+                        fullWidth
+                        type={showPassword ? "text" : "password"}
+                        label="Confirm New Password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        InputProps={{ sx: { borderRadius: 2 } }}
+                      />
+                    </Grid>
+                    
+                    <Grid item xs={12} sx={{ mt: 2 }}>
+                      <Button 
+                        variant="contained" 
+                        size="large"
+                        startIcon={<SaveIcon />}
+                        onClick={handleUpdatePassword}
+                        disabled={updateProfileMutation.isPending || !currentPassword || !newPassword}
+                        sx={{ 
+                          borderRadius: 2, 
+                          px: 4, 
+                          textTransform: 'none', 
+                          fontWeight: 600,
+                          boxShadow: 'none',
+                          ':hover': { boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)' }
+                        }}
+                      >
+                        Update Password
+                      </Button>
+                    </Grid>
+                  </Grid>
+                </Box>
+              </CustomTabPanel>
+            </Paper>
+          </Grid>
         </Grid>
-      </Grid>
+      </Container>
     </Box>
   );
 }

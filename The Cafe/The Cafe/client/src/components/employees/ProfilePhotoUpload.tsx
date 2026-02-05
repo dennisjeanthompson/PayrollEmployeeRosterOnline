@@ -82,13 +82,6 @@ export const ProfilePhotoUpload: React.FC<ProfilePhotoUploadProps> = ({
       );
       
       const { signature, timestamp, apiKey, cloudName } = await sigResponse.json();
-      
-      console.log('🔍 [ProfilePhotoUpload] Signature Response:', { 
-        hasSignature: !!signature, 
-        timestamp, 
-        hasApiKey: !!apiKey, 
-        cloudName 
-      });
 
       // 2. Upload to Cloudinary with Signature
       const result = await uploadToCloudinary({
@@ -115,7 +108,6 @@ export const ProfilePhotoUpload: React.FC<ProfilePhotoUploadProps> = ({
       onUploadComplete?.(result.publicId, result.secureUrl);
       toast.success('✅ Profile photo updated!');
     } catch (error) {
-      console.error('Upload error:', error);
       toast.error('❌ Upload failed. Please try again.');
     } finally {
       setUploading(false);
@@ -136,16 +128,16 @@ export const ProfilePhotoUpload: React.FC<ProfilePhotoUploadProps> = ({
       onUploadComplete?.('', '');
       toast.success('Profile photo removed');
     } catch (error) {
-      console.error('Remove error:', error);
       toast.error('Failed to remove photo');
     }
   };
 
   return (
-    <div className="flex flex-col items-center gap-4">
+    <div className="flex flex-col items-center gap-6">
       {/* Avatar with Photo */}
       <div className="relative group">
-        <Avatar className={`${sizeClasses[size]} border-4 border-white shadow-lg`}>
+        <div className="absolute -inset-0.5 bg-gradient-to-r from-teal-400 to-blue-500 rounded-full opacity-75 group-hover:opacity-100 transition duration-500 blur-sm"></div>
+        <Avatar className={`${sizeClasses[size]} relative border-4 border-white shadow-xl`}>
           {photoId ? (
             <AdvancedImage
               cldImg={getProfilePhoto(photoId, size === 'lg' ? 400 : size === 'md' ? 200 : 100)}
@@ -154,7 +146,7 @@ export const ProfilePhotoUpload: React.FC<ProfilePhotoUploadProps> = ({
           ) : photoUrl ? (
             <AvatarImage src={photoUrl} alt={employeeName} />
           ) : (
-            <AvatarFallback className="bg-gradient-to-br from-blue-500 to-purple-600 text-white text-xl font-bold">
+            <AvatarFallback className="bg-gradient-to-br from-slate-100 to-slate-200 text-slate-700 text-xl font-bold">
               {initials}
             </AvatarFallback>
           )}
@@ -164,14 +156,14 @@ export const ProfilePhotoUpload: React.FC<ProfilePhotoUploadProps> = ({
         {!disabled && (
           <button
             onClick={() => fileInputRef.current?.click()}
-            className="absolute bottom-0 right-0 bg-white rounded-full p-2 shadow-lg hover:bg-gray-100 transition-colors border border-gray-200 opacity-0 group-hover:opacity-100"
+            className="absolute bottom-1 right-1 bg-white text-slate-700 rounded-full p-2.5 shadow-lg shadow-black/10 hover:bg-slate-50 hover:text-blue-600 transition-all duration-200 border border-slate-100 opacity-0 group-hover:opacity-100 transform translate-y-2 group-hover:translate-y-0"
             disabled={uploading}
             title="Change photo"
           >
             {uploading ? (
-              <Loader2 className="w-4 h-4 text-gray-700 animate-spin" />
+              <Loader2 className="w-4 h-4 animate-spin" />
             ) : (
-              <Camera className="w-4 h-4 text-gray-700" />
+              <Camera className="w-4 h-4" />
             )}
           </button>
         )}
@@ -180,10 +172,10 @@ export const ProfilePhotoUpload: React.FC<ProfilePhotoUploadProps> = ({
         {(photoId || photoUrl) && !disabled && (
           <button
             onClick={handleRemovePhoto}
-            className="absolute top-0 right-0 bg-red-500 rounded-full p-1 shadow-lg hover:bg-red-600 transition-colors opacity-0 group-hover:opacity-100"
+            className="absolute top-0 right-0 bg-red-500 text-white rounded-full p-1.5 shadow-md hover:bg-red-600 transition-all duration-200 opacity-0 group-hover:opacity-100 transform -translate-y-2 group-hover:translate-y-0 scale-90"
             title="Remove photo"
           >
-            <X className="w-3 h-3 text-white" />
+            <X className="w-3 h-3" />
           </button>
         )}
       </div>
@@ -200,30 +192,30 @@ export const ProfilePhotoUpload: React.FC<ProfilePhotoUploadProps> = ({
 
       {/* Upload button */}
       {!disabled && (
-        <Button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          variant="outline"
-          size="sm"
-          className="gap-2"
-        >
-          {uploading ? (
-            <>
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Uploading...
-            </>
-          ) : (
-            <>
-              <Upload className="w-4 h-4" />
-              {photoId || photoUrl ? 'Change Photo' : 'Upload Photo'}
-            </>
-          )}
-        </Button>
+        <div className="flex flex-col items-center gap-2">
+            <Button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            variant="outline"
+            className="gap-2 rounded-full px-6 border-slate-200 hover:border-slate-300 hover:bg-slate-50 text-slate-600 font-medium transition-all shadow-sm"
+            >
+            {uploading ? (
+                <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Uploading...
+                </>
+            ) : (
+                <>
+                <Upload className="w-4 h-4" />
+                {photoId || photoUrl ? 'Change Photo' : 'Upload Photo'}
+                </>
+            )}
+            </Button>
+            <p className="text-[10px] uppercase tracking-wider text-slate-400 font-medium">
+                JPG, PNG, GIF • Max 5MB
+            </p>
+        </div>
       )}
-
-      <p className="text-xs text-muted-foreground text-center">
-        JPG, PNG, GIF or WebP. Max 5MB.
-      </p>
     </div>
   );
 };
