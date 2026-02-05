@@ -988,3 +988,82 @@ export async function markSetupComplete() {
   }
 }
 
+
+export async function seedSampleShiftTrades() {
+  console.log('🔄 Seeding sample shift trades...');
+  try {
+    const existingTrades = await db.select().from(shiftTrades).limit(1);
+    if (existingTrades.length > 0) {
+      console.log('✅ Shift trades already exist');
+      return;
+    }
+
+    // Get shifts and employees
+    const upcomingShifts = await db.select().from(shifts).where(eq(shifts.status, 'scheduled'));
+    const allUsers = await db.select().from(users).where(eq(users.role, 'employee'));
+
+    if (upcomingShifts.length < 2 || allUsers.length < 2) {
+      console.log('⚠️ Not enough shifts or employees for trades');
+      return;
+    }
+
+    // Trade 1: Pending Trade (User 1 -> User 2)
+    // Find a shift for User 1
+    const shift1 = upcomingShifts.find(s => s.userId === allUsers[0].id);
+    if (shift1) {
+      await db.insert(shiftTrades).values({
+        id: randomUUID(),
+        shiftId: shift1.id,
+        fromUserId: allUsers[0].id,
+        toUserId: allUsers[1].id,
+        reason: 'Personal duplicate appointment',
+        status: 'pending',
+        urgency: 'normal',
+        requestedAt: new Date(),
+      });
+    }
+
+    // Trade 2: Open Trade (User 3 offers shift to anyone)
+    const shift2 = upcomingShifts.find(s => s.userId === allUsers[2].id);
+    if (shift2) {
+      await db.insert(shiftTrades).values({
+        id: randomUUID(),
+        shiftId: shift2.id,
+        fromUserId: allUsers[2].id,
+        toUserId: null, // Open to anyone
+        reason: 'Emergency family matter',
+        status: 'pending',
+        urgency: 'urgent',
+        requestedAt: new Date(),
+      });
+    }
+
+    // Trade 3: Approved Trade (User 4 -> User 5)
+    const shift3 = upcomingShifts.find(s => s.userId === allUsers[3].id);
+    if (shift3 && allUsers.length > 4) {
+      const tradeId = randomUUID();
+      const approvedTime = new Date();
+      approvedTime.setHours(approvedTime.getHours() - 2);
+
+      await db.insert(shiftTrades).values({
+        id: tradeId,
+        shiftId: shift3.id,
+        fromUserId: allUsers[3].id,
+        toUserId: allUsers[4].id,
+        reason: 'Swapping shifts for study time',
+        status: 'approved',
+        urgency: 'normal',
+        requestedAt: approvedTime,
+        approvedAt: new Date(),
+      });
+      
+      // Update the shift owner effectively
+      await db.update(shifts).set({ userId: allUsers[4].id }).where(eq(shifts.id, shift3.id));
+    }
+
+    console.log('   ✅ Created sample shift trades (Pending, Open, Approved)');
+  } catch (error) {
+    console.error('❌ Error seeding shift trades:', error);
+    // Don't throw, just log - we don't want to break the whole init flow for sample data
+  }
+}
