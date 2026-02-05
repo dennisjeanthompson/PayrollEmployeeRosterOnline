@@ -133,14 +133,17 @@ export async function uploadToCloudinary(options: UploadOptions): Promise<Upload
 
   // Use signed upload if signature is provided
   if (signature && timestamp && apiKey) {
+    console.log('🔒 [uploadToCloudinary] using SIGNED upload');
     formData.append('api_key', apiKey);
     formData.append('timestamp', timestamp.toString());
     formData.append('signature', signature);
-    // Note: We intentionally do NOT append upload_preset for signed uploads 
-    // unless explicitly needed, as it often conflicts with manual signatures 
-    // if the preset is not configured as "signed"
   } else {
     // Fallback to unsigned upload
+    console.warn('⚠️ [uploadToCloudinary] falling back to UNSIGNED upload (Missing sig/time/key)', {
+      hasSig: !!signature,
+      hasTime: !!timestamp,
+      hasKey: !!apiKey
+    });
     formData.append('upload_preset', uploadPreset);
   }
 

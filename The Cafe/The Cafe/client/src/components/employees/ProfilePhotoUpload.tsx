@@ -82,6 +82,13 @@ export const ProfilePhotoUpload: React.FC<ProfilePhotoUploadProps> = ({
       );
       
       const { signature, timestamp, apiKey, cloudName } = await sigResponse.json();
+      
+      console.log('🔍 [ProfilePhotoUpload] Signature Response:', { 
+        hasSignature: !!signature, 
+        timestamp, 
+        hasApiKey: !!apiKey, 
+        cloudName 
+      });
 
       // 2. Upload to Cloudinary with Signature
       const result = await uploadToCloudinary({
