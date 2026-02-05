@@ -8,6 +8,29 @@ import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { eq, sql } from 'drizzle-orm';
 
+export async function resetDatabase() {
+  console.log('🗑️ Resetting database (dropping all tables)...');
+  try {
+    // Drop schema public cascade is the cleanest way to wipe everything in Postgres
+    await db.execute(sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO postgres; GRANT ALL ON SCHEMA public TO public;`);
+    console.log('✅ Database reset complete');
+  } catch (error) {
+    console.error('❌ Error resetting database:', error);
+    // Fallback: Try dropping tables individually if schema drop fails (e.g. permissions)
+    try {
+      await db.execute(sql`
+        DROP TABLE IF EXISTS audit_logs, archived_payroll_periods, holidays, deduction_rates, deduction_settings, 
+        setup_status, notifications, time_off_requests, approvals, payroll_entries, payroll_periods, 
+        shift_trades, shifts, users, branches CASCADE
+      `);
+      console.log('✅ Database tables dropped');
+    } catch (fallbackError) {
+      console.error('❌ Fallback reset failed:', fallbackError);
+      throw fallbackError;
+    }
+  }
+}
+
 export async function initializeDatabase() {
   console.log('🔧 Initializing PostgreSQL database with Neon...');
 
@@ -45,6 +68,8 @@ export async function initializeDatabase() {
         cash_advance_deduction TEXT DEFAULT '0',
         philhealth_deduction TEXT DEFAULT '0',
         other_deductions TEXT DEFAULT '0',
+        photo_url TEXT,
+        photo_public_id TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
@@ -270,6 +295,35 @@ export async function initializeDatabase() {
         reason TEXT,
         ip_address TEXT,
         user_agent TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Time off policy settings
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS time_off_policy (
+        id TEXT PRIMARY KEY,
+        branch_id TEXT REFERENCES branches(id) NOT NULL,
+        leave_type TEXT NOT NULL,
+        minimum_advance_days INTEGER NOT NULL DEFAULT 0,
+        is_active BOOLEAN DEFAULT true,
+        updated_at TIMESTAMP DEFAULT NOW(),
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    // Employee documents (Cloudinary)
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS employee_documents (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) NOT NULL,
+        type TEXT NOT NULL,
+        name TEXT NOT NULL,
+        public_id TEXT NOT NULL,
+        url TEXT NOT NULL,
+        format TEXT,
+        size INTEGER,
+        uploaded_by TEXT REFERENCES users(id),
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
@@ -628,6 +682,42 @@ export async function seedSampleUsers() {
         position: 'Kitchen Staff', 
         hourlyRate: '100.00',
         sssLoan: '2000',
+        pagibigLoan: '0',
+      },
+      {
+        id: 'user-emp-sofia',
+        username: 'sofia',
+        firstName: 'Sofia',
+        lastName: 'Mendoza',
+        email: 'sofia.mendoza@thecafe.ph',
+        role: 'employee',
+        position: 'Shift Lead',
+        hourlyRate: '150.00',
+        sssLoan: '0',
+        pagibigLoan: '1000',
+      },
+      {
+        id: 'user-emp-miguel',
+        username: 'miguel',
+        firstName: 'Luis Miguel',
+        lastName: 'Torres',
+        email: 'miguel.torres@thecafe.ph',
+        role: 'employee',
+        position: 'Barista',
+        hourlyRate: '112.50',
+        sssLoan: '0',
+        pagibigLoan: '0',
+      },
+      {
+        id: 'user-emp-bea',
+        username: 'bea',
+        firstName: 'Bea',
+        lastName: 'Alonzo',
+        email: 'bea.alonzo@thecafe.ph',
+        role: 'employee',
+        position: 'Server',
+        hourlyRate: '100.00',
+        sssLoan: '0',
         pagibigLoan: '0',
       },
     ];

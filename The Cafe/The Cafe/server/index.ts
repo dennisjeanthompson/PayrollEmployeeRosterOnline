@@ -4,106 +4,20 @@ import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { networkInterfaces } from "os";
-import { initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll } from "./init-db";
+import { initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll, resetDatabase } from "./init-db";
 import { promptDatabaseChoice, deleteDatabaseFile, displayDatabaseStats, loadSampleData } from "./db-manager";
 import { recreateConnection } from "./db";
 
 const app = express();
 
-// Trust proxy FIRST - required for Render.com (secure cookies behind reverse proxy)
+// ... (omitted)
+
+// Trust proxy FIRST - required for Render.com
 if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
 }
 
-// CORS configuration - allow same-origin and specific production URLs
-const allowedOrigins = [
-  'http://localhost:3000',
-  'http://localhost:5000', 
-  'http://127.0.0.1:3000',
-  'http://127.0.0.1:5000',
-  'https://donmacchiatos.onrender.com',
-  process.env.RENDER_EXTERNAL_URL,
-].filter(Boolean);
-
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (like mobile apps, curl requests, server-to-server)
-    if (!origin) return callback(null, true);
-    
-    // In production, only allow specific origins; in development, allow all
-    if (process.env.NODE_ENV === 'production') {
-      if (allowedOrigins.includes(origin)) {
-        callback(null, true);
-      } else {
-        console.log(`CORS blocked origin: ${origin}`);
-        callback(new Error('Not allowed by CORS'));
-      }
-    } else {
-      callback(null, true);
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
-}));
-
-
-// Add debugging headers for cookie issues
-app.use((req, res, next) => {
-  // Intercept res.setHeader to log all headers being set
-  const originalSetHeader = res.setHeader.bind(res);
-  res.setHeader = function(name: string, value: string | string[] | number) {
-    if (name.toLowerCase() === 'set-cookie') {
-      console.log(`🍪 [SET-COOKIE]`, value);
-    }
-    return originalSetHeader(name, value);
-  };
-  
-  // Log incoming cookies
-  if (req.headers.cookie) {
-    console.log(`🍪 [RECEIVED COOKIES]`, req.headers.cookie);
-  }
-  
-  // Log session info
-  if (req.session && (req.session as any).user) {
-    console.log(`📝 [SESSION] ID: ${req.sessionID}, User: ${(req.session as any).user.username}`);
-  }
-  
-  next();
-});
-
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
-
-app.use((req, res, next) => {
-  const start = Date.now();
-  const path = req.path;
-  let capturedJsonResponse: Record<string, any> | undefined = undefined;
-
-  const originalResJson = res.json;
-  res.json = function (bodyJson, ...args) {
-    capturedJsonResponse = bodyJson;
-    return originalResJson.apply(res, [bodyJson, ...args]);
-  };
-
-  res.on("finish", () => {
-    const duration = Date.now() - start;
-    if (path.startsWith("/api")) {
-      let logLine = `${req.method} ${path} ${res.statusCode} in ${duration}ms`;
-      if (capturedJsonResponse) {
-        logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
-      }
-
-      if (logLine.length > 80) {
-        logLine = logLine.slice(0, 79) + "…";
-      }
-
-      log(logLine);
-    }
-  });
-
-  next();
-});
+// ... (omitted)
 
 (async () => {
   let loadSample = false;
@@ -115,8 +29,9 @@ app.use((req, res, next) => {
     // Check if FRESH_DB environment variable is set
     if (process.env.FRESH_DB === 'true') {
       console.log('\n🔄 FRESH_DB flag detected. Deleting existing database...\n');
-      deleteDatabaseFile();
-      // Recreate the database connection after deletion
+      // Use proper Postgres reset logic
+      await resetDatabase();
+      // Recreate the database connection after deletion (if needed, though pool likely persists)
       recreateConnection();
     }
 

@@ -33,16 +33,15 @@ async function seed() {
     const password = await bcrypt.hash('password123', 10);
     
     const newEmployees = [
-      { firstName: 'Mark', lastName: 'Santos', position: 'Barista', rate: '110.00' },
-      { firstName: 'Jennifer', lastName: 'Reyes', position: 'Cashier', rate: '100.00' },
-      { firstName: 'Ryan', lastName: 'Cruz', position: 'Server', rate: '95.00' },
-      { firstName: 'Michelle', lastName: 'Garcia', position: 'Kitchen Staff', rate: '105.00' },
-      { firstName: 'Paulo', lastName: 'Dizon', position: 'Barista', rate: '110.00' },
-      { firstName: 'Catherine', lastName: 'Ocampo', position: 'Manager', role: 'manager', rate: '180.00' },
-      { firstName: 'Jeffrey', lastName: 'Lim', position: 'Server', rate: '95.00' },
-      { firstName: 'Christine', lastName: 'Bautista', position: 'Cashier', rate: '100.00' },
-      { firstName: 'Michael', lastName: 'Tan', position: 'Kitchen Staff', rate: '105.00' },
-      { firstName: 'Jessica', lastName: 'Mendoza', position: 'Barista', rate: '112.00' },
+      { firstName: 'Sam', lastName: 'Santos', position: 'Barista', rate: '112.50' },
+      { firstName: 'Ana Marie', lastName: 'Garcia', position: 'Cashier', rate: '93.75' },
+      { firstName: 'Pedro Miguel', lastName: 'Reyes', position: 'Kitchen Staff', rate: '100.00' },
+      { firstName: 'Sofia', lastName: 'Mendoza', position: 'Shift Lead', rate: '150.00' },
+      { firstName: 'Luis Miguel', lastName: 'Torres', position: 'Barista', rate: '112.50' },
+      { firstName: 'Bea', lastName: 'Alonzo', position: 'Server', rate: '100.00' },
+      // Manager is usually seeded separately or handled here if needed, but this script seems to focus on employees
+      // We can add the manager if this script is intended to be comprehensive
+      { firstName: 'Sarah', lastName: 'Thompson', position: 'Branch Manager', role: 'manager', rate: '187.50' },
     ];
 
     for (const emp of newEmployees) {
