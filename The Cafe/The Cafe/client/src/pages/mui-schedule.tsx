@@ -3166,7 +3166,18 @@ const EnhancedScheduler = () => {
       </Dialog>
 
       {/* UNIFIED SCHEDULE: Time-Off Request Modal */}
-      <Dialog open={timeOffModalOpen} onClose={() => setTimeOffModalOpen(false)} maxWidth="sm" fullWidth>
+      <Dialog 
+        open={timeOffModalOpen} 
+        onClose={() => setTimeOffModalOpen(false)} 
+        maxWidth="sm" 
+        fullWidth
+        fullScreen={!isDesktop}
+        PaperProps={{
+          sx: {
+            overflow: 'visible', // Allow datepicker popup to overflow
+          }
+        }}
+      >
         <DialogTitle>{selectedTimeOff ? 'Edit Time-Off Request' : 'Request Time Off'}</DialogTitle>
         <DialogContent>
           <Stack spacing={3} sx={{ mt: 1 }}>
@@ -3219,6 +3230,8 @@ const EnhancedScheduler = () => {
               display: 'flex', 
               gap: 2, 
               flexWrap: 'wrap',
+              position: 'relative', // Position context for datepicker dropdown
+              zIndex: 10, // Higher z-index for datepicker containers
               '& .react-datepicker-wrapper': { flex: 1, minWidth: 150 },
               '& .react-datepicker__input-container input': {
                 width: '100%',
@@ -3235,11 +3248,15 @@ const EnhancedScheduler = () => {
                   boxShadow: '0 0 0 2px rgba(16, 185, 129, 0.2)',
                 },
               },
+              '& .react-datepicker-popper': {
+                zIndex: 9999, // Very high z-index for popup
+              },
               '& .react-datepicker': {
                 backgroundColor: '#1e1e1e',
                 border: '1px solid rgba(255,255,255,0.2)',
                 borderRadius: '8px',
                 fontFamily: 'inherit',
+                boxShadow: '0 8px 30px rgba(0,0,0,0.4)',
               },
               '& .react-datepicker__header': {
                 backgroundColor: '#2d2d2d',
@@ -3294,6 +3311,8 @@ const EnhancedScheduler = () => {
                   minDate={new Date()}
                   dateFormat="MMM d, yyyy"
                   placeholderText="Select start date"
+                  popperPlacement="bottom-start"
+                  portalId="root"
                 />
               </Box>
               <Box sx={{ flex: 1 }}>
@@ -3313,6 +3332,8 @@ const EnhancedScheduler = () => {
                   minDate={timeOffFormData.startDate ? new Date(timeOffFormData.startDate) : new Date()}
                   dateFormat="MMM d, yyyy"
                   placeholderText="Select end date"
+                  popperPlacement="bottom-end"
+                  portalId="root"
                 />
               </Box>
             </Box>
