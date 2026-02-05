@@ -36,31 +36,29 @@ import {
 const ProfileHeader = ({ firstName, lastName, role }: { firstName: string, lastName: string, role: string }) => (
   <Box 
     sx={{ 
-      background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)', 
-      pt: 8, 
-      pb: 12,
+      background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)', 
+      pt: { xs: 4, md: 8 }, 
+      pb: { xs: 8, md: 12 },
       px: 3,
-      mb: -6,
-      borderRadius: '0 0 24px 24px'
+      mb: { xs: -4, md: -6 },
+      borderRadius: '0 0 24px 24px',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
     }}
   >
     <Container maxWidth="lg">
-      <Typography variant="h4" sx={{ color: 'white', fontWeight: 700, mb: 1 }}>
-        Account Settings
-      </Typography>
-      <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.7)' }}>
-        Manage your profile, security, and preferences.
-      </Typography>
+      <Box sx={{ maxWidth: 800 }}>
+        <Typography variant="h3" sx={{ color: 'white', fontWeight: 800, mb: 1, letterSpacing: '-0.02em' }}>
+          Account Settings
+        </Typography>
+        <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 400 }}>
+          Manage your profile, security, and preferences.
+        </Typography>
+      </Box>
     </Container>
   </Box>
 );
 
-// Custom TabPanel
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
+// ... (TabPanel interface and function remain same) ...
 
 function CustomTabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
@@ -133,33 +131,42 @@ export default function MuiProfileSettings() {
 
   if (!user) return <Box p={3}>Loading...</Box>;
 
+  const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || 'User';
+  const joinedDate = user.createdAt ? new Date(user.createdAt).toLocaleDateString(undefined, {
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  }) : 'N/A';
+
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#f8fafc' }}>
+    <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9' }}>
       <ProfileHeader firstName={user.firstName} lastName={user.lastName} role={user.role} />
       
-      <Container maxWidth="lg" sx={{ mt: 0 }}>
+      <Container maxWidth="lg" sx={{ mt: 0, px: { xs: 2, md: 3 }, position: 'relative', zIndex: 10 }}>
         <Grid container spacing={3}>
           
           {/* Left Column: User Profile Card */}
-          <Grid item xs={12} md={4}>
+          <Grid item xs={12} md={4} lg={3.5}>
             <Paper 
               elevation={0}
               sx={{ 
-                p: 4, 
+                p: { xs: 3, md: 4 }, 
                 borderRadius: 4, 
-                height: { md: '100%', xs: 'auto' },
+                height: 'auto',
                 textAlign: 'center',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-                border: '1px solid rgba(0,0,0,0.05)',
-                position: 'relative',
-                overflow: 'hidden'
+                boxShadow: '0 10px 30px -10px rgba(0,0,0,0.1)',
+                border: '1px solid rgba(255,255,255,0.5)',
+                bgcolor: 'rgba(255,255,255,0.9)',
+                backdropFilter: 'blur(10px)',
+                position: 'sticky',
+                top: 24
               }}
             >
               <Box sx={{ position: 'relative', zIndex: 1 }}>
                 <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
                   <ProfilePhotoUpload
                     employeeId={user.id}
-                    employeeName={`${user.firstName} ${user.lastName}`}
+                    employeeName={fullName}
                     currentPhotoId={user.photoPublicId}
                     currentPhotoUrl={user.photoUrl}
                     size="lg"
@@ -170,41 +177,52 @@ export default function MuiProfileSettings() {
                   />
                 </Box>
                 
-                <Typography variant="h5" fontWeight={700} sx={{ color: '#0f172a' }}>
-                  {user.firstName} {user.lastName}
+                <Typography variant="h5" fontWeight={800} sx={{ color: '#0f172a', mb: 0.5 }}>
+                  {fullName}
                 </Typography>
                 
                 <Chip 
-                  label={user.role} 
+                  label={user.role || 'Employee'} 
                   size="small" 
                   sx={{ 
                     mt: 1, 
-                    mb: 2, 
+                    mb: 3, 
+                    px: 1,
+                    py: 0.5,
                     textTransform: 'uppercase', 
-                    fontWeight: 600, 
+                    fontWeight: 700, 
                     fontSize: '0.7rem',
                     letterSpacing: '0.05em',
-                    bgcolor: user.role === 'admin' ? '#eef2ff' : '#f0f9ff',
+                    borderRadius: 2,
+                    bgcolor: user.role === 'admin' ? '#eef2ff' : '#eff6ff',
                     color: user.role === 'admin' ? '#4f46e5' : '#0ea5e9'
                   }} 
                 />
 
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                  {user.position}
+                <Typography variant="body2" color="text.secondary" sx={{ mb: 3, fontStyle: 'italic' }}>
+                  {user.position || 'No Position Title'}
                 </Typography>
                 
-                <Divider sx={{ my: 3 }} />
+                <Divider sx={{ my: 3, opacity: 0.5 }} />
                 
-                <Box sx={{ px: 2 }}>
+                <Box sx={{ px: 1, textAlign: 'left' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, color: 'text.secondary' }}>
-                    <BadgeIcon sx={{ fontSize: 20, mr: 2, opacity: 0.7 }} />
-                    <Typography variant="body2">ID: #{user.id.toString().padStart(4, '0')}</Typography>
+                    <BadgeIcon sx={{ fontSize: 20, mr: 2, opacity: 0.7, color: '#64748b' }} />
+                    <Box>
+                        <Typography variant="caption" display="block" sx={{ fontWeight: 600, color: '#94a3b8' }}>USER ID</Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                            {user.username || `#${user.id}`}
+                        </Typography>
+                    </Box>
                   </Box>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, color: 'text.secondary' }}>
-                    <DateIcon sx={{ fontSize: 20, mr: 2, opacity: 0.7 }} />
-                    <Typography variant="body2">
-                      Joined {user.createdAt ? new Date(user.createdAt).toLocaleDateString() : 'N/A'}
-                    </Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary' }}>
+                    <DateIcon sx={{ fontSize: 20, mr: 2, opacity: 0.7, color: '#64748b' }} />
+                    <Box>
+                        <Typography variant="caption" display="block" sx={{ fontWeight: 600, color: '#94a3b8' }}>JOINED DATE</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                            {joinedDate}
+                        </Typography>
+                    </Box>
                   </Box>
                 </Box>
               </Box>
@@ -212,15 +230,16 @@ export default function MuiProfileSettings() {
           </Grid>
 
           {/* Right Column: Settings Tabs */}
-          <Grid item xs={12} md={8}>
+          <Grid item xs={12} md={8} lg={8.5}>
             <Paper 
               elevation={0}
               sx={{ 
                 borderRadius: 4, 
                 minHeight: 500,
                 overflow: 'hidden',
-                boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
-                border: '1px solid rgba(0,0,0,0.05)'
+                boxShadow: '0 10px 30px -10px rgba(0,0,0,0.1)',
+                border: '1px solid rgba(255,255,255,0.5)',
+                bgcolor: 'white'
               }}
             >
               <Tabs 
