@@ -794,7 +794,7 @@ export async function seedSampleSchedulesAndPayroll() {
       for (let i = 0; i < employees.length; i++) {
         const emp = employees[i];
         // Each employee works ~5 days a week
-        if (Math.random() > 0.7) continue; // 30% chance to skip (day off)
+
 
         // Assign different shift patterns to different employees
         const pattern = shiftPatterns[i % shiftPatterns.length];
