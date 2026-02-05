@@ -81,6 +81,8 @@ export default function MuiProfileSettings() {
   const queryClient = useQueryClient();
 
   // Form States
+  const [firstName, setFirstName] = useState(user?.firstName || "");
+  const [lastName, setLastName] = useState(user?.lastName || "");
   const [email, setEmail] = useState(user?.email || "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -88,7 +90,11 @@ export default function MuiProfileSettings() {
   const [showPassword, setShowPassword] = useState(false);
 
   React.useEffect(() => {
-    if (user) setEmail(user.email);
+    if (user) {
+      setEmail(user.email);
+      setFirstName(user.firstName || "");
+      setLastName(user.lastName || "");
+    }
   }, [user]);
 
   const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
@@ -113,7 +119,7 @@ export default function MuiProfileSettings() {
     }
   });
 
-  const handleUpdateGeneral = () => updateProfileMutation.mutate({ email });
+  const handleUpdateGeneral = () => updateProfileMutation.mutate({ firstName, lastName, email });
 
   const handleUpdatePassword = () => {
     if (newPassword !== confirmPassword) {
@@ -275,20 +281,20 @@ export default function MuiProfileSettings() {
                       <TextField
                         fullWidth
                         label="First Name"
-                        value={user.firstName}
-                        disabled
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
                         variant="outlined"
-                        InputProps={{ sx: { borderRadius: 2, bgcolor: '#f1f5f9' } }}
+                        InputProps={{ sx: { borderRadius: 2 } }}
                       />
                     </Grid>
                     <Grid item xs={12} sm={6}>
                       <TextField
                         fullWidth
                         label="Last Name"
-                        value={user.lastName}
-                        disabled
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
                         variant="outlined"
-                        InputProps={{ sx: { borderRadius: 2, bgcolor: '#f1f5f9' } }}
+                        InputProps={{ sx: { borderRadius: 2 } }}
                       />
                     </Grid>
                     <Grid item xs={12}>
@@ -312,7 +318,7 @@ export default function MuiProfileSettings() {
                         size="large"
                         startIcon={<SaveIcon />}
                         onClick={handleUpdateGeneral}
-                        disabled={updateProfileMutation.isPending || email === user.email}
+                        disabled={updateProfileMutation.isPending || (email === user.email && firstName === user.firstName && lastName === user.lastName)}
                         sx={{ 
                           borderRadius: 2, 
                           px: 4, 

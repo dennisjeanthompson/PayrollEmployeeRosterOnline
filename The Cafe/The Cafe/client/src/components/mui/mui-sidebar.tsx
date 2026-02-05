@@ -372,6 +372,7 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
       >
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
           <Avatar
+            src={currentUser?.photoUrl}
             sx={{
               width: 44,
               height: 44,
