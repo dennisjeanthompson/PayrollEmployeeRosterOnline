@@ -20,7 +20,10 @@ router.get('/upload-signature', (req, res) => {
   try {
     const { public_id, folder } = req.query;
 
+    console.log('📝 [GET /upload-signature] Request received', { public_id, folder });
+
     if (!public_id || !folder) {
+      console.warn('❌ [GET /upload-signature] Missing params');
       return res.status(400).json({ error: 'Missing required parameters' });
     }
 
@@ -29,8 +32,15 @@ router.get('/upload-signature', (req, res) => {
     const apiKey = process.env.CLOUDINARY_API_KEY;
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
 
+    console.log('   Env Check:', { 
+        hasSecret: !!apiSecret, 
+        hasKey: !!apiKey, 
+        hasCloud: !!cloudName 
+    });
+
     if (!apiSecret || !apiKey || !cloudName) {
-      return res.status(500).json({ error: 'Cloudinary configuration missing' });
+      console.error('❌ [GET /upload-signature] Missing Cloudinary config');
+      return res.status(500).json({ error: 'Cloudinary configuration missing on server' });
     }
 
     // Cloudinary signature generation:
@@ -53,6 +63,8 @@ router.get('/upload-signature', (req, res) => {
       .join('&') + apiSecret;
 
     const signature = crypto.createHash('sha1').update(signatureString).digest('hex');
+    
+    console.log('✅ [GET /upload-signature] Signature generated successfully');
 
     res.json({
       signature,
@@ -60,9 +72,9 @@ router.get('/upload-signature', (req, res) => {
       apiKey,
       cloudName
     });
-  } catch (error) {
-    console.error('Error generating signature:', error);
-    res.status(500).json({ error: 'Failed to generate upload signature' });
+  } catch (error: any) {
+    console.error('❌ [GET /upload-signature] Error:', error);
+    res.status(500).json({ error: error.message || 'Failed to generate upload signature' });
   }
 });
 
