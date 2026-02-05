@@ -48,6 +48,7 @@ import {
   Verified as VerifiedIcon,
   Download as DownloadIcon,
   TrendingUp as TrendingUpIcon,
+  ManageAccounts as ProfileIcon,
 } from "@mui/icons-material";
 
 const DRAWER_WIDTH = 280;
@@ -77,6 +78,7 @@ const managementNavigation: NavItem[] = [
 ];
 
 const settingsNavigation: NavItem[] = [
+  { name: "Profile Settings", href: "/profile", icon: ProfileIcon, roles: ["employee", "manager", "admin"] },
   { name: "Compliance", href: "/compliance", icon: VerifiedIcon, roles: ["admin"] },
   { name: "Deductions", href: "/deduction-settings", icon: SettingsIcon, roles: ["manager", "admin"] },
   { name: "Deduction Rates", href: "/admin/deduction-rates", icon: SettingsIcon, roles: ["admin"] },

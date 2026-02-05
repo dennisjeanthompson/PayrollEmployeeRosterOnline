@@ -325,6 +325,88 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Admin endpoint to fix all unhashed passwords (IMPORTANT: run once after identifying issues)
+  app.post("/api/admin/fix-passwords", requireAuth, requireRole(["admin"]), async (req: Request, res: Response) => {
+    try {
+      const { defaultPassword } = req.body;
+      const passwordToHash = defaultPassword || 'password123'; // Default password if none provided
+      
+      // Get all users
+      const allBranches = await storage.getAllBranches();
+      let fixed = 0;
+      let skipped = 0;
+      const fixedUsers: string[] = [];
+      
+      for (const branch of allBranches) {
+        const users = await storage.getUsersByBranch(branch.id);
+        
+        for (const user of users) {
+          const isBcryptHash = user.password.startsWith('$2b$') || user.password.startsWith('$2a$');
+          
+          if (!isBcryptHash) {
+            // Password is not hashed, hash it now
+            await storage.updateUser(user.id, { password: passwordToHash });
+            fixedUsers.push(user.username);
+            fixed++;
+          } else {
+            skipped++;
+          }
+        }
+      }
+      
+      console.log(`✅ Password fix complete: ${fixed} fixed, ${skipped} already hashed`);
+      res.json({
+        message: `Fixed ${fixed} unhashed passwords, ${skipped} were already hashed`,
+        fixed,
+        skipped,
+        fixedUsers,
+        newPassword: passwordToHash,
+      });
+    } catch (error) {
+      console.error('Fix passwords error:', error);
+      res.status(500).json({ message: 'Failed to fix passwords' });
+    }
+  });
+
+  // Admin endpoint to reset a specific user's password
+  app.post("/api/admin/reset-password", requireAuth, requireRole(["admin", "manager"]), async (req: Request, res: Response) => {
+    try {
+      const { userId, newPassword } = req.body;
+      
+      if (!userId || !newPassword) {
+        return res.status(400).json({ message: "userId and newPassword are required" });
+      }
+      
+      if (newPassword.length < 6) {
+        return res.status(400).json({ message: "Password must be at least 6 characters" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+      
+      // Managers can only reset passwords for employees in their branch
+      const currentUser = req.user!;
+      if (currentUser.role === 'manager') {
+        if (user.branchId !== currentUser.branchId) {
+          return res.status(403).json({ message: "Cannot reset password for user in another branch" });
+        }
+        if (user.role !== 'employee') {
+          return res.status(403).json({ message: "Managers can only reset employee passwords" });
+        }
+      }
+      
+      await storage.updateUser(userId, { password: newPassword });
+      
+      console.log(`✅ Password reset for user ${user.username} by ${currentUser.username}`);
+      res.json({ message: `Password reset successfully for ${user.username}` });
+    } catch (error) {
+      console.error('Reset password error:', error);
+      res.status(500).json({ message: 'Failed to reset password' });
+    }
+  });
+
   // In-memory store for client-side debug reports (kept only in memory for local debugging)
   const clientDebugReports: Array<any> = [];
 
@@ -385,9 +467,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Compare password with bcrypt
-      const isPasswordValid = await bcrypt.compare(password, user.password);
+      // Check if password is a valid bcrypt hash
+      const isBcryptHash = user.password.startsWith('$2b$') || user.password.startsWith('$2a$');
+      
+      let isPasswordValid = false;
+      
+      if (!isBcryptHash) {
+        // Password is stored as plain text - compare directly and then hash it
+        console.log(`⚠️ [LOGIN] User ${username} has unhashed password - fixing...`);
+        
+        if (user.password === password) {
+          // Password matches, now hash it for future logins
+          const hashedPassword = await bcrypt.hash(password, 10);
+          await storage.updateUser(user.id, { password }); // db-storage will hash it
+          console.log(`✅ [LOGIN] Fixed password hash for user ${username}`);
+          isPasswordValid = true;
+        }
+      } else {
+        // Normal bcrypt comparison
+        isPasswordValid = await bcrypt.compare(password, user.password);
+      }
+      
       if (!isPasswordValid) {
+        console.log(`❌ [LOGIN] Invalid password for user ${username}`);
         return res.status(401).json({ message: "Invalid credentials" });
       }
 

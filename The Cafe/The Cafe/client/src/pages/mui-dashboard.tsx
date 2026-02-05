@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager, getCurrentUser } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtime } from "@/hooks/use-realtime";
 import { format } from "date-fns";
 import { Link } from "wouter";
 import { getInitials } from "@/lib/utils";
@@ -80,45 +81,39 @@ export default function MuiDashboard() {
   const queryClient = useQueryClient();
   const theme = useTheme();
 
+  // Enable real-time updates
+  useRealtime({
+    enabled: true,
+    // Add specific query keys to invalidate on general updates if needed
+    queryKeys: ["/api/approvals", "/api/time-off-requests", "/api/notifications", "/api/shifts/branch", "/api/shifts"]
+  });
+
   // Queries
   const { data: approvals, isLoading: approvalsLoading } = useQuery<ApprovalsResponse>({
     queryKey: ["/api/approvals"],
     enabled: isManagerRole,
-    refetchInterval: 5000, // Poll every 5 seconds for real-time updates
-    refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
+    // Polling removed in favor of real-time updates
   });
 
   const { data: timeOffResponse, isLoading: timeOffLoading } = useQuery<TimeOffResponse>({
     queryKey: ["/api/time-off-requests"],
     enabled: isManagerRole,
-    refetchInterval: 5000, // Poll every 5 seconds for real-time time off requests
-    refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   const { data: shifts, isLoading: shiftsLoading } = useQuery<ShiftsResponse>({
     queryKey: ["/api/shifts/branch"],
     enabled: isManagerRole,
-    refetchInterval: 5000, // Poll every 5 seconds for real-time schedule updates
-    refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   const { data: employeeShifts, isLoading: employeeShiftsLoading } = useQuery<ShiftsResponse>({
     queryKey: ["/api/shifts"],
     enabled: !isManagerRole,
-    refetchInterval: 5000, // Poll every 5 seconds for real-time schedule updates
-    refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   const { data: teamHours, isLoading: teamHoursLoading } = useQuery<TeamHoursResponse>({
     queryKey: ["/api/hours/team-summary"],
     enabled: isManagerRole,
-    refetchInterval: 10000, // Poll every 10 seconds for team hours
-    refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
+    refetchInterval: 30000, // Keep slower polling for hours stats as they change frequently with clock-ins
   });
 
   // Filter today's shifts
@@ -146,9 +141,9 @@ export default function MuiDashboard() {
     },
     onSuccess: () => {
       toast({ title: "Approved", description: "Time off request approved" });
+      // Invalidation handled by real-time events, but kept for immediate feedback
       queryClient.invalidateQueries({ queryKey: ["/api/time-off-requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -164,7 +159,6 @@ export default function MuiDashboard() {
       toast({ title: "Rejected", description: "Time off request rejected" });
       queryClient.invalidateQueries({ queryKey: ["/api/time-off-requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });

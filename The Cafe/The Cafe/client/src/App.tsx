@@ -41,6 +41,7 @@ const MuiAdminDeductionRates = lazy(() => import("@/pages/mui-admin-deduction-ra
 const MuiAuditLogs = lazy(() => import("@/pages/mui-audit-logs"));
 const MuiHolidayCalendar = lazy(() => import("@/pages/mui-holiday-calendar"));
 const MuiComplianceDashboard = lazy(() => import("@/pages/mui-compliance-dashboard"));
+const MuiProfileSettings = lazy(() => import("@/pages/mui-profile-settings"));
 
 const Setup = lazy(() => import("@/pages/setup"));
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -271,6 +272,26 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
           <RouteLoader>
             <ErrorBoundary>
               <MuiNotifications />
+            </ErrorBoundary>
+          </RouteLoader>
+        </DesktopLayout>
+      </Route>
+
+      <Route path="/profile">
+        <DesktopLayout>
+          <RouteLoader>
+            <ErrorBoundary>
+              <MuiProfileSettings />
+            </ErrorBoundary>
+          </RouteLoader>
+        </DesktopLayout>
+      </Route>
+
+      <Route path="/settings">
+        <DesktopLayout>
+          <RouteLoader>
+            <ErrorBoundary>
+              <MuiProfileSettings />
             </ErrorBoundary>
           </RouteLoader>
         </DesktopLayout>

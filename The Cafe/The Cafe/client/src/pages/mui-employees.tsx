@@ -108,6 +108,8 @@ import {
 // Custom Components
 import { EmployeeShiftModal } from "@/components/employees/employee-shift-modal";
 import { DeletionOptionsModal } from "@/components/employees/deletion-options-modal";
+import ProfilePhotoUpload from "@/components/employees/ProfilePhotoUpload";
+import DocumentUpload, { DocumentType } from "@/components/employees/DocumentUpload";
 import { isAdmin, getCurrentUser } from "@/lib/auth";
 
 // Types
@@ -122,6 +124,8 @@ interface Employee {
   hourlyRate: string;
   branchId: string;
   isActive: boolean;
+  photoUrl?: string;
+  photoPublicId?: string;
   blockchainVerified?: boolean;
   blockchainHash?: string;
   verifiedAt?: string;
@@ -262,6 +266,17 @@ export default function MuiEmployees() {
     refetchInterval: 10000, // Poll every 10 seconds for stats
     refetchOnWindowFocus: true,
     refetchIntervalInBackground: true,
+  });
+
+  // Fetch documents for current employee
+  const { data: documentsResponse, refetch: refetchDocuments } = useQuery({
+    queryKey: ["/api/employees", currentEmployee?.id, "documents"],
+    queryFn: async () => {
+      if (!currentEmployee?.id) return [];
+      const response = await apiRequest("GET", `/api/employees/${currentEmployee.id}/documents`);
+      return response.json();
+    },
+    enabled: !!currentEmployee?.id && (viewDialogOpen || formDialogOpen),
   });
 
   const employeesData = employeesResponse?.employees || [];
@@ -616,6 +631,7 @@ export default function MuiEmployees() {
       renderCell: (params: GridRenderCellParams<Employee>) => (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1.5, py: 1, overflow: "hidden" }}>
           <Avatar
+            src={params.row.photoUrl}
             sx={{
               width: 36,
               height: 36,
@@ -625,8 +641,8 @@ export default function MuiEmployees() {
               fontWeight: 600,
             }}
           >
-            {params.row.firstName?.charAt(0)}
-            {params.row.lastName?.charAt(0)}
+            {!params.row.photoUrl && params.row.firstName?.charAt(0)}
+            {!params.row.photoUrl && params.row.lastName?.charAt(0)}
           </Avatar>
           <Box sx={{ minWidth: 0, flex: 1 }}>
             <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
@@ -1096,6 +1112,19 @@ export default function MuiEmployees() {
               {isEditing ? `Edit Employee: ${currentEmployee?.firstName} ${currentEmployee?.lastName}` : "Add New Employee"}
             </DialogTitle>
             <DialogContent dividers>
+              {isEditing && currentEmployee && (
+                <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
+                  <ProfilePhotoUpload
+                    currentPhotoId={currentEmployee.photoPublicId}
+                    currentPhotoUrl={currentEmployee.photoUrl}
+                    employeeId={currentEmployee.id}
+                    employeeName={`${currentEmployee.firstName} ${currentEmployee.lastName}`}
+                    onUploadComplete={() => {
+                      queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+                    }}
+                  />
+                </Box>
+              )}
               <Stack spacing={3} sx={{ mt: 1 }}>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 6 }}>
@@ -1230,92 +1259,133 @@ export default function MuiEmployees() {
         </Dialog>
 
         {/* View Details Dialog */}
-        <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="sm" fullWidth>
-          <DialogTitle>Employee Details</DialogTitle>
-          <DialogContent dividers>
+        <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth>
+          <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <Typography variant="h6">Employee Profile</Typography>
+            <IconButton onClick={() => setViewDialogOpen(false)} size="small">
+              <CloseIcon />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent dividers sx={{ p: 0 }}>
             {currentEmployee && (
-              <Stack spacing={3}>
-                <Box sx={{ display: "flex", alignItems: "center", gap: 3 }}>
-                  <Avatar
-                    sx={{
-                      width: 80,
-                      height: 80,
-                      bgcolor: currentEmployee.role === "manager" ? "primary.main" : "success.main",
-                      fontSize: "1.5rem",
-                    }}
-                  >
-                    {currentEmployee.firstName?.charAt(0)}
-                    {currentEmployee.lastName?.charAt(0)}
-                  </Avatar>
-                  <Box>
-                    <Typography variant="h5" sx={{ fontWeight: 600 }}>
-                      {currentEmployee.firstName} {currentEmployee.lastName}
-                    </Typography>
-                    <Typography color="text.secondary">{currentEmployee.position}</Typography>
-                    <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                      <Chip size="small" label={currentEmployee.role} color={getRoleColor(currentEmployee.role)} />
-                      <Chip
-                        size="small"
-                        label={currentEmployee.isActive ? "Active" : "Inactive"}
-                        color={currentEmployee.isActive ? "success" : "error"}
-                        variant="outlined"
-                      />
-                    </Stack>
+              <Box sx={{ display: 'flex', flexDirection: 'column', height: '600px' }}>
+                <Box sx={{ p: 3, bgcolor: "background.default", borderBottom: 1, borderColor: "divider" }}>
+                  <Box sx={{ display: "flex", alignItems: "center", gap: 3 }}>
+                    <Avatar
+                      src={currentEmployee.photoUrl}
+                      sx={{
+                        width: 80,
+                        height: 80,
+                        bgcolor: currentEmployee.role === "manager" ? "primary.main" : "success.main",
+                        fontSize: "1.5rem",
+                        border: 4,
+                        borderColor: "background.paper",
+                        boxShadow: 2
+                      }}
+                    >
+                      {!currentEmployee.photoUrl && currentEmployee.firstName?.charAt(0)}
+                      {!currentEmployee.photoUrl && currentEmployee.lastName?.charAt(0)}
+                    </Avatar>
+                    <Box>
+                      <Typography variant="h5" sx={{ fontWeight: 700 }}>
+                        {currentEmployee.firstName} {currentEmployee.lastName}
+                      </Typography>
+                      <Typography color="text.secondary" gutterBottom>{currentEmployee.position}</Typography>
+                      <Stack direction="row" spacing={1}>
+                        <Chip size="small" label={currentEmployee.role} color={getRoleColor(currentEmployee.role)} />
+                        <Chip
+                          size="small"
+                          label={currentEmployee.isActive ? "Active" : "Inactive"}
+                          color={currentEmployee.isActive ? "success" : "error"}
+                          variant="outlined"
+                        />
+                      </Stack>
+                    </Box>
                   </Box>
                 </Box>
 
-                <Divider />
+                <Box sx={{ flex: 1, display: 'flex' }}>
+                  {/* Sidebar/Tabs */}
+                  <Tabs
+                    orientation="vertical"
+                    variant="scrollable"
+                    value={0} // Default to info for now, could add state
+                    sx={{ borderRight: 1, borderColor: "divider", minWidth: 160 }}
+                  >
+                    <Tab icon={<PersonIcon />} label="Personal Info" iconPosition="start" sx={{ justifyContent: "flex-start", minHeight: 48 }} />
+                    <Tab icon={<WorkIcon />} label="Documents" iconPosition="start" sx={{ justifyContent: "flex-start", minHeight: 48 }} onClick={() => {
+                        // For simplicity in this demo, just scroll or show sections.
+                        // Or better, keep simple list view below.
+                    }} />
+                  </Tabs>
 
-                <Grid container spacing={2}>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Email
-                    </Typography>
-                    <Typography variant="body2">{currentEmployee.email}</Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Username
-                    </Typography>
-                    <Typography variant="body2">{currentEmployee.username}</Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Branch
-                    </Typography>
-                    <Typography variant="body2">{getBranchName(currentEmployee.branchId)}</Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Hourly Rate
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      ₱{parseFloat(currentEmployee.hourlyRate).toFixed(2)}
-                    </Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Hours This Month
-                    </Typography>
-                    <Typography variant="body2">{currentEmployee.hoursThisMonth?.toFixed(1) || "0.0"} hours</Typography>
-                  </Grid>
-                  <Grid size={{ xs: 6 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Shifts This Month
-                    </Typography>
-                    <Typography variant="body2">{currentEmployee.shiftsThisMonth || 0} shifts</Typography>
-                  </Grid>
-                  <Grid size={{ xs: 12 }}>
-                    <Typography variant="caption" color="text.secondary">
-                      Member Since
-                    </Typography>
-                    <Typography variant="body2">{format(new Date(currentEmployee.createdAt), "MMMM d, yyyy")}</Typography>
-                  </Grid>
-                </Grid>
-              </Stack>
+                  {/* Content Area */}
+                  <Box sx={{ flex: 1, overflow: 'auto', p: 3 }}>
+                    <Stack spacing={4}>
+                      {/* Personal Info Section */}
+                      <Box>
+                        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Contract Details
+                        </Typography>
+                        <Grid container spacing={3}>
+                          <Grid size={{ xs: 6 }}>
+                            <Stack spacing={0.5}>
+                              <Typography variant="caption" color="text.secondary">Email</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>{currentEmployee.email}</Typography>
+                            </Stack>
+                          </Grid>
+                          <Grid size={{ xs: 6 }}>
+                            <Stack spacing={0.5}>
+                              <Typography variant="caption" color="text.secondary">Username</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>{currentEmployee.username}</Typography>
+                            </Stack>
+                          </Grid>
+                          <Grid size={{ xs: 6 }}>
+                            <Stack spacing={0.5}>
+                              <Typography variant="caption" color="text.secondary">Branch</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>{getBranchName(currentEmployee.branchId)}</Typography>
+                            </Stack>
+                          </Grid>
+                          <Grid size={{ xs: 6 }}>
+                            <Stack spacing={0.5}>
+                              <Typography variant="caption" color="text.secondary">Hourly Rate</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main' }}>
+                                ₱{parseFloat(currentEmployee.hourlyRate).toLocaleString('en-PH', { minimumFractionDigits: 2 })}/hr
+                              </Typography>
+                            </Stack>
+                          </Grid>
+                          <Grid size={{ xs: 6 }}>
+                             <Stack spacing={0.5}>
+                              <Typography variant="caption" color="text.secondary">Joined</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                {format(new Date(currentEmployee.createdAt), "MMMM d, yyyy")}
+                              </Typography>
+                            </Stack>
+                          </Grid>
+                        </Grid>
+                      </Box>
+                      
+                      <Divider />
+
+                      {/* Documents Section */}
+                      <Box>
+                        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Documents
+                        </Typography>
+                        <DocumentUpload 
+                          employeeId={currentEmployee.id}
+                          documents={documentsResponse || []}
+                          onUploadComplete={() => refetchDocuments()}
+                          onDocumentRemove={() => refetchDocuments()}
+                        />
+                      </Box>
+                    </Stack>
+                  </Box>
+                </Box>
+              </Box>
             )}
           </DialogContent>
-          <DialogActions sx={{ p: 2.5 }}>
+          <DialogActions sx={{ p: 2, borderTop: 1, borderColor: "divider" }}>
             <Button onClick={() => setViewDialogOpen(false)}>Close</Button>
             <Button
               variant="contained"

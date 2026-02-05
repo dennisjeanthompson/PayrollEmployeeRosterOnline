@@ -189,6 +189,14 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       onEventRef.current?.("payroll:sent", data);
     });
 
+    // Notification events
+    socket.on("notification:created", (data) => {
+      console.log("🔔 New notification:", data);
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["notifications"] }); // Alias if mapped differently
+      onEventRef.current?.("notification:created", data);
+    });
+
     // Invalidate custom query keys if provided
     socket.on("data-refresh-needed", () => {
       const keys = queryKeysRef.current;

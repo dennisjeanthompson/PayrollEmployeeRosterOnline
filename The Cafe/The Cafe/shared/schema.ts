@@ -32,8 +32,12 @@ export const users = pgTable("users", {
   cashAdvanceDeduction: text("cash_advance_deduction").default("0"),
   philhealthDeduction: text("philhealth_deduction").default("0"),
   otherDeductions: text("other_deductions").default("0"),
+  // Cloudinary photo fields
+  photoUrl: text("photo_url"),
+  photoPublicId: text("photo_public_id"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
 
 export const shifts = pgTable("shifts", {
   id: text("id").primaryKey(),
@@ -229,6 +233,20 @@ export const timeOffPolicy = pgTable("time_off_policy", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Employee documents (ID cards, certificates, supporting documents)
+export const employeeDocuments = pgTable("employee_documents", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  type: text("type").notNull(), // 'sss_id', 'philhealth_id', 'pagibig_id', 'tin_id', 'birth_certificate', 'proof_of_address', 'nbi_clearance', 'resume', 'diploma', 'other'
+  name: text("name").notNull(), // Original filename
+  publicId: text("public_id").notNull(), // Cloudinary public ID
+  url: text("url").notNull(), // Cloudinary secure URL
+  format: text("format"), // 'pdf', 'jpg', 'png', etc.
+  size: integer("size"), // File size in bytes
+  uploadedBy: text("uploaded_by").references(() => users.id), // Who uploaded it
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert Schemas
 export const insertBranchSchema = createInsertSchema(branches).omit({
   id: true,
@@ -353,6 +371,8 @@ export type Holiday = typeof holidays.$inferSelect;
 export type ArchivedPayrollPeriod = typeof archivedPayrollPeriods.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type TimeOffPolicy = typeof timeOffPolicy.$inferSelect;
+export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
+
 
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;

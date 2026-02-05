@@ -49,3 +49,32 @@ export function getCurrentUser(): User | null {
 export function logout() {
   setAuthState({ user: null, isAuthenticated: false });
 }
+
+import { useState, useEffect } from "react";
+import { apiRequest } from "./queryClient";
+
+export function useAuth() {
+  const [state, setState] = useState(getAuthState());
+
+  useEffect(() => {
+    const unsubscribe = subscribeToAuth((newState) => {
+      setState(newState);
+    });
+    return unsubscribe;
+  }, []);
+
+  const refreshUser = async () => {
+    try {
+      if (!state.isAuthenticated) return;
+      const res = await apiRequest("GET", "/api/auth/me");
+      if (res.ok) {
+        const data = await res.json();
+        setAuthState({ user: data.user, isAuthenticated: true });
+      }
+    } catch (err) {
+      console.error("Failed to refresh user", err);
+    }
+  };
+
+  return { ...state, refreshUser };
+}

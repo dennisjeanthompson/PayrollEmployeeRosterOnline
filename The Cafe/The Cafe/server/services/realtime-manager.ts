@@ -271,6 +271,13 @@ class RealTimeManager {
     this.io.emit("payroll:sent", { entryId, netPay });
   }
 
+  // NOTIFICATION EVENTS
+  public broadcastNotification(notification: any) {
+    if (notification.userId) {
+      this.io.to(`user:${notification.userId}`).emit("notification:created", { notification });
+    }
+  }
+
   public isUserOnline(userId: string): boolean {
     return this.userConnections.has(userId) && (this.userConnections.get(userId)?.size ?? 0) > 0;
   }

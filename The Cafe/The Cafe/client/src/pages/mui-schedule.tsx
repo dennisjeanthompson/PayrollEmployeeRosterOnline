@@ -1454,6 +1454,22 @@ const EnhancedScheduler = () => {
     }
   }, [isPublished, isDateBlocked, isManagerRole, currentUser, isDesktop, mobileSelectedEmployee]);
 
+  // MOBILE FIX: Handle single date taps (which don't trigger 'select' easily on touch)
+  const handleDateClick = useCallback((arg: any) => {
+      const adaptedInfo = {
+        start: arg.date,
+        end: arg.date, // Point in time
+        startStr: arg.dateStr,
+        endStr: arg.dateStr, // Same for point-click
+        allDay: arg.allDay,
+        jsEvent: arg.jsEvent,
+        view: arg.view,
+        resource: arg.resource
+      };
+      
+      handleDateSelect(adaptedInfo);
+  }, [handleDateSelect]);
+
   // Handle external event receive (when create: true)
   const handleEventReceive = useCallback((info: any) => {
     // Remove the temporary event immediately - we want to use our modal
@@ -2760,6 +2776,8 @@ const EnhancedScheduler = () => {
             eventResize={handleEventResize}
             eventClick={handleEventClick}
             select={handleDateSelect}
+            dateClick={handleDateClick}
+            selectLongPressDelay={200} // Reduce delay for faster selection on mobile
             eventReceive={handleEventReceive}
             
             // HOVER DETAILS: Show summary tooltip on day cells

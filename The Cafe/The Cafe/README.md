@@ -1,103 +1,65 @@
-# The Café - Employee Management System
+# The Cafe - Workforce Management System
 
-A modern, full-stack employee management system for café businesses. Features time tracking, shift scheduling, payroll management, and role-based access for employees and managers.
+A comprehensive workforce management application for The Cafe, featuring scheduling, payroll, shift trading, and employee management.
 
 ## 🚀 Quick Start
 
-### Prerequisites
-- Node.js 18+ 
-- npm or yarn
+1.  **Install Dependencies**
+    ```bash
+    npm install
+    ```
 
-### Installation
+2.  **Database Setup**
+    Ensure your `.env` file contains the correct `DATABASE_URL` (PostgreSQL/Neon).
+    ```bash
+    npm run db:push
+    ```
 
-```bash
-# Clone the repository
-git clone https://github.com/dennisjeanthompson/cuddly-sniffle.git
+3.  **Start Development Server**
+    ```bash
+    npm run dev
+    ```
+    The application will be available at `http://localhost:5000`.
 
-# Navigate to the project folder
-cd "cuddly-sniffle/The Cafe/The Cafe"
+## 🔑 Login Credentials
 
-# Install dependencies
-npm install
-```
+The following sample accounts have been seeded into the database for testing purposes.
 
-### Running the App
+### Admin
+- **Username**: `admin`
+- **Password**: `admin123`
+- **Role**: Full System Access
 
-```bash
-# Start the development servers
-npm run dev
-```
+### Manager
+- **Username**: `catherineocampo`
+- **Password**: `password123`
+- **Role**: Branch Manager (Can manage schedules, payroll, and employees)
 
-This starts a single development server (single origin):
-- **App (Desktop & Mobile responsive)**: http://localhost:5000
+### Employees
+All employees use the default password: **`password123`**
 
-### Default Login Credentials
+| Name | Username | Role | Position |
+|------|----------|------|----------|
+| Mark Santos | `marksantos` | Employee | Barista |
+| Jennifer Reyes | `jenniferreyes` | Employee | Cashier |
+| Ryan Cruz | `ryancruz` | Employee | Server |
+| Michelle Garcia | `michellegarcia` | Employee | Kitchen Staff |
+| Paulo Dizon | `paulodizon` | Employee | Barista |
+| Jeffrey Lim | `jeffreylim` | Employee | Server |
+| Christine Bautista | `christinebautista` | Employee | Cashier |
+| Michael Tan | `michaeltan` | Employee | Kitchen Staff |
+| Jessica Mendoza | `jessicamendoza` | Employee | Barista |
 
-| Role | Username | Password |
-|------|----------|----------|
-| Admin | admin | admin123 |
-| Manager | manager | manager123 |
-| Employee | employee1 | password123 |
+## 🛠️ Tech Stack
 
-## 📱 Features
-
-### For Employees (Mobile - Responsive)
-- View schedule and upcoming shifts
-- Clock in/out
-- Request time off
-- Trade shifts with coworkers
-- View payslips
-
-### For Managers/Admins (Desktop - Port 5000)
-- Manage employee schedules (Week/Month view)
-- Process payroll with 2-week or monthly periods
-- Approve time-off requests
-- View reports and analytics
-- Manage employees and branches
-
-## 🛠️ Available Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | Start the development server (port 5000) |
-| `npm run build` | Build for production |
-| `npm run test` | Run tests |
-| `npm start` | Start production server |
-
-## 🗄️ Database
-
-The app uses PostgreSQL (Neon) for both development and production. The database is automatically initialized with all required tables and seeded with sample data on first run.
-
-Set the `DATABASE_URL` environment variable to connect to your PostgreSQL database:
-```bash
-export DATABASE_URL="postgresql://user:password@host/database"
-npm run dev
-```
-
-## 📁 Project Structure
-
-```
-The Cafe/
-├── client/           # React frontend
-│   └── src/
-│       ├── components/   # Reusable UI components
-│       ├── pages/        # Page components
-│       ├── hooks/        # Custom React hooks
-│       └── lib/          # Utilities
-├── server/           # Express backend
-│   ├── routes/       # API route handlers
-│   └── services/     # Business logic
-├── shared/           # Shared types and schemas
-└── package.json
-```
-
-## 🔧 Tech Stack
-
-- **Frontend**: React, TypeScript, Vite, Material-UI, TailwindCSS
+- **Frontend**: React, TypeScript, Material-UI (MUI), FullCalendar
 - **Backend**: Express.js, Node.js
-- **Database**: PostgreSQL with Neon (Drizzle ORM)
-- **State**: TanStack Query
+- **Database**: PostgreSQL (via Neon), Drizzle ORM
+- **Authentication**: Session-based (express-session), Bcrypt
+- **File Storage**: Cloudinary (Profile Photos & Documents)
 
-## 📄 License
+## ✨ Recent Updates
 
-MIT
+- **Cloudinary Integration**: Supports uploading profile photos and employee documents (IDs, contracts).
+- **Payroll System**: Automated payroll calculation with Philippine tax/benefit deductions (SSS, PhilHealth, Pag-IBIG).
+- **Mobile Responsive**: Optimized views for schedule and payslip access on mobile devices.

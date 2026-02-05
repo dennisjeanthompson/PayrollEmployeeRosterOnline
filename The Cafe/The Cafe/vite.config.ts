@@ -29,11 +29,24 @@ export default defineConfig({
         main: path.resolve(__dirname, "client", "index.html"),
       },
       output: {
-        // Let Vite handle automatic chunking - NO manual chunks to avoid duplication
-        // Vite's automatic splitting ensures React is singleton
+        // Manual chunks for better code splitting and caching
+        manualChunks: {
+          // Vendor chunks - separate large libraries for better caching
+          'vendor-react': ['react', 'react-dom'],
+          'vendor-mui-core': ['@mui/material', '@mui/system'],
+          'vendor-mui-icons': ['@mui/icons-material'],
+          'vendor-query': ['@tanstack/react-query'],
+        },
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
+      },
+    },
+    // Terser options for better compression
+    terserOptions: {
+      compress: {
+        drop_console: false, // Keep console for debugging
+        drop_debugger: true,
       },
     },
   },
