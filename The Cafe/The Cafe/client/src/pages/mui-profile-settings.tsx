@@ -37,8 +37,9 @@ const ProfileHeader = ({ firstName, lastName, role }: { firstName: string, lastN
   <Box 
     sx={{ 
       background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)', 
-      py: { xs: 6, md: 8 },
+      py: { xs: 4, md: 6 },
       px: 3,
+      pb: { xs: 8, md: 10 }, // Extra bottom padding for overlap
       boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
     }}
   >
@@ -139,14 +140,7 @@ export default function MuiProfileSettings() {
     <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9' }}>
       <ProfileHeader firstName={user.firstName} lastName={user.lastName} role={user.role} />
       
-      <Container maxWidth="lg" sx={{ mt: -4, px: { xs: 2, md: 3 }, position: 'relative', zIndex: 10 }}>
-        {/* mt: -4 provides a slight robust overlap without looking broken, or we can use mt: 4 for full separation. 
-            Let's use mt: 4 for clear separation per user request implication. 
-            Actually, the user said "like at the corner". Standard separation is safest. 
-            I'll use mt: 4. */}
-      </Container>
-      
-      <Container maxWidth="lg" sx={{ mt: 4, px: { xs: 2, md: 3 } }}>
+      <Container maxWidth="lg" sx={{ mt: -8, px: { xs: 2, md: 3 }, position: 'relative', zIndex: 10 }}>
         <Grid container spacing={3}>
           
           {/* Left Column: User Profile Card */}
@@ -154,7 +148,7 @@ export default function MuiProfileSettings() {
             <Paper 
               elevation={0}
               sx={{ 
-                p: { xs: 3, md: 4 }, 
+                p: { xs: 3, md: 3 }, 
                 borderRadius: 4, 
                 height: 'auto',
                 textAlign: 'center',
@@ -240,7 +234,8 @@ export default function MuiProfileSettings() {
                 overflow: 'hidden',
                 boxShadow: '0 10px 30px -10px rgba(0,0,0,0.1)',
                 border: '1px solid rgba(255,255,255,0.5)',
-                bgcolor: 'white'
+                bgcolor: 'white',
+                minHeight: 'auto'
               }}
             >
               <Tabs 

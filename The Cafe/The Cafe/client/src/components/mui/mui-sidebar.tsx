@@ -1,5 +1,5 @@
 import { Link, useLocation } from "wouter";
-import { getCurrentUser, isManager, isAdmin, setAuthState } from "@/lib/auth";
+import { useAuth, isManager, isAdmin, setAuthState } from "@/lib/auth";
 import { getInitials, capitalizeFirstLetter } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -8,6 +8,7 @@ import { useState } from "react";
 // MUI Components
 import {
   Box,
+
   Drawer,
   List,
   ListItem,
@@ -93,7 +94,7 @@ interface MuiSidebarProps {
 
 export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSidebarProps) {
   const [location, setLocation] = useLocation();
-  const currentUser = getCurrentUser();
+  const { user: currentUser } = useAuth();
   const { toast } = useToast();
   const [isCollapsed, setIsCollapsed] = useState(false);
   const theme = useTheme();
