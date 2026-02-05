@@ -2022,8 +2022,8 @@ const EnhancedScheduler = () => {
         </Paper>
       )}
 
-      {/* Employee Roster Sidebar - Responsive Drawer */}
-      {!isDesktop ? (
+      {/* Employee Roster Sidebar - Responsive Drawer - MANAGERS ONLY */}
+      {isManagerRole && !isDesktop ? (
         <SwipeableDrawer
           anchor="left"
           open={rosterOpen}
@@ -2176,7 +2176,7 @@ const EnhancedScheduler = () => {
             </Box>
           </Box>
         </SwipeableDrawer>
-      ) : (
+      ) : isManagerRole ? (
         <Box
           className="no-print"
           sx={{
@@ -2220,7 +2220,7 @@ const EnhancedScheduler = () => {
               const colors = EMPLOYEE_COLORS[index % EMPLOYEE_COLORS.length];
               const displayRole = employee.position || employee.role || 'employee';
               const isInactive = employee.isActive === false;
-              const canDrag = !isPublished && !isInactive;
+              const canDrag = isManagerRole && !isPublished && !isInactive;
               
               return (
                 <Tooltip 
@@ -2306,7 +2306,7 @@ const EnhancedScheduler = () => {
             </Box>
           </Box>
         </Box>
-      )}
+      ) : null}
 
       {/* Main Calendar Area */}
       <Box
@@ -2387,21 +2387,23 @@ const EnhancedScheduler = () => {
 
         <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
         
-        {/* Roster Toggle */}
-        <Tooltip title="Toggle Employee Roster">
-          <Button
-            variant={rosterOpen ? 'contained' : 'outlined'}
-            startIcon={<PeopleIcon />}
-            onClick={() => setRosterOpen(!rosterOpen)}
-            size="small"
-            sx={{ 
-              minWidth: { xs: 80, sm: 'auto' },
-              fontSize: { xs: '0.75rem', sm: '0.875rem' }
-            }}
-          >
-            Roster
-          </Button>
-        </Tooltip>
+        {/* Roster Toggle - MANAGERS ONLY */}
+        {isManagerRole && (
+          <Tooltip title="Toggle Employee Roster">
+            <Button
+              variant={rosterOpen ? 'contained' : 'outlined'}
+              startIcon={<PeopleIcon />}
+              onClick={() => setRosterOpen(!rosterOpen)}
+              size="small"
+              sx={{ 
+                minWidth: { xs: 80, sm: 'auto' },
+                fontSize: { xs: '0.75rem', sm: '0.875rem' }
+              }}
+            >
+              Roster
+            </Button>
+          </Tooltip>
+        )}
 
         {/* UNIFIED SCHEDULE: Request Time Off Button */}
         <Tooltip title="Request time off">
