@@ -4,7 +4,7 @@ import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { networkInterfaces } from "os";
-import { initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll, resetDatabase } from "./init-db";
+import { initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll, resetDatabase, markSetupComplete } from "./init-db";
 import { promptDatabaseChoice, deleteDatabaseFile, displayDatabaseStats, loadSampleData } from "./db-manager";
 import { recreateConnection } from "./db";
 
@@ -83,6 +83,10 @@ if (process.env.NODE_ENV === 'production') {
 
   // Seed Philippine holidays if table is empty
   await seedPhilippineHolidays();
+
+  // Mark setup as complete since we have seeded data
+  await markSetupComplete();
+  console.log('✅ Setup marked as complete');
 
   const server = await registerRoutes(app);
 

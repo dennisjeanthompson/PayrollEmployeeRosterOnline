@@ -965,3 +965,26 @@ export async function seedSampleSchedulesAndPayroll() {
     throw error;
   }
 }
+
+export async function markSetupComplete() {
+  console.log('🏁 Marking setup as complete...');
+  try {
+    const existing = await db.select().from(setupStatus).limit(1);
+    if (existing.length > 0) {
+      await db.update(setupStatus)
+        .set({ isSetupComplete: true, setupCompletedAt: new Date() })
+        .where(eq(setupStatus.id, existing[0].id));
+    } else {
+      await db.insert(setupStatus).values({
+        id: randomUUID(),
+        isSetupComplete: true,
+        setupCompletedAt: new Date(),
+      });
+    }
+    console.log('✅ Setup marked as complete');
+  } catch (error) {
+    console.error('❌ Error marking setup as complete:', error);
+    throw error;
+  }
+}
+
