@@ -1083,6 +1083,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
   });
 
+  // Register employee uploads routes (BEFORE createEmployeeRouter to avoid /:id conflict)
+  app.use("/api/employees", requireAuth, employeeUploadsRouter);
+
   // Register employee routes (after specific /api/employees/* routes to avoid conflicts)
   app.use(createEmployeeRouter(realTimeManager));
 
@@ -3440,7 +3443,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Mount employee uploads router - PROTECTED
-  app.use("/api/employees", requireAuth, employeeUploadsRouter);
-
+  // MOVED UP to avoid conflict with /api/employees/:id
+  
   return httpServer;
 }
