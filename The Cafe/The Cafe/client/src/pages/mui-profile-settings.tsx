@@ -37,12 +37,9 @@ const ProfileHeader = ({ firstName, lastName, role }: { firstName: string, lastN
   <Box 
     sx={{ 
       background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)', 
-      pt: { xs: 4, md: 8 }, 
-      pb: { xs: 8, md: 12 },
+      py: { xs: 6, md: 8 },
       px: 3,
-      mb: { xs: -4, md: -6 },
-      borderRadius: '0 0 24px 24px',
-      boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+      boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
     }}
   >
     <Container maxWidth="lg">
@@ -142,7 +139,14 @@ export default function MuiProfileSettings() {
     <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9' }}>
       <ProfileHeader firstName={user.firstName} lastName={user.lastName} role={user.role} />
       
-      <Container maxWidth="lg" sx={{ mt: 0, px: { xs: 2, md: 3 }, position: 'relative', zIndex: 10 }}>
+      <Container maxWidth="lg" sx={{ mt: -4, px: { xs: 2, md: 3 }, position: 'relative', zIndex: 10 }}>
+        {/* mt: -4 provides a slight robust overlap without looking broken, or we can use mt: 4 for full separation. 
+            Let's use mt: 4 for clear separation per user request implication. 
+            Actually, the user said "like at the corner". Standard separation is safest. 
+            I'll use mt: 4. */}
+      </Container>
+      
+      <Container maxWidth="lg" sx={{ mt: 4, px: { xs: 2, md: 3 } }}>
         <Grid container spacing={3}>
           
           {/* Left Column: User Profile Card */}
@@ -154,15 +158,12 @@ export default function MuiProfileSettings() {
                 borderRadius: 4, 
                 height: 'auto',
                 textAlign: 'center',
-                boxShadow: '0 10px 30px -10px rgba(0,0,0,0.1)',
-                border: '1px solid rgba(255,255,255,0.5)',
-                bgcolor: 'rgba(255,255,255,0.9)',
-                backdropFilter: 'blur(10px)',
-                position: 'sticky',
-                top: 24
+                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
+                border: '1px solid #e2e8f0',
+                bgcolor: 'white'
               }}
             >
-              <Box sx={{ position: 'relative', zIndex: 1 }}>
+              <Box sx={{ position: 'relative' }}>
                 <Box sx={{ mb: 3, display: 'flex', justifyContent: 'center' }}>
                   <ProfilePhotoUpload
                     employeeId={user.id}
@@ -203,7 +204,7 @@ export default function MuiProfileSettings() {
                   {user.position || 'No Position Title'}
                 </Typography>
                 
-                <Divider sx={{ my: 3, opacity: 0.5 }} />
+                <Divider sx={{ my: 3 }} />
                 
                 <Box sx={{ px: 1, textAlign: 'left' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, color: 'text.secondary' }}>
