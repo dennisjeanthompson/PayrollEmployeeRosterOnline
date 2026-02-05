@@ -10,7 +10,8 @@ import { recreateConnection } from "./db";
 
 const app = express();
 
-// ... (omitted)
+app.use(express.json());
+app.use(express.urlencoded({ extended: false }));
 
 // Trust proxy FIRST - required for Render.com
 if (process.env.NODE_ENV === 'production') {
