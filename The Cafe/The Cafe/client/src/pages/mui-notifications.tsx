@@ -4,6 +4,7 @@ import { isManager, getCurrentUser } from "@/lib/auth";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 
 // MUI Components
 import {
@@ -110,6 +111,7 @@ export default function MuiNotifications() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [notificationToDelete, setNotificationToDelete] = useState<Notification | null>(null);
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
+  const [, setLocation] = useLocation();
 
   // Fetch notifications with real-time updates
   const { data: notificationsResponse, isLoading, refetch } = useQuery({
@@ -248,6 +250,9 @@ export default function MuiNotifications() {
       case "payroll":
       case "payment":
         return theme.palette.info.main;
+      case "clock_in":
+      case "clock_out":
+        return theme.palette.warning.main;
       default:
         return theme.palette.grey[500];
     }
@@ -762,11 +767,33 @@ export default function MuiNotifications() {
                       <Stack spacing={1.5}>
                         {Object.entries(parsedData).map(([key, value]) => {
                         const isObject = typeof value === 'object' && value !== null;
+                        
+                        // Map technical keys to professional labels
+                        const labelMap: Record<string, string> = {
+                          tradeId: "Trade ID",
+                          shiftId: "Shift ID",
+                          shiftDate: "Shift Date",
+                          requesterName: "Requested By",
+                          takerName: "Accepted By",
+                          tradeType: "Trade Type",
+                          status: "Status",
+                          requestId: "Request ID",
+                          startDate: "Start Date",
+                          endDate: "End Date",
+                          type: "Leave Type",
+                          advanceDays: "Notice Given (Days)",
+                          shortNotice: "Short Notice",
+                          minimumAdvanceDays: "Policy Requirement"
+                        };
+
+                        const displayLabel = labelMap[key] || key.replace(/_/g, ' ');
+                        const displayValue = key === 'shortNotice' ? (value ? 'Yes ⚠️' : 'No') : String(value);
+
                         if (isObject) {
                           return (
                             <Box key={key} sx={{ width: '100%' }}>
                               <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'capitalize', mb: 1 }}>
-                                {key.replace(/_/g, ' ')}
+                                {displayLabel}
                               </Typography>
                               <Box
                                 component="pre"
@@ -793,10 +820,10 @@ export default function MuiNotifications() {
                         return (
                           <Stack key={key} direction="row" justifyContent="space-between" alignItems="center">
                             <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
-                              {key.replace(/_/g, ' ')}
+                              {displayLabel}
                             </Typography>
-                            <Typography variant="body2" fontWeight={500} sx={{ wordBreak: 'break-word' }}>
-                              {String(value)}
+                            <Typography variant="body2" fontWeight={500} sx={{ wordBreak: 'break-word', textTransform: key === 'status' || key === 'type' ? 'capitalize' : 'none' }}>
+                              {displayValue}
                             </Typography>
                           </Stack>
                         );
@@ -842,6 +869,51 @@ export default function MuiNotifications() {
                 Delete
               </Button>
               <Box sx={{ flex: 1 }} />
+              
+              {/* Contextual Quick Actions */}
+              {selectedNotification.data && (() => {
+                let data = selectedNotification.data;
+                if (typeof data === 'string') {
+                  try { data = JSON.parse(data); } catch (e) { data = null; }
+                }
+
+                if (!data) return null;
+
+                const isTrade = selectedNotification.type.includes('trade');
+                const isTimeOff = selectedNotification.type.includes('time_off');
+
+                return (
+                  <Stack direction="row" spacing={1}>
+                    {isTrade && (
+                      <Button
+                        variant="contained"
+                        color="secondary"
+                        startIcon={<SwapIcon />}
+                        onClick={() => {
+                          setDetailDialogOpen(false);
+                          setLocation("/schedule");
+                        }}
+                      >
+                        View Trade
+                      </Button>
+                    )}
+                    {isTimeOff && (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        startIcon={<ScheduleIcon />}
+                        onClick={() => {
+                          setDetailDialogOpen(false);
+                          setLocation("/schedule");
+                        }}
+                      >
+                        View Schedule
+                      </Button>
+                    )}
+                  </Stack>
+                );
+              })()}
+
               {!selectedNotification.isRead && (
                 <Button
                   variant="contained"

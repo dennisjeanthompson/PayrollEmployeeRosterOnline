@@ -633,8 +633,10 @@ const EnhancedScheduler = () => {
   const renderEventContent = useCallback((arg: any) => {
     const { event } = arg;
     const isMobile = !isDesktop;
+    const { type, trade } = event.extendedProps;
   
     const isAllDay = event.allDay || event.display === 'background';
+    const isTrade = type === 'shift-trade';
   
     return (
       <div style={{
@@ -657,14 +659,21 @@ const EnhancedScheduler = () => {
         }}>
           {event.title}
         </div>
+
+        {isTrade && trade?.requester && (
+          <div style={{ fontSize: '0.65rem', opacity: 0.9, fontStyle: 'italic' }}>
+            {trade.requester.firstName}'s shift
+          </div>
+        )}
+
         {!isAllDay && (
           <div style={{
             fontSize: '0.65rem',
             opacity: 0.8,
-            marginTop: '2px',
+            marginTop: 'auto', // push to bottom
+            paddingTop: '2px',
           }}>
             {format(new Date(event.start!), 'h:mm a')}
-            {event.end && ` - ${format(new Date(event.end), 'h:mm a')}`}
           </div>
         )}
       </div>
@@ -1004,6 +1013,45 @@ const EnhancedScheduler = () => {
     },
   });
 
+  const takeShiftTradeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('PUT', `/api/shift-trades/${id}/take`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to take shift trade');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shift-trades'] });
+      queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      setSnackbar({ open: true, message: '✅ Shift trade accepted! Pending manager approval.', severity: 'success' });
+      setApprovalModalOpen(false);
+    },
+    onError: (error: Error) => {
+      setSnackbar({ open: true, message: `❌ ${error.message}`, severity: 'error' });
+    }
+  });
+
+  const deleteShiftTradeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('DELETE', `/api/shift-trades/${id}`);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to cancel shift trade');
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shift-trades'] });
+      setSnackbar({ open: true, message: '🗑️ Shift trade cancelled.', severity: 'info' });
+      setApprovalModalOpen(false);
+    },
+    onError: (error: Error) => {
+      setSnackbar({ open: true, message: `❌ ${error.message}`, severity: 'error' });
+    }
+  });
+
   const approveTradeAsManagerMutation = useMutation({
     mutationFn: async ({ id, approve }: { id: string; approve: boolean }) => {
       const res = await apiRequest('PATCH', `/api/shift-trades/${id}/approve`, {
@@ -1178,20 +1226,24 @@ const EnhancedScheduler = () => {
         const shift = shifts.find(s => s.id === trade.shiftId);
         if (!shift) return null;
 
-        const colors = getEmployeeColor(shift.userId, employees);
-        const tradeColor = trade.status === 'accepted' ? '#06B6D4' : '#F59E0B'; // Cyan vs Orange
+        const requesterName = trade.requester?.firstName || 'Unknown';
+        const targetName = trade.targetUser?.firstName || (trade.toUserId ? 'Direct' : 'Open');
+        const isPending = trade.status === 'pending';
+        const isAccepted = trade.status === 'accepted';
         
+        let tradeLabel = '';
+        if (isAccepted) tradeLabel = isDesktop ? '🔄 Trade Accepted' : '🔄 Accepted';
+        else if (!trade.targetUserId) tradeLabel = isDesktop ? '📢 Open Trade' : '📢 Open';
+        else tradeLabel = isDesktop ? '🔄 Direct Trade' : '🔄 Direct';
+
         return {
           id: `trade-${trade.id}`,
           resourceId: shift.userId,
-          // MOBILE FIX: Shorter title to prevent cramping
-          title: isDesktop
-            ? `🔄 Trade ${trade.status === 'accepted' ? 'Accepted' : 'Pending'}`
-            : (trade.status === 'accepted' ? '🔄 Acc' : '🔄 Pend'),
+          title: tradeLabel,
           start: shift.startTime,
           end: shift.endTime,
           backgroundColor: colors.bg,
-          borderColor: tradeColor,
+          borderColor: isAccepted ? '#06B6D4' : (trade.targetUserId ? '#F59E0B' : '#8B5CF6'), // Cyan vs Orange vs Purple
           borderWidth: '3px',
           textColor: colors.text,
           classNames: ['shift-trade'],
@@ -1200,7 +1252,7 @@ const EnhancedScheduler = () => {
             type: 'shift-trade',
             trade,
             shift,
-            tooltip: `Trade: ${trade.requester?.firstName} → ${trade.targetUser?.firstName} (${trade.status})`
+            tooltip: `${tradeLabel}: ${requesterName} → ${targetName}`
           },
         };
       })
@@ -1365,28 +1417,11 @@ const EnhancedScheduler = () => {
       return;
     }
 
-    // SHIFT TRADE: Different actions for involved parties vs managers
+    // SHIFT TRADE: Open professional detail modal for all trades
     if (type === 'shift-trade') {
-      const isRequester = trade.requesterId === currentUser?.id;
-      const isTarget = trade.targetUserId === currentUser?.id;
-      
-      if (isManagerRole && trade.status === 'accepted') {
-        // Manager can approve accepted trades
-        setSelectedTrade(trade);
-        setApprovalType('shift-trade');
-        setApprovalModalOpen(true);
-      } else if (isTarget && trade.status === 'pending') {
-        // Target user can accept/reject pending trade
-        setSelectedTrade(trade);
-        setApprovalType('shift-trade');
-        setApprovalModalOpen(true);
-      } else {
-        setSnackbar({ 
-          open: true, 
-          message: `Shift trade: ${trade.status} (${trade.requester?.firstName} → ${trade.targetUser?.firstName})`, 
-          severity: 'info' 
-        });
-      }
+      setSelectedTrade(trade);
+      setApprovalType('shift-trade');
+      setApprovalModalOpen(true);
       return;
     }
 
@@ -3657,7 +3692,7 @@ const EnhancedScheduler = () => {
         fullScreen={!isDesktop} // MOBILE FIX
       >
         <DialogTitle>
-          {approvalType === 'time-off' ? 'Approve Time-Off Request' : 'Approve Shift Trade'}
+          {approvalType === 'time-off' ? 'Time-Off Request Details' : 'Shift Trade Details'}
         </DialogTitle>
         <DialogContent>
           {approvalType === 'time-off' && selectedTimeOff && (
@@ -3680,64 +3715,158 @@ const EnhancedScheduler = () => {
             </Stack>
           )}
           
-          {approvalType === 'shift-trade' && selectedTrade && (
-            <Stack spacing={2} sx={{ mt: 1 }}>
-              <Typography variant="body2">
-                <strong>From:</strong> {selectedTrade.requester?.firstName} {selectedTrade.requester?.lastName}
-              </Typography>
-              <Typography variant="body2">
-                <strong>To:</strong> {selectedTrade.targetUser?.firstName} {selectedTrade.targetUser?.lastName}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Shift:</strong> {selectedTrade.shift?.date ? format(new Date(selectedTrade.shift.date), 'MMM d, yyyy') : 'N/A'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Reason:</strong> {selectedTrade.reason || 'No reason provided'}
-              </Typography>
-              <Typography variant="body2">
-                <strong>Status:</strong> {selectedTrade.status}
-              </Typography>
-            </Stack>
-          )}
+          {approvalType === 'shift-trade' && selectedTrade && (() => {
+            const isRequester = selectedTrade.requesterId === currentUser?.id;
+            const isTarget = selectedTrade.targetUserId === currentUser?.id;
+            const isOpenTrade = !selectedTrade.toUserId || selectedTrade.toUserId === "";
+            const isAcceptedByMe = isTarget && selectedTrade.status === 'accepted';
+            const isPending = selectedTrade.status === 'pending';
+            
+            return (
+              <Stack spacing={2} sx={{ mt: 1 }}>
+                <Typography variant="body2">
+                  <strong>Type:</strong> {isOpenTrade ? '📢 Open Trade' : '🔄 Direct Trade'}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Requested By:</strong> {selectedTrade.requester?.firstName} {selectedTrade.requester?.lastName}
+                </Typography>
+                {!isOpenTrade && (
+                  <Typography variant="body2">
+                    <strong>Direct To:</strong> {selectedTrade.targetUser?.firstName} {selectedTrade.targetUser?.lastName}
+                  </Typography>
+                )}
+                <Typography variant="body2">
+                  <strong>Shift:</strong> {selectedTrade.shift?.date ? format(new Date(selectedTrade.shift.date), 'MMM d, yyyy') : 'N/A'}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Reason:</strong> {selectedTrade.reason || 'No reason provided'}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Current Status:</strong> {selectedTrade.status}
+                </Typography>
+                
+                {isOpenTrade && isPending && !isRequester && (
+                  <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.info.main, 0.1), borderRadius: 1 }}>
+                    <Typography variant="body2" color="info.main">
+                      This shift is available for anyone in your branch to take.
+                    </Typography>
+                  </Box>
+                )}
+              </Stack>
+            );
+          })()}
         </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setApprovalModalOpen(false)}>Cancel</Button>
-          <Button
-            variant="outlined"
-            color="error"
-            onClick={() => {
-              if (approvalType === 'time-off' && selectedTimeOff) {
-                updateTimeOffMutation.mutate({ id: selectedTimeOff.id, status: 'rejected' });
-              } else if (approvalType === 'shift-trade' && selectedTrade) {
-                if (isManagerRole) {
-                  approveTradeAsManagerMutation.mutate({ id: selectedTrade.id, approve: false });
-                } else {
-                  respondToTradeMutation.mutate({ id: selectedTrade.id, accept: false });
-                }
-              }
-            }}
-            disabled={updateTimeOffMutation.isPending || respondToTradeMutation.isPending || approveTradeAsManagerMutation.isPending}
-          >
-            Reject
-          </Button>
-          <Button
-            variant="contained"
-            color="success"
-            onClick={() => {
-              if (approvalType === 'time-off' && selectedTimeOff) {
-                updateTimeOffMutation.mutate({ id: selectedTimeOff.id, status: 'approved' });
-              } else if (approvalType === 'shift-trade' && selectedTrade) {
-                if (isManagerRole) {
-                  approveTradeAsManagerMutation.mutate({ id: selectedTrade.id, approve: true });
-                } else {
-                  respondToTradeMutation.mutate({ id: selectedTrade.id, accept: true });
-                }
-              }
-            }}
-            disabled={updateTimeOffMutation.isPending || respondToTradeMutation.isPending || approveTradeAsManagerMutation.isPending}
-          >
-            Approve
-          </Button>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button onClick={() => setApprovalModalOpen(false)}>Close</Button>
+          
+          {/* Actions for Time-Off (Managers only) */}
+          {approvalType === 'time-off' && selectedTimeOff && isManagerRole && (
+            <>
+              <Button
+                variant="outlined"
+                color="error"
+                onClick={() => updateTimeOffMutation.mutate({ id: selectedTimeOff.id, status: 'rejected' })}
+                disabled={updateTimeOffMutation.isPending}
+              >
+                Reject
+              </Button>
+              <Button
+                variant="contained"
+                color="success"
+                onClick={() => updateTimeOffMutation.mutate({ id: selectedTimeOff.id, status: 'approved' })}
+                disabled={updateTimeOffMutation.isPending}
+              >
+                Approve
+              </Button>
+            </>
+          )}
+
+          {/* Actions for Shift Trades */}
+          {approvalType === 'shift-trade' && selectedTrade && (() => {
+            const isRequester = selectedTrade.requesterId === currentUser?.id;
+            const isTarget = selectedTrade.targetUserId === currentUser?.id;
+            const isOpenTrade = !selectedTrade.toUserId || selectedTrade.toUserId === "";
+            const isPending = selectedTrade.status === 'pending';
+            const isAccepted = selectedTrade.status === 'accepted';
+
+            // 1. Managers can approve accepted trades
+            if (isManagerRole && isAccepted) {
+              return (
+                <>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={() => approveTradeAsManagerMutation.mutate({ id: selectedTrade.id, approve: false })}
+                    disabled={approveTradeAsManagerMutation.isPending}
+                  >
+                    Reject
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={() => approveTradeAsManagerMutation.mutate({ id: selectedTrade.id, approve: true })}
+                    disabled={approveTradeAsManagerMutation.isPending}
+                  >
+                    Approve
+                  </Button>
+                </>
+              );
+            }
+
+            // 2. Requester can cancel a pending/accepted trade
+            if (isRequester && (isPending || isAccepted)) {
+              return (
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={() => deleteShiftTradeMutation.mutate(selectedTrade.id)}
+                  disabled={deleteShiftTradeMutation.isPending}
+                >
+                  Cancel My Trade
+                </Button>
+              );
+            }
+
+            // 3. Anyone can take an open pending trade
+            if (isOpenTrade && isPending && !isRequester) {
+              return (
+                <Button
+                  variant="contained"
+                  color="primary"
+                  onClick={() => takeShiftTradeMutation.mutate(selectedTrade.id)}
+                  disabled={takeShiftTradeMutation.isPending}
+                >
+                  Take This Shift
+                </Button>
+              );
+            }
+
+            // 4. Target can accept/reject a direct pending trade
+            if (isTarget && isPending) {
+              return (
+                <>
+                  <Button
+                    variant="outlined"
+                    color="error"
+                    onClick={() => respondToTradeMutation.mutate({ id: selectedTrade.id, accept: false })}
+                    disabled={respondToTradeMutation.isPending}
+                  >
+                    Reject Trade
+                  </Button>
+                  <Button
+                    variant="contained"
+                    color="success"
+                    onClick={() => respondToTradeMutation.mutate({ id: selectedTrade.id, accept: true })}
+                    disabled={respondToTradeMutation.isPending}
+                  >
+                    Accept Trade
+                  </Button>
+                </>
+              );
+            }
+
+            return null;
+          })()}
         </DialogActions>
       </Dialog>
 

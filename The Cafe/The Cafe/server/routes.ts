@@ -859,12 +859,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create notification for employee
       const notification = await storage.createNotification({
         userId: shift.userId,
-        type: 'schedule',
+        type: 'clock_in',
         title: 'Clocked In',
         message: `You have been clocked in for your shift at ${format(new Date(), "h:mm a")}`,
         data: JSON.stringify({
           shiftId: id,
-          action: 'clock-in'
+          action: 'clock-in',
+          time: format(new Date(), "h:mm a"),
+          date: format(new Date(), "MMM d, yyyy")
         })
       } as any);
       realTimeManager.broadcastNotification(notification);
@@ -900,12 +902,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create notification for employee
       const notification = await storage.createNotification({
         userId: shift.userId,
-        type: 'schedule',
+        type: 'clock_out',
         title: 'Clocked Out',
         message: `You have been clocked out from your shift at ${format(new Date(), "h:mm a")}`,
         data: JSON.stringify({
           shiftId: id,
-          action: 'clock-out'
+          action: 'clock-out',
+          time: format(new Date(), "h:mm a"),
+          date: format(new Date(), "MMM d, yyyy")
         })
       } as any);
       realTimeManager.broadcastNotification(notification);
@@ -1827,10 +1831,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (trade.toUserId) {
         const notification = await storage.createNotification({
           userId: trade.toUserId,
-          type: 'schedule',
+          type: 'trade_request',
           title: 'Direct Shift Trade Request',
           message: `${requesterName} wants to trade their ${shiftDate} shift with you.`,
-          data: JSON.stringify({ tradeId: trade.id, shiftId: trade.shiftId })
+          data: JSON.stringify({ 
+            tradeId: trade.id, 
+            shiftId: trade.shiftId,
+            shiftDate,
+            requesterName,
+            tradeType: 'direct'
+          })
         } as any);
         realTimeManager.broadcastNotification(notification);
       } else {
@@ -1842,10 +1852,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           const notification = await storage.createNotification({
             userId: user.id,
-            type: 'schedule',
+            type: 'shift_trade',
             title: 'New Shift Available',
             message: `${requesterName} posted a ${shiftDate} shift for trade.`,
-            data: JSON.stringify({ tradeId: trade.id, shiftId: trade.shiftId })
+            data: JSON.stringify({ 
+              tradeId: trade.id, 
+              shiftId: trade.shiftId,
+              shiftDate,
+              requesterName,
+              tradeType: 'open'
+            })
           } as any);
           realTimeManager.broadcastNotification(notification);
         }
@@ -1861,10 +1877,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const notificationManager = await storage.createNotification({
           userId: manager.id,
-          type: 'schedule',
+          type: 'trade_request',
           title: 'New Shift Trade Posted',
           message: `${requesterName} has posted a shift trade for ${shiftDate}.`,
-          data: JSON.stringify({ tradeId: trade.id, shiftId: trade.shiftId })
+          data: JSON.stringify({ 
+            tradeId: trade.id, 
+            shiftId: trade.shiftId,
+            shiftDate,
+            requesterName,
+            tradeType: trade.toUserId ? 'direct' : 'open'
+          })
         } as any);
         realTimeManager.broadcastNotification(notificationManager);
       }
@@ -2029,10 +2051,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const notificationRequester = await storage.createNotification({
         userId: trade.fromUserId,
-        type: 'schedule',
+        type: 'shift_trade',
         title: 'Shift Trade Taken',
         message: `${takerName} has accepted your ${shiftDate} shift trade. It is now pending manager approval.`,
-        data: JSON.stringify({ tradeId: id, shiftId: trade.shiftId })
+        data: JSON.stringify({ 
+          tradeId: id, 
+          shiftId: trade.shiftId,
+          shiftDate,
+          takerName,
+          status: 'taken'
+        })
       } as any);
       realTimeManager.broadcastNotification(notificationRequester);
 
@@ -2042,10 +2070,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const manager of managers) {
         const notificationManager = await storage.createNotification({
           userId: manager.id,
-          type: 'schedule',
+          type: 'trade_request',
           title: 'Shift Trade Awaiting Approval',
           message: `${takerName} has taken a shift trade from another employee. Please review it.`,
-          data: JSON.stringify({ tradeId: id, shiftId: trade.shiftId })
+          data: JSON.stringify({ 
+            tradeId: id, 
+            shiftId: trade.shiftId,
+            shiftDate,
+            takerName,
+            status: 'pending_approval'
+          })
         } as any);
         realTimeManager.broadcastNotification(notificationManager);
       }
@@ -2087,21 +2121,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // 3. Create notifications
+      const shift = await storage.getShift(trade.shiftId);
+      const shiftDate = shift?.startTime ? format(new Date(shift.startTime), "MMM d") : "a shift";
+
       const notificationRequester = await storage.createNotification({
         userId: trade.fromUserId,
-        type: 'schedule',
+        type: 'shift_trade',
         title: 'Shift Trade Approved',
-        message: 'Your shift trade request has been approved.',
-        data: JSON.stringify({ tradeId: id })
+        message: `Your trade for the ${shiftDate} shift has been approved.`,
+        data: JSON.stringify({ 
+          tradeId: id,
+          shiftId: trade.shiftId,
+          shiftDate,
+          status: 'approved'
+        })
       } as any);
       realTimeManager.broadcastNotification(notificationRequester);
 
       const notificationTarget = await storage.createNotification({
         userId: trade.toUserId,
-        type: 'schedule',
+        type: 'shift_trade',
         title: 'Shift Trade Approved',
-        message: 'You have been assigned a new shift from a trade.',
-        data: JSON.stringify({ tradeId: id })
+        message: `You have been assigned a new shift (${shiftDate}) from a trade.`,
+        data: JSON.stringify({ 
+          tradeId: id,
+          shiftId: trade.shiftId,
+          shiftDate,
+          status: 'approved'
+        })
       } as any);
       realTimeManager.broadcastNotification(notificationTarget);
 
@@ -2146,13 +2193,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         approvedAt: new Date()
       });
 
+      const shift = await storage.getShift(trade.shiftId);
+      const shiftDate = shift?.startTime ? format(new Date(shift.startTime), "MMM d") : "a shift";
+
       // Notify requester
       const notificationRequester = await storage.createNotification({
         userId: trade.fromUserId,
-        type: 'schedule',
+        type: 'shift_trade',
         title: 'Shift Trade Rejected',
-        message: 'Your shift trade request has been rejected.',
-        data: JSON.stringify({ tradeId: id })
+        message: `Your shift trade request for ${shiftDate} has been rejected.`,
+        data: JSON.stringify({ 
+          tradeId: id,
+          shiftId: trade.shiftId,
+          shiftDate,
+          status: 'rejected'
+        })
       } as any);
       realTimeManager.broadcastNotification(notificationRequester);
 
@@ -2865,7 +2920,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           userId: manager.id,
           type: 'time_off',
           title: shortNotice ? '⚠️ Short Notice Time Off Request' : 'New Time Off Request',
-          message: `${employee?.firstName} ${employee?.lastName} has requested time off from ${format(request.startDate, "MMM d")} to ${format(request.endDate, "MMM d, yyyy")} (${requestPayload.type})${shortNoticeText}`,
+          message: `${employee?.firstName} ${employee?.lastName} has requested time off from ${format(new Date(request.startDate), "MMM d")} to ${format(new Date(request.endDate), "MMM d, yyyy")} (${requestPayload.type})${shortNoticeText}`,
           isRead: false,
           data: JSON.stringify({
             requestId: request.id,
@@ -2916,6 +2971,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Time off request not found" });
     }
 
+    // Sync with approvals table
+    try {
+      const pendingApprovals = await storage.getPendingApprovals(req.user!.branchId);
+      const relatedApproval = pendingApprovals.find(a => a.requestId === id && a.type === 'time_off');
+      if (relatedApproval) {
+        await storage.updateApproval(relatedApproval.id, {
+          status: "approved",
+          approvedBy: req.user!.id,
+          reason: "Automatically approved via time-off request approval"
+        });
+      }
+    } catch (syncError) {
+      console.error('Failed to sync with approvals table:', syncError);
+      // Don't fail the main request if sync fails
+    }
+
     // Create notification for employee
     const notification = await storage.createNotification({
       userId: request.userId,
@@ -2925,7 +2996,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       isRead: false,
       data: JSON.stringify({
         requestId: request.id,
-        status: 'approved'
+        status: 'approved',
+        startDate: format(new Date(request.startDate), "MMM d, yyyy"),
+        endDate: format(new Date(request.endDate), "MMM d, yyyy"),
+        type: request.type
       })
     } as any);
     realTimeManager.broadcastNotification(notification);
@@ -2944,6 +3018,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Time off request not found" });
     }
 
+    // Sync with approvals table
+    try {
+      const pendingApprovals = await storage.getPendingApprovals(req.user!.branchId);
+      const relatedApproval = pendingApprovals.find(a => a.requestId === id && a.type === 'time_off');
+      if (relatedApproval) {
+        await storage.updateApproval(relatedApproval.id, {
+          status: "rejected",
+          approvedBy: req.user!.id,
+          reason: "Automatically rejected via time-off request rejection"
+        });
+      }
+    } catch (syncError) {
+      console.error('Failed to sync with approvals table:', syncError);
+      // Don't fail the main request if sync fails
+    }
+
     // Create notification for employee
     const notification = await storage.createNotification({
       userId: request.userId,
@@ -2953,7 +3043,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       isRead: false,
       data: JSON.stringify({
         requestId: request.id,
-        status: 'rejected'
+        status: 'rejected',
+        startDate: format(new Date(request.startDate), "MMM d, yyyy"),
+        endDate: format(new Date(request.endDate), "MMM d, yyyy"),
+        type: request.type
       })
     } as any);
     realTimeManager.broadcastNotification(notification);

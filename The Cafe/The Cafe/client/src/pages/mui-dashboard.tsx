@@ -466,7 +466,7 @@ function ManagerDashboard({
         <Grid size={{ xs: 12, lg: 6 }}>
           <InfoCard
             title="Pending Approvals"
-            subtitle={`${pendingTimeOffRequests.length + (approvals?.approvals?.length || 0)} requests waiting`}
+            subtitle={`${pendingTimeOffRequests.length} requests waiting`}
             icon={<BellIcon />}
             color="warning"
           >
