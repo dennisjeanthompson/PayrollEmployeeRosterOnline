@@ -283,7 +283,7 @@ const EnhancedScheduler = () => {
   // 2025 BEST PRACTICE: Real-time WebSocket updates with toast notifications
   useRealtime({
     enabled: true,
-    queryKeys: ['shifts', 'time-off-requests', 'shift-trades'],
+    queryKeys: ['shifts', 'time-off-requests', 'shift-trades', 'employees', '/api/hours/all-employees'],
     onEvent: (event, data) => {
       // Toast notifications for new requests (managers care most)
       if (event === 'time-off:created' && isManagerRole) {
@@ -302,6 +302,11 @@ const EnhancedScheduler = () => {
       if (event === 'trade:status-changed') {
         toast.success('✅ Shift trade updated!', { autoClose: 3000 });
         queryClient.invalidateQueries({ queryKey: ['shift-trades'] });
+      }
+      // Employee changes
+      if (['employee:created', 'employee:updated', 'employee:deleted'].includes(event)) {
+          queryClient.invalidateQueries({ queryKey: ['employees'] });
+          queryClient.invalidateQueries({ queryKey: ['/api/hours/all-employees'] });
       }
       // Shift changes
       if (['shift:created', 'shift:updated', 'shift:deleted'].includes(event)) {

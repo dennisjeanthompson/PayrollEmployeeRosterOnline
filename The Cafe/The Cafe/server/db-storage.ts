@@ -250,8 +250,8 @@ export class DatabaseStorage implements IStorage {
 
   // Convenience: return only employees (role === 'employee') for a branch
   async getEmployees(branchId: string): Promise<User[]> {
-    const all = await this.getUsersByBranch(branchId);
-    return all.filter(u => u.role === 'employee');
+    // Managers should also be visible in the roster for scheduling
+    return this.getUsersByBranch(branchId);
   }
 
   // Branches

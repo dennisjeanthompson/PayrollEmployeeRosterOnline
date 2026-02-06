@@ -100,7 +100,6 @@ export interface IStorage {
 
   // Reports helpers
   getPayrollEntriesForDateRange(branchId: string, startDate: Date, endDate: Date): Promise<PayrollEntry[]>;
-  getEmployees(branchId: string): Promise<User[]>;
 
 
   // Holidays
@@ -300,9 +299,7 @@ export class MemStorage implements IStorage {
   }
 
   async getEmployees(branchId: string): Promise<User[]> {
-    return Array.from(this.users.values()).filter(user => 
-      user.branchId === branchId && user.role === 'employee'
-    );
+    return this.getUsersByBranch(branchId);
   }
 
   async getBranch(id: string): Promise<Branch | undefined> {
