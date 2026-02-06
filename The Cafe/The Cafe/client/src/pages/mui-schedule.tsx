@@ -634,6 +634,8 @@ const EnhancedScheduler = () => {
     const { event } = arg;
     const isMobile = !isDesktop;
   
+    const isAllDay = event.allDay || event.display === 'background';
+  
     return (
       <div style={{
         display: 'flex',
@@ -645,24 +647,26 @@ const EnhancedScheduler = () => {
       }}>
         <div style={{
           fontWeight: '600',
-          whiteSpace: 'normal', // ← CRITICAL: allow wrapping
-          wordBreak: 'break-word', // ← break long words
+          whiteSpace: 'normal',
+          wordBreak: 'break-word',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           display: '-webkit-box',
-          WebkitLineClamp: 2, // max 2 lines
+          WebkitLineClamp: 2,
           WebkitBoxOrient: 'vertical',
         }}>
           {event.title}
         </div>
-        <div style={{
-          fontSize: '0.65rem',
-          opacity: 0.8,
-          marginTop: '2px',
-        }}>
-          {format(new Date(event.start!), 'h:mm a')}
-          {event.end && ` - ${format(new Date(event.end), 'h:mm a')}`}
-        </div>
+        {!isAllDay && (
+          <div style={{
+            fontSize: '0.65rem',
+            opacity: 0.8,
+            marginTop: '2px',
+          }}>
+            {format(new Date(event.start!), 'h:mm a')}
+            {event.end && ` - ${format(new Date(event.end), 'h:mm a')}`}
+          </div>
+        )}
       </div>
     );
   }, [isDesktop]);
@@ -938,9 +942,18 @@ const EnhancedScheduler = () => {
       
       return { previousTrades };
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
+      // Refresh queries to get server-side data (like IDs and relations)
       queryClient.invalidateQueries({ queryKey: ['shift-trades'] });
       queryClient.invalidateQueries({ queryKey: ['shifts'] });
+      
+      // Also update the trades list directly if response contains the new trade
+      if (data?.trade) {
+        queryClient.setQueryData(['shift-trades'], (old: any) => ({
+          ...old,
+          trades: [...(old?.trades || []).filter((t: any) => !t.id.startsWith('temp-')), data.trade]
+        }));
+      }
       setSnackbar({ 
         open: true, 
         message: '✅ Shift trade request submitted!', 
@@ -1152,7 +1165,11 @@ const EnhancedScheduler = () => {
       .filter(trade => {
         // Privacy filter for non-managers
         if (!isManagerRole && currentUser) {
-          return trade.requesterId === currentUser.id || trade.targetUserId === currentUser.id;
+          // Show if I'm involved OR if it's an OPEN trade (targetUserId is empty)
+          return trade.requesterId === currentUser.id || 
+                 trade.targetUserId === currentUser.id ||
+                 !trade.targetUserId || 
+                 trade.targetUserId === "";
         }
         return true;
       })
@@ -2722,8 +2739,7 @@ const EnhancedScheduler = () => {
             // CRITICAL FIX: Per-view configuration for dayMaxEvents (7shifts/Deputy pattern)
             views={{
               dayGridMonth: {
-                dayMaxEvents: 3, // Show max 3 events per day, then "+X more"
-                // REMOVED dayMaxEventRows to avoid conflict with dayMaxEvents
+                dayMaxEvents: 5, // Increased to show more trades/shifts at a glance
               },
               dayGridWeek: {
                 dayMaxEvents: true, // Auto-fit based on height
