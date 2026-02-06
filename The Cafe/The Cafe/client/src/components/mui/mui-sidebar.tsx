@@ -392,7 +392,9 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
                   sx={{ fontWeight: 600 }}
                   noWrap
                 >
-                  {currentUser?.firstName} {currentUser?.lastName}
+                  {(currentUser?.firstName || currentUser?.lastName) 
+                    ? `${currentUser.firstName || ''} ${currentUser.lastName || ''}`.trim()
+                    : currentUser?.username || 'User'}
                 </Typography>
                 <Chip
                   label={capitalizeFirstLetter(currentUser?.role || "employee")}

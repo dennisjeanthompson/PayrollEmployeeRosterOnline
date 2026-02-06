@@ -531,7 +531,9 @@ router.delete('/api/employees/:id', requireAuth, requireRole(['manager']), async
 
     // Prevent deleting yourself
     if (existingEmployee.id === req.session.user?.id) {
-      return res.status(400).json({ message: 'You cannot delete your own account' });
+      return res.status(400).json({ 
+        message: `You cannot delete your own account (${existingEmployee.firstName} ${existingEmployee.lastName})` 
+      });
     }
 
     // Prevent deleting admin accounts (only admins can delete admins)
