@@ -857,7 +857,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const employee = await storage.getUser(shift.userId);
 
       // Create notification for employee
-      await storage.createNotification({
+      const notification = await storage.createNotification({
         userId: shift.userId,
         type: 'schedule',
         title: 'Clocked In',
@@ -867,6 +867,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           action: 'clock-in'
         })
       } as any);
+      realTimeManager.broadcastNotification(notification);
 
       res.json({
         message: "Employee clocked in successfully",
@@ -897,7 +898,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
 
       // Create notification for employee
-      await storage.createNotification({
+      const notification = await storage.createNotification({
         userId: shift.userId,
         type: 'schedule',
         title: 'Clocked Out',
@@ -907,6 +908,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           action: 'clock-out'
         })
       } as any);
+      realTimeManager.broadcastNotification(notification);
 
       res.json({
         message: "Employee clocked out successfully",
@@ -1816,7 +1818,58 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       console.log(`✅ Shift trade created: ${trade.id} by user ${fromUserId}`);
       
-      // Broadcast real-time event
+      // Get the requester details for the notification message
+      const requester = await storage.getUser(fromUserId);
+      const requesterName = requester ? `${requester.firstName} ${requester.lastName}` : "An employee";
+      const shiftDate = shift?.startTime ? format(new Date(shift.startTime), "MMM d") : "a shift";
+
+      // 1. Notify the target user if this is a direct trade
+      if (trade.toUserId) {
+        const notification = await storage.createNotification({
+          userId: trade.toUserId,
+          type: 'schedule',
+          title: 'Direct Shift Trade Request',
+          message: `${requesterName} wants to trade their ${shiftDate} shift with you.`,
+          data: JSON.stringify({ tradeId: trade.id, shiftId: trade.shiftId })
+        } as any);
+        realTimeManager.broadcastNotification(notification);
+      } else {
+        // 2. If it's an open trade, notify everyone in the branch
+        const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
+        for (const user of branchUsers) {
+          // Don't notify the person who created it
+          if (user.id === fromUserId) continue;
+          
+          const notification = await storage.createNotification({
+            userId: user.id,
+            type: 'schedule',
+            title: 'New Shift Available',
+            message: `${requesterName} posted a ${shiftDate} shift for trade.`,
+            data: JSON.stringify({ tradeId: trade.id, shiftId: trade.shiftId })
+          } as any);
+          realTimeManager.broadcastNotification(notification);
+        }
+      }
+
+      // 3. Notify all managers (always)
+      const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
+      const managers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
+      for (const manager of managers) {
+        // Don't duplicate if manager was already notified as an employee (though usually managers aren't in branchUsers as employees)
+        // Check if manager is already the requester
+        if (manager.id === req.user!.id) continue;
+
+        const notificationManager = await storage.createNotification({
+          userId: manager.id,
+          type: 'schedule',
+          title: 'New Shift Trade Posted',
+          message: `${requesterName} has posted a shift trade for ${shiftDate}.`,
+          data: JSON.stringify({ tradeId: trade.id, shiftId: trade.shiftId })
+        } as any);
+        realTimeManager.broadcastNotification(notificationManager);
+      }
+
+      // Broadcast real-time event for UI state updates (badges, list updates)
       realTimeManager.broadcastTradeCreated(enrichedTrade, shift);
       
       res.json({ trade: enrichedTrade });
@@ -1968,6 +2021,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       console.log(`✅ User ${userId} took shift trade ${id}`);
+
+      // 1. Notify the original requester
+      const taker = await storage.getUser(userId);
+      const takerName = taker ? `${taker.firstName} ${taker.lastName}` : "Another employee";
+      const shiftDate = shift?.startTime ? format(new Date(shift.startTime), "MMM d") : "a shift";
+      
+      const notificationRequester = await storage.createNotification({
+        userId: trade.fromUserId,
+        type: 'schedule',
+        title: 'Shift Trade Taken',
+        message: `${takerName} has accepted your ${shiftDate} shift trade. It is now pending manager approval.`,
+        data: JSON.stringify({ tradeId: id, shiftId: trade.shiftId })
+      } as any);
+      realTimeManager.broadcastNotification(notificationRequester);
+
+      // 2. Notify all managers in the branch
+      const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
+      const managers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
+      for (const manager of managers) {
+        const notificationManager = await storage.createNotification({
+          userId: manager.id,
+          type: 'schedule',
+          title: 'Shift Trade Awaiting Approval',
+          message: `${takerName} has taken a shift trade from another employee. Please review it.`,
+          data: JSON.stringify({ tradeId: id, shiftId: trade.shiftId })
+        } as any);
+        realTimeManager.broadcastNotification(notificationManager);
+      }
+
+      // 3. Broadcast status change to update UI lists
+      realTimeManager.broadcastTradeStatusChanged(id, "pending", enrichedTrade);
+
       res.json({ trade: enrichedTrade });
     } catch (error: any) {
       console.error("Take shift trade error:", error);
@@ -2776,7 +2861,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Create notifications for all managers with short notice info
       const shortNoticeText = shortNotice ? ` ⚠️ SHORT NOTICE (${advanceDays} days)` : '';
       for (const manager of managers) {
-        await storage.createNotification({
+        const notification = await storage.createNotification({
           userId: manager.id,
           type: 'time_off',
           title: shortNotice ? '⚠️ Short Notice Time Off Request' : 'New Time Off Request',
@@ -2793,6 +2878,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             minimumAdvanceDays
           })
         } as any);
+        realTimeManager.broadcastNotification(notification);
       }
 
       // Return request with advance notice info for frontend to show appropriate toast
@@ -2831,7 +2917,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     // Create notification for employee
-    await storage.createNotification({
+    const notification = await storage.createNotification({
       userId: request.userId,
       type: 'time_off_approved',
       title: 'Time Off Request Approved',
@@ -2842,6 +2928,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'approved'
       })
     } as any);
+    realTimeManager.broadcastNotification(notification);
 
     res.json({ request });
   });
@@ -2858,7 +2945,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     // Create notification for employee
-    await storage.createNotification({
+    const notification = await storage.createNotification({
       userId: request.userId,
       type: 'time_off_rejected',
       title: 'Time Off Request Rejected',
@@ -2869,6 +2956,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'rejected'
       })
     } as any);
+    realTimeManager.broadcastNotification(notification);
 
     res.json({ request });
   });

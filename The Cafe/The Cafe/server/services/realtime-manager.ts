@@ -1,5 +1,6 @@
 import { Server as HTTPServer } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
+import { dbStorage } from "../db-storage";
 
 export interface RealTimeEvents {
   "shift:created": { shift: any };
@@ -55,8 +56,13 @@ class RealTimeManager {
   }
 
   private setupConnections() {
-    this.io.on("connection", (socket: Socket) => {
+    this.io.on("connection", async (socket: Socket) => {
       const userId = socket.data.userId;
+
+      if (!userId) {
+        console.warn("Socket connected without userId");
+        return;
+      }
 
       // Track user connections
       if (!this.userConnections.has(userId)) {
@@ -69,6 +75,25 @@ class RealTimeManager {
       // Join user's personal room
       socket.join(`user:${userId}`);
       socket.join(`shifts`); // Subscribe to all shifts for real-time updates
+
+      // Fetch user details to join role/branch rooms
+      try {
+        const user = await dbStorage.getUser(userId);
+        if (user) {
+          console.log(`Joining user ${userId} to branch room: branch:${user.branchId}`);
+          socket.join(`branch:${user.branchId}`);
+          
+          if (user.role === 'manager' || user.role === 'admin') {
+            socket.join('managers');
+            socket.join(`branch:${user.branchId}:managers`);
+          } else {
+            socket.join('employees');
+            socket.join(`branch:${user.branchId}:employees`);
+          }
+        }
+      } catch (err) {
+        console.error(`Error joining rooms for user ${userId}:`, err);
+      }
 
       // Handle custom events
       socket.on("subscribe:employee-shifts", () => {
@@ -276,6 +301,14 @@ class RealTimeManager {
     if (notification.userId) {
       this.io.to(`user:${notification.userId}`).emit("notification:created", { notification });
     }
+  }
+
+  public broadcastBranchNotification(branchId: string, notification: any) {
+    this.io.to(`branch:${branchId}`).emit("notification:created", { notification });
+  }
+
+  public broadcastBranchManagerNotification(branchId: string, notification: any) {
+    this.io.to(`branch:${branchId}:managers`).emit("notification:created", { notification });
   }
 
   public isUserOnline(userId: string): boolean {
