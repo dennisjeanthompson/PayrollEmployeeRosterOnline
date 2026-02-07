@@ -3657,8 +3657,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // MOVED UP to avoid conflict with /api/employees/:id
   
   // Debug endpoint to force seeding
-  app.post("/api/debug/seed", requireAuth, requireRole(["admin", "manager"]), async (req, res) => {
+  app.post("/api/debug/seed", requireAuth, async (req, res) => {
     try {
+      // Manual role check with debug output
+      if (!['admin', 'manager'].includes(req.user!.role)) {
+        return res.status(403).json({ 
+          message: "Insufficient permissions", 
+          yourRole: req.user!.role,
+          userId: req.user!.id
+        });
+      }
+
       console.log('🌱 Manual seeding triggered via API');
       await seedSampleUsers();
       await seedSampleSchedulesAndPayroll();
