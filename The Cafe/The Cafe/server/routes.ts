@@ -3596,6 +3596,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updateData: any = {};
 
       // Update email if provided
+      // Update fields if provided and different
+      if (firstName && firstName !== user.firstName) {
+        updateData.firstName = firstName;
+      }
+      
+      if (lastName && lastName !== user.lastName) {
+        updateData.lastName = lastName;
+      }
+
       if (email && email !== user.email) {
         // Check if email is taken
         const existing = await storage.getUserByUsername(email); // Assuming getUserByUsername might also check email/logic, or we just trust unique constraint will catch it
