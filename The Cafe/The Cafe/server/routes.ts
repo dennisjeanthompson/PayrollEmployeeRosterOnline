@@ -2152,8 +2152,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } as any);
       realTimeManager.broadcastNotification(notificationTarget);
 
-      // Enrich with shift data
-      const shift = await storage.getShift(trade.shiftId);
+      // Enrich with shift data (shift already fetched above)
       const enrichedTrade = {
         ...updatedTrade,
         shift: shift ? {
@@ -2211,8 +2210,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } as any);
       realTimeManager.broadcastNotification(notificationRequester);
 
-      // Enrich with shift data
-      const shift = await storage.getShift(trade.shiftId);
+      // Enrich with shift data (shift already fetched above)
       const enrichedTrade = {
         ...updatedTrade,
         shift: shift ? {
