@@ -19,6 +19,7 @@ import { forecastRouter } from "./routes/forecast";
 import { seedRatesRouter } from "./routes/seed-rates";
 import holidaysRouter from "./routes/holidays";
 import employeeUploadsRouter from "./routes/employee-uploads";
+import { seedSampleUsers, seedSampleSchedulesAndPayroll } from "./init-db"; // Import seed functions
 import bcrypt from "bcrypt";
 import { format } from "date-fns";
 import crypto from "crypto";
@@ -3655,5 +3656,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Mount employee uploads router - PROTECTED
   // MOVED UP to avoid conflict with /api/employees/:id
   
+  // Debug endpoint to force seeding
+  app.post("/api/debug/seed", requireAuth, requireRole(["admin", "manager"]), async (req, res) => {
+    try {
+      console.log('🌱 Manual seeding triggered via API');
+      await seedSampleUsers();
+      await seedSampleSchedulesAndPayroll();
+      
+      const userCount = await storage.getUsersByBranch(req.user!.branchId);
+      
+      res.json({ 
+        message: "Seeding completed successfully", 
+        usersFound: userCount.length,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Manual seeding error:', error);
+      res.status(500).json({ message: "Seeding failed", error: String(error) });
+    }
+  });
+
   return httpServer;
 }
