@@ -723,6 +723,13 @@ export async function seedSampleUsers() {
     ];
 
     for (const user of sampleUsers) {
+      // Check if user already exists to avoid unique constraint errors
+      const existing = await db.select().from(users).where(eq(users.username, user.username));
+      if (existing.length > 0) {
+        console.log(`   Skipping ${user.username} (already exists)`);
+        continue;
+      }
+
       await db.insert(users).values({
         id: user.id || randomUUID(),
         username: user.username,
