@@ -1669,22 +1669,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.user!.id;
       const branchId = req.user!.branchId;
       
-      // Get all trades for the user (as requester or target)
-      const trades = await storage.getShiftTradesByUser(userId);
+      // 1. Get all trades for the user (as requester or target)
+      const myTrades = await storage.getShiftTradesByUser(userId);
+
+      // 2. Get Open Market trades (available for pickup by anyone in branch)
+      const openTrades = await storage.getAvailableShiftTrades(branchId);
       
-      // Also get pending trades for managers
+      // 3. Get pending trades for managers (needing approval)
       let managerTrades: any[] = [];
       if (req.user!.role === "manager" || req.user!.role === "admin") {
         managerTrades = await storage.getPendingShiftTrades(branchId);
       }
       
       // Combine and deduplicate
-      const allTrades = [...trades];
-      for (const trade of managerTrades) {
-        if (!allTrades.find(t => t.id === trade.id)) {
-          allTrades.push(trade);
-        }
-      }
+      // Use a Map for O(n) deduplication
+      const tradeMap = new Map();
+      
+      [...myTrades, ...openTrades, ...managerTrades].forEach(trade => {
+        tradeMap.set(trade.id, trade);
+      });
+      
+      const allTrades = Array.from(tradeMap.values());
       
       // Enrich trades with shift and user data
       const enrichedTrades = await Promise.all(

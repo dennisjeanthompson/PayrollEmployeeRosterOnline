@@ -335,7 +335,7 @@ const EnhancedScheduler = () => {
   const [visibleRangeEnd, setVisibleRangeEnd] = useState(() => endOfWeek(new Date(), { weekStartsOn: 1 }));
 
   // Feature 6: Published Toggle
-  const [isPublished, setIsPublished] = useState(false);
+  const [isPublished, setIsPublished] = useState(true);
 
   // Sync sidebar state with screen size - make collapsed by default on mobile
   useEffect(() => {
