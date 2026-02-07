@@ -1325,8 +1325,7 @@ const EnhancedScheduler = () => {
 
   // FullCalendar Event Handlers
   const handleEventDrop = useCallback(async (info: any) => {
-    if (isPublished) {
-      setSnackbar({ open: true, message: 'Switch to Draft mode to edit the schedule', severity: 'warning' });
+    if (!isManagerRole || isPublished) {
       info.revert();
       return;
     }
@@ -1355,11 +1354,10 @@ const EnhancedScheduler = () => {
       // Revert the change on the calendar UI if the server update fails
       info.revert();
     }
-  }, [updateShiftMutation, checkOverlap, isPublished]);
+  }, [updateShiftMutation, checkOverlap, isPublished, isManagerRole]);
 
   const handleEventResize = useCallback(async (info: any) => {
-    if (isPublished) {
-      setSnackbar({ open: true, message: 'Switch to Draft mode to edit the schedule', severity: 'warning' });
+    if (!isManagerRole || isPublished) {
       info.revert();
       return;
     }
@@ -1387,7 +1385,7 @@ const EnhancedScheduler = () => {
     } catch (error) {
        info.revert();
     }
-  }, [updateShiftMutation, checkOverlap, isPublished]);
+  }, [updateShiftMutation, checkOverlap, isPublished, isManagerRole]);
 
   // UNIFIED SCHEDULE: Enhanced Event Click Handler with Role-Based Logic
   const handleEventClick = useCallback((info: any) => {
@@ -1455,14 +1453,9 @@ const EnhancedScheduler = () => {
 
     // REGULAR SHIFT: Different logic for employees vs managers
     if (type === 'shift') {
-      if (isPublished) {
-        setSnackbar({ open: true, message: 'Switch to Draft mode to edit the schedule', severity: 'warning' });
-        return;
-      }
-
       const isOwnShift = shift.userId === currentUser?.id;
       
-      // Employees clicking own shift: Open trade modal
+      // Employees clicking own shift: Open trade modal (always allowed, even when published)
       if (!isManagerRole && isOwnShift) {
         setShiftTradeFormData({
           shiftId: shift.id,
@@ -1473,17 +1466,27 @@ const EnhancedScheduler = () => {
         return;
       }
 
-      // Managers or other shifts: Edit modal
-      if (isManagerRole) {
-        setSelectedShift(shift);
-        setEditModalOpen(true);
+      // Employees clicking someone else's shift: Just show info
+      if (!isManagerRole) {
+        const empName = employees?.find((e: any) => e.id === shift.userId);
+        const name = empName ? `${empName.firstName} ${empName.lastName}` : 'Employee';
+        setSnackbar({ open: true, message: `${name}'s shift`, severity: 'info' });
+        return;
       }
+
+      // Managers: Edit modal (only in draft mode)
+      if (isPublished) {
+        setSnackbar({ open: true, message: 'Switch to Draft mode to edit the schedule', severity: 'warning' });
+        return;
+      }
+      setSelectedShift(shift);
+      setEditModalOpen(true);
       return;
     }
 
     // Fallback
     setSnackbar({ open: true, message: 'Event clicked', severity: 'info' });
-  }, [isPublished, isManagerRole, currentUser]);
+  }, [isPublished, isManagerRole, currentUser, employees]);
 
   // Feature 1: Drag-to-create (using select) - ENHANCED FOR EMPLOYEE ACTIONS
   // Employee Calendar Click Action State
@@ -1577,6 +1580,9 @@ const EnhancedScheduler = () => {
     // Remove the temporary event immediately - we want to use our modal
     info.event.remove();
 
+    // Only managers can create shifts via drag
+    if (!isManagerRole) return;
+
     if (isPublished) {
       setSnackbar({ open: true, message: 'Switch to Draft mode to create shifts', severity: 'warning' });
       return;
@@ -1624,7 +1630,7 @@ const EnhancedScheduler = () => {
       });
       setCreateModalOpen(true);
     }
-  }, [isPublished, isDateBlocked]);
+  }, [isPublished, isDateBlocked, isManagerRole]);
 
   // Initialize external draggable for employee roster
   useEffect(() => {
@@ -2870,7 +2876,7 @@ const EnhancedScheduler = () => {
             allDaySlot={false}
             editable={isManagerRole && !isPublished}
             droppable={isManagerRole && !isPublished}
-            selectable={isManagerRole && !isPublished}
+            selectable={true}
             selectMirror={true}
             events={calendarEvents}
             eventDrop={handleEventDrop}
