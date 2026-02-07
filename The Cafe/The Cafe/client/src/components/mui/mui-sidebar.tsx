@@ -287,6 +287,8 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
           justifyContent: isCollapsed ? "center" : "space-between",
           height: 70,
           borderBottom: `1px solid rgba(255, 255, 255, 0.08)`,
+          bgcolor: isCollapsed ? "transparent" : alpha(theme.palette.background.paper, 0.4),
+          backdropFilter: "blur(10px)",
         }}
       >
         <Box

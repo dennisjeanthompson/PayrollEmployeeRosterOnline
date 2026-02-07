@@ -32,28 +32,19 @@ import {
   CakeOutlined as DateIcon,
 } from "@mui/icons-material";
 
-// Modern Gradient Header Component
-const ProfileHeader = ({ firstName, lastName, role }: { firstName: string, lastName: string, role: string }) => (
+// Header Background Element (Soft Gradient)
+const ProfileBackground = () => (
   <Box 
     sx={{ 
       background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)', 
-      py: { xs: 4, md: 6 },
-      px: 3,
-      pb: { xs: 8, md: 10 }, // Extra bottom padding for overlap
-      boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+      height: { xs: 120, md: 160 },
+      width: '100%',
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      zIndex: 0,
     }}
-  >
-    <Container maxWidth="lg">
-      <Box sx={{ maxWidth: 800 }}>
-        <Typography variant="h3" sx={{ color: 'white', fontWeight: 800, mb: 1, letterSpacing: '-0.02em' }}>
-          Account Settings
-        </Typography>
-        <Typography variant="h6" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 400 }}>
-          Manage your profile, security, and preferences.
-        </Typography>
-      </Box>
-    </Container>
-  </Box>
+  />
 );
 
 // ... (TabPanel interface and function remain same) ...
@@ -143,11 +134,20 @@ export default function MuiProfileSettings() {
   }) : 'N/A';
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9' }}>
-      <ProfileHeader firstName={user.firstName} lastName={user.lastName} role={user.role} />
+    <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9', position: 'relative' }}>
+      <ProfileBackground />
       
-      <Container maxWidth="lg" sx={{ mt: -8, px: { xs: 2, md: 3 }, position: 'relative', zIndex: 10 }}>
-        <Grid container spacing={3}>
+      <Container maxWidth="lg" sx={{ pt: { xs: 4, md: 6 }, pb: 8, px: { xs: 2, md: 3 }, position: 'relative', zIndex: 10 }}>
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h4" sx={{ color: 'white', fontWeight: 800, mb: 1, letterSpacing: '-0.02em' }}>
+            Account Settings
+          </Typography>
+          <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 400 }}>
+            Manage your profile, security, and preferences.
+          </Typography>
+        </Box>
+
+        <Grid container spacing={4}>
           
           {/* Left Column: User Profile Card */}
           <Grid item xs={12} md={4} lg={3.5}>
@@ -209,18 +209,18 @@ export default function MuiProfileSettings() {
                 <Box sx={{ px: 1, textAlign: 'left' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, color: 'text.secondary' }}>
                     <BadgeIcon sx={{ fontSize: 20, mr: 2, opacity: 0.7, color: '#64748b' }} />
-                    <Box>
-                        <Typography variant="caption" display="block" sx={{ fontWeight: 600, color: '#94a3b8' }}>USER ID</Typography>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 500 }}>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography variant="caption" display="block" sx={{ fontWeight: 700, color: '#94a3b8', lineHeight: 1.2 }}>USER ID</Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569', mt: 0.5 }} noWrap>
                             {user.username || `#${user.id}`}
                         </Typography>
                     </Box>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary' }}>
                     <DateIcon sx={{ fontSize: 20, mr: 2, opacity: 0.7, color: '#64748b' }} />
-                    <Box>
-                        <Typography variant="caption" display="block" sx={{ fontWeight: 600, color: '#94a3b8' }}>JOINED DATE</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography variant="caption" display="block" sx={{ fontWeight: 700, color: '#94a3b8', lineHeight: 1.2 }}>JOINED DATE</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#475569', mt: 0.5 }}>
                             {joinedDate}
                         </Typography>
                     </Box>
