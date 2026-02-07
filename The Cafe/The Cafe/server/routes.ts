@@ -3585,7 +3585,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update own profile (Self-service)
   app.put("/api/auth/profile", requireAuth, async (req, res) => {
     try {
-      const { email, password, newPassword } = req.body;
+      const { email, password, newPassword, firstName, lastName } = req.body;
       const userId = req.user!.id;
 
       const user = await storage.getUser(userId);
