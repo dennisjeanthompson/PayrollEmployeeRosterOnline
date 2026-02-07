@@ -1738,16 +1738,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const tradesWithDetails = await Promise.all(
       filteredTrades.map(async (trade) => {
         const shift = await storage.getShift(trade.shiftId);
-        const fromUser = await storage.getUser(trade.fromUserId);
+        const requesterUser = await storage.getUser(trade.fromUserId);
         return { 
           ...trade, 
+          // Add aliased properties for frontend compatibility
+          requesterId: trade.fromUserId,
+          targetUserId: trade.toUserId || "",
           shift: shift ? {
             ...shift,
             date: shift.startTime ? new Date(shift.startTime).toISOString().split('T')[0] : null,
             startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
             endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null,
           } : null,
-          fromUser 
+          // Use consistent property names
+          requester: requesterUser ? {
+            firstName: requesterUser.firstName || "",
+            lastName: requesterUser.lastName || "",
+          } : null,
+          targetUser: null, // Available trades have no target yet
+          fromUser: requesterUser, // Legacy compatibility
         };
       })
     );
@@ -1763,18 +1772,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const tradesWithDetails = await Promise.all(
       trades.map(async (trade) => {
         const shift = await storage.getShift(trade.shiftId);
-        const fromUser = await storage.getUser(trade.fromUserId);
-        const toUser = trade.toUserId ? await storage.getUser(trade.toUserId) : null;
+        const requesterUser = await storage.getUser(trade.fromUserId);
+        const targetUserData = trade.toUserId ? await storage.getUser(trade.toUserId) : null;
         return { 
           ...trade, 
+          // Add aliased properties for frontend compatibility
+          requesterId: trade.fromUserId,
+          targetUserId: trade.toUserId || "",
           shift: shift ? {
             ...shift,
             date: shift.startTime ? new Date(shift.startTime).toISOString().split('T')[0] : null,
             startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
             endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null,
           } : null,
-          fromUser, 
-          toUser 
+          // Use consistent property names
+          requester: requesterUser ? {
+            firstName: requesterUser.firstName || "",
+            lastName: requesterUser.lastName || "",
+          } : null,
+          targetUser: targetUserData ? {
+            firstName: targetUserData.firstName || "",
+            lastName: targetUserData.lastName || "",
+          } : null,
+          // Legacy compatibility
+          fromUser: requesterUser,
+          toUser: targetUserData,
         };
       })
     );

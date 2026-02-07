@@ -144,11 +144,24 @@ interface ShiftTrade {
   status: string; // 'pending' | 'accepted' | 'approved' | 'rejected'
   reason: string;
   createdAt: string;
+  // Legacy properties from backend (for compatibility)
+  fromUserId?: string;
+  toUserId?: string;
+  // Standardized user data
   requester?: {
     firstName: string;
     lastName: string;
   };
   targetUser?: {
+    firstName: string;
+    lastName: string;
+  };
+  // Legacy user data from some endpoints
+  fromUser?: {
+    firstName: string;
+    lastName: string;
+  };
+  toUser?: {
     firstName: string;
     lastName: string;
   };
@@ -1226,8 +1239,8 @@ const EnhancedScheduler = () => {
         const shift = shifts.find(s => s.id === trade.shiftId);
         if (!shift) return null;
 
-        const requesterName = trade.requester?.firstName || 'Unknown';
-        const targetName = trade.targetUser?.firstName || (trade.toUserId ? 'Direct' : 'Open');
+        const requesterName = trade.requester?.firstName || trade.fromUser?.firstName || 'Unknown';
+        const targetName = trade.targetUser?.firstName || trade.toUser?.firstName || (trade.targetUserId || trade.toUserId ? 'Direct' : 'Open');
         const isPending = trade.status === 'pending';
         const isAccepted = trade.status === 'accepted';
         
@@ -3716,11 +3729,17 @@ const EnhancedScheduler = () => {
           )}
           
           {approvalType === 'shift-trade' && selectedTrade && (() => {
-            const isRequester = selectedTrade.requesterId === currentUser?.id;
-            const isTarget = selectedTrade.targetUserId === currentUser?.id;
-            const isOpenTrade = !selectedTrade.toUserId || selectedTrade.toUserId === "";
+            const isRequester = selectedTrade.requesterId === currentUser?.id || selectedTrade.fromUserId === currentUser?.id;
+            const isTarget = selectedTrade.targetUserId === currentUser?.id || selectedTrade.toUserId === currentUser?.id;
+            const isOpenTrade = !selectedTrade.targetUserId && !selectedTrade.toUserId;
             const isAcceptedByMe = isTarget && selectedTrade.status === 'accepted';
             const isPending = selectedTrade.status === 'pending';
+            
+            // Use fallback for user names
+            const requesterFirstName = selectedTrade.requester?.firstName || selectedTrade.fromUser?.firstName || 'Unknown';
+            const requesterLastName = selectedTrade.requester?.lastName || selectedTrade.fromUser?.lastName || '';
+            const targetFirstName = selectedTrade.targetUser?.firstName || selectedTrade.toUser?.firstName || '';
+            const targetLastName = selectedTrade.targetUser?.lastName || selectedTrade.toUser?.lastName || '';
             
             return (
               <Stack spacing={2} sx={{ mt: 1 }}>
@@ -3728,11 +3747,11 @@ const EnhancedScheduler = () => {
                   <strong>Type:</strong> {isOpenTrade ? '📢 Open Trade' : '🔄 Direct Trade'}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Requested By:</strong> {selectedTrade.requester?.firstName} {selectedTrade.requester?.lastName}
+                  <strong>Requested By:</strong> {requesterFirstName} {requesterLastName}
                 </Typography>
                 {!isOpenTrade && (
                   <Typography variant="body2">
-                    <strong>Direct To:</strong> {selectedTrade.targetUser?.firstName} {selectedTrade.targetUser?.lastName}
+                    <strong>Direct To:</strong> {targetFirstName} {targetLastName}
                   </Typography>
                 )}
                 <Typography variant="body2">
@@ -3783,9 +3802,9 @@ const EnhancedScheduler = () => {
 
           {/* Actions for Shift Trades */}
           {approvalType === 'shift-trade' && selectedTrade && (() => {
-            const isRequester = selectedTrade.requesterId === currentUser?.id;
-            const isTarget = selectedTrade.targetUserId === currentUser?.id;
-            const isOpenTrade = !selectedTrade.toUserId || selectedTrade.toUserId === "";
+            const isRequester = selectedTrade.requesterId === currentUser?.id || selectedTrade.fromUserId === currentUser?.id;
+            const isTarget = selectedTrade.targetUserId === currentUser?.id || selectedTrade.toUserId === currentUser?.id;
+            const isOpenTrade = !selectedTrade.targetUserId && !selectedTrade.toUserId;
             const isPending = selectedTrade.status === 'pending';
             const isAccepted = selectedTrade.status === 'accepted';
 
