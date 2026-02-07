@@ -679,14 +679,15 @@ const EnhancedScheduler = () => {
           </div>
         )}
 
-        {!isAllDay && (
+        {!isAllDay && event.start && (
           <div style={{
             fontSize: '0.65rem',
             opacity: 0.8,
             marginTop: 'auto', // push to bottom
             paddingTop: '2px',
           }}>
-            {format(new Date(event.start!), 'h:mm a')}
+            {format(new Date(event.start), 'h:mm a')}
+            {event.end ? ` - ${format(new Date(event.end), 'h:mm a')}` : ''}
           </div>
         )}
       </div>
@@ -1146,12 +1147,13 @@ const EnhancedScheduler = () => {
         ? `${shift.user.firstName} ${shift.user.lastName}` 
         : getEmployeeName(shift.userId);
       const role = shift.user?.role || getEmployeeRole(shift.userId);
+      const timeRange = format(new Date(shift.startTime), 'h:mm a') + ' - ' + format(new Date(shift.endTime), 'h:mm a');
       
       return {
         id: shift.id,
         resourceId: shift.userId, // NEW: Link to resource for timeline view
         title: viewMode === 'timeline' 
-          ? format(new Date(shift.startTime), 'h:mm a') + ' - ' + format(new Date(shift.endTime), 'h:mm a')
+          ? timeRange
           : `${empName}${role ? ` • ${role}` : ''}`,
         start: shift.startTime,
         end: shift.endTime,
@@ -3740,19 +3742,10 @@ const EnhancedScheduler = () => {
           )}
           
           {approvalType === 'shift-trade' && selectedTrade && (() => {
-            // DEBUG: Log all IDs to identify mismatch
-            console.log('[TRADE MODAL DEBUG]', {
-              'currentUser.id': currentUser?.id,
-              'trade.requesterId': selectedTrade.requesterId,
-              'trade.fromUserId': selectedTrade.fromUserId,
-              'trade.targetUserId': selectedTrade.targetUserId,
-              'trade.toUserId': selectedTrade.toUserId,
-              'trade.status': selectedTrade.status,
-            });
-
             const isRequester = selectedTrade.requesterId === currentUser?.id || selectedTrade.fromUserId === currentUser?.id;
             const isTarget = selectedTrade.targetUserId === currentUser?.id || selectedTrade.toUserId === currentUser?.id;
-            const isOpenTrade = !selectedTrade.targetUserId && !selectedTrade.toUserId;
+            const hasTarget = !!(selectedTrade.targetUserId || selectedTrade.toUserId);
+            const isOpenTrade = !hasTarget;
             const isPending = selectedTrade.status === 'pending';
             const isAccepted = selectedTrade.status === 'accepted';
             
@@ -3789,8 +3782,13 @@ const EnhancedScheduler = () => {
                   </Typography>
                 )}
                 <Typography variant="body2">
-                  <strong>Shift:</strong> {selectedTrade.shift?.date ? format(new Date(selectedTrade.shift.date), 'MMM d, yyyy') : 'N/A'}
+                  <strong>Shift Date:</strong> {selectedTrade.shift?.date ? format(new Date(selectedTrade.shift.date), 'MMM d, yyyy') : 'N/A'}
                 </Typography>
+                {selectedTrade.shift?.startTime && selectedTrade.shift?.endTime && (
+                  <Typography variant="body2">
+                    <strong>Shift Time:</strong> {format(new Date(selectedTrade.shift.startTime), 'h:mm a')} – {format(new Date(selectedTrade.shift.endTime), 'h:mm a')}
+                  </Typography>
+                )}
                 <Typography variant="body2">
                   <strong>Reason:</strong> {selectedTrade.reason || 'No reason provided'}
                 </Typography>
@@ -3811,6 +3809,14 @@ const EnhancedScheduler = () => {
                   <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.info.main, 0.1), borderRadius: 1 }}>
                     <Typography variant="body2" color="info.main">
                       This shift is available for anyone in your branch to take.
+                    </Typography>
+                  </Box>
+                )}
+                
+                {isRequester && isPending && (
+                  <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.warning.main, 0.1), borderRadius: 1 }}>
+                    <Typography variant="body2" color="warning.main">
+                      ✏️ This is your trade request. You can cancel it below if you no longer need coverage.
                     </Typography>
                   </Box>
                 )}
