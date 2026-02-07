@@ -1239,6 +1239,9 @@ const EnhancedScheduler = () => {
         const shift = shifts.find(s => s.id === trade.shiftId);
         if (!shift) return null;
 
+        // Get colors for the shift owner
+        const tradeColors = getEmployeeColor(shift.userId, employees);
+        
         const requesterName = trade.requester?.firstName || trade.fromUser?.firstName || 'Unknown';
         const targetName = trade.targetUser?.firstName || trade.toUser?.firstName || (trade.targetUserId || trade.toUserId ? 'Direct' : 'Open');
         const isPending = trade.status === 'pending';
@@ -1255,10 +1258,10 @@ const EnhancedScheduler = () => {
           title: tradeLabel,
           start: shift.startTime,
           end: shift.endTime,
-          backgroundColor: colors.bg,
+          backgroundColor: tradeColors.bg,
           borderColor: isAccepted ? '#06B6D4' : (trade.targetUserId ? '#F59E0B' : '#8B5CF6'), // Cyan vs Orange vs Purple
           borderWidth: '3px',
-          textColor: colors.text,
+          textColor: tradeColors.text,
           classNames: ['shift-trade'],
           editable: false,
           extendedProps: {
