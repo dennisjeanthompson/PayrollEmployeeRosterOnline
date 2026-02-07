@@ -3732,6 +3732,16 @@ const EnhancedScheduler = () => {
           )}
           
           {approvalType === 'shift-trade' && selectedTrade && (() => {
+            // DEBUG: Log all IDs to identify mismatch
+            console.log('[TRADE MODAL DEBUG]', {
+              'currentUser.id': currentUser?.id,
+              'trade.requesterId': selectedTrade.requesterId,
+              'trade.fromUserId': selectedTrade.fromUserId,
+              'trade.targetUserId': selectedTrade.targetUserId,
+              'trade.toUserId': selectedTrade.toUserId,
+              'trade.status': selectedTrade.status,
+            });
+
             const isRequester = selectedTrade.requesterId === currentUser?.id || selectedTrade.fromUserId === currentUser?.id;
             const isTarget = selectedTrade.targetUserId === currentUser?.id || selectedTrade.toUserId === currentUser?.id;
             const isOpenTrade = !selectedTrade.targetUserId && !selectedTrade.toUserId;

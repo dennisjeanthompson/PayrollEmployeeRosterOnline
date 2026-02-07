@@ -1700,6 +1700,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           
           return {
             ...trade,
+            // EXPLICIT IDS: Add both property name variants for frontend compatibility
+            requesterId: trade.fromUserId,
+            targetUserId: trade.toUserId || null,
             shift: shift ? {
               date: shift.startTime ? new Date(shift.startTime).toISOString().split('T')[0] : null,
               startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
