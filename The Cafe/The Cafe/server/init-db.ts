@@ -863,8 +863,9 @@ export async function seedSampleSchedulesAndPayroll() {
         totalPay: '75000',
       });
 
-      // Create payroll entries for each employee
-      for (const emp of employees) {
+      // Create payroll entries for all employees AND the manager
+      const allStaff = [...employees, manager].filter(Boolean);
+      for (const emp of allStaff) {
         const hourlyRate = parseFloat(emp.hourlyRate);
         const regularHours = 80 + Math.floor(Math.random() * 8); // 80-88 hours per period
         const overtimeHours = Math.floor(Math.random() * 10); // 0-10 OT hours
