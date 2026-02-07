@@ -1226,40 +1226,50 @@ const EnhancedScheduler = () => {
       .filter(trade => {
         // Privacy filter for non-managers
         if (!isManagerRole && currentUser) {
-          // Show if I'm involved OR if it's an OPEN trade (targetUserId is empty)
-          return trade.requesterId === currentUser.id || 
-                 trade.targetUserId === currentUser.id ||
-                 !trade.targetUserId || 
-                 trade.targetUserId === "";
+          const myId = currentUser.id;
+          // Show if I'm involved (check both field name variants) OR if it's an OPEN trade
+          const isInvolved = trade.requesterId === myId || trade.fromUserId === myId ||
+                             trade.targetUserId === myId || trade.toUserId === myId;
+          const isOpen = !trade.targetUserId && !trade.toUserId;
+          return isInvolved || isOpen;
         }
         return true;
       })
       .filter(trade => trade.status === 'pending' || trade.status === 'accepted')
       .map(trade => {
-        const shift = shifts.find(s => s.id === trade.shiftId);
-        if (!shift) return null;
+        // Use local shift data if available, otherwise fall back to the enriched trade.shift from the API.
+        // This is critical: employees only receive their OWN shifts from /api/shifts/branch,
+        // so another employee's shift won't be in the local `shifts` array.
+        const localShift = shifts.find(s => s.id === trade.shiftId);
+        const tradeShift = trade.shift; // Enriched data from API: { date, startTime, endTime }
 
-        // Get colors for the shift owner
-        const tradeColors = getEmployeeColor(shift.userId, employees);
+        // We need at least a start time to render the event on the calendar
+        const eventStart = localShift?.startTime || tradeShift?.startTime;
+        const eventEnd = localShift?.endTime || tradeShift?.endTime;
+        if (!eventStart) return null;
+
+        // For the color, use the shift owner if we have the local shift, otherwise use a default trade color
+        const shiftOwnerId = localShift?.userId || trade.requesterId || trade.fromUserId;
+        const tradeColors = getEmployeeColor(shiftOwnerId, employees);
         
         const requesterName = trade.requester?.firstName || trade.fromUser?.firstName || 'Unknown';
         const targetName = trade.targetUser?.firstName || trade.toUser?.firstName || (trade.targetUserId || trade.toUserId ? 'Direct' : 'Open');
-        const isPending = trade.status === 'pending';
         const isAccepted = trade.status === 'accepted';
+        const hasTarget = !!(trade.targetUserId || trade.toUserId);
         
         let tradeLabel = '';
         if (isAccepted) tradeLabel = isDesktop ? '🔄 Trade Accepted' : '🔄 Accepted';
-        else if (!trade.targetUserId) tradeLabel = isDesktop ? '📢 Open Trade' : '📢 Open';
-        else tradeLabel = isDesktop ? '🔄 Direct Trade' : '🔄 Direct';
+        else if (!hasTarget) tradeLabel = isDesktop ? `📢 Open Trade (${requesterName})` : '📢 Open';
+        else tradeLabel = isDesktop ? `🔄 Direct Trade (${requesterName})` : '🔄 Direct';
 
         return {
           id: `trade-${trade.id}`,
-          resourceId: shift.userId,
+          resourceId: shiftOwnerId,
           title: tradeLabel,
-          start: shift.startTime,
-          end: shift.endTime,
+          start: eventStart,
+          end: eventEnd || eventStart, // fallback if no end time
           backgroundColor: tradeColors.bg,
-          borderColor: isAccepted ? '#06B6D4' : (trade.targetUserId ? '#F59E0B' : '#8B5CF6'), // Cyan vs Orange vs Purple
+          borderColor: isAccepted ? '#06B6D4' : (hasTarget ? '#F59E0B' : '#8B5CF6'), // Cyan vs Orange vs Purple
           borderWidth: '3px',
           textColor: tradeColors.text,
           classNames: ['shift-trade'],
@@ -1267,7 +1277,7 @@ const EnhancedScheduler = () => {
           extendedProps: {
             type: 'shift-trade',
             trade,
-            shift,
+            shift: localShift || tradeShift,
             tooltip: `${tradeLabel}: ${requesterName} → ${targetName}`
           },
         };

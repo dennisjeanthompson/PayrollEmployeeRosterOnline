@@ -474,27 +474,6 @@ export class DatabaseStorage implements IStorage {
     );
   }
 
-  async getAvailableShiftTrades(branchId: string): Promise<ShiftTradeWithShift[]> {
-    const result = await db.select({
-      trade: shiftTrades,
-      shift: shifts,
-    })
-    .from(shiftTrades)
-    .innerJoin(shifts, eq(shiftTrades.shiftId, shifts.id))
-    .where(
-      and(
-        eq(shifts.branchId, branchId),
-        isNull(shiftTrades.toUserId),
-        eq(shiftTrades.status, 'pending')
-      )
-    );
-    
-    // Return flat structure or enriched structure?
-    // The route expects ShiftTrade[], but enriching happens later.
-    // Let's just return ShiftTrade[]
-    return result.map(r => r.trade);
-  }
-
   // Payroll
   async createPayrollPeriod(period: InsertPayrollPeriod): Promise<PayrollPeriod> {
     const id = randomUUID();
