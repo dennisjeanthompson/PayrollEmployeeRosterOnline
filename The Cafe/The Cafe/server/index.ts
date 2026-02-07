@@ -60,6 +60,16 @@ if (process.env.NODE_ENV === 'production') {
     }
   } else {
     console.log('🚀 Production mode: Using PostgreSQL (Neon) database');
+    
+    // Check if FORCE_RESEED is set to 'true' - this will reset and reseed the database
+    if (process.env.FORCE_RESEED === 'true') {
+      console.log('\n🔄 FORCE_RESEED flag detected. Resetting production database...\n');
+      await resetDatabase();
+      await initializeDatabase();
+      // Load sample data flag
+      loadSample = true;
+      console.log('✅ Production database reset complete. Will reseed with sample data.\n');
+    }
   }
 
   // Initialize database (creates tables if they don't exist)
