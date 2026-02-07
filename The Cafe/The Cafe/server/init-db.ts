@@ -12,7 +12,8 @@ export async function resetDatabase() {
   console.log('🗑️ Resetting database (dropping all tables)...');
   try {
     // Drop schema public cascade is the cleanest way to wipe everything in Postgres
-    await db.execute(sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO postgres; GRANT ALL ON SCHEMA public TO public;`);
+    // Note: Neon doesn't have a 'postgres' role, so we only grant to 'public'
+    await db.execute(sql`DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;`);
     console.log('✅ Database reset complete');
   } catch (error) {
     console.error('❌ Error resetting database:', error);
