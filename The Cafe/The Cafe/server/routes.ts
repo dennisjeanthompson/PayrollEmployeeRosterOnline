@@ -3604,22 +3604,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updateData: any = {};
 
-      // Update email if provided
-      // Update fields if provided and different
-      if (firstName && firstName !== user.firstName) {
+      // Normalize: treat null/undefined/empty-string as equivalent
+      const norm = (v: any) => v || null; // "" → null, null → null, "John" → "John"
+
+      // Update fields if provided and actually different
+      if (firstName !== undefined && norm(firstName) !== norm(user.firstName)) {
         updateData.firstName = firstName;
       }
       
-      if (lastName && lastName !== user.lastName) {
+      if (lastName !== undefined && norm(lastName) !== norm(user.lastName)) {
         updateData.lastName = lastName;
       }
 
-      if (email && email !== user.email) {
-        // Check if email is taken
-        const existing = await storage.getUserByUsername(email); // Assuming getUserByUsername might also check email/logic, or we just trust unique constraint will catch it
-        // Actually storage.getUserByUsername only checks username. 
-        // We'll rely on db constraint or need a check. 
-        // For now, let's just attempt update.
+      if (email !== undefined && norm(email) !== norm(user.email)) {
         updateData.email = email;
       }
 
@@ -3639,7 +3636,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (Object.keys(updateData).length === 0) {
-        return res.status(400).json({ message: "No changes provided" });
+        // No actual changes — return success (idempotent)
+        const { password: _p, ...userWithoutPassword } = user;
+        return res.json({ message: "No changes needed", user: userWithoutPassword });
       }
 
       const updatedUser = await storage.updateUser(userId, updateData);

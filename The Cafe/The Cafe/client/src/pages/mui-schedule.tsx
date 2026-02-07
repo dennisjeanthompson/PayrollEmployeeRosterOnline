@@ -141,7 +141,7 @@ interface ShiftTrade {
   requesterId: string;
   targetUserId: string;
   shiftId: string;
-  status: string; // 'pending' | 'accepted' | 'approved' | 'rejected'
+  status: string; // 'open' | 'pending' | 'accepted' | 'approved' | 'rejected' | 'cancelled'
   reason: string;
   createdAt: string;
   // Legacy properties from backend (for compatibility)
@@ -2763,11 +2763,9 @@ const EnhancedScheduler = () => {
             // MOBILE: Auto-select best view
             initialView={(() => {
               const isMobile = window.innerWidth < 768;
-              if (isMobile) {
-                return viewMode === 'list' ? 'listWeek' : 'dayGridMonth';
-              }
-              return viewMode === 'timeline' ? 'resourceTimelineWeek' : 
-                     (viewMode === 'list' ? 'listWeek' : 'timeGridWeek');
+              if (viewMode === 'list') return 'listWeek';
+              if (viewMode === 'timeline' && !isMobile) return 'resourceTimelineWeek';
+              return 'dayGridMonth'; // Default to month view for best readability
             })()}
             
             // MOBILE-FRIENDLY: Simplified header
@@ -3745,8 +3743,21 @@ const EnhancedScheduler = () => {
             const isRequester = selectedTrade.requesterId === currentUser?.id || selectedTrade.fromUserId === currentUser?.id;
             const isTarget = selectedTrade.targetUserId === currentUser?.id || selectedTrade.toUserId === currentUser?.id;
             const isOpenTrade = !selectedTrade.targetUserId && !selectedTrade.toUserId;
-            const isAcceptedByMe = isTarget && selectedTrade.status === 'accepted';
             const isPending = selectedTrade.status === 'pending';
+            const isAccepted = selectedTrade.status === 'accepted';
+            
+            // User-friendly status labels
+            const statusLabel = (() => {
+              switch (selectedTrade.status) {
+                case 'open': return '🟡 Open';
+                case 'pending': return '⏳ Pending';
+                case 'accepted': return '✋ Accepted — Awaiting Manager Approval';
+                case 'approved': return '✅ Approved';
+                case 'rejected': return '❌ Rejected';
+                case 'cancelled': return '🚫 Cancelled';
+                default: return selectedTrade.status;
+              }
+            })();
             
             // Use fallback for user names
             const requesterFirstName = selectedTrade.requester?.firstName || selectedTrade.fromUser?.firstName || 'Unknown';
@@ -3774,8 +3785,17 @@ const EnhancedScheduler = () => {
                   <strong>Reason:</strong> {selectedTrade.reason || 'No reason provided'}
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Current Status:</strong> {selectedTrade.status}
+                  <strong>Current Status:</strong> {statusLabel}
                 </Typography>
+                
+                {/* Manager info: pending direct trade where target hasn't accepted yet */}
+                {isManagerRole && isPending && !isOpenTrade && !isTarget && !isRequester && (
+                  <Box sx={{ mt: 1, p: 1.5, bgcolor: alpha(theme.palette.warning.main, 0.1), borderRadius: 1 }}>
+                    <Typography variant="body2" color="warning.main">
+                      ⚠️ The target employee has not yet accepted this trade. You can still approve or reject it.
+                    </Typography>
+                  </Box>
+                )}
                 
                 {isOpenTrade && isPending && !isRequester && (
                   <Box sx={{ mt: 2, p: 2, bgcolor: alpha(theme.palette.info.main, 0.1), borderRadius: 1 }}>
@@ -3817,52 +3837,67 @@ const EnhancedScheduler = () => {
           {approvalType === 'shift-trade' && selectedTrade && (() => {
             const isRequester = selectedTrade.requesterId === currentUser?.id || selectedTrade.fromUserId === currentUser?.id;
             const isTarget = selectedTrade.targetUserId === currentUser?.id || selectedTrade.toUserId === currentUser?.id;
-            const isOpenTrade = !selectedTrade.targetUserId && !selectedTrade.toUserId;
+            const hasTarget = !!(selectedTrade.targetUserId || selectedTrade.toUserId);
+            const isOpenTrade = !hasTarget;
             const isPending = selectedTrade.status === 'pending';
             const isAccepted = selectedTrade.status === 'accepted';
+            const isActionable = isPending || isAccepted;
 
-            // 1. Managers can approve accepted trades
-            if (isManagerRole && isAccepted) {
-              return (
-                <>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    onClick={() => approveTradeAsManagerMutation.mutate({ id: selectedTrade.id, approve: false })}
-                    disabled={approveTradeAsManagerMutation.isPending}
-                  >
-                    Reject
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="success"
-                    onClick={() => approveTradeAsManagerMutation.mutate({ id: selectedTrade.id, approve: true })}
-                    disabled={approveTradeAsManagerMutation.isPending}
-                  >
-                    Approve
-                  </Button>
-                </>
-              );
-            }
+            const buttons: React.ReactNode[] = [];
 
-            // 2. Requester can cancel a pending/accepted trade
-            if (isRequester && (isPending || isAccepted)) {
-              return (
+            // 1. Managers can approve/reject trades that have a target user (pending or accepted)
+            if (isManagerRole && hasTarget && isActionable && !isRequester) {
+              buttons.push(
                 <Button
+                  key="reject"
                   variant="outlined"
                   color="error"
-                  onClick={() => deleteShiftTradeMutation.mutate(selectedTrade.id)}
-                  disabled={deleteShiftTradeMutation.isPending}
+                  onClick={() => approveTradeAsManagerMutation.mutate({ id: selectedTrade.id, approve: false })}
+                  disabled={approveTradeAsManagerMutation.isPending}
                 >
-                  Cancel My Trade
+                  Reject
+                </Button>,
+                <Button
+                  key="approve"
+                  variant="contained"
+                  color="success"
+                  onClick={() => approveTradeAsManagerMutation.mutate({ id: selectedTrade.id, approve: true })}
+                  disabled={approveTradeAsManagerMutation.isPending}
+                >
+                  Approve
                 </Button>
               );
             }
 
-            // 3. Anyone can take an open pending trade
-            if (isOpenTrade && isPending && !isRequester) {
-              return (
+            // 2. Target can accept/reject a direct pending trade (only if they haven't accepted yet)
+            if (isTarget && isPending && buttons.length === 0) {
+              buttons.push(
                 <Button
+                  key="reject-trade"
+                  variant="outlined"
+                  color="error"
+                  onClick={() => respondToTradeMutation.mutate({ id: selectedTrade.id, accept: false })}
+                  disabled={respondToTradeMutation.isPending}
+                >
+                  Reject Trade
+                </Button>,
+                <Button
+                  key="accept-trade"
+                  variant="contained"
+                  color="success"
+                  onClick={() => respondToTradeMutation.mutate({ id: selectedTrade.id, accept: true })}
+                  disabled={respondToTradeMutation.isPending}
+                >
+                  Accept Trade
+                </Button>
+              );
+            }
+
+            // 3. Anyone can take an open pending trade (not the requester)
+            if (isOpenTrade && isPending && !isRequester && buttons.length === 0) {
+              buttons.push(
+                <Button
+                  key="take"
                   variant="contained"
                   color="primary"
                   onClick={() => takeShiftTradeMutation.mutate(selectedTrade.id)}
@@ -3873,31 +3908,22 @@ const EnhancedScheduler = () => {
               );
             }
 
-            // 4. Target can accept/reject a direct pending trade
-            if (isTarget && isPending) {
-              return (
-                <>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    onClick={() => respondToTradeMutation.mutate({ id: selectedTrade.id, accept: false })}
-                    disabled={respondToTradeMutation.isPending}
-                  >
-                    Reject Trade
-                  </Button>
-                  <Button
-                    variant="contained"
-                    color="success"
-                    onClick={() => respondToTradeMutation.mutate({ id: selectedTrade.id, accept: true })}
-                    disabled={respondToTradeMutation.isPending}
-                  >
-                    Accept Trade
-                  </Button>
-                </>
+            // 4. Requester can cancel their own pending/accepted trade
+            if (isRequester && isActionable && buttons.length === 0) {
+              buttons.push(
+                <Button
+                  key="cancel"
+                  variant="outlined"
+                  color="error"
+                  onClick={() => deleteShiftTradeMutation.mutate(selectedTrade.id)}
+                  disabled={deleteShiftTradeMutation.isPending}
+                >
+                  Cancel My Trade
+                </Button>
               );
             }
 
-            return null;
+            return buttons.length > 0 ? <>{buttons}</> : null;
           })()}
         </DialogActions>
       </Dialog>

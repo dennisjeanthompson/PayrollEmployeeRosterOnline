@@ -272,7 +272,7 @@ export const insertShiftTradeSchema = z.object({
   fromUserId: z.string().uuid().optional(),
   toUserId: z.string().uuid().optional(),
   reason: z.string().min(1, "Reason is required"),
-  status: z.enum(['pending', 'approved', 'rejected']).default('pending'),
+  status: z.enum(['open', 'pending', 'accepted', 'approved', 'rejected', 'cancelled']).default('pending'),
   urgency: z.enum(['urgent', 'normal', 'low']).default('normal'),
   notes: z.string().optional(),
   requestedAt: z.date().optional(),

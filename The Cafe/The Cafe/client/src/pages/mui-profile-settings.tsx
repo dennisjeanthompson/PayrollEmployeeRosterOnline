@@ -47,7 +47,11 @@ const ProfileBackground = () => (
   />
 );
 
-// ... (TabPanel interface and function remain same) ...
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
 
 function CustomTabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
@@ -71,10 +75,10 @@ export default function MuiProfileSettings() {
   const [tabValue, setTabValue] = useState(0);
   const queryClient = useQueryClient();
 
-  // Form States
-  const [firstName, setFirstName] = useState(user?.firstName || "");
-  const [lastName, setLastName] = useState(user?.lastName || "");
-  const [email, setEmail] = useState(user?.email || "");
+  // Form States — always default to empty string to keep inputs controlled
+  const [firstName, setFirstName] = useState(user?.firstName ?? "");
+  const [lastName, setLastName] = useState(user?.lastName ?? "");
+  const [email, setEmail] = useState(user?.email ?? "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -82,9 +86,9 @@ export default function MuiProfileSettings() {
 
   React.useEffect(() => {
     if (user) {
-      setEmail(user.email);
-      setFirstName(user.firstName || "");
-      setLastName(user.lastName || "");
+      setEmail(user.email ?? "");
+      setFirstName(user.firstName ?? "");
+      setLastName(user.lastName ?? "");
     }
   }, [user]);
 
@@ -95,7 +99,11 @@ export default function MuiProfileSettings() {
   const updateProfileMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("PUT", "/api/auth/profile", data);
-      return res.json();
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.message || "Failed to update profile");
+      }
+      return json;
     },
     onSuccess: (data) => {
       toast({ title: "Profile Updated", description: data.message });
@@ -110,7 +118,19 @@ export default function MuiProfileSettings() {
     }
   });
 
-  const handleUpdateGeneral = () => updateProfileMutation.mutate({ firstName, lastName, email });
+  // Normalize helper: treat null/undefined/"" as equivalent for comparison
+  const norm = (v: string | null | undefined) => v || "";
+  const hasGeneralChanges = norm(email) !== norm(user.email) || 
+    norm(firstName) !== norm(user.firstName) || 
+    norm(lastName) !== norm(user.lastName);
+
+  const handleUpdateGeneral = () => {
+    if (!email.trim()) {
+      toast({ title: "Error", description: "Email address is required", variant: "destructive" });
+      return;
+    }
+    updateProfileMutation.mutate({ firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim() });
+  };
 
   const handleUpdatePassword = () => {
     if (newPassword !== confirmPassword) {
@@ -133,6 +153,20 @@ export default function MuiProfileSettings() {
     day: 'numeric'
   }) : 'N/A';
 
+  // Shared sx for TextFields to ensure text is visible on white backgrounds in dark themes
+  const textFieldSx = {
+    '& .MuiInputBase-input': { color: '#1e293b' },
+    '& .MuiInputLabel-root': { color: '#64748b' },
+    '& .MuiInputLabel-root.Mui-focused': { color: '#3b82f6' },
+    '& .MuiOutlinedInput-root': {
+      bgcolor: '#fff',
+      '& fieldset': { borderColor: '#cbd5e1' },
+      '&:hover fieldset': { borderColor: '#94a3b8' },
+      '&.Mui-focused fieldset': { borderColor: '#3b82f6' },
+    },
+    '& .MuiFormHelperText-root': { color: '#64748b' },
+  };
+
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9', position: 'relative' }}>
       <ProfileBackground />
@@ -150,7 +184,7 @@ export default function MuiProfileSettings() {
         <Grid container spacing={4}>
           
           {/* Left Column: User Profile Card */}
-          <Grid item xs={12} md={4} lg={3.5}>
+          <Grid size={{ xs: 12, md: 4, lg: 3.5 }}>
             <Paper 
               elevation={0}
               sx={{ 
@@ -231,12 +265,11 @@ export default function MuiProfileSettings() {
           </Grid>
 
           {/* Right Column: Settings Tabs */}
-          <Grid item xs={12} md={8} lg={8.5}>
+          <Grid size={{ xs: 12, md: 8, lg: 8.5 }}>
             <Paper 
               elevation={0}
               sx={{ 
                 borderRadius: 4, 
-                minHeight: 500,
                 overflow: 'hidden',
                 boxShadow: '0 10px 30px -10px rgba(0,0,0,0.1)',
                 border: '1px solid rgba(255,255,255,0.5)',
@@ -270,14 +303,14 @@ export default function MuiProfileSettings() {
               <CustomTabPanel value={tabValue} index={0}>
                 <Box sx={{ p: 4 }}>
                   <Box sx={{ mb: 4 }}>
-                    <Typography variant="h6" fontWeight={700} gutterBottom>Personal Information</Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: '#0f172a' }}>Personal Information</Typography>
+                    <Typography variant="body2" sx={{ color: '#64748b' }}>
                       Update your basic profile details here.
                     </Typography>
                   </Box>
 
                   <Grid container spacing={3}>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <TextField
                         fullWidth
                         label="First Name"
@@ -285,9 +318,10 @@ export default function MuiProfileSettings() {
                         onChange={(e) => setFirstName(e.target.value)}
                         variant="outlined"
                         InputProps={{ sx: { borderRadius: 2 } }}
+                        sx={textFieldSx}
                       />
                     </Grid>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <TextField
                         fullWidth
                         label="Last Name"
@@ -295,9 +329,10 @@ export default function MuiProfileSettings() {
                         onChange={(e) => setLastName(e.target.value)}
                         variant="outlined"
                         InputProps={{ sx: { borderRadius: 2 } }}
+                        sx={textFieldSx}
                       />
                     </Grid>
-                    <Grid item xs={12}>
+                    <Grid size={12}>
                       <TextField
                         fullWidth
                         label="Email Address"
@@ -305,27 +340,32 @@ export default function MuiProfileSettings() {
                         onChange={(e) => setEmail(e.target.value)}
                         variant="outlined"
                         InputProps={{ 
-                          startAdornment: <InputAdornment position="start"><EmailIcon color="action" /></InputAdornment>,
+                          startAdornment: <InputAdornment position="start"><EmailIcon sx={{ color: '#64748b' }} /></InputAdornment>,
                           sx: { borderRadius: 2 } 
                         }}
                         helperText="Used for notifications and login"
+                        sx={textFieldSx}
                       />
                     </Grid>
                     
-                    <Grid item xs={12} sx={{ mt: 2 }}>
+                    <Grid size={12} sx={{ mt: 2 }}>
                       <Button 
                         variant="contained" 
                         size="large"
                         startIcon={<SaveIcon />}
                         onClick={handleUpdateGeneral}
-                        disabled={updateProfileMutation.isPending || (email === user.email && firstName === user.firstName && lastName === user.lastName)}
+                        disabled={updateProfileMutation.isPending || !hasGeneralChanges}
                         sx={{ 
                           borderRadius: 2, 
                           px: 4, 
                           textTransform: 'none', 
                           fontWeight: 600,
                           boxShadow: 'none',
-                          ':hover': { boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)' }
+                          ':hover': { boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)' },
+                          '&.Mui-disabled': {
+                            bgcolor: '#e2e8f0',
+                            color: '#94a3b8',
+                          },
                         }}
                       >
                         Save Changes
@@ -339,8 +379,8 @@ export default function MuiProfileSettings() {
               <CustomTabPanel value={tabValue} index={1}>
                 <Box sx={{ p: 4 }}>
                   <Box sx={{ mb: 4 }}>
-                    <Typography variant="h6" fontWeight={700} gutterBottom>Password & Security</Typography>
-                    <Typography variant="body2" color="text.secondary">
+                    <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: '#0f172a' }}>Password & Security</Typography>
+                    <Typography variant="body2" sx={{ color: '#64748b' }}>
                       Manage your password to keep your account safe.
                     </Typography>
                   </Box>
@@ -350,7 +390,7 @@ export default function MuiProfileSettings() {
                   </Alert>
                   
                   <Grid container spacing={3} sx={{ maxWidth: 600 }}>
-                    <Grid item xs={12}>
+                    <Grid size={12}>
                       <TextField
                         fullWidth
                         type={showPassword ? "text" : "password"}
@@ -361,15 +401,16 @@ export default function MuiProfileSettings() {
                             sx: { borderRadius: 2 },
                             endAdornment: (
                                 <InputAdornment position="end">
-                                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end">
+                                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: '#64748b' }}>
                                         {showPassword ? <VisibilityOff /> : <Visibility />}
                                     </IconButton>
                                 </InputAdornment>
                             )
                         }}
+                        sx={textFieldSx}
                       />
                     </Grid>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <TextField
                         fullWidth
                         type={showPassword ? "text" : "password"}
@@ -377,9 +418,10 @@ export default function MuiProfileSettings() {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         InputProps={{ sx: { borderRadius: 2 } }}
+                        sx={textFieldSx}
                       />
                     </Grid>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <TextField
                         fullWidth
                         type={showPassword ? "text" : "password"}
@@ -387,10 +429,11 @@ export default function MuiProfileSettings() {
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         InputProps={{ sx: { borderRadius: 2 } }}
+                        sx={textFieldSx}
                       />
                     </Grid>
                     
-                    <Grid item xs={12} sx={{ mt: 2 }}>
+                    <Grid size={12} sx={{ mt: 2 }}>
                       <Button 
                         variant="contained" 
                         size="large"
@@ -403,7 +446,11 @@ export default function MuiProfileSettings() {
                           textTransform: 'none', 
                           fontWeight: 600,
                           boxShadow: 'none',
-                          ':hover': { boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)' }
+                          ':hover': { boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)' },
+                          '&.Mui-disabled': {
+                            bgcolor: '#e2e8f0',
+                            color: '#94a3b8',
+                          },
                         }}
                       >
                         Update Password
