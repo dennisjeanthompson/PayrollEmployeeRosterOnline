@@ -2940,29 +2940,28 @@ const EnhancedScheduler = () => {
             views={{
               dayGridMonth: {
                 dayMaxEvents: 5,
+                eventDisplay: 'block' as const,
               },
               dayGridWeek: {
                 dayMaxEvents: true,
+                eventDisplay: 'block' as const,
               },
               dayGridDay: {
                 dayMaxEvents: false,
+                eventDisplay: 'block' as const,
               },
               timeGridWeek: {
                 dayMaxEvents: false,
                 slotDuration: '00:30:00',
                 slotLabelInterval: '01:00:00',
-                slotMinTime: '05:00:00',
-                slotMaxTime: '23:00:00',
-                expandRows: true,
+                eventDisplay: 'auto' as const,
                 dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
               },
               timeGridDay: {
                 dayMaxEvents: false,
                 slotDuration: '00:30:00',
                 slotLabelInterval: '01:00:00',
-                slotMinTime: '05:00:00',
-                slotMaxTime: '23:00:00',
-                expandRows: true,
+                eventDisplay: 'auto' as const,
               },
               listWeek: {
                 dayMaxEvents: false,
@@ -3017,10 +3016,10 @@ const EnhancedScheduler = () => {
                 </Box>
               );
             }}
-            slotMinTime="06:00:00"
-            slotMaxTime="22:00:00"
+            slotMinTime="05:00:00"
+            slotMaxTime="23:59:00"
             slotDuration="01:00:00"
-            allDaySlot={false}
+            allDaySlot={true}
             editable={isManagerRole && !isPublished}
             droppable={isManagerRole && !isPublished}
             selectable={true}
@@ -3174,7 +3173,7 @@ const EnhancedScheduler = () => {
               meridiem: 'short',
             }}
             nowIndicator={true}
-            eventDisplay="block"
+            // eventDisplay is set per-view: 'block' for dayGrid, 'auto' for timeGrid
 
             schedulerLicenseKey="GPL-My-Project-Is-Open-Source"
           />
