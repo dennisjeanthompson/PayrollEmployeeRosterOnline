@@ -1,8 +1,62 @@
 /* Mobile-First Responsive Calendar Styles */
 
+/* ===== DESKTOP & TABLET: Timegrid week/day proper sizing ===== */
+
+/* Timegrid slots - enough height for readable events */
+.fc-timegrid-slot {
+  height: 3.5em !important;
+}
+
+/* Timegrid events base styling */
+.fc-timegrid-event {
+  min-height: 26px !important;
+  border-radius: 6px !important;
+  overflow: hidden !important;
+}
+
+/* Timegrid event inner content */
+.fc-timegrid-event .fc-event-main {
+  padding: 2px 4px !important;
+  overflow: hidden !important;
+}
+
+/* Week view: ensure columns have minimum width for readability */
+.fc-timeGridWeek-view .fc-col-header-cell {
+  min-width: 100px !important;
+}
+.fc-timeGridWeek-view .fc-timegrid-col {
+  min-width: 100px !important;
+}
+
+/* Week view: scrollable table so columns don't shrink too small */
+.fc-timeGridWeek-view .fc-scrollgrid-sync-table {
+  min-width: 700px !important;
+}
+.fc-timeGridWeek-view .fc-scroller {
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  -webkit-overflow-scrolling: touch !important;
+}
+
+/* Day view: give events full width */
+.fc-timeGridDay-view .fc-timegrid-slot {
+  height: 4em !important;
+}
+.fc-timeGridDay-view .fc-timegrid-event {
+  min-height: 36px !important;
+}
+.fc-timeGridDay-view .fc-timegrid-event .fc-event-main {
+  padding: 4px 8px !important;
+}
+
+/* Slot label axis width */
+.fc-timegrid-axis {
+  min-width: 60px !important;
+}
+
 /* CRITICAL: Make FullCalendar responsive on mobile */
 @media (max-width: 600px) {
-  /* Calendar container - allow overflow and scrolling */
+  /* Calendar container */
   .fc {
     width: 100% !important;
     font-size: 0.75rem !important;
@@ -32,12 +86,12 @@
   /* Title - smaller on mobile */
   .fc-toolbar-title {
     font-size: 1.1rem !important;
-   margin: 4px 0 !important;
+    margin: 4px 0 !important;
   }
   
-  /* Time grid - compact view */
+  /* Time grid - compact but still readable on mobile */
   .fc-timegrid-slot {
-    height: 2em !important;
+    height: 3em !important;
   }
   
   .fc-timegrid-slot-label {
@@ -88,7 +142,7 @@
     padding: 1px 2px !important;
   }
   
-  /* Scrollable time grid */
+  /* Scrollable containers */
   .fc-scroller {
     overflow: auto !important;
     -webkit-overflow-scrolling: touch !important;
@@ -97,6 +151,35 @@
   /* More link in day grid */
   .fc-daygrid-more-link {
     font-size: 0.7rem !important;
+  }
+
+  /* MOBILE timegrid week: allow horizontal scroll, tighter columns */
+  .fc-timeGridWeek-view .fc-col-header-cell {
+    min-width: 75px !important;
+    font-size: 0.65rem !important;
+  }
+  .fc-timeGridWeek-view .fc-timegrid-col {
+    min-width: 75px !important;
+  }
+  .fc-timeGridWeek-view .fc-scrollgrid-sync-table {
+    min-width: 525px !important;
+  }
+  .fc-timegrid-event {
+    min-height: 22px !important;
+    font-size: 0.68rem !important;
+  }
+  .fc-timegrid-axis {
+    min-width: 40px !important;
+    font-size: 0.6rem !important;
+  }
+
+  /* MOBILE day view - full width, bigger events */
+  .fc-timeGridDay-view .fc-timegrid-slot {
+    height: 3.5em !important;
+  }
+  .fc-timeGridDay-view .fc-timegrid-event {
+    min-height: 28px !important;
+    font-size: 0.75rem !important;
   }
 }
 
@@ -113,6 +196,16 @@
   
   .fc-toolbar-title {
     font-size: 1.3rem !important;
+  }
+
+  .fc-timeGridWeek-view .fc-col-header-cell {
+    min-width: 90px !important;
+  }
+  .fc-timeGridWeek-view .fc-timegrid-col {
+    min-width: 90px !important;
+  }
+  .fc-timeGridWeek-view .fc-scrollgrid-sync-table {
+    min-width: 630px !important;
   }
 }
 
@@ -141,7 +234,7 @@
   transition: opacity 0.1s !important;
 }
 
-/* Hide resource timeline on very small screens (not a paid feature) */
+/* Hide resource timeline on very small screens */
 @media (max-width: 600px) {
   .fc-resourceTimelineWeek-view .fc-resource-area {
     min-width: 100px !important;
@@ -153,28 +246,41 @@
   }
 }
 
-/* CRITICAL: Prevent horizontal scroll on mobile - 2025 best practice */
+/* CRITICAL: Prevent horizontal scroll on mobile for non-timegrid views */
 @media (max-width: 768px) {
-  /* Force calendar to fit screen width */
-  .fc,
-  .fc-view-harness,
-  .fc-view,
-  .fc-daygrid,
-  .fc-timegrid {
+  /* Force day-grid views to fit screen width */
+  .fc-dayGridMonth-view,
+  .fc-dayGridMonth-view .fc-view-harness,
+  .fc-dayGridMonth-view .fc-view,
+  .fc-dayGridMonth-view .fc-daygrid {
     width: 100% !important;
     max-width: 100vw !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Timegrid week needs horizontal scroll - don't block it */
+  .fc-timeGridWeek-view {
+    overflow-x: auto !important;
+  }
+  .fc-timeGridWeek-view .fc-scroller {
+    overflow-x: auto !important;
+    overflow-y: auto !important;
+  }
+
+  /* Day view fits single column, no horizontal scroll needed */
+  .fc-timeGridDay-view {
+    width: 100% !important;
     overflow-x: hidden !important;
   }
   
   /* Vertical scroll container */
   .fc-scroller {
-    overflow-x: hidden !important;
-    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
   }
   
-  /* Table widths */
-  .fc-scrollgrid,
-  .fc-scrollgrid-sync-table {
+  /* Table widths for month/daygrid */
+  .fc-dayGridMonth-view .fc-scrollgrid,
+  .fc-dayGridMonth-view .fc-scrollgrid-sync-table {
     width: 100% !important;
     max-width: none !important;
   }

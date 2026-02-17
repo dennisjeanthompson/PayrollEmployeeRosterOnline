@@ -642,23 +642,57 @@ const EnhancedScheduler = () => {
     return gaps;
   }, [shifts, currentWeekStart, minStaffingThreshold]);
 
-  // FIXED: Responsive event content rendering
+  // FIXED: View-aware responsive event content rendering
   const renderEventContent = useCallback((arg: any) => {
-    const { event } = arg;
+    const { event, view } = arg;
     const isMobile = !isDesktop;
     const { type, trade } = event.extendedProps;
+    const viewType = view?.type || '';
   
     const isAllDay = event.allDay || event.display === 'background';
     const isTrade = type === 'shift-trade';
+    const isTimeGrid = viewType.startsWith('timeGrid');
+    const isDayView = viewType === 'timeGridDay';
+    const isWeekView = viewType === 'timeGridWeek';
+    const isMonthView = viewType === 'dayGridMonth';
+
+    // View-aware font sizing: day > week > month
+    const getFontSize = () => {
+      if (isMobile) {
+        if (isDayView) return '0.8rem';
+        if (isWeekView) return '0.7rem';
+        return '0.65rem';
+      }
+      if (isDayView) return '0.85rem';
+      if (isWeekView) return '0.78rem';
+      return '0.75rem';
+    };
+
+    const getTimeFontSize = () => {
+      if (isMobile) return isDayView ? '0.75rem' : '0.65rem';
+      return isDayView ? '0.8rem' : isWeekView ? '0.72rem' : '0.65rem';
+    };
+
+    const getPadding = () => {
+      if (isDayView) return '4px 8px';
+      if (isWeekView) return '3px 5px';
+      return '2px 4px';
+    };
+
+    // For timegrid week: show compact but readable
+    // For timegrid day: show full detail
+    const lineClamp = isDayView ? 3 : isWeekView ? 2 : 2;
   
     return (
       <div style={{
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
-        padding: '2px 4px',
-        fontSize: isMobile ? '0.65rem' : '0.75rem',
+        padding: getPadding(),
+        fontSize: getFontSize(),
         overflow: 'hidden',
+        lineHeight: isTimeGrid ? '1.3' : '1.2',
+        minHeight: isTimeGrid ? '20px' : undefined,
       }}>
         <div style={{
           fontWeight: '600',
@@ -667,24 +701,25 @@ const EnhancedScheduler = () => {
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           display: '-webkit-box',
-          WebkitLineClamp: 2,
+          WebkitLineClamp: lineClamp,
           WebkitBoxOrient: 'vertical',
         }}>
           {event.title}
         </div>
 
         {isTrade && trade?.requester && (
-          <div style={{ fontSize: '0.65rem', opacity: 0.9, fontStyle: 'italic' }}>
+          <div style={{ fontSize: getTimeFontSize(), opacity: 0.9, fontStyle: 'italic' }}>
             {trade.requester.firstName}'s shift
           </div>
         )}
 
         {!isAllDay && event.start && (
           <div style={{
-            fontSize: '0.65rem',
+            fontSize: getTimeFontSize(),
             opacity: 0.8,
-            marginTop: 'auto', // push to bottom
+            marginTop: 'auto',
             paddingTop: '2px',
+            whiteSpace: 'nowrap',
           }}>
             {format(new Date(event.start), 'h:mm a')}
             {event.end ? ` - ${format(new Date(event.end), 'h:mm a')}` : ''}
@@ -1985,15 +2020,110 @@ const EnhancedScheduler = () => {
             background: white !important;
           }
         }
+
+        /* ===== TIMEGRID WEEK/DAY VIEW FIXES ===== */
+
+        /* Give timegrid slots enough height so events are readable */
+        .fc-timeGridWeek-view .fc-timegrid-slot {
+          height: 3.5em !important;
+        }
+        .fc-timeGridDay-view .fc-timegrid-slot {
+          height: 4em !important;
         }
 
-        /* MOBILE FIX: Hide intrusive tooltip on mobile */
+        /* Ensure events in timegrid have minimum height & proper sizing */
+        .fc-timegrid-event {
+          min-height: 28px !important;
+          border-radius: 6px !important;
+          margin: 1px 2px !important;
+        }
+        .fc-timeGridDay-view .fc-timegrid-event {
+          min-height: 36px !important;
+          font-size: 0.85rem !important;
+        }
+        .fc-timeGridWeek-view .fc-timegrid-event {
+          min-height: 28px !important;
+          font-size: 0.78rem !important;
+        }
+
+        /* When events overlap in timegrid, allow vertical stacking via scroll */
+        .fc-timegrid-col-events {
+          overflow-y: auto !important;
+          overflow-x: hidden !important;
+        }
+
+        /* Make each day column in timegrid week have a minimum width */
+        .fc-timeGridWeek-view .fc-col-header-cell {
+          min-width: 100px !important;
+        }
+        .fc-timeGridWeek-view .fc-timegrid-col {
+          min-width: 100px !important;
+        }
+
+        /* Timegrid scrollable container: allow horizontal scroll on week view */
+        .fc-timeGridWeek-view .fc-scroller {
+          overflow-x: auto !important;
+          overflow-y: auto !important;
+        }
+        .fc-timeGridWeek-view .fc-scrollgrid-sync-table {
+          min-width: 700px !important;
+        }
+
+        /* Day view: full-width events, no horizontal cramping */
+        .fc-timeGridDay-view .fc-timegrid-col {
+          min-width: 250px !important;
+        }
+        .fc-timeGridDay-view .fc-timegrid-event-harness {
+          min-width: 80% !important;
+        }
+
+        /* Fix event harness in two columns (side-by-side overlap) */
+        .fc-timegrid-event-harness {
+          min-width: 50px !important;
+        }
+
+        /* Timegrid event inner content padding */
+        .fc-timegrid-event .fc-event-main {
+          padding: 2px 4px !important;
+          overflow: hidden !important;
+        }
+        .fc-timeGridDay-view .fc-timegrid-event .fc-event-main {
+          padding: 4px 8px !important;
+        }
+
+        /* Make slot labels wider so time text doesn't crop */
+        .fc-timegrid-axis {
+          min-width: 60px !important;
+        }
+
+        /* ===== RESPONSIVE TIMEGRID OVERRIDES ===== */
         @media (max-width: 768px) {
-          div[id^="tooltip-"] {
-            display: none !important;
-            visibility: hidden !important;
-            pointer-events: none !important;
-            opacity: 0 !important;
+          .fc-timeGridWeek-view .fc-timegrid-slot {
+            height: 3em !important;
+          }
+          .fc-timeGridDay-view .fc-timegrid-slot {
+            height: 3.5em !important;
+          }
+          .fc-timeGridWeek-view .fc-col-header-cell {
+            min-width: 80px !important;
+            font-size: 0.7rem !important;
+          }
+          .fc-timeGridWeek-view .fc-timegrid-col {
+            min-width: 80px !important;
+          }
+          .fc-timeGridWeek-view .fc-scrollgrid-sync-table {
+            min-width: 560px !important;
+          }
+          .fc-timegrid-event {
+            min-height: 24px !important;
+            font-size: 0.7rem !important;
+          }
+          .fc-timeGridDay-view .fc-timegrid-event {
+            min-height: 28px !important;
+          }
+          .fc-timegrid-axis {
+            min-width: 45px !important;
+            font-size: 0.65rem !important;
           }
         }
 
@@ -2770,8 +2900,11 @@ const EnhancedScheduler = () => {
             minHeight: { xs: '70vh', sm: 'auto' },
             borderRadius: 2, 
             position: 'relative',
-            overflow: { xs: 'hidden', sm: 'auto' }, // CRITICAL: No horizontal scroll on mobile
-            width: '100%', // CRITICAL: Fit screen width
+            overflow: 'auto', // Allow scroll so timegrid week columns aren't cramped
+            width: '100%',
+            '& .fc-timeGridWeek-view': {
+              overflowX: 'auto',
+            },
           }} 
           className="print-calendar"
         >
@@ -2793,32 +2926,46 @@ const EnhancedScheduler = () => {
               right: '', // Controlled by our custom buttons
             }}
             
-            // MOBILE OPTIMIZATION: Height settings for vertical scroll only
-            height="auto" // CRITICAL: Auto height prevents horizontal scroll
-            contentHeight="auto" // Allow content to expand vertically
-            aspectRatio={window.innerWidth < 768 ? 1.0 : 1.8} // Mobile: More vertical, Desktop: More horizontal
+            // RESPONSIVE: Proper height management per view
+            height="auto"
+            contentHeight="auto"
+            aspectRatio={window.innerWidth < 768 ? 1.0 : 1.8}
             handleWindowResize={true}
             windowResizeDelay={100}
             
             // MOBILE: Better event display
             expandRows={true} // Expand rows to fill height (better for mobile)
             
-            // CRITICAL FIX: Per-view configuration for dayMaxEvents (7shifts/Deputy pattern)
+            // CRITICAL FIX: Per-view configuration (7shifts/Deputy pattern)
             views={{
               dayGridMonth: {
-                dayMaxEvents: 5, // Increased to show more trades/shifts at a glance
+                dayMaxEvents: 5,
               },
               dayGridWeek: {
-                dayMaxEvents: true, // Auto-fit based on height
+                dayMaxEvents: true,
               },
               dayGridDay: {
-                dayMaxEvents: false, // Show all events in day view
+                dayMaxEvents: false,
               },
               timeGridWeek: {
-                dayMaxEvents: false, // Time grid handles overlap differently
+                dayMaxEvents: false,
+                slotDuration: '00:30:00',
+                slotLabelInterval: '01:00:00',
+                slotMinTime: '05:00:00',
+                slotMaxTime: '23:00:00',
+                expandRows: true,
+                dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
+              },
+              timeGridDay: {
+                dayMaxEvents: false,
+                slotDuration: '00:30:00',
+                slotLabelInterval: '01:00:00',
+                slotMinTime: '05:00:00',
+                slotMaxTime: '23:00:00',
+                expandRows: true,
               },
               listWeek: {
-                dayMaxEvents: false, // List view shows everything
+                dayMaxEvents: false,
               },
             }}
             
@@ -2912,8 +3059,8 @@ const EnhancedScheduler = () => {
 
             moreLinkClick="popover"
             
-            // Event overlap settings
-            slotEventOverlap={false}
+            // Event overlap settings - allow overlap so events don't get too narrow
+            slotEventOverlap={true}
             
             eventDidMount={(info) => {
               // RIGHT-CLICK HANDLER: Add context menu on shift events
