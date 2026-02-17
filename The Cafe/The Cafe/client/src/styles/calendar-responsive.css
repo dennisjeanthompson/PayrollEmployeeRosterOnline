@@ -4,50 +4,45 @@
 
 /* Timegrid slots - enough height for readable events */
 .fc-timegrid-slot {
-  height: 3.5em !important;
+  height: 3em !important;
 }
 
 /* Timegrid events base styling */
 .fc-timegrid-event {
-  min-height: 26px !important;
+  min-height: 24px !important;
   border-radius: 6px !important;
   overflow: hidden !important;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
 }
 
 /* Timegrid event inner content */
 .fc-timegrid-event .fc-event-main {
-  padding: 2px 4px !important;
+  padding: 1px 3px !important;
   overflow: hidden !important;
 }
 
-/* Week view: ensure columns have minimum width for readability */
-.fc-timeGridWeek-view .fc-col-header-cell {
-  min-width: 100px !important;
-}
-.fc-timeGridWeek-view .fc-timegrid-col {
-  min-width: 100px !important;
-}
+/* Let FullCalendar manage column widths naturally */
 
 /* Week view: scrollable table so columns don't shrink too small */
 .fc-timeGridWeek-view .fc-scrollgrid-sync-table {
-  min-width: 700px !important;
+  min-width: 600px !important;
 }
 /* Let FullCalendar manage scroller overflow internally */
 
-/* Day view: give events full width */
+/* Day view: give events proper sizing */
 .fc-timeGridDay-view .fc-timegrid-slot {
-  height: 4em !important;
+  height: 3em !important;
 }
 .fc-timeGridDay-view .fc-timegrid-event {
-  min-height: 36px !important;
+  min-height: 30px !important;
 }
 .fc-timeGridDay-view .fc-timegrid-event .fc-event-main {
-  padding: 4px 8px !important;
+  padding: 3px 6px !important;
 }
 
 /* Slot label axis width */
 .fc-timegrid-axis {
-  min-width: 60px !important;
+  min-width: 55px !important;
 }
 
 /* CRITICAL: Make FullCalendar responsive on mobile */
@@ -149,19 +144,12 @@
   }
 
   /* MOBILE timegrid week: allow horizontal scroll, tighter columns */
-  .fc-timeGridWeek-view .fc-col-header-cell {
-    min-width: 75px !important;
-    font-size: 0.65rem !important;
-  }
-  .fc-timeGridWeek-view .fc-timegrid-col {
-    min-width: 75px !important;
-  }
   .fc-timeGridWeek-view .fc-scrollgrid-sync-table {
-    min-width: 525px !important;
+    min-width: 480px !important;
   }
   .fc-timegrid-event {
-    min-height: 22px !important;
-    font-size: 0.68rem !important;
+    min-height: 20px !important;
+    font-size: 0.65rem !important;
   }
   .fc-timegrid-axis {
     min-width: 40px !important;
@@ -193,14 +181,8 @@
     font-size: 1.3rem !important;
   }
 
-  .fc-timeGridWeek-view .fc-col-header-cell {
-    min-width: 90px !important;
-  }
-  .fc-timeGridWeek-view .fc-timegrid-col {
-    min-width: 90px !important;
-  }
   .fc-timeGridWeek-view .fc-scrollgrid-sync-table {
-    min-width: 630px !important;
+    min-width: 560px !important;
   }
 }
 
