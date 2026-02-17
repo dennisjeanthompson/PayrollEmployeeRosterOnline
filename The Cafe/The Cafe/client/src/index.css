@@ -1440,8 +1440,12 @@ html {
   }
 }
 
-/* 4. Final nuclear fallback – beats everything because it comes last */
-*, *::before, *::after {
+/* 4. Targeted border removal – preserves FullCalendar structural borders */
+/* NOTE: The previous * { border: none } rule was destroying FullCalendar's
+   scrollgrid table layout, causing events to not render properly. */
+.MuiCard-root,
+.MuiPaper-root,
+.MuiDivider-root {
   border-width: 0 !important;
   border-style: none !important;
 }

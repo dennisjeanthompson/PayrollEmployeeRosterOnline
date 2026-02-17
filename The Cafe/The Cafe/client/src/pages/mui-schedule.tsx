@@ -93,6 +93,13 @@ import '../styles/calendar-responsive.css';
 // Real-time WebSocket updates for instant sync (2025 best practice)
 import { useRealtime } from '@/hooks/use-realtime';
 
+// Helper: Convert a UTC date to a "fake local" Date so date-fns format() displays UTC values
+// This is needed because FullCalendar uses timeZone="UTC" but date-fns always formats in local time
+function toUTCDate(date: Date | string): Date {
+  const d = typeof date === 'string' ? new Date(date) : date;
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
+}
+
 // ---Types ---
 interface Shift {
   id: string;
@@ -607,7 +614,7 @@ const EnhancedScheduler = () => {
   const dailyHoursSummary = useMemo(() => {
     const summary: Record<string, number> = {};
     shifts.forEach(shift => {
-      const day = format(new Date(shift.startTime), 'yyyy-MM-dd');
+      const day = format(toUTCDate(shift.startTime), 'yyyy-MM-dd');
       const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
       summary[day] = (summary[day] || 0) + hours;
     });
@@ -721,8 +728,8 @@ const EnhancedScheduler = () => {
             paddingTop: '2px',
             whiteSpace: 'nowrap',
           }}>
-            {format(new Date(event.start), 'h:mm a')}
-            {event.end ? ` - ${format(new Date(event.end), 'h:mm a')}` : ''}
+            {format(toUTCDate(event.start), 'h:mm a')}
+            {event.end ? ` - ${format(toUTCDate(event.end), 'h:mm a')}` : ''}
           </div>
         )}
       </div>
@@ -1182,7 +1189,7 @@ const EnhancedScheduler = () => {
         ? `${shift.user.firstName} ${shift.user.lastName}` 
         : getEmployeeName(shift.userId);
       const role = shift.user?.role || getEmployeeRole(shift.userId);
-      const timeRange = format(new Date(shift.startTime), 'h:mm a') + ' - ' + format(new Date(shift.endTime), 'h:mm a');
+      const timeRange = format(toUTCDate(shift.startTime), 'h:mm a') + ' - ' + format(toUTCDate(shift.endTime), 'h:mm a');
       
       return {
         id: shift.id,
@@ -3019,6 +3026,8 @@ const EnhancedScheduler = () => {
             slotMinTime="05:00:00"
             slotMaxTime="23:59:00"
             slotDuration="01:00:00"
+            scrollTime="05:30:00"
+            timeZone="UTC"
             allDaySlot={true}
             editable={isManagerRole && !isPublished}
             droppable={isManagerRole && !isPublished}
@@ -3084,7 +3093,7 @@ const EnhancedScheduler = () => {
                     <div style="padding: 8px;">
                       <strong>${employee?.firstName} ${employee?.lastName}</strong><br/>
                       ${shift.position || 'Staff'}<br/>
-                      <span style="color: #10B981;">${format(new Date(shift.startTime), 'h:mm a')} - ${format(new Date(shift.endTime), 'h:mm a')}</span><br/>
+                      <span style="color: #10B981;">${format(toUTCDate(shift.startTime), 'h:mm a')} - ${format(toUTCDate(shift.endTime), 'h:mm a')}</span><br/>
                       ${shift.notes ? `<i>${shift.notes}</i>` : ''}
                     </div>
                   `;
@@ -3633,7 +3642,7 @@ const EnhancedScheduler = () => {
                   <Stack spacing={0.5} sx={{ ml: 2 }}>
                     {conflictingShifts.slice(0, 3).map(shift => (
                       <Typography key={shift.id} variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        • {format(new Date(shift.startTime), 'MMM d, yyyy h:mm a')} - {format(new Date(shift.endTime), 'h:mm a')}
+                        • {format(toUTCDate(shift.startTime), 'MMM d, yyyy h:mm a')} - {format(toUTCDate(shift.endTime), 'h:mm a')}
                         {shift.position && <Chip label={shift.position} size="small" sx={{ height: 16, fontSize: '0.65rem' }} />}
                       </Typography>
                     ))}
@@ -3723,7 +3732,7 @@ const EnhancedScheduler = () => {
                   .filter(s => new Date(s.startTime) > new Date()) // Only future shifts
                   .map((shift) => (
                     <MenuItem key={shift.id} value={shift.id}>
-                      {format(new Date(shift.startTime), 'MMM d, yyyy h:mm a')} - {format(new Date(shift.endTime), 'h:mm a')}
+                      {format(toUTCDate(shift.startTime), 'MMM d, yyyy h:mm a')} - {format(toUTCDate(shift.endTime), 'h:mm a')}
                       {shift.position && ` (${shift.position})`}
                     </MenuItem>
                   ))}
@@ -4415,7 +4424,7 @@ const EnhancedScheduler = () => {
                       }
                       secondary={
                         <Typography variant="caption" color="text.secondary">
-                          {format(new Date(shift.startTime), 'h:mm a')} - {format(new Date(shift.endTime), 'h:mm a')}
+                          {format(toUTCDate(shift.startTime), 'h:mm a')} - {format(toUTCDate(shift.endTime), 'h:mm a')}
                           {shift.notes && ` • ${shift.notes}`}
                         </Typography>
                       }

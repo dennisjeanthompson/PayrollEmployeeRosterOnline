@@ -807,11 +807,14 @@ export async function seedSampleSchedulesAndPayroll() {
         // Assign different shift patterns to different employees
         const pattern = shiftPatterns[i % shiftPatterns.length];
         
+        // TIMEZONE FIX: Use setUTCHours so shift times are stored consistently
+        // regardless of server timezone. These represent intended local times (PHT).
+        // FullCalendar renders with timeZone='UTC' to display them at face value.
         const startTime = new Date(shiftDate);
-        startTime.setHours(pattern.start, 0, 0, 0);
+        startTime.setUTCHours(pattern.start, 0, 0, 0);
         
         const endTime = new Date(shiftDate);
-        endTime.setHours(pattern.end, 0, 0, 0);
+        endTime.setUTCHours(pattern.end, 0, 0, 0);
 
         const status = day < 0 ? 'completed' : (day === 0 ? 'in-progress' : 'scheduled');
 
