@@ -625,7 +625,7 @@ export default function MuiShiftTrading() {
 
 
         {viewMode === 'calendar' ? (
-          <Paper sx={{ p: 2, height: '700px', borderRadius: 3, '& .fc-event': { cursor: 'pointer' } }}>
+          <Paper sx={{ p: 2, height: '700px', borderRadius: 3, overflow: 'hidden', '& .fc-event': { cursor: 'pointer' } }}>
             <FullCalendar
               plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
               initialView="dayGridMonth"
@@ -634,6 +634,10 @@ export default function MuiShiftTrading() {
                 center: 'title',
                 right: 'dayGridMonth,timeGridWeek,listWeek'
               }}
+              slotMinTime="05:00:00"
+              slotMaxTime="23:59:00"
+              nowIndicator={true}
+              expandRows={true}
               events={[
                 // My Shifts (Potential to trade)
                 ...myShifts.map((shift: any) => ({

@@ -32,11 +32,7 @@
 .fc-timeGridWeek-view .fc-scrollgrid-sync-table {
   min-width: 700px !important;
 }
-.fc-timeGridWeek-view .fc-scroller {
-  overflow-x: auto !important;
-  overflow-y: auto !important;
-  -webkit-overflow-scrolling: touch !important;
-}
+/* Let FullCalendar manage scroller overflow internally */
 
 /* Day view: give events full width */
 .fc-timeGridDay-view .fc-timegrid-slot {
@@ -142,9 +138,8 @@
     padding: 1px 2px !important;
   }
   
-  /* Scrollable containers */
+  /* Scrollable containers - use touch scrolling */
   .fc-scroller {
-    overflow: auto !important;
     -webkit-overflow-scrolling: touch !important;
   }
   
@@ -262,10 +257,7 @@
   .fc-timeGridWeek-view {
     overflow-x: auto !important;
   }
-  .fc-timeGridWeek-view .fc-scroller {
-    overflow-x: auto !important;
-    overflow-y: auto !important;
-  }
+  /* Let FullCalendar manage scroller overflow internally */
 
   /* Day view fits single column, no horizontal scroll needed */
   .fc-timeGridDay-view {

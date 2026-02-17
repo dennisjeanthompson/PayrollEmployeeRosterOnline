@@ -2053,10 +2053,12 @@ const EnhancedScheduler = () => {
           font-size: 0.78rem !important;
         }
 
-        /* When events overlap in timegrid, allow vertical stacking via scroll */
-        .fc-timegrid-col-events {
-          overflow-y: auto !important;
-          overflow-x: hidden !important;
+        /* Let FullCalendar manage timegrid col-events positioning internally */
+        /* Do NOT add position:relative to fc-timegrid-col-events - it breaks event harness positioning */
+
+        /* Ensure the col-frame stretches to hold events properly */
+        .fc-timegrid-col-frame {
+          position: relative !important;
         }
 
         /* Make each day column in timegrid week have a minimum width */
@@ -2067,11 +2069,7 @@ const EnhancedScheduler = () => {
           min-width: 100px !important;
         }
 
-        /* Timegrid scrollable container: allow horizontal scroll on week view */
-        .fc-timeGridWeek-view .fc-scroller {
-          overflow-x: auto !important;
-          overflow-y: auto !important;
-        }
+        /* Timegrid week: ensure table has minimum width for readability */
         .fc-timeGridWeek-view .fc-scrollgrid-sync-table {
           min-width: 700px !important;
         }
@@ -2903,15 +2901,12 @@ const EnhancedScheduler = () => {
         <Paper 
           sx={{ 
             p: { xs: 0.5, sm: 2 }, 
-            height: { xs: 'auto', sm: 'calc(100vh - 180px)' },
-            minHeight: { xs: '70vh', sm: 'auto' },
+            height: { xs: 'calc(100vh - 200px)', sm: 'calc(100vh - 180px)' },
+            minHeight: { xs: '500px', sm: '600px' },
             borderRadius: 2, 
             position: 'relative',
-            overflow: 'auto', // Allow scroll so timegrid week columns aren't cramped
+            overflow: 'hidden', // Let FullCalendar manage its own scrolling
             width: '100%',
-            '& .fc-timeGridWeek-view': {
-              overflowX: 'auto',
-            },
           }} 
           className="print-calendar"
         >
@@ -2934,9 +2929,7 @@ const EnhancedScheduler = () => {
             }}
             
             // RESPONSIVE: Proper height management per view
-            height="auto"
-            contentHeight="auto"
-            aspectRatio={window.innerWidth < 768 ? 1.0 : 1.8}
+            height="100%"
             handleWindowResize={true}
             windowResizeDelay={100}
             
