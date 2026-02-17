@@ -273,8 +273,23 @@ export class DatabaseStorage implements IStorage {
     return created;
   }
 
-  async getAllBranches(): Promise<Branch[]> {
-    return db.select().from(branches);
+  async getAllBranches(): Promise<(Branch & { employeeCount: number })[]> {
+    const allBranches = await db.select().from(branches);
+    // Count employees for each branch
+    const counts = await db
+      .select({
+        branchId: users.branchId,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(users)
+      .where(eq(users.isActive, true))
+      .groupBy(users.branchId);
+    
+    const countMap = new Map(counts.map(c => [c.branchId, c.count]));
+    return allBranches.map(b => ({
+      ...b,
+      employeeCount: countMap.get(b.id) || 0,
+    }));
   }
 
   async updateBranch(id: string, branch: Partial<InsertBranch>): Promise<Branch | undefined> {

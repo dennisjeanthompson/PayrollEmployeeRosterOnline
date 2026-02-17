@@ -70,16 +70,16 @@ export function registerBranchesRoutes(router: Router) {
     }
   });
 
-  // Update a branch
-  router.put("/api/branches/:id", async (req: Request, res: Response) => {
+  // Update a branch (supports both PUT and PATCH)
+  const handleUpdate = async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
 
       const schema = z.object({
-        name: z.string().min(1, "Name is required"),
-        address: z.string().min(1, "Address is required"),
+        name: z.string().min(1, "Name is required").optional(),
+        address: z.string().min(1, "Address is required").optional(),
         phone: z.string().optional(),
-        isActive: z.boolean(),
+        isActive: z.boolean().optional(),
       });
 
       const result = schema.safeParse(req.body);
@@ -90,12 +90,7 @@ export function registerBranchesRoutes(router: Router) {
         });
       }
 
-      const updatedBranch = await dbStorage.updateBranch(id, {
-        name: result.data.name,
-        address: result.data.address,
-        phone: result.data.phone,
-        isActive: result.data.isActive,
-      });
+      const updatedBranch = await dbStorage.updateBranch(id, result.data);
 
       if (!updatedBranch) {
         return res.status(404).json({ message: "Branch not found" });
@@ -106,7 +101,10 @@ export function registerBranchesRoutes(router: Router) {
       console.error("Error updating branch:", error);
       res.status(500).json({ message: "Failed to update branch" });
     }
-  });
+  };
+
+  router.put("/api/branches/:id", handleUpdate);
+  router.patch("/api/branches/:id", handleUpdate);
 
   // Delete a branch (soft delete by setting isActive to false)
   router.delete("/api/branches/:id", async (req: Request, res: Response) => {
