@@ -703,28 +703,46 @@ const EnhancedScheduler = () => {
       );
     }
 
-    // WEEK VIEW: Compact - just employee name, time shown by FullCalendar natively
+    // WEEK VIEW: Name at TOP, short time below, compact
     if (isWeekView) {
-      const empName = event.title?.split(' • ')[0] || event.title;
+      // Use shortened name to fit narrow columns: "Sofia M." instead of "Sofia Mendoza"
+      const fullName = event.title?.split(' • ')[0] || event.title;
+      const nameParts = fullName.trim().split(' ');
+      const shortName = nameParts.length > 1 
+        ? `${nameParts[0]} ${nameParts[nameParts.length - 1][0]}.`
+        : nameParts[0];
+      const timeStr = event.start && event.end
+        ? `${format(toUTCDate(event.start), 'h:mma').toLowerCase()}-${format(toUTCDate(event.end), 'h:mma').toLowerCase()}`
+        : '';
       return (
         <div style={{
-          padding: '1px 4px',
-          fontSize: isMobile ? '0.65rem' : '0.72rem',
+          padding: '2px 3px',
+          fontSize: isMobile ? '0.62rem' : '0.68rem',
           overflow: 'hidden',
-          lineHeight: '1.2',
-          height: '100%',
+          lineHeight: '1.25',
           display: 'flex',
           flexDirection: 'column',
-          justifyContent: 'center',
+          gap: '1px',
         }}>
           <div style={{
-            fontWeight: 600,
+            fontWeight: 700,
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}>
-            {isTrade ? '🔄 ' : ''}{empName}
+            {isTrade ? '🔄' : ''}{shortName}
           </div>
+          {timeStr && (
+            <div style={{
+              fontSize: '0.58rem',
+              opacity: 0.75,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}>
+              {timeStr}
+            </div>
+          )}
         </div>
       );
     }
@@ -2099,25 +2117,34 @@ const EnhancedScheduler = () => {
 
         /* Timegrid event inner content */
         .fc-timegrid-event .fc-event-main {
-          padding: 1px 3px !important;
+          padding: 1px 2px !important;
           overflow: hidden !important;
         }
         .fc-timeGridDay-view .fc-timegrid-event .fc-event-main {
           padding: 2px 6px !important;
         }
 
-        /* FullCalendar natively shows time - hide duplicate time element when we render custom content */
-        .fc-timegrid-event .fc-event-time {
-          font-size: 0.65rem !important;
-          opacity: 0.8 !important;
-          margin-bottom: 0 !important;
-          padding: 0 !important;
-          min-height: 0 !important;
+        /* WEEK VIEW: Hide FullCalendar's native time element - we render our own */
+        .fc-timeGridWeek-view .fc-timegrid-event .fc-event-time {
+          display: none !important;
         }
 
-        /* Week view: let events overlap naturally with proper layering */
+        /* DAY VIEW: Also hide native time - we render custom content */
+        .fc-timeGridDay-view .fc-timegrid-event .fc-event-time {
+          display: none !important;
+        }
+
+        /* Week view: events should show content at TOP, not center/bottom */
+        .fc-timeGridWeek-view .fc-timegrid-event .fc-event-main-frame {
+          display: flex !important;
+          flex-direction: column !important;
+          justify-content: flex-start !important;
+          align-items: stretch !important;
+        }
+
+        /* Week view: reasonable event width - don't let harness be too narrow */
         .fc-timeGridWeek-view .fc-timegrid-event-harness {
-          margin-right: 0 !important;
+          min-width: 0 !important;
         }
 
         /* Ensure the col-frame stretches to hold events properly */
@@ -3026,14 +3053,14 @@ const EnhancedScheduler = () => {
                 eventDisplay: 'auto' as const,
                 dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
                 slotEventOverlap: true,
-                eventMaxStack: 3,
+                allDaySlot: false,
               },
               timeGridDay: {
                 slotDuration: '00:30:00',
                 slotLabelInterval: '01:00:00',
                 eventDisplay: 'auto' as const,
                 slotEventOverlap: true,
-                eventMaxStack: 5,
+                allDaySlot: false,
               },
               listWeek: {
                 dayMaxEvents: false,
@@ -3132,9 +3159,8 @@ const EnhancedScheduler = () => {
 
             moreLinkClick="popover"
             
-            // Event overlap settings - allow partial overlap for better space usage
+            // Event overlap settings
             slotEventOverlap={true}
-            eventMaxStack={4}
             
             eventDidMount={(info) => {
               // RIGHT-CLICK HANDLER: Add context menu on shift events
