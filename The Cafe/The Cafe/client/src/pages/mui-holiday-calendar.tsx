@@ -45,6 +45,7 @@ import {
   Refresh as RefreshIcon,
   CheckCircle,
   Block,
+  Close as CloseIcon,
 } from "@mui/icons-material";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
@@ -88,6 +89,8 @@ export default function MuiHolidayCalendar() {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [editingHoliday, setEditingHoliday] = useState<Holiday | null>(null);
   const [deletingHoliday, setDeletingHoliday] = useState<Holiday | null>(null);
+  const [detailAnchor, setDetailAnchor] = useState<HTMLElement | null>(null);
+  const [detailHoliday, setDetailHoliday] = useState<Holiday | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     date: format(new Date(), "yyyy-MM-dd"),
@@ -404,8 +407,10 @@ export default function MuiHolidayCalendar() {
               }}
               height="auto"
               eventClick={(info) => {
+                info.jsEvent.preventDefault();
                 const holiday = info.event.extendedProps.holiday as Holiday;
-                handleEdit(holiday);
+                setDetailHoliday(holiday);
+                setDetailAnchor(info.el);
               }}
               eventContent={(arg) => {
                 const holiday = arg.event.extendedProps.holiday as Holiday;
@@ -557,6 +562,123 @@ export default function MuiHolidayCalendar() {
         </Box>
       </Box>
 
+      {/* Holiday Detail Popover (Calendar View) */}
+      {detailAnchor && detailHoliday && (() => {
+        const typeConfig = getTypeConfig(detailHoliday.type);
+        const rect = detailAnchor.getBoundingClientRect();
+        return (
+          <>
+            {/* Backdrop */}
+            <Box
+              onClick={() => { setDetailAnchor(null); setDetailHoliday(null); }}
+              sx={{ position: 'fixed', inset: 0, zIndex: 1200 }}
+            />
+            {/* Popover card */}
+            <Card
+              elevation={8}
+              sx={{
+                position: 'fixed',
+                left: Math.min(rect.left, window.innerWidth - 320),
+                top: rect.bottom + 8,
+                zIndex: 1300,
+                width: 300,
+                borderRadius: 3,
+                border: `2px solid ${typeConfig.color}`,
+                overflow: 'visible',
+              }}
+            >
+              <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                {/* Header with close */}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+                  <Box>
+                    <Typography variant="subtitle1" fontWeight={700}>
+                      {detailHoliday.name}
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {format(new Date(detailHoliday.date), 'MMMM d, yyyy')}
+                    </Typography>
+                  </Box>
+                  <IconButton size="small" onClick={() => { setDetailAnchor(null); setDetailHoliday(null); }}>
+                    <CloseIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+
+                {/* Type chip */}
+                <Chip
+                  label={typeConfig.label}
+                  size="small"
+                  sx={{
+                    bgcolor: alpha(typeConfig.color, 0.15),
+                    color: typeConfig.color,
+                    fontWeight: 600,
+                    mb: 1.5,
+                  }}
+                />
+
+                {/* Details */}
+                <Stack spacing={0.5} sx={{ mb: 2 }}>
+                  <Typography variant="body2">
+                    <strong>Pay Rule:</strong> {detailHoliday.payRule?.worked || typeConfig.payWorked}
+                  </Typography>
+                  <Typography variant="body2">
+                    <strong>Work Allowed:</strong>{' '}
+                    <Chip
+                      size="small"
+                      icon={detailHoliday.workAllowed ? <CheckCircle /> : <Block />}
+                      label={detailHoliday.workAllowed ? 'Yes' : 'Blocked'}
+                      color={detailHoliday.workAllowed ? 'success' : 'error'}
+                      variant="outlined"
+                      sx={{ height: 24 }}
+                    />
+                  </Typography>
+                  {detailHoliday.isRecurring && (
+                    <Typography variant="body2" color="text.secondary">
+                      🔁 Recurring annually
+                    </Typography>
+                  )}
+                  {detailHoliday.notes && (
+                    <Typography variant="body2" color="text.secondary" fontStyle="italic">
+                      {detailHoliday.notes}
+                    </Typography>
+                  )}
+                </Stack>
+
+                {/* Action buttons */}
+                <Stack direction="row" spacing={1}>
+                  <Button
+                    variant="contained"
+                    size="small"
+                    startIcon={<EditIcon />}
+                    onClick={() => {
+                      setDetailAnchor(null);
+                      setDetailHoliday(null);
+                      handleEdit(detailHoliday);
+                    }}
+                    sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, flex: 1 }}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    size="small"
+                    color="error"
+                    startIcon={<DeleteIcon />}
+                    onClick={() => {
+                      setDetailAnchor(null);
+                      setDetailHoliday(null);
+                      handleDelete(detailHoliday);
+                    }}
+                    sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600, flex: 1 }}
+                  >
+                    Delete
+                  </Button>
+                </Stack>
+              </CardContent>
+            </Card>
+          </>
+        );
+      })()}
+
       {/* Add/Edit Dialog */}
       <Dialog
         open={isDialogOpen}
@@ -659,23 +781,38 @@ export default function MuiHolidayCalendar() {
             />
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ p: 3, pt: 0 }}>
-          <Button onClick={() => setIsDialogOpen(false)} sx={{ borderRadius: 2, textTransform: "none" }}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleSubmit}
-            disabled={!formData.name || !formData.date || createMutation.isPending || updateMutation.isPending}
-            startIcon={
-              createMutation.isPending || updateMutation.isPending ? (
-                <CircularProgress size={16} color="inherit" />
-              ) : null
-            }
-            sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
-          >
-            {createMutation.isPending || updateMutation.isPending ? "Saving..." : "Save"}
-          </Button>
+        <DialogActions sx={{ p: 3, pt: 0, justifyContent: editingHoliday ? 'space-between' : 'flex-end' }}>
+          {editingHoliday && (
+            <Button
+              color="error"
+              startIcon={<DeleteIcon />}
+              onClick={() => {
+                setIsDialogOpen(false);
+                handleDelete(editingHoliday);
+              }}
+              sx={{ borderRadius: 2, textTransform: "none" }}
+            >
+              Delete
+            </Button>
+          )}
+          <Stack direction="row" spacing={1}>
+            <Button onClick={() => setIsDialogOpen(false)} sx={{ borderRadius: 2, textTransform: "none" }}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              onClick={handleSubmit}
+              disabled={!formData.name || !formData.date || createMutation.isPending || updateMutation.isPending}
+              startIcon={
+                createMutation.isPending || updateMutation.isPending ? (
+                  <CircularProgress size={16} color="inherit" />
+                ) : null
+              }
+              sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+            >
+              {createMutation.isPending || updateMutation.isPending ? "Saving..." : "Save"}
+            </Button>
+          </Stack>
         </DialogActions>
       </Dialog>
 
