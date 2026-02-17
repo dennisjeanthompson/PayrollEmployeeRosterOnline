@@ -232,6 +232,14 @@ const EMPLOYEE_COLORS = [
   { bg: '#14B8A6', text: '#FFFFFF' }, // Teal
 ];
 
+// Softer colors for timegrid views (week/day) to reduce visual noise
+const softenColor = (hex: string, opacity: number = 0.75): string => {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
+};
+
 const getEmployeeColor = (employeeId: string, employees: Employee[]) => {
   const index = employees.findIndex(e => e.id === employeeId);
   return EMPLOYEE_COLORS[index % EMPLOYEE_COLORS.length] || EMPLOYEE_COLORS[0];
@@ -656,13 +664,11 @@ const EnhancedScheduler = () => {
     const { type, trade } = event.extendedProps;
     const viewType = view?.type || '';
   
-    const isAllDay = event.allDay || event.display === 'background';
     const isTrade = type === 'shift-trade';
     const isTimeGrid = viewType.startsWith('timeGrid');
     const isDayView = viewType === 'timeGridDay';
     const isWeekView = viewType === 'timeGridWeek';
     const isMonthView = viewType === 'dayGridMonth';
-    const isListView = viewType.startsWith('list');
 
     // MONTH VIEW: Compact pill-style events with color dot
     if (isMonthView) {
@@ -697,47 +703,19 @@ const EnhancedScheduler = () => {
       );
     }
 
-    // View-aware font sizing: day > week > month
-    const getFontSize = () => {
-      if (isMobile) {
-        if (isDayView) return '0.8rem';
-        if (isWeekView) return '0.7rem';
-        return '0.65rem';
-      }
-      if (isDayView) return '0.85rem';
-      if (isWeekView) return '0.75rem';
-      return '0.75rem';
-    };
-
-    const getTimeFontSize = () => {
-      if (isMobile) return isDayView ? '0.75rem' : '0.6rem';
-      return isDayView ? '0.78rem' : isWeekView ? '0.68rem' : '0.65rem';
-    };
-
-    const getPadding = () => {
-      if (isDayView) return '4px 8px';
-      if (isWeekView) return '2px 4px';
-      return '2px 4px';
-    };
-
-    const lineClamp = isDayView ? 3 : isWeekView ? 2 : 2;
-
-    // WEEK VIEW: Compact vertical layout with name + time
+    // WEEK VIEW: Compact - just employee name, time shown by FullCalendar natively
     if (isWeekView) {
       const empName = event.title?.split(' • ')[0] || event.title;
-      const timeStr = event.start && event.end
-        ? `${format(toUTCDate(event.start), 'h:mm a')} - ${format(toUTCDate(event.end), 'h:mm a')}`
-        : '';
       return (
         <div style={{
+          padding: '1px 4px',
+          fontSize: isMobile ? '0.65rem' : '0.72rem',
+          overflow: 'hidden',
+          lineHeight: '1.2',
+          height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          height: '100%',
-          padding: getPadding(),
-          fontSize: getFontSize(),
-          overflow: 'hidden',
-          lineHeight: '1.3',
-          minHeight: '20px',
+          justifyContent: 'center',
         }}>
           <div style={{
             fontWeight: 600,
@@ -745,62 +723,34 @@ const EnhancedScheduler = () => {
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}>
-            {empName}
+            {isTrade ? '🔄 ' : ''}{empName}
           </div>
-          {isTrade && trade?.requester && (
-            <div style={{ fontSize: getTimeFontSize(), opacity: 0.9, fontStyle: 'italic' }}>
-              {trade.requester.firstName}'s shift
-            </div>
-          )}
-          {timeStr && (
-            <div style={{
-              fontSize: getTimeFontSize(),
-              opacity: 0.75,
-              marginTop: 'auto',
-              paddingTop: '1px',
-              whiteSpace: 'nowrap',
-            }}>
-              {timeStr}
-            </div>
-          )}
         </div>
       );
     }
 
-    // DAY VIEW: Full detail with name, role, and time
+    // DAY VIEW: Name + role, time shown by FullCalendar natively
     if (isDayView) {
       const parts = event.title?.split(' • ') || [event.title];
       const empName = parts[0];
       const role = parts[1] || '';
-      const timeStr = event.start && event.end
-        ? `${format(toUTCDate(event.start), 'h:mm a')} - ${format(toUTCDate(event.end), 'h:mm a')}`
-        : '';
       return (
         <div style={{
+          padding: '3px 6px',
+          fontSize: isMobile ? '0.78rem' : '0.82rem',
+          overflow: 'hidden',
+          lineHeight: '1.3',
+          height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          height: '100%',
-          padding: getPadding(),
-          fontSize: getFontSize(),
-          overflow: 'hidden',
-          lineHeight: '1.4',
-          minHeight: '30px',
         }}>
-          <div style={{ fontWeight: 700, fontSize: '0.85rem' }}>{empName}</div>
-          {role && <div style={{ fontSize: '0.75rem', opacity: 0.85 }}>{role}</div>}
+          <div style={{ fontWeight: 700 }}>
+            {isTrade ? '🔄 ' : ''}{empName}
+          </div>
+          {role && <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: '1px' }}>{role}</div>}
           {isTrade && trade?.requester && (
-            <div style={{ fontSize: '0.75rem', opacity: 0.9, fontStyle: 'italic' }}>
+            <div style={{ fontSize: '0.7rem', opacity: 0.85, fontStyle: 'italic', marginTop: '1px' }}>
               {trade.requester.firstName}'s shift
-            </div>
-          )}
-          {timeStr && (
-            <div style={{
-              fontSize: '0.75rem',
-              opacity: 0.75,
-              marginTop: 'auto',
-              paddingTop: '2px',
-            }}>
-              {timeStr}
             </div>
           )}
         </div>
@@ -810,44 +760,27 @@ const EnhancedScheduler = () => {
     // DEFAULT fallback (list view, etc.)
     return (
       <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-        padding: getPadding(),
-        fontSize: getFontSize(),
+        padding: '2px 4px',
+        fontSize: '0.75rem',
         overflow: 'hidden',
         lineHeight: '1.3',
-        minHeight: isTimeGrid ? '20px' : undefined,
       }}>
         <div style={{
-          fontWeight: '600',
+          fontWeight: 600,
           whiteSpace: 'normal',
           wordBreak: 'break-word',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
           display: '-webkit-box',
-          WebkitLineClamp: lineClamp,
+          WebkitLineClamp: 2,
           WebkitBoxOrient: 'vertical',
         }}>
           {event.title}
         </div>
 
         {isTrade && trade?.requester && (
-          <div style={{ fontSize: getTimeFontSize(), opacity: 0.9, fontStyle: 'italic' }}>
+          <div style={{ fontSize: '0.65rem', opacity: 0.9, fontStyle: 'italic' }}>
             {trade.requester.firstName}'s shift
-          </div>
-        )}
-
-        {!isAllDay && event.start && (
-          <div style={{
-            fontSize: getTimeFontSize(),
-            opacity: 0.8,
-            marginTop: 'auto',
-            paddingTop: '2px',
-            whiteSpace: 'nowrap',
-          }}>
-            {format(toUTCDate(event.start), 'h:mm a')}
-            {event.end ? ` - ${format(toUTCDate(event.end), 'h:mm a')}` : ''}
           </div>
         )}
       </div>
@@ -1317,7 +1250,7 @@ const EnhancedScheduler = () => {
           : `${empName}${role ? ` • ${role}` : ''}`,
         start: shift.startTime,
         end: shift.endTime,
-        backgroundColor: colors.bg,
+        backgroundColor: softenColor(colors.bg, 0.82),
         borderColor: colors.bg,
         textColor: colors.text,
         extendedProps: { shift, employeeId: shift.userId, type: 'shift' },
@@ -2148,42 +2081,48 @@ const EnhancedScheduler = () => {
 
         /* ===== TIMEGRID WEEK/DAY VIEW FIXES ===== */
 
-        /* Give timegrid slots enough height so events are readable */
-        .fc-timeGridWeek-view .fc-timegrid-slot {
-          height: 3em !important;
-        }
-        .fc-timeGridDay-view .fc-timegrid-slot {
-          height: 3em !important;
-        }
-
-        /* Ensure events in timegrid have minimum height & proper sizing */
+        /* Timegrid events: clean rounded cards with subtle shadow */
         .fc-timegrid-event {
-          min-height: 24px !important;
-          border-radius: 6px !important;
+          border-radius: 5px !important;
+          border-left-width: 3px !important;
+          border-left-style: solid !important;
           margin: 0 1px !important;
-          box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
+          box-shadow: 0 1px 2px rgba(0,0,0,0.15) !important;
+          opacity: 0.92 !important;
+          transition: opacity 0.15s, box-shadow 0.15s !important;
         }
-        .fc-timeGridDay-view .fc-timegrid-event {
-          min-height: 30px !important;
-        }
-        .fc-timeGridWeek-view .fc-timegrid-event {
-          min-height: 24px !important;
-        }
-
-        /* Let FullCalendar manage timegrid col-events positioning internally */
-
-        /* Ensure the col-frame stretches to hold events properly */
-        .fc-timegrid-col-frame {
-          position: relative !important;
+        .fc-timegrid-event:hover {
+          opacity: 1 !important;
+          box-shadow: 0 2px 6px rgba(0,0,0,0.25) !important;
+          z-index: 100 !important;
         }
 
-        /* Timegrid event inner content padding */
+        /* Timegrid event inner content */
         .fc-timegrid-event .fc-event-main {
           padding: 1px 3px !important;
           overflow: hidden !important;
         }
         .fc-timeGridDay-view .fc-timegrid-event .fc-event-main {
-          padding: 3px 6px !important;
+          padding: 2px 6px !important;
+        }
+
+        /* FullCalendar natively shows time - hide duplicate time element when we render custom content */
+        .fc-timegrid-event .fc-event-time {
+          font-size: 0.65rem !important;
+          opacity: 0.8 !important;
+          margin-bottom: 0 !important;
+          padding: 0 !important;
+          min-height: 0 !important;
+        }
+
+        /* Week view: let events overlap naturally with proper layering */
+        .fc-timeGridWeek-view .fc-timegrid-event-harness {
+          margin-right: 0 !important;
+        }
+
+        /* Ensure the col-frame stretches to hold events properly */
+        .fc-timegrid-col-frame {
+          position: relative !important;
         }
 
         /* Make slot labels wider so time text doesn't crop */
@@ -2191,25 +2130,10 @@ const EnhancedScheduler = () => {
           min-width: 55px !important;
         }
 
-        /* Day view: side-by-side events get fair width */
-        .fc-timeGridDay-view .fc-timegrid-event-harness {
-          min-width: 120px !important;
-        }
-
         /* ===== RESPONSIVE TIMEGRID OVERRIDES ===== */
         @media (max-width: 768px) {
-          .fc-timeGridWeek-view .fc-timegrid-slot {
-            height: 2.5em !important;
-          }
-          .fc-timeGridDay-view .fc-timegrid-slot {
-            height: 3em !important;
-          }
           .fc-timegrid-event {
-            min-height: 20px !important;
             font-size: 0.65rem !important;
-          }
-          .fc-timeGridDay-view .fc-timegrid-event {
-            min-height: 24px !important;
           }
           .fc-timegrid-axis {
             min-width: 42px !important;
@@ -2220,13 +2144,19 @@ const EnhancedScheduler = () => {
           }
         }
 
-        /* MOBILE FIX: Hide intrusive tooltip on mobile */
-        @media (max-width: 768px) {
+        /* Tooltip styling - positioned smartly */
+        div[id^="tooltip-"] {
+          pointer-events: none !important;
+          animation: tooltipFadeIn 0.15s ease !important;
+        }
+        @keyframes tooltipFadeIn {
+          from { opacity: 0; transform: translateX(-50%) translateY(4px); }
+          to { opacity: 1; transform: translateX(-50%) translateY(0); }
+        }
+        /* MOBILE: Hide tooltips on touch devices */
+        @media (max-width: 768px), (hover: none) {
           div[id^="tooltip-"] {
             display: none !important;
-            visibility: hidden !important;
-            pointer-events: none !important;
-            opacity: 0 !important;
           }
         }
 
@@ -2257,10 +2187,10 @@ const EnhancedScheduler = () => {
 
         /* Day cell minimum height for month view (ensure space for events) */
         .fc-daygrid-day-frame {
-          min-height: 90px !important;
+          min-height: 85px !important;
         }
         
-        /* Month view: colored pill events with proper contrast */
+        /* Month view: colored pill events */
         .fc-daygrid-event {
           margin: 1px 2px !important;
           padding: 0 !important;
@@ -2268,27 +2198,22 @@ const EnhancedScheduler = () => {
           border: none !important;
           box-shadow: none !important;
         }
-        
-        /* Month view: ensure event dot inherits the event background color */
         .fc-daygrid-event .fc-event-main {
           padding: 0 !important;
         }
-        
         .fc-daygrid-dot-event {
           padding: 1px 4px !important;
         }
 
-        /* Month view: today highlight */
+        /* Today highlight */
         .fc-day-today {
           background: rgba(59, 130, 246, 0.04) !important;
         }
-
-        /* Week/Day: today column highlight */
         .fc-timegrid-col.fc-day-today {
           background: rgba(59, 130, 246, 0.03) !important;
         }
 
-        /* Now indicator styling */
+        /* Now indicator (red line for current time) */
         .fc-timegrid-now-indicator-line {
           border-color: #ef4444 !important;
           border-width: 2px !important;
@@ -2297,24 +2222,31 @@ const EnhancedScheduler = () => {
           border-color: #ef4444 !important;
         }
 
-        /* Col header styling for week view */
+        /* Col header styling */
         .fc-col-header-cell {
-          padding: 8px 4px !important;
+          padding: 6px 4px !important;
         }
         .fc-col-header-cell-cushion {
           font-weight: 600 !important;
           font-size: 0.8rem !important;
         }
 
-        /* Scrollgrid border cleanup */
+        /* Scrollgrid borders - subtle dividers */
         .fc-scrollgrid {
           border-color: rgba(255,255,255,0.08) !important;
         }
         .fc-timegrid-slot {
-          border-color: rgba(255,255,255,0.05) !important;
+          border-color: rgba(255,255,255,0.06) !important;
         }
         .fc-timegrid-slot-minor {
-          border-color: rgba(255,255,255,0.02) !important;
+          border-style: dotted !important;
+          border-color: rgba(255,255,255,0.03) !important;
+        }
+
+        /* Event time formatting in timegrid */
+        .fc-timegrid-event .fc-event-title-container {
+          flex-grow: 1 !important;
+          min-height: 0 !important;
         }
       `}</style>
     <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'background.default' }} className="print-container">
@@ -3073,7 +3005,7 @@ const EnhancedScheduler = () => {
             // MOBILE: Better event display
             expandRows={true} // Expand rows to fill height (better for mobile)
             
-            // CRITICAL FIX: Per-view configuration (7shifts/Deputy pattern)
+            // Per-view configuration
             views={{
               dayGridMonth: {
                 dayMaxEvents: 4,
@@ -3089,19 +3021,19 @@ const EnhancedScheduler = () => {
                 eventDisplay: 'block' as const,
               },
               timeGridWeek: {
-                dayMaxEvents: false,
                 slotDuration: '00:30:00',
                 slotLabelInterval: '01:00:00',
                 eventDisplay: 'auto' as const,
                 dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
-                slotEventOverlap: false,
+                slotEventOverlap: true,
+                eventMaxStack: 3,
               },
               timeGridDay: {
-                dayMaxEvents: false,
                 slotDuration: '00:30:00',
                 slotLabelInterval: '01:00:00',
                 eventDisplay: 'auto' as const,
-                slotEventOverlap: false,
+                slotEventOverlap: true,
+                eventMaxStack: 5,
               },
               listWeek: {
                 dayMaxEvents: false,
@@ -3200,8 +3132,9 @@ const EnhancedScheduler = () => {
 
             moreLinkClick="popover"
             
-            // Event overlap settings - allow overlap so events don't get too narrow
+            // Event overlap settings - allow partial overlap for better space usage
             slotEventOverlap={true}
+            eventMaxStack={4}
             
             eventDidMount={(info) => {
               // RIGHT-CLICK HANDLER: Add context menu on shift events
@@ -3292,8 +3225,24 @@ const EnhancedScheduler = () => {
                   document.body.appendChild(tooltip);
                   
                   const rect = info.el.getBoundingClientRect();
-                  tooltip.style.left = `${rect.left + rect.width / 2}px`;
-                  tooltip.style.top = `${rect.top - tooltip.offsetHeight - 8}px`;
+                  const viewportH = window.innerHeight;
+                  const viewportW = window.innerWidth;
+                  
+                  // Position tooltip above event, but flip below if not enough space
+                  let left = rect.left + rect.width / 2;
+                  let top = rect.top - tooltip.offsetHeight - 8;
+                  
+                  // Flip below if tooltip goes above viewport
+                  if (top < 8) {
+                    top = rect.bottom + 8;
+                  }
+                  // Keep within horizontal bounds
+                  const tooltipW = tooltip.offsetWidth;
+                  if (left - tooltipW / 2 < 8) left = tooltipW / 2 + 8;
+                  if (left + tooltipW / 2 > viewportW - 8) left = viewportW - tooltipW / 2 - 8;
+                  
+                  tooltip.style.left = `${left}px`;
+                  tooltip.style.top = `${top}px`;
                   tooltip.style.transform = 'translateX(-50%)';
                 });
                 

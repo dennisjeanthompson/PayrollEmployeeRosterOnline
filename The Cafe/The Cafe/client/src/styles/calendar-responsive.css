@@ -2,17 +2,18 @@
 
 /* ===== DESKTOP & TABLET: Timegrid week/day proper sizing ===== */
 
-/* Timegrid slots - enough height for readable events */
-.fc-timegrid-slot {
-  height: 3em !important;
-}
-
-/* Timegrid events base styling */
+/* Timegrid events base styling - subtle rounded cards */
 .fc-timegrid-event {
-  min-height: 24px !important;
-  border-radius: 6px !important;
+  border-radius: 5px !important;
+  border-left-width: 3px !important;
+  border-left-style: solid !important;
   overflow: hidden !important;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.2) !important;
+  opacity: 0.92 !important;
+  transition: opacity 0.15s, box-shadow 0.15s !important;
+}
+.fc-timegrid-event:hover {
+  opacity: 1 !important;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.25) !important;
 }
 
 /* Timegrid event inner content */
@@ -21,23 +22,14 @@
   overflow: hidden !important;
 }
 
-/* Let FullCalendar manage column widths naturally */
-
 /* Week view: scrollable table so columns don't shrink too small */
 .fc-timeGridWeek-view .fc-scrollgrid-sync-table {
   min-width: 600px !important;
 }
-/* Let FullCalendar manage scroller overflow internally */
 
 /* Day view: give events proper sizing */
-.fc-timeGridDay-view .fc-timegrid-slot {
-  height: 3em !important;
-}
-.fc-timeGridDay-view .fc-timegrid-event {
-  min-height: 30px !important;
-}
 .fc-timeGridDay-view .fc-timegrid-event .fc-event-main {
-  padding: 3px 6px !important;
+  padding: 2px 6px !important;
 }
 
 /* Slot label axis width */
@@ -148,7 +140,6 @@
     min-width: 480px !important;
   }
   .fc-timegrid-event {
-    min-height: 20px !important;
     font-size: 0.65rem !important;
   }
   .fc-timegrid-axis {
@@ -156,12 +147,8 @@
     font-size: 0.6rem !important;
   }
 
-  /* MOBILE day view - full width, bigger events */
-  .fc-timeGridDay-view .fc-timegrid-slot {
-    height: 3.5em !important;
-  }
+  /* MOBILE day view */
   .fc-timeGridDay-view .fc-timegrid-event {
-    min-height: 28px !important;
     font-size: 0.75rem !important;
   }
 }
