@@ -1,8 +1,8 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { isManager, getCurrentUser, isAdmin, isEmployee } from "@/lib/auth";
+import { isManager, getCurrentUser, isAdmin, isEmployee, useAuth } from "@/lib/auth";
 import { format, parseISO } from "date-fns";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest, invalidateQueries } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 
 // MUI Components
@@ -125,11 +125,12 @@ interface Employee {
 export default function MuiBranches() {
   const theme = useTheme();
   const currentUser = getCurrentUser();
+  const { switchBranch } = useAuth();
   const isAdminRole = isAdmin();
   const isManagerRole = isManager();
   const isEmployeeRole = isEmployee();
   const canManage = isAdminRole || isManagerRole;
-  const canSwitchBranch = isAdminRole; // Only admins can freely switch between all branches
+  const canSwitchBranch = isAdminRole || isManagerRole; // Managers and admins can switch branches
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -160,13 +161,20 @@ export default function MuiBranches() {
   });
 
   // Persist selected branch for auto-detection on next visit
-  const handleBranchSwitch = useCallback((branchId: string) => {
+  const handleBranchSwitch = useCallback(async (branchId: string) => {
     setSelectedBranchId(branchId);
-    try {
-      localStorage.setItem('selectedBranchId', branchId);
-    } catch {}
-    toast({ title: branchId ? `Switched to branch view` : 'Viewing all branches' });
-  }, [toast]);
+    if (branchId && canSwitchBranch) {
+      const ok = await switchBranch(branchId);
+      if (ok) {
+        invalidateQueries.branchSwitch();
+        toast({ title: `Switched to branch — all pages updated` });
+      } else {
+        toast({ title: 'Failed to switch branch', variant: 'destructive' });
+      }
+    } else {
+      toast({ title: 'Viewing all branches' });
+    }
+  }, [switchBranch, canSwitchBranch, toast]);
 
   // Fetch branches with real-time updates
   const { data: branchesResponse, isLoading, refetch } = useQuery({

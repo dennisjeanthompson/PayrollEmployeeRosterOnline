@@ -205,6 +205,37 @@ export const invalidateQueries = {
     queryClient.invalidateQueries({ queryKey: ['/api/time-off-requests'] });
     queryClient.invalidateQueries({ queryKey: ['/api/approvals'] });
   },
+  /** Invalidate ALL branch-dependent queries after a branch switch */
+  branchSwitch: () => {
+    // Clear the entire cache so every page refetches for the new branch
+    queryClient.invalidateQueries({ queryKey: ['/api/shifts'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/shifts/branch'] });
+    queryClient.invalidateQueries({ queryKey: ['shifts'] });
+    queryClient.invalidateQueries({ queryKey: ['my-shifts'] });
+    queryClient.invalidateQueries({ queryKey: ['employees'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/employees/stats'] });
+    queryClient.invalidateQueries({ queryKey: ['employees-all-branches'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/hours/all-employees'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/hours/team-summary'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/payroll'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/payroll/periods'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/payroll/entries'] });
+    queryClient.invalidateQueries({ queryKey: ['payroll-entries'] });
+    queryClient.invalidateQueries({ queryKey: ['payroll-periods'] });
+    queryClient.invalidateQueries({ queryKey: ['payroll-entries-branch'] });
+    queryClient.invalidateQueries({ queryKey: ['current-payroll-period'] });
+    queryClient.invalidateQueries({ queryKey: ['shift-trades'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/shift-trades'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/approvals'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/time-off-requests'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+    queryClient.invalidateQueries({ queryKey: ['branches'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/branches'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/dashboard'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/deduction-settings'] });
+    queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
+  },
   all: () => {
     queryClient.invalidateQueries();
   },

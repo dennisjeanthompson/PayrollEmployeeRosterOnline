@@ -12,6 +12,9 @@ let authState: AuthState = {
 
 const listeners: Set<(state: AuthState) => void> = new Set();
 
+// Branch switch listeners (separate from auth state listeners)
+const branchSwitchListeners: Set<(branchId: string) => void> = new Set();
+
 export function getAuthState(): AuthState {
   return authState;
 }
@@ -24,6 +27,11 @@ export function setAuthState(newState: Partial<AuthState>) {
 export function subscribeToAuth(listener: (state: AuthState) => void) {
   listeners.add(listener);
   return () => { listeners.delete(listener); };
+}
+
+export function onBranchSwitch(listener: (branchId: string) => void) {
+  branchSwitchListeners.add(listener);
+  return () => { branchSwitchListeners.delete(listener); };
 }
 
 export function isManager(): boolean {
@@ -46,11 +54,15 @@ export function getCurrentUser(): User | null {
   return authState.user;
 }
 
+export function getActiveBranchId(): string | undefined {
+  return authState.user?.branchId;
+}
+
 export function logout() {
   setAuthState({ user: null, isAuthenticated: false });
 }
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { apiRequest } from "./queryClient";
 
 export function useAuth() {
@@ -76,5 +88,51 @@ export function useAuth() {
     }
   };
 
-  return { ...state, refreshUser };
+  /**
+   * Switch the active branch for the current session.
+   * This updates the server session and refreshes all client-side data.
+   * Only available to managers and admins.
+   */
+  const switchBranch = useCallback(async (branchId: string): Promise<boolean> => {
+    try {
+      const res = await apiRequest("PUT", "/api/auth/switch-branch", { branchId });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || "Failed to switch branch");
+      }
+
+      // Update client-side auth state with new branchId
+      const currentUser = getAuthState().user;
+      if (currentUser) {
+        setAuthState({
+          user: { ...currentUser, branchId } as User,
+          isAuthenticated: true,
+        });
+      }
+
+      // Notify all branch switch listeners
+      branchSwitchListeners.forEach(listener => listener(branchId));
+
+      // Persist selection for auto-detect on next visit
+      try { localStorage.setItem('lastBranchId', branchId); } catch {}
+
+      return true;
+    } catch (err) {
+      console.error("Failed to switch branch:", err);
+      return false;
+    }
+  }, []);
+
+  return { ...state, refreshUser, switchBranch };
+}
+
+/**
+ * Hook to react to branch switches across the app.
+ * Usage: useBranchSwitch(() => { refetchData(); });
+ */
+export function useBranchSwitch(callback: (branchId: string) => void) {
+  useEffect(() => {
+    const unsub = onBranchSwitch(callback);
+    return unsub;
+  }, [callback]);
 }

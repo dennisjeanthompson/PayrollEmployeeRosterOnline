@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { getCurrentUser } from "@/lib/auth";
+import React, { useEffect, useState, useCallback } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getCurrentUser, isManager, isAdmin, useAuth } from "@/lib/auth";
+import { invalidateQueries } from "@/lib/queryClient";
 import { useLocation, Link } from "wouter";
 import { useTheme as useAppTheme } from "@/components/theme-provider";
 import CommandPalette from "../search/CommandPalette";
@@ -20,6 +21,11 @@ import {
   alpha,
   useTheme,
   styled,
+  Select,
+  MenuItem,
+  FormControl,
+  CircularProgress,
+  Snackbar,
 } from "@mui/material";
 
 // MUI Icons
@@ -31,6 +37,8 @@ import {
   LocationOn as LocationIcon,
   Keyboard as KeyboardIcon,
   Menu as MenuIcon,
+  Store as StoreIcon,
+  SwapHoriz as SwapHorizIcon,
 } from "@mui/icons-material";
 
 // Styled search component
@@ -88,16 +96,23 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 
 export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void }) {
   const currentUser = getCurrentUser();
+  const { switchBranch } = useAuth();
+  const canSwitchBranch = isAdmin() || isManager();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [location, setLocation] = useLocation();
   const theme = useTheme();
   const { theme: appTheme, setTheme } = useAppTheme();
+  const queryClient = useQueryClient();
   
+  // Branch switching state
+  const [isSwitching, setIsSwitching] = useState(false);
+  const [switchToast, setSwitchToast] = useState<string | null>(null);
+
   // Global search state (trigger for Command Palette)
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
-  const { data: branchesData } = useQuery<{ branches?: Array<{ id: string; name: string }> }>({
+  const { data: branchesData } = useQuery<{ branches?: Array<{ id: string; name: string; isActive?: boolean }> }>({
     queryKey: ["/api/branches"],
   });
 
@@ -120,9 +135,28 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const activeBranches = branchesData?.branches?.filter((b) => b.isActive !== false) || [];
   const currentBranch = branchesData?.branches?.find(
     (branch) => branch.id === currentUser?.branchId
   );
+
+  const handleBranchSwitch = useCallback(async (branchId: string) => {
+    if (branchId === currentUser?.branchId || isSwitching) return;
+    setIsSwitching(true);
+    try {
+      const success = await switchBranch(branchId);
+      if (success) {
+        const targetBranch = branchesData?.branches?.find((b) => b.id === branchId);
+        setSwitchToast(`Switched to ${targetBranch?.name || 'branch'}`);
+        // Invalidate all branch-dependent queries so every page refetches
+        invalidateQueries.branchSwitch();
+      } else {
+        setSwitchToast('Failed to switch branch');
+      }
+    } finally {
+      setIsSwitching(false);
+    }
+  }, [currentUser?.branchId, isSwitching, switchBranch, branchesData?.branches]);
 
   const getPageInfo = () => {
     const titles: Record<string, { title: string; subtitle: string }> = {
@@ -228,8 +262,57 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
           </Box>
         </Search>
 
-        {/* Branch */}
-        {currentBranch && (
+        {/* Branch Switcher */}
+        {currentBranch && canSwitchBranch && activeBranches.length > 1 ? (
+          <Tooltip title="Switch branch — all pages will update" arrow>
+            <FormControl size="small" sx={{ mr: 1.5, minWidth: 140, display: { xs: "none", sm: "flex" } }}>
+              <Select
+                value={currentUser?.branchId || ''}
+                onChange={(e) => handleBranchSwitch(e.target.value)}
+                disabled={isSwitching}
+                variant="outlined"
+                sx={{
+                  height: 32,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  borderRadius: 2,
+                  borderColor: alpha(theme.palette.primary.main, 0.3),
+                  bgcolor: alpha(theme.palette.primary.main, 0.05),
+                  '& .MuiOutlinedInput-notchedOutline': {
+                    borderColor: alpha(theme.palette.primary.main, 0.3),
+                  },
+                  '&:hover .MuiOutlinedInput-notchedOutline': {
+                    borderColor: alpha(theme.palette.primary.main, 0.5),
+                  },
+                  '& .MuiSelect-icon': {
+                    color: 'primary.main',
+                  },
+                }}
+                startAdornment={
+                  isSwitching 
+                    ? <CircularProgress size={14} sx={{ mr: 0.5 }} />
+                    : <StoreIcon sx={{ fontSize: 16, mr: 0.5, color: 'primary.main' }} />
+                }
+                renderValue={(value) => {
+                  const branch = activeBranches.find((b) => b.id === value);
+                  return branch?.name || 'Branch';
+                }}
+              >
+                {activeBranches.map((branch) => (
+                  <MenuItem key={branch.id} value={branch.id} sx={{ fontSize: 13 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <StoreIcon sx={{ fontSize: 16, color: branch.id === currentUser?.branchId ? 'primary.main' : 'text.secondary' }} />
+                      <span>{branch.name}</span>
+                      {branch.id === currentUser?.branchId && (
+                        <Chip label="Current" size="small" color="primary" sx={{ height: 18, fontSize: 10, ml: 0.5 }} />
+                      )}
+                    </Box>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          </Tooltip>
+        ) : currentBranch ? (
           <Chip
             icon={<LocationIcon sx={{ fontSize: 16 }} />}
             label={currentBranch.name}
@@ -245,7 +328,16 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
               },
             }}
           />
-        )}
+        ) : null}
+
+        {/* Branch switch toast */}
+        <Snackbar
+          open={!!switchToast}
+          autoHideDuration={3000}
+          onClose={() => setSwitchToast(null)}
+          message={switchToast}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        />
 
         {/* Date */}
         <Chip

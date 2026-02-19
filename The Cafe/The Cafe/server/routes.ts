@@ -603,14 +603,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Remove password from response
       const { password, ...userWithoutPassword } = user;
+      // Return user with potentially overridden branchId from session
       res.json({ 
-        user: userWithoutPassword 
+        user: { ...userWithoutPassword, branchId: req.user.branchId || userWithoutPassword.branchId }
       });
     } catch (error) {
       console.error('Error in /api/auth/me:', error);
       res.status(500).json({ 
         message: error instanceof Error ? error.message : "Internal server error" 
       });
+    }
+  });
+
+  // Switch branch (admin/manager only) — updates session branchId so all
+  // existing GET endpoints automatically serve data for the new branch.
+  app.put("/api/auth/switch-branch", requireAuth, requireRole(["manager", "admin"]), async (req: Request, res: Response) => {
+    try {
+      const { branchId } = req.body;
+      if (!branchId || typeof branchId !== "string") {
+        return res.status(400).json({ message: "branchId is required" });
+      }
+
+      // Verify the branch exists
+      const branch = await storage.getBranch(branchId);
+      if (!branch) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
+
+      // Update session user's branchId
+      req.session.user = { ...req.session.user!, branchId };
+      req.user = { ...req.user!, branchId };
+
+      return new Promise<void>((resolve) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error("❌ Failed to save session after branch switch:", err);
+            res.status(500).json({ message: "Failed to switch branch" });
+          } else {
+            console.log(`✅ Branch switched to ${branch.name} (${branchId}) for user ${req.user!.username}`);
+            res.json({ 
+              message: "Branch switched successfully",
+              branchId,
+              branchName: branch.name,
+            });
+          }
+          resolve();
+        });
+      });
+    } catch (error) {
+      console.error("Error switching branch:", error);
+      res.status(500).json({ message: "Failed to switch branch" });
     }
   });
 

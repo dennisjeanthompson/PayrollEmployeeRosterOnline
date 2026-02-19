@@ -129,7 +129,7 @@ export default function MuiPayroll() {
 
   // Fetch current payroll period with real-time updates
   const { data: currentPeriod, refetch: refetchPeriod } = useQuery({
-    queryKey: ["current-payroll-period"],
+    queryKey: ["current-payroll-period", currentUser?.branchId],
     queryFn: async () => {
       const response = await apiRequest("GET", `/api/payroll/periods/current?branchId=${currentUser?.branchId}`);
       return response.json();
