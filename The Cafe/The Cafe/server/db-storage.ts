@@ -248,6 +248,11 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(users).where(eq(users.branchId, branchId));
   }
 
+  // Get all users across all branches (for admin/manager overview)
+  async getAllUsers(): Promise<User[]> {
+    return db.select().from(users);
+  }
+
   // Convenience: return only employees (role === 'employee') for a branch
   async getEmployees(branchId: string): Promise<User[]> {
     // Managers should also be visible in the roster for scheduling

@@ -186,9 +186,9 @@ export default function MuiShiftTrading() {
     },
   });
 
-  const trades: ShiftTrade[] = tradesResponse?.trades || [];
-  const myShifts = myShiftsResponse?.shifts || [];
-  const employees = employeesResponse?.employees || [];
+  const trades: ShiftTrade[] = Array.isArray(tradesResponse?.trades) ? tradesResponse.trades : (Array.isArray(tradesResponse) ? tradesResponse : []);
+  const myShifts = Array.isArray(myShiftsResponse?.shifts) ? myShiftsResponse.shifts : (Array.isArray(myShiftsResponse) ? myShiftsResponse : []);
+  const employees = Array.isArray(employeesResponse?.employees) ? employeesResponse.employees : (Array.isArray(employeesResponse) ? employeesResponse : []);
 
   // Filter trades
   const myRequests = trades.filter((t) => t.requesterId === currentUser?.id);
@@ -463,13 +463,6 @@ export default function MuiShiftTrading() {
             <IconButton onClick={() => refetch()}>
               <RefreshIcon />
             </IconButton>
-            <Button
-              variant="contained"
-              startIcon={<AddIcon />}
-              onClick={() => setCreateDialogOpen(true)}
-            >
-              New Trade Request
-            </Button>
             <Button
               variant="contained"
               startIcon={<AddIcon />}
@@ -850,7 +843,7 @@ export default function MuiShiftTrading() {
                   onChange={(e) => setFormData({ ...formData, targetUserId: e.target.value })}
                 >
                   {employees
-                    .filter((emp: any) => emp.id !== currentUser?.id && emp.role === 'employee')
+                    .filter((emp: any) => emp.id !== currentUser?.id && emp.role === 'employee' && (!currentUser?.branchId || emp.branchId === currentUser.branchId))
                     .map((emp: any) => (
                       <MenuItem key={emp.id} value={emp.id}>
                         {emp.firstName} {emp.lastName}

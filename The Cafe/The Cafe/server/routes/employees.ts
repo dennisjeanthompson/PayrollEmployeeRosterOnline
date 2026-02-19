@@ -70,6 +70,27 @@ export function createEmployeeRouter(realTimeManager: RealTimeManager) {
     }
   });
 
+  // Get all employees across all branches (admin/manager only - for branch overview)
+  router.get('/api/employees/all-branches', requireAuth, requireRole(['manager']), async (req, res) => {
+    try {
+      const allUsers = await storage.getAllUsers();
+      const sanitizedEmployees = allUsers.map(emp => ({
+        id: emp.id,
+        firstName: emp.firstName,
+        lastName: emp.lastName,
+        email: emp.email,
+        position: emp.position,
+        branchId: emp.branchId,
+        role: emp.role,
+        isActive: emp.isActive ?? true,
+      }));
+      res.json({ employees: sanitizedEmployees });
+    } catch (error) {
+      console.error('Error fetching all employees:', error);
+      res.status(500).json({ message: 'Failed to fetch employees' });
+    }
+  });
+
 // Get employee stats (must be before /:id route)
 router.get('/api/employees/stats', requireAuth, requireRole(['manager']), async (req, res) => {
   try {

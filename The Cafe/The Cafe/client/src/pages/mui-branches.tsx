@@ -1,6 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { isManager, getCurrentUser, isAdmin } from "@/lib/auth";
+import { isManager, getCurrentUser, isAdmin, isEmployee } from "@/lib/auth";
 import { format, parseISO } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -45,6 +45,11 @@ import {
   ListItemAvatar,
   ListItemText,
   Badge,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Menu,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 
@@ -69,6 +74,12 @@ import {
   ToggleOn as ToggleOnIcon,
   ToggleOff as ToggleOffIcon,
   Warning as WarningIcon,
+  SwapHoriz as SwapHorizIcon,
+  Dashboard as DashboardIcon,
+  Lock as LockIcon,
+  Visibility as VisibilityIcon,
+  FilterList as FilterListIcon,
+  AccountTree as AccountTreeIcon,
 } from "@mui/icons-material";
 
 // Safe date formatting helper
@@ -116,10 +127,25 @@ export default function MuiBranches() {
   const currentUser = getCurrentUser();
   const isAdminRole = isAdmin();
   const isManagerRole = isManager();
+  const isEmployeeRole = isEmployee();
   const canManage = isAdminRole || isManagerRole;
+  const canSwitchBranch = isAdminRole; // Only admins can freely switch between all branches
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Branch switching state - auto-detect from user's branch or last used
+  const getStoredBranch = (): string => {
+    try {
+      const stored = localStorage.getItem('selectedBranchId');
+      if (stored && canSwitchBranch) return stored;
+    } catch {}
+    return currentUser?.branchId || '';
+  };
+
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(getStoredBranch());
+  const [viewMode, setViewMode] = useState<'single' | 'all'>(
+    canSwitchBranch ? 'all' : 'single'
+  );
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -133,6 +159,15 @@ export default function MuiBranches() {
     isActive: true,
   });
 
+  // Persist selected branch for auto-detection on next visit
+  const handleBranchSwitch = useCallback((branchId: string) => {
+    setSelectedBranchId(branchId);
+    try {
+      localStorage.setItem('selectedBranchId', branchId);
+    } catch {}
+    toast({ title: branchId ? `Switched to branch view` : 'Viewing all branches' });
+  }, [toast]);
+
   // Fetch branches with real-time updates
   const { data: branchesResponse, isLoading, refetch } = useQuery({
     queryKey: ["branches"],
@@ -145,24 +180,64 @@ export default function MuiBranches() {
     refetchIntervalInBackground: true,
   });
 
-  // Fetch employees to show per-branch staff
+  // Fetch employees - use all-branches endpoint for admin/manager, standard for employee
   const { data: employeesResponse } = useQuery({
-    queryKey: ["employees"],
+    queryKey: canManage ? ["employees-all-branches"] : ["employees"],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/api/employees");
+      const endpoint = canManage ? "/api/employees/all-branches" : "/api/employees";
+      const response = await apiRequest("GET", endpoint);
       return response.json();
     },
     refetchInterval: 10000,
   });
 
-  const branches: Branch[] = branchesResponse?.branches || [];
-  const allEmployees: Employee[] = employeesResponse || [];
-  const activeBranches = branches.filter((b) => b.isActive);
-  const totalEmployees = branches.reduce((sum, b) => sum + (b.employeeCount || 0), 0);
+  const branches: Branch[] = Array.isArray(branchesResponse?.branches) ? branchesResponse.branches : (Array.isArray(branchesResponse) ? branchesResponse : []);
+  const allEmployees: Employee[] = Array.isArray(employeesResponse?.employees) ? employeesResponse.employees : (Array.isArray(employeesResponse) ? employeesResponse : []);
+  const activeBranches = branches.filter((b: Branch) => b.isActive);
+
+  // Auto-select user's branch if not set
+  useEffect(() => {
+    if (!selectedBranchId && currentUser?.branchId && branches.length > 0) {
+      setSelectedBranchId(currentUser.branchId);
+    }
+  }, [currentUser?.branchId, branches, selectedBranchId]);
+
+  // Filter branches based on view mode and role
+  const displayedBranches = useMemo(() => {
+    if (viewMode === 'all' && canSwitchBranch) {
+      return branches;
+    }
+    if (selectedBranchId) {
+      return branches.filter((b: Branch) => b.id === selectedBranchId);
+    }
+    // Branch managers see only their own branch
+    if (isManagerRole && !isAdminRole && currentUser?.branchId) {
+      return branches.filter((b: Branch) => b.id === currentUser.branchId);
+    }
+    return branches;
+  }, [branches, viewMode, selectedBranchId, canSwitchBranch, isManagerRole, isAdminRole, currentUser?.branchId]);
+
+  // Calculate stats based on displayed branches
+  const displayedTotalEmployees = displayedBranches.reduce((sum: number, b: Branch) => sum + (b.employeeCount || 0), 0);
+  const displayedActiveBranches = displayedBranches.filter((b: Branch) => b.isActive);
+  const totalEmployees = branches.reduce((sum: number, b: Branch) => sum + (b.employeeCount || 0), 0);
 
   // Get employees for a specific branch
   const getBranchEmployees = (branchId: string) => 
     allEmployees.filter((e: Employee) => e.branchId === branchId && e.isActive);
+
+  // Get the user's current branch name
+  const currentBranchName = useMemo(() => {
+    if (!currentUser?.branchId) return 'Unknown';
+    const branch = branches.find((b: Branch) => b.id === currentUser.branchId);
+    return branch?.name || 'Unknown';
+  }, [currentUser?.branchId, branches]);
+
+  const selectedBranchName = useMemo(() => {
+    if (viewMode === 'all') return 'All Branches';
+    const branch = branches.find((b: Branch) => b.id === selectedBranchId);
+    return branch?.name || 'Select Branch';
+  }, [selectedBranchId, branches, viewMode]);
 
   // Create branch mutation
   const createBranch = useMutation({
@@ -267,11 +342,16 @@ export default function MuiBranches() {
               Branch Management
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Manage your cafe locations and branches
+              {canSwitchBranch 
+                ? "Manage and switch between cafe locations" 
+                : isManagerRole 
+                  ? `Managing: ${currentBranchName}`
+                  : `Your branch: ${currentBranchName}`
+              }
             </Typography>
           </Box>
 
-          <Stack direction="row" spacing={2}>
+          <Stack direction="row" spacing={2} alignItems="center">
             <IconButton onClick={() => refetch()}>
               <RefreshIcon />
             </IconButton>
@@ -286,6 +366,132 @@ export default function MuiBranches() {
             )}
           </Stack>
         </Box>
+
+        {/* Branch Switcher - Only for roles that can switch */}
+        {canManage && branches.length > 1 && (
+          <Paper
+            sx={{
+              p: 2.5,
+              mb: 4,
+              borderRadius: 3,
+              background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.08)} 0%, ${alpha(theme.palette.primary.main, 0.02)} 100%)`,
+              border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+            }}
+          >
+            <Stack direction={{ xs: 'column', sm: 'row' }} alignItems={{ xs: 'stretch', sm: 'center' }} spacing={2}>
+              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ flex: 1 }}>
+                <Avatar sx={{ bgcolor: alpha(theme.palette.primary.main, 0.15), color: 'primary.main' }}>
+                  <SwapHorizIcon />
+                </Avatar>
+                <Box>
+                  <Typography variant="subtitle2" fontWeight={600}>
+                    Branch View
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {canSwitchBranch 
+                      ? "Switch between branches or view all at once" 
+                      : "You are viewing your assigned branch"}
+                  </Typography>
+                </Box>
+              </Stack>
+
+              <Stack direction="row" spacing={1.5} alignItems="center">
+                {/* All Branches toggle (admin only) */}
+                {canSwitchBranch && (
+                  <Button
+                    variant={viewMode === 'all' ? 'contained' : 'outlined'}
+                    size="small"
+                    startIcon={<DashboardIcon />}
+                    onClick={() => {
+                      setViewMode(viewMode === 'all' ? 'single' : 'all');
+                      if (viewMode === 'single') {
+                        toast({ title: 'Viewing all branches' });
+                      }
+                    }}
+                    sx={{ 
+                      borderRadius: 2,
+                      textTransform: 'none',
+                      fontWeight: 600,
+                    }}
+                  >
+                    All Branches
+                  </Button>
+                )}
+
+                {/* Branch selector dropdown */}
+                {(canSwitchBranch || (isManagerRole && !isAdminRole && branches.length > 0)) && (
+                  <FormControl size="small" sx={{ minWidth: 200 }}>
+                    <InputLabel>
+                      <Stack direction="row" alignItems="center" spacing={0.5}>
+                        <StoreIcon sx={{ fontSize: 16 }} />
+                        <span>Select Branch</span>
+                      </Stack>
+                    </InputLabel>
+                    <Select
+                      value={selectedBranchId}
+                      label="Select Branch"
+                      onChange={(e) => {
+                        const branchId = e.target.value as string;
+                        setViewMode('single');
+                        handleBranchSwitch(branchId);
+                      }}
+                      disabled={!canSwitchBranch && isManagerRole && !isAdminRole}
+                      sx={{
+                        borderRadius: 2,
+                        '& .MuiSelect-select': { py: 1 },
+                      }}
+                      startAdornment={
+                        !canSwitchBranch && isManagerRole ? (
+                          <LockIcon sx={{ fontSize: 16, mr: 0.5, color: 'text.disabled' }} />
+                        ) : null
+                      }
+                    >
+                      {activeBranches.map((branch: Branch) => (
+                        <MenuItem key={branch.id} value={branch.id}>
+                          <Stack direction="row" alignItems="center" spacing={1}>
+                            <StoreIcon sx={{ fontSize: 16, color: 'primary.main' }} />
+                            <span>{branch.name}</span>
+                            <Chip 
+                              label={`${branch.employeeCount || 0} staff`} 
+                              size="small" 
+                              variant="outlined" 
+                              sx={{ height: 20, fontSize: 10 }} 
+                            />
+                            {branch.id === currentUser?.branchId && (
+                              <Chip label="Your branch" size="small" color="primary" sx={{ height: 20, fontSize: 10 }} />
+                            )}
+                          </Stack>
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                )}
+
+                {/* Show lock indicator for branch-specific managers */}
+                {isManagerRole && !isAdminRole && (
+                  <Tooltip title="Branch managers can only view their assigned branch. Contact an admin to change branches.">
+                    <Chip
+                      icon={<LockIcon sx={{ fontSize: 14 }} />}
+                      label={currentBranchName}
+                      size="small"
+                      color="default"
+                      variant="outlined"
+                      sx={{ borderRadius: 2 }}
+                    />
+                  </Tooltip>
+                )}
+              </Stack>
+            </Stack>
+          </Paper>
+        )}
+
+        {/* Employee role info banner */}
+        {isEmployeeRole && (
+          <Alert severity="info" sx={{ mb: 3, borderRadius: 2 }}>
+            <AlertTitle>Your Branch: {currentBranchName}</AlertTitle>
+            You are viewing information for your assigned branch. Contact your manager for any branch-related questions.
+          </Alert>
+        )}
 
         {isLoading && <LinearProgress sx={{ mb: 3, borderRadius: 1 }} />}
 
@@ -305,10 +511,15 @@ export default function MuiBranches() {
                 </Avatar>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Total Branches
+                    {viewMode === 'all' ? 'Total Branches' : 'Viewing'}
                   </Typography>
                   <Typography variant="h4" fontWeight={700}>
-                    {branches.length}
+                    {displayedBranches.length}
+                    {viewMode === 'single' && branches.length > 1 && (
+                      <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
+                        of {branches.length}
+                      </Typography>
+                    )}
                   </Typography>
                 </Box>
               </Stack>
@@ -332,7 +543,7 @@ export default function MuiBranches() {
                     Active
                   </Typography>
                   <Typography variant="h4" fontWeight={700}>
-                    {activeBranches.length}
+                    {displayedActiveBranches.length}
                   </Typography>
                 </Box>
               </Stack>
@@ -353,10 +564,10 @@ export default function MuiBranches() {
                 </Avatar>
                 <Box>
                   <Typography variant="body2" color="text.secondary">
-                    Total Staff
+                    {viewMode === 'all' ? 'Total Staff' : 'Branch Staff'}
                   </Typography>
                   <Typography variant="h4" fontWeight={700}>
-                    {totalEmployees}
+                    {displayedTotalEmployees}
                   </Typography>
                 </Box>
               </Stack>
@@ -380,7 +591,7 @@ export default function MuiBranches() {
                     Avg Staff/Branch
                   </Typography>
                   <Typography variant="h4" fontWeight={700}>
-                    {branches.length > 0 ? Math.round(totalEmployees / branches.length) : 0}
+                    {displayedBranches.length > 0 ? Math.round(displayedTotalEmployees / displayedBranches.length) : 0}
                   </Typography>
                 </Box>
               </Stack>
@@ -388,9 +599,109 @@ export default function MuiBranches() {
           </Grid>
         </Grid>
 
+        {/* Company Overview (visible in "All Branches" mode) */}
+        {viewMode === 'all' && canSwitchBranch && displayedBranches.length > 1 && (
+          <Paper sx={{ p: 3, mb: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.info.main, 0.2)}` }}>
+            <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+              <Avatar sx={{ bgcolor: alpha(theme.palette.info.main, 0.15), color: 'info.main' }}>
+                <AccountTreeIcon />
+              </Avatar>
+              <Box>
+                <Typography variant="h6" fontWeight={600}>Company Overview</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Cross-branch summary across all {branches.length} locations
+                </Typography>
+              </Box>
+            </Stack>
+            <Divider sx={{ mb: 2 }} />
+            <TableContainer>
+              <Table size="small">
+                <TableHead>
+                  <TableRow>
+                    <TableCell sx={{ fontWeight: 600 }}>Branch</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 600 }}>Status</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 600 }}>Staff</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 600 }}>Managers</TableCell>
+                    <TableCell align="center" sx={{ fontWeight: 600 }}>Employees</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Since</TableCell>
+                    {canSwitchBranch && <TableCell align="center" sx={{ fontWeight: 600 }}>Actions</TableCell>}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {branches.map((branch: Branch) => {
+                    const branchEmployees = getBranchEmployees(branch.id);
+                    const managers = branchEmployees.filter((e: Employee) => e.role === 'manager' || e.role === 'admin');
+                    const regularEmployees = branchEmployees.filter((e: Employee) => e.role === 'employee');
+                    return (
+                      <TableRow key={branch.id} hover sx={{ cursor: canSwitchBranch ? 'pointer' : 'default' }}
+                        onClick={() => { if (canSwitchBranch) { setViewMode('single'); handleBranchSwitch(branch.id); } }}
+                      >
+                        <TableCell>
+                          <Stack direction="row" alignItems="center" spacing={1.5}>
+                            <Avatar sx={{ width: 32, height: 32, bgcolor: alpha(theme.palette.primary.main, 0.15), color: 'primary.main' }}>
+                              <StoreIcon sx={{ fontSize: 18 }} />
+                            </Avatar>
+                            <Box>
+                              <Typography variant="body2" fontWeight={600}>{branch.name}</Typography>
+                              <Typography variant="caption" color="text.secondary">{branch.address}</Typography>
+                            </Box>
+                            {branch.id === currentUser?.branchId && (
+                              <Chip label="You" size="small" color="primary" sx={{ height: 18, fontSize: 10 }} />
+                            )}
+                          </Stack>
+                        </TableCell>
+                        <TableCell align="center">
+                          <Chip
+                            label={branch.isActive ? "Active" : "Inactive"}
+                            size="small"
+                            color={branch.isActive ? "success" : "default"}
+                            sx={{ height: 22 }}
+                          />
+                        </TableCell>
+                        <TableCell align="center">
+                          <Typography fontWeight={600}>{branch.employeeCount || 0}</Typography>
+                        </TableCell>
+                        <TableCell align="center">{managers.length}</TableCell>
+                        <TableCell align="center">{regularEmployees.length}</TableCell>
+                        <TableCell>
+                          <Typography variant="caption">{safeFormatDate(branch.createdAt, "MMM yyyy")}</Typography>
+                        </TableCell>
+                        {canSwitchBranch && (
+                          <TableCell align="center">
+                            <Tooltip title={`Switch to ${branch.name}`}>
+                              <IconButton size="small" onClick={(e) => { e.stopPropagation(); setViewMode('single'); handleBranchSwitch(branch.id); }}>
+                                <VisibilityIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
+                          </TableCell>
+                        )}
+                      </TableRow>
+                    );
+                  })}
+                  {/* Totals row */}
+                  <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.03) }}>
+                    <TableCell sx={{ fontWeight: 700 }}>Total ({branches.length} branches)</TableCell>
+                    <TableCell align="center">
+                      <Chip label={`${activeBranches.length} active`} size="small" color="success" sx={{ height: 22 }} />
+                    </TableCell>
+                    <TableCell align="center"><Typography fontWeight={700}>{totalEmployees}</Typography></TableCell>
+                    <TableCell align="center">
+                      {allEmployees.filter((e: Employee) => (e.role === 'manager' || e.role === 'admin') && e.isActive).length}
+                    </TableCell>
+                    <TableCell align="center">
+                      {allEmployees.filter((e: Employee) => e.role === 'employee' && e.isActive).length}
+                    </TableCell>
+                    <TableCell colSpan={canSwitchBranch ? 2 : 1} />
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </TableContainer>
+          </Paper>
+        )}
+
         {/* Branches Grid */}
         <Grid container spacing={3}>
-          {branches.map((branch) => {
+          {displayedBranches.map((branch: Branch) => {
             const branchEmployees = getBranchEmployees(branch.id);
             const isExpanded = expandedBranch === branch.id;
 
@@ -549,19 +860,26 @@ export default function MuiBranches() {
             );
           })}
 
-          {branches.length === 0 && !isLoading && (
+          {displayedBranches.length === 0 && !isLoading && (
             <Grid size={{ xs: 12 }}>
               <Box sx={{ py: 8, textAlign: "center" }}>
                 <StoreIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
                 <Typography variant="h6" color="text.secondary">
-                  No branches yet
+                  {branches.length === 0 ? 'No branches yet' : 'No branches match your filter'}
                 </Typography>
                 <Typography variant="body2" color="text.disabled" sx={{ mb: 2 }}>
-                  Create your first branch to get started
+                  {branches.length === 0 
+                    ? 'Create your first branch to get started' 
+                    : 'Try switching to "All Branches" view'}
                 </Typography>
-                {canManage && (
+                {canManage && branches.length === 0 && (
                   <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateDialogOpen(true)}>
                     Add Branch
+                  </Button>
+                )}
+                {branches.length > 0 && canSwitchBranch && (
+                  <Button variant="outlined" startIcon={<DashboardIcon />} onClick={() => setViewMode('all')}>
+                    View All Branches
                   </Button>
                 )}
               </Box>
