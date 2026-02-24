@@ -1,7 +1,7 @@
 import { db } from './db';
-import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, auditLogs, timeOffPolicy } from '@shared/schema';
+import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, auditLogs, timeOffPolicy, adjustmentLogs } from '@shared/schema';
 import type { IStorage } from './storage';
-import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftTrade, InsertShiftTrade, PayrollPeriod, InsertPayrollPeriod, PayrollEntry, InsertPayrollEntry, Approval, InsertApproval, TimeOffRequest, InsertTimeOffRequest, Notification, InsertNotification, DeductionSettings, InsertDeductionSettings, DeductionRate, InsertDeductionRate, Holiday, InsertHoliday, ArchivedPayrollPeriod, InsertArchivedPayrollPeriod, TimeOffPolicy, InsertTimeOffPolicy, AuditLog, InsertAuditLog } from '@shared/schema';
+import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftTrade, InsertShiftTrade, PayrollPeriod, InsertPayrollPeriod, PayrollEntry, InsertPayrollEntry, Approval, InsertApproval, TimeOffRequest, InsertTimeOffRequest, Notification, InsertNotification, DeductionSettings, InsertDeductionSettings, DeductionRate, InsertDeductionRate, Holiday, InsertHoliday, ArchivedPayrollPeriod, InsertArchivedPayrollPeriod, TimeOffPolicy, InsertTimeOffPolicy, AuditLog, InsertAuditLog, AdjustmentLog, InsertAdjustmentLog } from '@shared/schema';
 import { eq, and, gte, lte, gt, lt, ne, desc, or, sql, isNull } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcrypt';
@@ -1189,6 +1189,73 @@ export class DatabaseStorage implements IStorage {
     );
     
     return result.map(r => r.entry);
+  }
+
+  // Adjustment Logs (Manual OT/Lateness/Exception Logging)
+  async createAdjustmentLog(log: InsertAdjustmentLog): Promise<AdjustmentLog> {
+    const id = randomUUID();
+    const adjustmentLog: AdjustmentLog = {
+      id,
+      employeeId: log.employeeId,
+      branchId: log.branchId,
+      loggedBy: log.loggedBy,
+      date: new Date(log.date),
+      type: log.type,
+      value: log.value,
+      remarks: log.remarks ?? null,
+      status: log.status ?? 'pending',
+      verifiedByEmployee: log.verifiedByEmployee ?? false,
+      verifiedAt: log.verifiedAt ?? null,
+      approvedBy: log.approvedBy ?? null,
+      approvedAt: log.approvedAt ?? null,
+      payrollPeriodId: log.payrollPeriodId ?? null,
+      calculatedAmount: log.calculatedAmount ?? null,
+      createdAt: new Date(),
+    };
+    await db.insert(adjustmentLogs).values(adjustmentLog);
+    return adjustmentLog;
+  }
+
+  async getAdjustmentLog(id: string): Promise<AdjustmentLog | undefined> {
+    const result = await db.select().from(adjustmentLogs).where(eq(adjustmentLogs.id, id)).limit(1);
+    return result[0];
+  }
+
+  async getAdjustmentLogsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<AdjustmentLog[]> {
+    const conditions = [eq(adjustmentLogs.employeeId, employeeId)];
+    if (startDate) conditions.push(gte(adjustmentLogs.date, startDate));
+    if (endDate) conditions.push(lte(adjustmentLogs.date, endDate));
+    return db.select().from(adjustmentLogs).where(and(...conditions)).orderBy(desc(adjustmentLogs.date));
+  }
+
+  async getAdjustmentLogsByBranch(branchId: string, startDate?: Date, endDate?: Date): Promise<AdjustmentLog[]> {
+    const conditions = [eq(adjustmentLogs.branchId, branchId)];
+    if (startDate) conditions.push(gte(adjustmentLogs.date, startDate));
+    if (endDate) conditions.push(lte(adjustmentLogs.date, endDate));
+    return db.select().from(adjustmentLogs).where(and(...conditions)).orderBy(desc(adjustmentLogs.date));
+  }
+
+  async getPendingAdjustmentLogs(branchId: string): Promise<AdjustmentLog[]> {
+    return db.select().from(adjustmentLogs).where(
+      and(
+        eq(adjustmentLogs.branchId, branchId),
+        or(
+          eq(adjustmentLogs.status, 'pending'),
+          eq(adjustmentLogs.status, 'employee_verified')
+        )
+      )
+    ).orderBy(desc(adjustmentLogs.date));
+  }
+
+  async updateAdjustmentLog(id: string, log: Partial<InsertAdjustmentLog>): Promise<AdjustmentLog | undefined> {
+    await db.update(adjustmentLogs).set(log).where(eq(adjustmentLogs.id, id));
+    const result = await db.select().from(adjustmentLogs).where(eq(adjustmentLogs.id, id)).limit(1);
+    return result[0];
+  }
+
+  async deleteAdjustmentLog(id: string): Promise<boolean> {
+    await db.delete(adjustmentLogs).where(eq(adjustmentLogs.id, id));
+    return true;
   }
 }
 

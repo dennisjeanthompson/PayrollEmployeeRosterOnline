@@ -1,5 +1,5 @@
 /**
- * Digital Payslip Types - Philippine Payroll System (2025)
+ * Digital Payslip Types - Philippine Payroll System (2026)
  * Complete type definitions for payslip generation and display
  */
 
@@ -200,7 +200,7 @@ export interface VerifyPayslipResponse {
   error?: string;
 }
 
-// Holiday Multiplier Constants (PH 2025)
+// Holiday Multiplier Constants (PH 2026)
 export const HOLIDAY_MULTIPLIERS = {
   regular: {
     worked: 200,        // 200% of daily rate
@@ -341,7 +341,7 @@ export function getHolidayMultiplierDescription(type: HolidayType, workType: Hol
 
 // Sample payslip data for testing
 export const SAMPLE_PAYSLIP_DATA: PayslipData = {
-  payslip_id: "PS-2025-000123",
+  payslip_id: "PS-2026-000123",
   company: {
     name: "The Café Inc.",
     address: "123 Coffee Lane, Makati City, Metro Manila 1200",
@@ -360,9 +360,9 @@ export const SAMPLE_PAYSLIP_DATA: PayslipData = {
     pagibig: "0000-1234-5678"
   },
   pay_period: {
-    start: "2025-11-16",
-    end: "2025-11-30",
-    payment_date: "2025-12-03",
+    start: "2026-01-16",
+    end: "2026-01-31",
+    payment_date: "2026-02-03",
     frequency: "semi-monthly"
   },
   earnings: [
@@ -412,7 +412,7 @@ export const SAMPLE_PAYSLIP_DATA: PayslipData = {
     type: "Bank Transfer",
     bank: "BPI",
     account_last4: "4321",
-    transaction_id: "TRX-2025120398765"
+    transaction_id: "TRX-2026020398765"
   },
   verification_code: "7f3a9c",
   notes: "Includes holiday pay for Nov 30 (Bonifacio Day - Regular Holiday). SSS Loan balance after this payment: ₱4,500.00",

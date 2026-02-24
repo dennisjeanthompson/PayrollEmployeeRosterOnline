@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Branch, type InsertBranch, type Shift, type InsertShift, type ShiftTrade, type InsertShiftTrade, type PayrollPeriod, type InsertPayrollPeriod, type PayrollEntry, type InsertPayrollEntry, type Approval, type InsertApproval, type TimeOffRequest, type InsertTimeOffRequest, type Notification, type InsertNotification, type DeductionSettings, type InsertDeductionSettings, type DeductionRate, type InsertDeductionRate, type AuditLog, type InsertAuditLog, type Holiday, type InsertHoliday } from "@shared/schema";
+import { type User, type InsertUser, type Branch, type InsertBranch, type Shift, type InsertShift, type ShiftTrade, type InsertShiftTrade, type PayrollPeriod, type InsertPayrollPeriod, type PayrollEntry, type InsertPayrollEntry, type Approval, type InsertApproval, type TimeOffRequest, type InsertTimeOffRequest, type Notification, type InsertNotification, type DeductionSettings, type InsertDeductionSettings, type DeductionRate, type InsertDeductionRate, type AuditLog, type InsertAuditLog, type Holiday, type InsertHoliday, type AdjustmentLog, type InsertAdjustmentLog } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 
@@ -110,6 +110,15 @@ export interface IStorage {
   getHolidayByDate(date: Date): Promise<Holiday | undefined>;
   updateHoliday(id: string, holiday: Partial<InsertHoliday>): Promise<Holiday | undefined>;
   deleteHoliday(id: string): Promise<boolean>;
+
+  // Adjustment Logs (Manual OT/Lateness/Exception Logging)
+  createAdjustmentLog(log: InsertAdjustmentLog): Promise<AdjustmentLog>;
+  getAdjustmentLog(id: string): Promise<AdjustmentLog | undefined>;
+  getAdjustmentLogsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<AdjustmentLog[]>;
+  getAdjustmentLogsByBranch(branchId: string, startDate?: Date, endDate?: Date): Promise<AdjustmentLog[]>;
+  getPendingAdjustmentLogs(branchId: string): Promise<AdjustmentLog[]>;
+  updateAdjustmentLog(id: string, log: Partial<InsertAdjustmentLog>): Promise<AdjustmentLog | undefined>;
+  deleteAdjustmentLog(id: string): Promise<boolean>;
 }
 
 export class MemStorage implements IStorage {
@@ -126,6 +135,7 @@ export class MemStorage implements IStorage {
   private holidays: Map<string, Holiday> = new Map();
   private deductionRates: Map<string, DeductionRate> = new Map();
   private auditLogs: Map<string, AuditLog> = new Map();
+  private adjustmentLogs: Map<string, AdjustmentLog> = new Map();
 
 
 
@@ -880,6 +890,71 @@ export class MemStorage implements IStorage {
 
   async deleteHoliday(id: string): Promise<boolean> {
     return this.holidays.delete(id);
+  }
+
+  // Adjustment Logs (Manual OT/Lateness/Exception Logging)
+  async createAdjustmentLog(log: InsertAdjustmentLog): Promise<AdjustmentLog> {
+    const id = randomUUID();
+    const adjustmentLog: AdjustmentLog = {
+      id,
+      employeeId: log.employeeId,
+      branchId: log.branchId,
+      loggedBy: log.loggedBy,
+      date: new Date(log.date),
+      type: log.type,
+      value: log.value,
+      remarks: log.remarks ?? null,
+      status: log.status ?? "pending",
+      verifiedByEmployee: log.verifiedByEmployee ?? false,
+      verifiedAt: log.verifiedAt ?? null,
+      approvedBy: log.approvedBy ?? null,
+      approvedAt: log.approvedAt ?? null,
+      payrollPeriodId: log.payrollPeriodId ?? null,
+      calculatedAmount: log.calculatedAmount ?? null,
+      createdAt: new Date(),
+    };
+    this.adjustmentLogs.set(id, adjustmentLog);
+    return adjustmentLog;
+  }
+
+  async getAdjustmentLog(id: string): Promise<AdjustmentLog | undefined> {
+    return this.adjustmentLogs.get(id);
+  }
+
+  async getAdjustmentLogsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<AdjustmentLog[]> {
+    return Array.from(this.adjustmentLogs.values()).filter(log => {
+      if (log.employeeId !== employeeId) return false;
+      if (startDate && new Date(log.date) < startDate) return false;
+      if (endDate && new Date(log.date) > endDate) return false;
+      return true;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  async getAdjustmentLogsByBranch(branchId: string, startDate?: Date, endDate?: Date): Promise<AdjustmentLog[]> {
+    return Array.from(this.adjustmentLogs.values()).filter(log => {
+      if (log.branchId !== branchId) return false;
+      if (startDate && new Date(log.date) < startDate) return false;
+      if (endDate && new Date(log.date) > endDate) return false;
+      return true;
+    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  async getPendingAdjustmentLogs(branchId: string): Promise<AdjustmentLog[]> {
+    return Array.from(this.adjustmentLogs.values()).filter(log =>
+      log.branchId === branchId && (log.status === 'pending' || log.status === 'employee_verified')
+    ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }
+
+  async updateAdjustmentLog(id: string, log: Partial<InsertAdjustmentLog>): Promise<AdjustmentLog | undefined> {
+    const existing = this.adjustmentLogs.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...log } as AdjustmentLog;
+    this.adjustmentLogs.set(id, updated);
+    return updated;
+  }
+
+  async deleteAdjustmentLog(id: string): Promise<boolean> {
+    return this.adjustmentLogs.delete(id);
   }
 }
 

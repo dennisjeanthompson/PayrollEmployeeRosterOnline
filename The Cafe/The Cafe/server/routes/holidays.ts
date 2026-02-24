@@ -265,4 +265,67 @@ router.post('/seed-2025', requireAuth, requireRole(['admin']), async (req: Reque
   }
 });
 
+// POST /api/holidays/seed-2026 - Seed 2026 Philippine holidays (admin only)
+router.post('/seed-2026', requireAuth, requireRole(['admin']), async (req: Request, res: Response) => {
+  try {
+    const existing2026 = await storage.getHolidaysByYear(2026);
+
+    if (existing2026.length > 0) {
+      return res.status(400).json({ 
+        message: '2026 holidays already exist. Delete them first to re-seed.',
+        count: existing2026.length 
+      });
+    }
+
+    // 2026 Philippine Holidays
+    const holidays2026 = [
+      // Regular Holidays
+      { name: "New Year's Day", date: '2026-01-01', type: 'regular', isRecurring: true },
+      { name: 'Araw ng Kagitingan', date: '2026-04-09', type: 'regular', isRecurring: true },
+      { name: 'Maundy Thursday', date: '2026-04-02', type: 'regular', isRecurring: false },
+      { name: 'Good Friday', date: '2026-04-03', type: 'regular', isRecurring: false },
+      { name: "Eid'l Fitr (TBD)", date: '2026-03-20', type: 'regular', isRecurring: false, notes: 'Date subject to NCMF announcement' },
+      { name: 'Labor Day', date: '2026-05-01', type: 'regular', isRecurring: true },
+      { name: "Eid'l Adha (TBD)", date: '2026-05-27', type: 'regular', isRecurring: false, notes: 'Date subject to NCMF announcement' },
+      { name: 'Independence Day', date: '2026-06-12', type: 'regular', isRecurring: true },
+      { name: 'National Heroes Day', date: '2026-08-31', type: 'regular', isRecurring: false },
+      { name: 'Bonifacio Day', date: '2026-11-30', type: 'regular', isRecurring: true },
+      { name: 'Christmas Day', date: '2026-12-25', type: 'regular', isRecurring: true },
+      { name: 'Rizal Day', date: '2026-12-30', type: 'regular', isRecurring: true },
+      // Special Non-Working Days
+      { name: 'Chinese New Year', date: '2026-02-17', type: 'special_non_working', isRecurring: false },
+      { name: 'EDSA Revolution Anniversary', date: '2026-02-25', type: 'special_non_working', isRecurring: true },
+      { name: 'Black Saturday', date: '2026-04-04', type: 'special_non_working', isRecurring: false },
+      { name: 'Ninoy Aquino Day', date: '2026-08-21', type: 'special_non_working', isRecurring: true },
+      { name: "All Saints' Day", date: '2026-11-01', type: 'special_non_working', isRecurring: true },
+      { name: "All Souls' Day", date: '2026-11-02', type: 'special_non_working', isRecurring: true },
+      { name: 'Feast of Immaculate Conception', date: '2026-12-08', type: 'special_non_working', isRecurring: true },
+      { name: 'Christmas Eve', date: '2026-12-24', type: 'special_non_working', isRecurring: true },
+      { name: "New Year's Eve", date: '2026-12-31', type: 'special_non_working', isRecurring: true },
+    ];
+
+    let createdCount = 0;
+    for (const holiday of holidays2026) {
+      await storage.createHoliday({
+        name: holiday.name,
+        date: new Date(holiday.date),
+        type: holiday.type,
+        year: 2026,
+        isRecurring: holiday.isRecurring,
+        workAllowed: true,
+        notes: (holiday as any).notes || null,
+      });
+      createdCount++;
+    }
+
+    res.json({ 
+      message: `Successfully seeded ${createdCount} holidays for 2026`,
+      count: createdCount 
+    });
+  } catch (error) {
+    console.error('Error seeding 2026 holidays:', error);
+    res.status(500).json({ message: 'Failed to seed 2026 holidays' });
+  }
+});
+
 export default router;

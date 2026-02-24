@@ -183,6 +183,24 @@ export default function MuiHolidayCalendar() {
     },
   });
 
+  // Seed 2026 holidays
+  const seed2026Mutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/holidays/seed-2026");
+      return response.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/holidays"] });
+      toast({
+        title: "Success",
+        description: data.message || "2026 holidays seeded successfully!",
+      });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const resetForm = () => {
     setFormData({
       name: "",
@@ -334,6 +352,21 @@ export default function MuiHolidayCalendar() {
             sx={{ borderRadius: 3, textTransform: "none", fontWeight: 600 }}
           >
             Seed 2025 Holidays
+          </Button>
+
+          <Button
+            variant="outlined"
+            color="success"
+            startIcon={seed2026Mutation.isPending ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
+            onClick={() => {
+              if (confirm("Seed official 2026 Philippine holidays?")) {
+                seed2026Mutation.mutate();
+              }
+            }}
+            disabled={seed2026Mutation.isPending}
+            sx={{ borderRadius: 3, textTransform: "none", fontWeight: 600 }}
+          >
+            Seed 2026 Holidays
           </Button>
 
           <Button

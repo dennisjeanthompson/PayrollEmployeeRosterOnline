@@ -33,6 +33,10 @@ import {
   Avatar,
   LinearProgress,
   Grid,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -51,6 +55,10 @@ import {
   Speed,
   Groups,
   Description as DescriptionIcon,
+  NoteAdd,
+  Schedule,
+  Warning,
+  Cancel,
 } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -126,6 +134,14 @@ export default function MuiPayrollManagement() {
   // Digital payslip viewer state
   const [payslipViewerOpen, setPayslipViewerOpen] = useState(false);
   const [selectedEntryForPayslip, setSelectedEntryForPayslip] = useState<PayrollEntry | null>(null);
+
+  // Adjustment log (Exception Log) state
+  const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
+  const [adjEmployeeId, setAdjEmployeeId] = useState("");
+  const [adjDate, setAdjDate] = useState<Date | null>(null);
+  const [adjType, setAdjType] = useState("overtime");
+  const [adjValue, setAdjValue] = useState("");
+  const [adjRemarks, setAdjRemarks] = useState("");
 
   // Enable real-time updates for payroll management
   useRealtime({
@@ -245,6 +261,106 @@ export default function MuiPayrollManagement() {
       queryClient.invalidateQueries({ queryKey: ["payroll-entries-branch"] });
     },
   });
+
+  // Adjustment Logs (Exception Logs) queries & mutations
+  const { data: adjustmentLogsData, isLoading: adjLogsLoading } = useQuery({
+    queryKey: ["adjustment-logs-branch"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/adjustment-logs/branch");
+      return response.json();
+    },
+    refetchOnWindowFocus: true,
+  });
+
+  // Fetch employees for the dropdown
+  const { data: employeesData } = useQuery({
+    queryKey: ["branch-employees"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/payroll/entries/branch");
+      return response.json();
+    },
+  });
+  
+  // Get unique employees from entries
+  const branchEmployees = useMemo(() => {
+    const entries = employeesData?.entries || [];
+    const empMap = new Map<string, { id: string; firstName: string; lastName: string; position: string }>();
+    entries.forEach((e: any) => {
+      if (e.employee && !empMap.has(e.employee.id)) {
+        empMap.set(e.employee.id, e.employee);
+      }
+    });
+    return Array.from(empMap.values());
+  }, [employeesData]);
+
+  const createAdjustmentMutation = useMutation({
+    mutationFn: async (data: { employeeId: string; date: string; type: string; value: string; remarks: string }) => {
+      const response = await apiRequest("POST", "/api/adjustment-logs", data);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "✓ Exception Logged", description: "Employee will be notified to verify" });
+      queryClient.invalidateQueries({ queryKey: ["adjustment-logs-branch"] });
+      setIsAdjustmentDialogOpen(false);
+      setAdjEmployeeId("");
+      setAdjDate(null);
+      setAdjType("overtime");
+      setAdjValue("");
+      setAdjRemarks("");
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const approveAdjustmentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("PUT", `/api/adjustment-logs/${id}/approve`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "✓ Adjustment Approved" });
+      queryClient.invalidateQueries({ queryKey: ["adjustment-logs-branch"] });
+    },
+  });
+
+  const rejectAdjustmentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("PUT", `/api/adjustment-logs/${id}/reject`);
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Adjustment Rejected" });
+      queryClient.invalidateQueries({ queryKey: ["adjustment-logs-branch"] });
+    },
+  });
+
+  const handleCreateAdjustment = () => {
+    if (!adjEmployeeId || !adjDate || !adjValue) {
+      toast({ title: "Missing Fields", description: "Employee, date, and value are required", variant: "destructive" });
+      return;
+    }
+    createAdjustmentMutation.mutate({
+      employeeId: adjEmployeeId,
+      date: format(adjDate, "yyyy-MM-dd"),
+      type: adjType,
+      value: adjValue,
+      remarks: adjRemarks,
+    });
+  };
+
+  const adjustmentTypeOptions = [
+    { value: "overtime", label: "Regular OT (125%)", color: "#10b981" },
+    { value: "rest_day_ot", label: "Rest Day OT (169%)", color: "#3b82f6" },
+    { value: "special_holiday_ot", label: "Special Holiday OT (169%)", color: "#f59e0b" },
+    { value: "regular_holiday_ot", label: "Regular Holiday OT (260%)", color: "#ef4444" },
+    { value: "night_diff", label: "Night Differential (+10%)", color: "#8b5cf6" },
+    { value: "late", label: "Tardiness (minutes)", color: "#f97316" },
+    { value: "undertime", label: "Undertime (minutes)", color: "#ec4899" },
+    { value: "absent", label: "Absent (days)", color: "#dc2626" },
+  ];
+
+  const adjLogs = adjustmentLogsData?.logs || [];
 
   const handleCreatePeriod = () => {
     if (!startDate || !endDate) {
@@ -503,6 +619,11 @@ export default function MuiPayrollManagement() {
             iconPosition="start"
             label={`Entries ${entries.length > 0 ? `(${entries.length})` : ""}`}
           />
+          <Tab
+            icon={<NoteAdd sx={{ fontSize: 18 }} />}
+            iconPosition="start"
+            label={`Exception Logs ${adjLogs.length > 0 ? `(${adjLogs.length})` : ""}`}
+          />
         </Tabs>
       </Box>
 
@@ -733,7 +854,7 @@ export default function MuiPayrollManagement() {
             </Card>
           </Grid>
         </Grid>
-      ) : (
+      ) : activeTab === 1 ? (
         /* Entries Tab */
         <Card
           elevation={0}
@@ -856,7 +977,7 @@ export default function MuiPayrollManagement() {
                         </TableCell>
                         <TableCell align="right">
                           <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                            <Tooltip title="View digital payslip (PH — Compliant 2025)">
+                            <Tooltip title="View digital payslip (PH — Compliant 2026)">
                               <IconButton
                                 size="small"
                                 color="info"
@@ -905,7 +1026,178 @@ export default function MuiPayrollManagement() {
             </>
           )}
         </Card>
-      )}
+      ) : activeTab === 2 ? (
+        /* Exception Logs Tab — Manager OT/Lateness Logging */
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: `1px solid ${'rgba(255, 255, 255, 0.02)'}`,
+            overflow: "hidden",
+          }}
+        >
+          <Box
+            sx={{
+              p: 2,
+              bgcolor: alpha(theme.palette.action.hover, 0.3),
+              borderBottom: `1px solid ${'rgba(255, 255, 255, 0.02)'}`,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Box>
+              <Typography variant="subtitle1" fontWeight={600}>
+                Daily Exception Logs
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                OT, tardiness, and other adjustments logged by managers — DOLE compliant
+              </Typography>
+            </Box>
+            <Button
+              variant="contained"
+              startIcon={<NoteAdd />}
+              onClick={() => setIsAdjustmentDialogOpen(true)}
+              sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+            >
+              Log Exception
+            </Button>
+          </Box>
+
+          {adjLogsLoading ? (
+            <Box sx={{ p: 4 }}><LinearProgress /></Box>
+          ) : adjLogs.length === 0 ? (
+            <Box sx={{ p: 6, textAlign: "center" }}>
+              <Schedule sx={{ fontSize: 48, color: "text.disabled", mb: 2 }} />
+              <Typography variant="h6" gutterBottom>No Exception Logs Yet</Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+                Log overtime, tardiness, or other adjustments when they happen.
+                These will be factored into payroll processing.
+              </Typography>
+              <Button
+                variant="contained"
+                startIcon={<NoteAdd />}
+                onClick={() => setIsAdjustmentDialogOpen(true)}
+                sx={{ borderRadius: 2, textTransform: "none" }}
+              >
+                Log First Exception
+              </Button>
+            </Box>
+          ) : (
+            <TableContainer>
+              <Table>
+                <TableHead>
+                  <TableRow sx={{ bgcolor: alpha(theme.palette.action.hover, 0.3) }}>
+                    <TableCell>Employee</TableCell>
+                    <TableCell>Date</TableCell>
+                    <TableCell>Type</TableCell>
+                    <TableCell align="right">Value</TableCell>
+                    <TableCell>Remarks</TableCell>
+                    <TableCell>Status</TableCell>
+                    <TableCell align="right">Amount</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {adjLogs.map((log: any) => {
+                    const typeConfig = adjustmentTypeOptions.find(t => t.value === log.type);
+                    const isDeduction = ['late', 'undertime', 'absent'].includes(log.type);
+                    const valueUnit = log.type === 'late' || log.type === 'undertime' ? 'mins' : log.type === 'absent' ? 'days' : 'hrs';
+                    
+                    return (
+                      <TableRow key={log.id} hover>
+                        <TableCell>
+                          <Typography variant="body2" fontWeight={600}>
+                            {log.employeeName || 'Unknown'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="body2">
+                            {format(new Date(log.date), "MMM d, yyyy")}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={typeConfig?.label || log.type}
+                            size="small"
+                            sx={{
+                              bgcolor: alpha(typeConfig?.color || '#666', 0.1),
+                              color: typeConfig?.color || '#666',
+                              fontWeight: 600,
+                            }}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          <Typography variant="body2" fontWeight={600}>
+                            {log.value} {valueUnit}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Typography variant="caption" color="text.secondary" sx={{ maxWidth: 200, display: "block", overflow: "hidden", textOverflow: "ellipsis" }}>
+                            {log.remarks || '—'}
+                          </Typography>
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            label={log.status?.replace('_', ' ')}
+                            size="small"
+                            color={
+                              log.status === 'approved' ? 'success' :
+                              log.status === 'employee_verified' ? 'info' :
+                              log.status === 'rejected' ? 'error' :
+                              'warning'
+                            }
+                            sx={{ fontWeight: 600, textTransform: "capitalize" }}
+                          />
+                        </TableCell>
+                        <TableCell align="right">
+                          {log.calculatedAmount ? (
+                            <Typography
+                              variant="body2"
+                              fontWeight={600}
+                              color={isDeduction ? "error.main" : "success.main"}
+                            >
+                              {isDeduction ? '-' : '+'}₱{Math.abs(parseFloat(log.calculatedAmount)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                            </Typography>
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">Pending</Typography>
+                          )}
+                        </TableCell>
+                        <TableCell align="right">
+                          <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                            {(log.status === 'pending' || log.status === 'employee_verified') && (
+                              <>
+                                <Tooltip title="Approve">
+                                  <IconButton
+                                    size="small"
+                                    color="success"
+                                    onClick={() => approveAdjustmentMutation.mutate(log.id)}
+                                  >
+                                    <CheckCircle fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Reject">
+                                  <IconButton
+                                    size="small"
+                                    color="error"
+                                    onClick={() => rejectAdjustmentMutation.mutate(log.id)}
+                                  >
+                                    <Cancel fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </>
+                            )}
+                          </Stack>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </Card>
+      ) : null}
 
       {/* Create Period Dialog */}
       <Dialog
@@ -1162,6 +1454,156 @@ export default function MuiPayrollManagement() {
           }}
         />
       )}
+
+      {/* Adjustment Log Dialog */}
+      <Dialog
+        open={isAdjustmentDialogOpen}
+        onClose={() => setIsAdjustmentDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            background: `linear-gradient(135deg, ${alpha(theme.palette.background.paper, 0.98)} 0%, ${theme.palette.background.paper} 100%)`,
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <NoteAdd color="primary" />
+            <Typography variant="h6" fontWeight={700}>
+              Log Exception
+            </Typography>
+          </Stack>
+          <Typography variant="caption" color="text.secondary">
+            Record overtime, tardiness, or other adjustments — DOLE compliant
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2.5} sx={{ mt: 1 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Employee</InputLabel>
+              <Select
+                value={adjEmployeeId}
+                label="Employee"
+                onChange={(e) => setAdjEmployeeId(e.target.value as string)}
+              >
+                {branchEmployees.map((emp: any) => (
+                  <MenuItem key={emp.id} value={emp.id}>
+                    {emp.firstName} {emp.lastName}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <DatePicker
+                label="Date"
+                value={adjDate ? new Date(adjDate) : null}
+                onChange={(val) => setAdjDate(val ? format(val, "yyyy-MM-dd") : "")}
+                slotProps={{ textField: { size: "small", fullWidth: true } }}
+              />
+            </LocalizationProvider>
+
+            <FormControl fullWidth size="small">
+              <InputLabel>Type</InputLabel>
+              <Select
+                value={adjType}
+                label="Type"
+                onChange={(e) => setAdjType(e.target.value as string)}
+              >
+                {adjustmentTypeOptions.map((opt) => (
+                  <MenuItem key={opt.value} value={opt.value}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Box
+                        sx={{
+                          width: 8,
+                          height: 8,
+                          borderRadius: "50%",
+                          bgcolor: opt.color,
+                        }}
+                      />
+                      <span>{opt.label}</span>
+                    </Stack>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <TextField
+              label={
+                adjType === 'late' || adjType === 'undertime'
+                  ? "Minutes"
+                  : adjType === 'absent'
+                  ? "Days"
+                  : "Hours"
+              }
+              type="number"
+              size="small"
+              fullWidth
+              value={adjValue}
+              onChange={(e) => setAdjValue(e.target.value)}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    {adjType === 'late' || adjType === 'undertime'
+                      ? 'mins'
+                      : adjType === 'absent'
+                      ? 'days'
+                      : 'hrs'}
+                  </InputAdornment>
+                ),
+              }}
+              helperText={
+                adjType === 'overtime'
+                  ? "Regular OT: 125% of hourly rate"
+                  : adjType === 'special_holiday_ot'
+                  ? "Special Holiday OT: 169% of hourly rate"
+                  : adjType === 'regular_holiday_ot'
+                  ? "Regular Holiday OT: 260% of hourly rate"
+                  : adjType === 'night_diff'
+                  ? "Night differential: +10% of hourly rate"
+                  : adjType === 'late'
+                  ? "Deduction = (hourly rate / 60) × minutes"
+                  : ""
+              }
+            />
+
+            <TextField
+              label="Remarks (DOLE compliance)"
+              size="small"
+              fullWidth
+              multiline
+              rows={2}
+              value={adjRemarks}
+              onChange={(e) => setAdjRemarks(e.target.value)}
+              placeholder="e.g., Extended shift for rush hour, approved by supervisor"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setIsAdjustmentDialogOpen(false)}
+            sx={{ borderRadius: 2, textTransform: "none" }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleCreateAdjustment}
+            disabled={!adjEmployeeId || !adjDate || !adjType || !adjValue || createAdjustmentMutation.isPending}
+            sx={{
+              borderRadius: 2,
+              textTransform: "none",
+              fontWeight: 600,
+              px: 3,
+              boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
+            }}
+          >
+            {createAdjustmentMutation.isPending ? "Logging..." : "Log Exception"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

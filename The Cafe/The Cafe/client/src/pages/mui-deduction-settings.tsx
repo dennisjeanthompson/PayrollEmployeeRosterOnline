@@ -26,13 +26,13 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
-// 2025 Philippine mandatory deduction rates (for display only)
+// 2026 Philippine mandatory deduction rates (for display only)
 const mandatoryDeductions = [
   {
     key: "sss",
     label: "SSS Contribution",
-    description: "Social Security System - Employee share 5% of MSC",
-    details: "MSC Floor: ₱5,000 | Ceiling: ₱35,000 | 33 salary brackets",
+    description: "Social Security System - Employee share 5% of MSC (+ MPF/WISP for salary > ₱20,000)",
+    details: "MSC Floor: ₱5,000 | Ceiling: ₱35,000 | 61 salary brackets | Total rate: 15% (5% EE / 10% ER)",
     icon: Security,
     color: "#3b82f6",
     rate: "5%",
@@ -41,7 +41,7 @@ const mandatoryDeductions = [
     key: "philhealth",
     label: "PhilHealth Contribution",
     description: "Philippine Health Insurance Corporation - 5% total (2.5% EE + 2.5% ER)",
-    details: "Floor: ₱10,000 | Ceiling: ₱100,000 | Premium: ₱500-₱5,000",
+    details: "Floor: ₱10,000 | Ceiling: ₱100,000 | Premium: ₱500-₱5,000/month",
     icon: LocalHospital,
     color: "#10b981",
     rate: "5%",
@@ -50,7 +50,7 @@ const mandatoryDeductions = [
     key: "pagibig",
     label: "Pag-IBIG (HDMF) Contribution",
     description: "Home Development Mutual Fund - 2% employee share",
-    details: "Maximum contribution: ₱100 (soon ₱200)",
+    details: "Maximum contribution: ₱200 (updated 2026) | Salary base cap: ₱10,000",
     icon: Home,
     color: "#8b5cf6",
     rate: "2%",
@@ -59,7 +59,7 @@ const mandatoryDeductions = [
     key: "tax",
     label: "Withholding Tax (BIR)",
     description: "Bureau of Internal Revenue - TRAIN Law progressive brackets",
-    details: "Annual: ₱0-250k = 0% | ₱250k-400k = 15% | ₱400k+ = 20-35%",
+    details: "Annual: ₱0-250k = 0% | ₱250k-400k = 15% | ₱400k-800k = 20% | ₱800k-2M = 25% | ₱2M-8M = 30% | ₱8M+ = 35%",
     icon: Receipt,
     color: "#f59e0b",
     rate: "TRAIN",
@@ -113,7 +113,7 @@ export default function MuiDeductionSettings() {
             Mandatory Deductions
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Philippine government contributions automatically applied per 2025 law
+            Philippine government contributions automatically applied per 2026 law
           </Typography>
         </Box>
       </Box>
@@ -135,7 +135,7 @@ export default function MuiDeductionSettings() {
             </Typography>
             <Typography variant="body2">
               SSS, PhilHealth, Pag-IBIG, and BIR withholding tax are automatically calculated
-              using official 2025 government rate tables. No manual configuration required.
+              using official 2026 government rate tables. No manual configuration required.
             </Typography>
           </Box>
           <Chip
@@ -159,12 +159,12 @@ export default function MuiDeductionSettings() {
         <CardHeader
           title={
             <Typography variant="h6" fontWeight={600}>
-              2025 Contribution Rates
+              2026 Contribution Rates
             </Typography>
           }
           subheader={
             <Typography variant="body2" color="text.secondary">
-              Based on SSS CI-2024-006, PhilHealth PA2025-0002, Pag-IBIG Circular 460, BIR RR 11-2018
+              Based on SSS Circular 2025, PhilHealth Circular 2026, Pag-IBIG Circular (₱200 max), BIR TRAIN Law
             </Typography>
           }
           sx={{

@@ -247,6 +247,31 @@ export const employeeDocuments = pgTable("employee_documents", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Manual Adjustment Logs for OT, Lateness, and other exceptions
+// Managers log these manually; employees can verify; admin approves for payroll
+export const adjustmentLogs = pgTable("adjustment_logs", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").references(() => users.id).notNull(),
+  branchId: text("branch_id").references(() => branches.id).notNull(),
+  loggedBy: text("logged_by").references(() => users.id).notNull(), // Manager who logged it
+  date: timestamp("date").notNull(), // Date the exception occurred
+  type: text("type").notNull(), // 'overtime', 'late', 'undertime', 'absent', 'rest_day_ot', 'special_holiday_ot', 'regular_holiday_ot', 'night_diff'
+  // For overtime: hours (e.g., 2.0)
+  // For lateness: minutes (e.g., 30)
+  // For undertime: minutes
+  value: text("value").notNull(), // Numeric value stored as text
+  remarks: text("remarks"), // DOLE compliance: reason/context for the adjustment
+  status: text("status").default("pending"), // 'pending', 'employee_verified', 'approved', 'rejected'
+  verifiedByEmployee: boolean("verified_by_employee").default(false),
+  verifiedAt: timestamp("verified_at"),
+  approvedBy: text("approved_by").references(() => users.id), // Admin who approved for payroll
+  approvedAt: timestamp("approved_at"),
+  payrollPeriodId: text("payroll_period_id").references(() => payrollPeriods.id), // Linked when processed
+  // Calculated amount (filled when payroll is processed)
+  calculatedAmount: text("calculated_amount"), // Positive for OT, negative for late deduction
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert Schemas
 export const insertBranchSchema = createInsertSchema(branches).omit({
   id: true,
@@ -347,6 +372,13 @@ export const insertTimeOffPolicySchema = createInsertSchema(timeOffPolicy).omit(
   updatedAt: true,
 });
 
+export const insertAdjustmentLogSchema = createInsertSchema(adjustmentLogs).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  date: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+});
+
 export interface DashboardStats {
   stats: {
     late: number;
@@ -372,6 +404,7 @@ export type ArchivedPayrollPeriod = typeof archivedPayrollPeriods.$inferSelect;
 export type AuditLog = typeof auditLogs.$inferSelect;
 export type TimeOffPolicy = typeof timeOffPolicy.$inferSelect;
 export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
+export type AdjustmentLog = typeof adjustmentLogs.$inferSelect;
 
 
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
@@ -389,3 +422,4 @@ export type InsertHoliday = z.infer<typeof insertHolidaySchema>;
 export type InsertArchivedPayrollPeriod = z.infer<typeof insertArchivedPayrollPeriodSchema>;
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type InsertTimeOffPolicy = z.infer<typeof insertTimeOffPolicySchema>;
+export type InsertAdjustmentLog = z.infer<typeof insertAdjustmentLogSchema>;

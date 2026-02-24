@@ -1150,13 +1150,196 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(forecastRouter);
   app.use(seedRatesRouter);
 
+  // ===== ADJUSTMENT LOGS (Manual OT/Lateness/Exception Logging) =====
+  
+  // Create adjustment log (Manager only)
+  app.post("/api/adjustment-logs", requireAuth, requireRole(["manager"]), async (req, res) => {
+    try {
+      const { employeeId, date, type, value, remarks } = req.body;
+      const branchId = req.user!.branchId;
+      const loggedBy = req.user!.id;
+
+      if (!employeeId || !date || !type || !value) {
+        return res.status(400).json({ message: "Employee, date, type, and value are required" });
+      }
+
+      // Validate type
+      const validTypes = ['overtime', 'late', 'undertime', 'absent', 'rest_day_ot', 'special_holiday_ot', 'regular_holiday_ot', 'night_diff'];
+      if (!validTypes.includes(type)) {
+        return res.status(400).json({ message: `Invalid type. Valid types: ${validTypes.join(', ')}` });
+      }
+
+      const log = await storage.createAdjustmentLog({
+        employeeId,
+        branchId,
+        loggedBy,
+        date: new Date(date),
+        type,
+        value: value.toString(),
+        remarks: remarks || null,
+        status: 'pending',
+      });
+
+      // Notify the employee
+      const manager = await storage.getUser(loggedBy);
+      const typeLabels: Record<string, string> = {
+        overtime: 'Overtime',
+        late: 'Tardiness',
+        undertime: 'Undertime',
+        absent: 'Absent',
+        rest_day_ot: 'Rest Day OT',
+        special_holiday_ot: 'Special Holiday OT',
+        regular_holiday_ot: 'Regular Holiday OT',
+        night_diff: 'Night Differential',
+      };
+      const valueUnit = type === 'late' || type === 'undertime' ? 'mins' : 'hrs';
+      
+      await storage.createNotification({
+        userId: employeeId,
+        type: 'adjustment',
+        title: 'Exception Log Recorded',
+        message: `${manager?.firstName || 'Manager'} logged ${typeLabels[type] || type}: ${value} ${valueUnit} for ${new Date(date).toLocaleDateString('en-PH')}. Please verify.`,
+        data: JSON.stringify({ adjustmentLogId: log.id }),
+      } as any);
+
+      res.json({ log });
+    } catch (error: any) {
+      console.error('Create adjustment log error:', error);
+      res.status(500).json({ message: error.message || "Failed to create adjustment log" });
+    }
+  });
+
+  // Get adjustment logs by branch (Manager)
+  app.get("/api/adjustment-logs/branch", requireAuth, requireRole(["manager"]), async (req, res) => {
+    try {
+      const branchId = req.user!.branchId;
+      const { startDate, endDate } = req.query;
+      const logs = await storage.getAdjustmentLogsByBranch(
+        branchId,
+        startDate ? new Date(startDate as string) : undefined,
+        endDate ? new Date(endDate as string) : undefined,
+      );
+      
+      // Enrich with employee names
+      const enriched = await Promise.all(logs.map(async (log) => {
+        const employee = await storage.getUser(log.employeeId);
+        const logger = await storage.getUser(log.loggedBy);
+        return {
+          ...log,
+          employeeName: employee ? `${employee.firstName} ${employee.lastName}` : 'Unknown',
+          loggedByName: logger ? `${logger.firstName} ${logger.lastName}` : 'Unknown',
+        };
+      }));
+      
+      res.json({ logs: enriched });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to get adjustment logs" });
+    }
+  });
+
+  // Get adjustment logs for the current employee (Employee view)
+  app.get("/api/adjustment-logs/mine", requireAuth, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const logs = await storage.getAdjustmentLogsByEmployee(userId);
+      res.json({ logs });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to get adjustment logs" });
+    }
+  });
+
+  // Employee verify adjustment log
+  app.put("/api/adjustment-logs/:id/verify", requireAuth, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+      
+      const log = await storage.getAdjustmentLog(id);
+      if (!log) return res.status(404).json({ message: "Adjustment log not found" });
+      if (log.employeeId !== userId) return res.status(403).json({ message: "Not authorized" });
+      
+      const updated = await storage.updateAdjustmentLog(id, {
+        status: 'employee_verified',
+        verifiedByEmployee: true,
+        verifiedAt: new Date(),
+      });
+      
+      res.json({ log: updated });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to verify adjustment log" });
+    }
+  });
+
+  // Approve adjustment log (Manager)
+  app.put("/api/adjustment-logs/:id/approve", requireAuth, requireRole(["manager"]), async (req, res) => {
+    try {
+      const { id } = req.params;
+      const approvedBy = req.user!.id;
+      
+      const updated = await storage.updateAdjustmentLog(id, {
+        status: 'approved',
+        approvedBy,
+        approvedAt: new Date(),
+      });
+      
+      if (!updated) return res.status(404).json({ message: "Adjustment log not found" });
+      res.json({ log: updated });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to approve adjustment log" });
+    }
+  });
+
+  // Reject adjustment log (Manager)
+  app.put("/api/adjustment-logs/:id/reject", requireAuth, requireRole(["manager"]), async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const updated = await storage.updateAdjustmentLog(id, {
+        status: 'rejected',
+      });
+      
+      if (!updated) return res.status(404).json({ message: "Adjustment log not found" });
+      res.json({ log: updated });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to reject adjustment log" });
+    }
+  });
+
+  // Delete adjustment log (Manager)
+  app.delete("/api/adjustment-logs/:id", requireAuth, requireRole(["manager"]), async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteAdjustmentLog(id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to delete adjustment log" });
+    }
+  });
+
   // Payroll routes
   app.get("/api/payroll", requireAuth, async (req, res) => {
     const userId = req.user!.id;
     console.log(`[Payroll] Fetching entries for user ${userId}`);
     const entries = await storage.getPayrollEntriesByUser(userId);
     console.log(`[Payroll] Found ${entries.length} entries:`, entries.map(e => ({ id: e.id, userId: e.userId })));
-    res.json({ entries });
+
+    // Enrich entries with pay-period dates so the UI can display them
+    const enriched = await Promise.all(
+      entries.map(async (entry) => {
+        try {
+          const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
+          return {
+            ...entry,
+            periodStartDate: period?.startDate ?? null,
+            periodEndDate: period?.endDate ?? null,
+          };
+        } catch {
+          return { ...entry, periodStartDate: null, periodEndDate: null };
+        }
+      }),
+    );
+
+    res.json({ entries: enriched });
   });
 
   // Get all payroll periods (Manager only)
@@ -1269,10 +1452,93 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const holidayPay = payCalculation.holidayPay;
         const nightDiffPay = payCalculation.nightDiffPay;
         const restDayPay = payCalculation.restDayPay;
-        const grossPay = payCalculation.totalGrossPay;
+        let grossPay = payCalculation.totalGrossPay;
+
+        // ===== MANUAL ADJUSTMENT LOGS (OT/Lateness from Manager input) =====
+        // Process approved adjustment logs for this employee in this period
+        const employeeAdjustments = await storage.getAdjustmentLogsByEmployee(
+          employee.id,
+          new Date(period.startDate),
+          new Date(period.endDate)
+        );
+
+        let manualOtPay = 0;
+        let manualOtHours = 0;
+        let lateDeduction = 0;
+        let totalLateMinutes = 0;
+        let undertimeDeduction = 0;
+
+        for (const adj of employeeAdjustments) {
+          // Only process approved or employee-verified adjustments
+          if (adj.status !== 'approved' && adj.status !== 'employee_verified') continue;
+
+          const adjValue = parseFloat(adj.value);
+          if (isNaN(adjValue) || adjValue <= 0) continue;
+
+          let calcAmount = 0;
+
+          switch (adj.type) {
+            case 'overtime':
+              // Regular Day OT: Hourly Rate × 125% (DOLE standard)
+              calcAmount = hourlyRate * 1.25 * adjValue;
+              manualOtPay += calcAmount;
+              manualOtHours += adjValue;
+              break;
+            case 'rest_day_ot':
+              // Rest Day OT: Hourly Rate × 130% × 130% = 169%
+              calcAmount = hourlyRate * 1.69 * adjValue;
+              manualOtPay += calcAmount;
+              manualOtHours += adjValue;
+              break;
+            case 'special_holiday_ot':
+              // Special Holiday OT: Hourly Rate × 130% × 130% = 169%
+              calcAmount = hourlyRate * 1.69 * adjValue;
+              manualOtPay += calcAmount;
+              manualOtHours += adjValue;
+              break;
+            case 'regular_holiday_ot':
+              // Regular Holiday OT: Hourly Rate × 200% × 130% = 260%
+              calcAmount = hourlyRate * 2.6 * adjValue;
+              manualOtPay += calcAmount;
+              manualOtHours += adjValue;
+              break;
+            case 'night_diff':
+              // Night Differential: Hourly Rate × 10% premium per hour
+              calcAmount = hourlyRate * 0.10 * adjValue;
+              manualOtPay += calcAmount;
+              break;
+            case 'late':
+              // Tardiness: (Hourly Rate / 60 mins) × minutes late
+              calcAmount = (hourlyRate / 60) * adjValue;
+              lateDeduction += calcAmount;
+              totalLateMinutes += adjValue;
+              break;
+            case 'undertime':
+              // Undertime: (Hourly Rate / 60 mins) × minutes undertime
+              calcAmount = (hourlyRate / 60) * adjValue;
+              undertimeDeduction += calcAmount;
+              break;
+            case 'absent':
+              // Absent: Full day deduction (8 hours × hourly rate)
+              calcAmount = hourlyRate * 8 * adjValue;
+              lateDeduction += calcAmount;
+              break;
+          }
+
+          // Update the adjustment log with calculated amount
+          const isDeduction = ['late', 'undertime', 'absent'].includes(adj.type);
+          await storage.updateAdjustmentLog(adj.id, {
+            calculatedAmount: (isDeduction ? -calcAmount : calcAmount).toFixed(2),
+            payrollPeriodId: id,
+          });
+        }
+
+        // Apply manual adjustments to gross pay
+        grossPay = grossPay + manualOtPay - lateDeduction - undertimeDeduction;
+        overtimeHours += manualOtHours;
 
         // COMPLIANCE: Mandatory Philippine government deductions are ALWAYS applied
-        // Per DOLE/BIR/SSS/PhilHealth/Pag-IBIG 2025 regulations
+        // Per DOLE/BIR/SSS/PhilHealth/Pag-IBIG 2026 regulations
         // These cannot be toggled off - they are required by law
         const settings = {
           deductSSS: true,           // SSS contribution - MANDATORY
@@ -1434,16 +1700,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
           periodId as string
         );
 
-        // Add employee details to each entry
-        const entriesWithUser = entries.map(entry => ({
-          ...entry,
-          employee: {
-            id: employee.id,
-            firstName: employee.firstName,
-            lastName: employee.lastName,
-            position: employee.position,
-            email: employee.email
-          }
+        // Add employee details and period dates to each entry
+        const entriesWithUser = await Promise.all(entries.map(async (entry) => {
+          let periodStartDate = null;
+          let periodEndDate = null;
+          try {
+            const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
+            if (period) {
+              periodStartDate = period.startDate;
+              periodEndDate = period.endDate;
+            }
+          } catch {}
+          return {
+            ...entry,
+            periodStartDate,
+            periodEndDate,
+            employee: {
+              id: employee.id,
+              firstName: employee.firstName,
+              lastName: employee.lastName,
+              position: employee.position,
+              email: employee.email
+            }
+          };
         }));
 
         allEntries.push(...entriesWithUser);
@@ -1542,11 +1821,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If parsing fails, breakdown stays null
     }
 
+    // Retrieve the pay period so the payslip shows the correct date range
+    let periodStart: string | null = null;
+    let periodEnd: string | null = null;
+    try {
+      const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
+      if (period) {
+        periodStart = period.startDate instanceof Date
+          ? period.startDate.toISOString()
+          : String(period.startDate);
+        periodEnd = period.endDate instanceof Date
+          ? period.endDate.toISOString()
+          : String(period.endDate);
+      }
+    } catch {}
+
     const payslipData = {
       employeeName: `${user.firstName} ${user.lastName}`,
       employeeId: user.id,
       position: user.position,
       period: entry.createdAt!,
+      periodStart,
+      periodEnd,
       regularHours: entry.regularHours,
       overtimeHours: entry.overtimeHours,
       nightDiffHours: (entry as any).nightDiffHours || 0,

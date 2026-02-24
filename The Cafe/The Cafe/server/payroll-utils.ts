@@ -858,3 +858,42 @@ export function get2025PhilippineHolidays(): { name: string; date: Date; type: '
     { name: "Eid ul-Adha", date: new Date(2025, 5, 7), type: 'regular', year: 2025 },
   ];
 }
+
+/**
+ * Get 2026 Philippine holidays
+ * Based on Proclamation for 2026 Regular and Special Non-Working Holidays
+ * Key for February 2026:
+ * - Feb 17 (Tuesday): Chinese New Year — Special Non-Working Holiday (130% if worked)
+ * - Feb 25 (Wednesday): EDSA People Power Anniversary — Special Working Holiday (normal rate)
+ */
+export function get2026PhilippineHolidays(): { name: string; date: Date; type: 'regular' | 'special_non_working' | 'special_working'; year: number }[] {
+  return [
+    // ===== REGULAR HOLIDAYS (200% if worked) =====
+    { name: "New Year's Day", date: new Date(2026, 0, 1), type: 'regular', year: 2026 },
+    { name: "Araw ng Kagitingan", date: new Date(2026, 3, 9), type: 'regular', year: 2026 },
+    { name: "Maundy Thursday", date: new Date(2026, 3, 2), type: 'regular', year: 2026 },
+    { name: "Good Friday", date: new Date(2026, 3, 3), type: 'regular', year: 2026 },
+    { name: "Labor Day", date: new Date(2026, 4, 1), type: 'regular', year: 2026 },
+    { name: "Independence Day", date: new Date(2026, 5, 12), type: 'regular', year: 2026 },
+    { name: "National Heroes Day", date: new Date(2026, 7, 31), type: 'regular', year: 2026 },
+    { name: "Bonifacio Day", date: new Date(2026, 10, 30), type: 'regular', year: 2026 },
+    { name: "Christmas Day", date: new Date(2026, 11, 25), type: 'regular', year: 2026 },
+    { name: "Rizal Day", date: new Date(2026, 11, 30), type: 'regular', year: 2026 },
+    // Islamic holidays (estimated dates — subject to actual moon sighting)
+    { name: "Eid ul-Fitr", date: new Date(2026, 2, 21), type: 'regular', year: 2026 },
+    { name: "Eid ul-Adha", date: new Date(2026, 4, 27), type: 'regular', year: 2026 },
+
+    // ===== SPECIAL NON-WORKING HOLIDAYS (130% if worked, no pay if not) =====
+    { name: "Chinese New Year", date: new Date(2026, 1, 17), type: 'special_non_working', year: 2026 },
+    { name: "Black Saturday", date: new Date(2026, 3, 4), type: 'special_non_working', year: 2026 },
+    { name: "Ninoy Aquino Day", date: new Date(2026, 7, 21), type: 'special_non_working', year: 2026 },
+    { name: "All Saints' Day Eve", date: new Date(2026, 9, 31), type: 'special_non_working', year: 2026 },
+    { name: "All Saints' Day", date: new Date(2026, 10, 1), type: 'special_non_working', year: 2026 },
+    { name: "Feast of the Immaculate Conception", date: new Date(2026, 11, 8), type: 'special_non_working', year: 2026 },
+    { name: "Christmas Eve", date: new Date(2026, 11, 24), type: 'special_non_working', year: 2026 },
+    { name: "Last Day of the Year", date: new Date(2026, 11, 31), type: 'special_non_working', year: 2026 },
+
+    // ===== SPECIAL WORKING HOLIDAYS (Normal rate, no extra premium) =====
+    { name: "EDSA People Power Anniversary", date: new Date(2026, 1, 25), type: 'special_working', year: 2026 },
+  ];
+}

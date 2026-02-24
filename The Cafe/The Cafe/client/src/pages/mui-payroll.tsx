@@ -70,6 +70,8 @@ interface PayrollEntry {
   netPay: number | string;
   status: string;
   createdAt: string;
+  periodStartDate?: string | null;
+  periodEndDate?: string | null;
   blockchainHash?: string;
   blockNumber?: number;
   transactionHash?: string;
@@ -376,7 +378,7 @@ export default function MuiPayroll() {
                   <Table>
                     <TableHead>
                       <TableRow>
-                        <TableCell>Date</TableCell>
+                        <TableCell>Pay Period</TableCell>
                         <TableCell align="right">Hours</TableCell>
                         <TableCell align="right">Gross Pay</TableCell>
                         <TableCell align="right">Deductions</TableCell>
@@ -391,7 +393,20 @@ export default function MuiPayroll() {
                           <TableCell>
                             <Stack direction="row" alignItems="center" spacing={1}>
                               <CalendarIcon fontSize="small" color="action" />
-                              <span>{format(parseISO(entry.createdAt), "MMM d, yyyy")}</span>
+                              <Box>
+                                {entry.periodStartDate && entry.periodEndDate ? (
+                                  <>
+                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                      {format(new Date(entry.periodStartDate), "MMM d")} – {format(new Date(entry.periodEndDate), "MMM d, yyyy")}
+                                    </Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      Paid {format(parseISO(entry.createdAt), "MMM d, yyyy")}
+                                    </Typography>
+                                  </>
+                                ) : (
+                                  <span>{format(parseISO(entry.createdAt), "MMM d, yyyy")}</span>
+                                )}
+                              </Box>
                             </Stack>
                           </TableCell>
                           <TableCell align="right">{parseFloat(String(entry.totalHours)).toFixed(1)}h</TableCell>
@@ -476,7 +491,9 @@ export default function MuiPayroll() {
                         Pay Period
                       </Typography>
                       <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        {format(parseISO(entry.createdAt), "MMMM d, yyyy")}
+                        {entry.periodStartDate && entry.periodEndDate
+                          ? `${format(new Date(entry.periodStartDate), "MMM d")} – ${format(new Date(entry.periodEndDate), "MMM d, yyyy")}`
+                          : format(parseISO(entry.createdAt), "MMMM d, yyyy")}
                       </Typography>
                       <Divider sx={{ my: 1 }} />
                       <Typography variant="h6" fontWeight={700} color="success.main">
