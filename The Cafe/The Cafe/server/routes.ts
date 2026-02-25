@@ -19,7 +19,7 @@ import { forecastRouter } from "./routes/forecast";
 import { seedRatesRouter } from "./routes/seed-rates";
 import holidaysRouter from "./routes/holidays";
 import employeeUploadsRouter from "./routes/employee-uploads";
-import { seedSampleUsers, seedSampleSchedulesAndPayroll } from "./init-db"; // Import seed functions
+import { resetDatabase, initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll, seedSampleShiftTrades, markSetupComplete } from "./init-db";
 import bcrypt from "bcrypt";
 import { format } from "date-fns";
 import crypto from "crypto";
@@ -4040,6 +4040,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Manual seeding error:', error);
       res.status(500).json({ message: "Seeding failed", error: String(error) });
+    }
+  });
+
+  // Full database reset + reseed (manager/admin only)
+  app.post("/api/debug/reset-and-reseed", requireAuth, async (req, res) => {
+    try {
+      if (!['admin', 'manager'].includes(req.user!.role)) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      console.log('🔄 Full database reset + reseed triggered via API');
+
+      // 1. Drop all tables
+      await resetDatabase();
+      console.log('   ✅ Database reset');
+
+      // 2. Recreate tables
+      await initializeDatabase();
+      console.log('   ✅ Tables created');
+
+      // 3. Create admin account
+      await createAdminAccount();
+      console.log('   ✅ Admin account created');
+
+      // 4. Seed users
+      await seedSampleUsers();
+      console.log('   ✅ Sample users seeded');
+
+      // 5. Seed schedules + payroll
+      await seedSampleSchedulesAndPayroll();
+      console.log('   ✅ Schedules + payroll seeded');
+
+      // 6. Seed deduction rates
+      await seedDeductionRates();
+      console.log('   ✅ Deduction rates seeded');
+
+      // 7. Seed holidays
+      await seedPhilippineHolidays();
+      console.log('   ✅ Holidays seeded');
+
+      // 8. Seed shift trades
+      await seedSampleShiftTrades();
+      console.log('   ✅ Shift trades seeded');
+
+      // 9. Mark setup complete
+      await markSetupComplete();
+      console.log('   ✅ Setup marked complete');
+
+      res.json({
+        message: "Database fully reset and reseeded!",
+        timestamp: new Date().toISOString(),
+        note: "You need to log in again (session was invalidated by reset)."
+      });
+    } catch (error) {
+      console.error('❌ Reset and reseed error:', error);
+      res.status(500).json({ message: "Reset failed", error: String(error) });
     }
   });
 
