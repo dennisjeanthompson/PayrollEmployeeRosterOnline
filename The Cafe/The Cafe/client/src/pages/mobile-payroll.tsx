@@ -25,6 +25,24 @@ interface PayrollEntry {
   deductions: number | string;
   status: string;
   createdAt: string;
+  periodStartDate?: string | null;
+  periodEndDate?: string | null;
+}
+
+/**
+ * Derives the actual payment date from the pay period end date.
+ * Philippine semi-monthly payroll convention:
+ *   - Period ending around the 15th → paid on the 25th of the same month
+ *   - Period ending at end of month  → paid on the 10th of the next month
+ */
+function getPaymentDate(periodEndDate: string | Date): Date {
+  const end = new Date(periodEndDate);
+  const day = end.getDate();
+  if (day <= 15) {
+    return new Date(end.getFullYear(), end.getMonth(), 25);
+  } else {
+    return new Date(end.getFullYear(), end.getMonth() + 1, 10);
+  }
 }
 
 interface PayslipResponse {
@@ -477,10 +495,14 @@ export default function MobilePayroll() {
                   <div className="flex items-start justify-between mb-4">
                     <div>
                       <p className="text-lg font-bold">
-                        {format(parseISO(entry.createdAt), "MMMM d, yyyy")}
+                        {entry.periodStartDate && entry.periodEndDate
+                          ? `${format(new Date(entry.periodStartDate), "MMM d")} – ${format(new Date(entry.periodEndDate), "MMM d, yyyy")}`
+                          : format(parseISO(entry.createdAt), "MMMM d, yyyy")}
                       </p>
                       <p className="text-base text-muted-foreground mt-1">
-                        Pay Period
+                        {entry.periodEndDate
+                          ? `Paid ${format(getPaymentDate(entry.periodEndDate), "MMM d, yyyy")}`
+                          : "Pay Period"}
                       </p>
                     </div>
                     <Badge

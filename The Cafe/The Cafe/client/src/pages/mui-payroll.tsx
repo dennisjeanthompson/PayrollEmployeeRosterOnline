@@ -58,6 +58,24 @@ import {
   Refresh as RefreshIcon,
 } from "@mui/icons-material";
 
+/**
+ * Derives the actual payment date from the pay period end date.
+ * Philippine semi-monthly payroll convention:
+ *   - Period ending around the 15th → paid on the 25th of the same month
+ *   - Period ending at end of month  → paid on the 10th of the next month
+ */
+function getPaymentDate(periodEndDate: string | Date): Date {
+  const end = new Date(periodEndDate);
+  const day = end.getDate();
+  if (day <= 15) {
+    // 1st–15th period → paid on the 25th of the same month
+    return new Date(end.getFullYear(), end.getMonth(), 25);
+  } else {
+    // 16th–EOM period → paid on the 10th of the next month
+    return new Date(end.getFullYear(), end.getMonth() + 1, 10);
+  }
+}
+
 interface PayrollEntry {
   id: string;
   userId: string;
@@ -400,7 +418,7 @@ export default function MuiPayroll() {
                                       {format(new Date(entry.periodStartDate), "MMM d")} – {format(new Date(entry.periodEndDate), "MMM d, yyyy")}
                                     </Typography>
                                     <Typography variant="caption" color="text.secondary">
-                                      Paid {format(parseISO(entry.createdAt), "MMM d, yyyy")}
+                                      Paid {format(getPaymentDate(entry.periodEndDate!), "MMM d, yyyy")}
                                     </Typography>
                                   </>
                                 ) : (
