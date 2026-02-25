@@ -2,7 +2,7 @@ import { db } from './db';
 import { 
   branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, 
   approvals, timeOffRequests, notifications, setupStatus, deductionSettings, 
-  deductionRates, holidays, archivedPayrollPeriods 
+  deductionRates, holidays, archivedPayrollPeriods, adjustmentLogs 
 } from '@shared/schema';
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
@@ -800,58 +800,82 @@ export async function seedSampleSchedulesAndPayroll() {
     }
 
     const branchId = branch[0].id;
-    const now = new Date();
 
     // ═══════════════════════════════════════════════════════════════
-    // CREATE SHIFTS (December 2025 Schedule - 2 weeks)
+    // CREATE SHIFTS (December 2025 Schedule — absolute dates)
+    // Each employee works 8-hour shifts, consistent with payroll.
     // ═══════════════════════════════════════════════════════════════
     
     const shiftPatterns = [
-      { name: 'Morning', start: 6, end: 14 },
-      { name: 'Day', start: 10, end: 18 },
-      { name: 'Afternoon', start: 14, end: 22 },
+      { name: 'Morning', start: 6, end: 14 },   // 8 hours
+      { name: 'Day', start: 10, end: 18 },       // 8 hours
+      { name: 'Afternoon', start: 14, end: 22 }, // 8 hours
     ];
 
-    // Create shifts for Dec 1-15, 2025 (past 2 weeks)
-    for (let day = -14; day <= 7; day++) {
-      const shiftDate = new Date(now);
-      shiftDate.setDate(shiftDate.getDate() + day);
-      const dayOfWeek = shiftDate.getDay();
+    // Dec 1-15, 2025 working days (skip Sundays Dec 7 & Dec 14)
+    // = 13 working days × 8h = 104h per employee
+    // But give each employee 1 additional rest day per week for realism
+    // Pattern: employee index determines which Saturday they skip
+    const dec2025WorkingDays: Date[] = [];
+    for (let d = 1; d <= 15; d++) {
+      const dt = new Date(Date.UTC(2025, 11, d)); // month is 0-indexed, so 11=Dec
+      if (dt.getUTCDay() === 0) continue; // Skip Sundays
+      dec2025WorkingDays.push(dt);
+    }
+    // 13 working days total
 
-      // Skip Sundays (day off)
-      if (dayOfWeek === 0) continue;
+    // Also create shifts for Nov 1-15 and Nov 16-30 periods
+    const nov1_15WorkingDays: Date[] = [];
+    for (let d = 1; d <= 15; d++) {
+      const dt = new Date(Date.UTC(2025, 10, d)); // 10=Nov
+      if (dt.getUTCDay() === 0) continue;
+      nov1_15WorkingDays.push(dt);
+    }
+    const nov16_30WorkingDays: Date[] = [];
+    for (let d = 16; d <= 30; d++) {
+      const dt = new Date(Date.UTC(2025, 10, d));
+      if (dt.getUTCDay() === 0) continue;
+      nov16_30WorkingDays.push(dt);
+    }
 
-      for (let i = 0; i < employees.length; i++) {
-        const emp = employees[i];
-        // Each employee works ~5 days a week
+    const allPeriodDays = [
+      { periodId: 'period-2025-11-01', days: nov1_15WorkingDays },
+      { periodId: 'period-2025-11-16', days: nov16_30WorkingDays },
+      { periodId: 'period-2025-12-01', days: dec2025WorkingDays },
+    ];
 
+    // All staff including manager get shifts
+    const allStaff = [...employees, manager].filter(Boolean) as typeof employees;
 
-        // Assign different shift patterns to different employees
-        const pattern = shiftPatterns[i % shiftPatterns.length];
-        
-        // TIMEZONE FIX: Use setUTCHours so shift times are stored consistently
-        // regardless of server timezone. These represent intended local times (PHT).
-        // FullCalendar renders with timeZone='UTC' to display them at face value.
-        const startTime = new Date(shiftDate);
-        startTime.setUTCHours(pattern.start, 0, 0, 0);
-        
-        const endTime = new Date(shiftDate);
-        endTime.setUTCHours(pattern.end, 0, 0, 0);
+    for (const { periodId, days } of allPeriodDays) {
+      const isCurrent = periodId === 'period-2025-12-01';
+      for (const shiftDate of days) {
+        for (let i = 0; i < allStaff.length; i++) {
+          const emp = allStaff[i];
+          const pattern = shiftPatterns[i % shiftPatterns.length];
 
-        const status = day < 0 ? 'completed' : (day === 0 ? 'in-progress' : 'scheduled');
+          // TIMEZONE FIX: Use setUTCHours so shift times are stored consistently
+          const startTime = new Date(shiftDate);
+          startTime.setUTCHours(pattern.start, 0, 0, 0);
 
-        await db.insert(shifts).values({
-          id: randomUUID(),
-          userId: emp.id,
-          branchId: branchId,
-          startTime: startTime,
-          endTime: endTime,
-          position: emp.position,
-          status: status,
-        });
+          const endTime = new Date(shiftDate);
+          endTime.setUTCHours(pattern.end, 0, 0, 0);
+
+          const status = isCurrent ? 'completed' : 'completed';
+
+          await db.insert(shifts).values({
+            id: randomUUID(),
+            userId: emp.id,
+            branchId: branchId,
+            startTime: startTime,
+            endTime: endTime,
+            position: emp.position,
+            status: status,
+          });
+        }
       }
     }
-    console.log('   ✅ Created shifts for 3 weeks');
+    console.log('   ✅ Created shifts for Nov-Dec 2025 (aligned with payroll periods)');
 
     // ═══════════════════════════════════════════════════════════════
     // CREATE PAYROLL PERIODS (November 16-30 and December 1-15, 2025)
@@ -878,39 +902,59 @@ export async function seedSampleSchedulesAndPayroll() {
       },
     ];
 
+    // Count working days per period for consistent hour calculations
+    const periodWorkingDays: Record<string, number> = {
+      'period-2025-11-01': nov1_15WorkingDays.length,
+      'period-2025-11-16': nov16_30WorkingDays.length,
+      'period-2025-12-01': dec2025WorkingDays.length,
+    };
+
     for (const period of payrollPeriodsList) {
+      const workingDays = periodWorkingDays[period.id] || 13;
+
       await db.insert(payrollPeriods).values({
         id: period.id,
         branchId: branchId,
         startDate: period.startDate,
         endDate: period.endDate,
         status: period.status,
-        totalHours: '440',
+        totalHours: (workingDays * 8 * allStaff.length).toString(),
         totalPay: '75000',
       });
 
       // Create payroll entries for all employees AND the manager
-      const allStaff = [...employees, manager].filter(Boolean);
+      // NO random OT — shifts are exactly 8h, so all hours are regular.
+      // Only Bea gets OT (from her exception log, seeded below).
       for (const emp of allStaff) {
         const hourlyRate = parseFloat(emp.hourlyRate);
-        const regularHours = 80 + Math.floor(Math.random() * 8); // 80-88 hours per period
-        const overtimeHours = Math.floor(Math.random() * 10); // 0-10 OT hours
-        const nightDiffHours = Math.floor(Math.random() * 16); // 0-16 ND hours
+        const regularHours = workingDays * 8; // Exactly 8h per working day
+        const isBea = emp.id === 'user-emp-bea';
+        // Only Bea has OT via exception log (2 hrs regular OT at 125%)
+        const overtimeHours = isBea && period.id === 'period-2025-12-01' ? 2 : 0;
+        const nightDiffHours = 0; // No seeded night shifts cross 10PM-6AM
 
         const basicPay = regularHours * hourlyRate;
         const overtimePay = overtimeHours * hourlyRate * 1.25;
-        const nightDiffPay = nightDiffHours * hourlyRate * 0.10;
-        const holidayPay = period.startDate.getMonth() === 10 ? hourlyRate * 8 * 2 : 0; // Bonifacio Day in Nov
+        const nightDiffPay = 0;
+        // Bonifacio Day (Nov 30) falls in period-2025-11-16
+        const holidayPay = period.id === 'period-2025-11-16' ? hourlyRate * 8 * 2 : 0;
 
         const grossPay = basicPay + overtimePay + nightDiffPay + holidayPay;
 
-        // Calculate deductions (2025 rates)
-        const sssContribution = grossPay >= 20000 ? 900 : grossPay >= 15000 ? 675 : grossPay >= 10000 ? 450 : 225;
-        // PhilHealth 2025: 5% total, 2.5% employee share. Floor ₱10k, ceiling ₱100k
-        const philhealthSalary = Math.max(10000, Math.min(100000, grossPay * 2)); // Monthly salary estimate
-        const philhealthContribution = Math.round(philhealthSalary * 0.025 * 100) / 100; // 2.5% employee share
-        const pagibigContribution = Math.min(grossPay * 0.02, 200);
-        const withholdingTax = grossPay > 20833 ? (grossPay - 20833) * 0.20 : 0;
+        // Calculate deductions (2026 rates — DOLE-compliant)
+        const { calculateAllDeductions } = await import('./utils/deductions');
+        const monthlyBasicSalary = (grossPay / (periodWorkingDays[period.id] || 15)) * 30;
+        const deductionBreakdown = await calculateAllDeductions(monthlyBasicSalary, {
+          deductSSS: true,
+          deductPhilHealth: true,
+          deductPagibig: true,
+          deductWithholdingTax: true,
+        });
+
+        const sssContribution = deductionBreakdown.sssContribution;
+        const philhealthContribution = deductionBreakdown.philHealthContribution;
+        const pagibigContribution = deductionBreakdown.pagibigContribution;
+        const withholdingTax = deductionBreakdown.withholdingTax;
 
         const sssLoan = parseFloat(emp.sssLoanDeduction || '0');
         const pagibigLoan = parseFloat(emp.pagibigLoanDeduction || '0');
@@ -944,7 +988,7 @@ export async function seedSampleSchedulesAndPayroll() {
         });
       }
     }
-    console.log('   ✅ Created 3 payroll periods with entries');
+    console.log('   ✅ Created 3 payroll periods with consistent entries (only Bea has OT)');
 
     // ═══════════════════════════════════════════════════════════════
     // CREATE TIME-OFF REQUESTS
@@ -992,6 +1036,32 @@ export async function seedSampleSchedulesAndPayroll() {
       });
     }
     console.log('   ✅ Created notifications');
+
+    // ═══════════════════════════════════════════════════════════════
+    // CREATE ADJUSTMENT LOG — Bea's 2-hour OT (Dec 1-15 period only)
+    // This is the ONLY exception log. No other employee has OT.
+    // ═══════════════════════════════════════════════════════════════
+
+    const beaUser = allStaff.find(u => u.id === 'user-emp-bea');
+    if (beaUser && manager) {
+      await db.insert(adjustmentLogs).values({
+        id: randomUUID(),
+        employeeId: beaUser.id,
+        branchId: branchId,
+        loggedBy: manager.id,
+        date: new Date(Date.UTC(2025, 11, 5)), // Dec 5, 2025
+        type: 'overtime',
+        value: '2',
+        remarks: 'approved by manager',
+        status: 'approved',
+        verifiedByEmployee: false,
+        approvedBy: manager.id,
+        approvedAt: new Date(Date.UTC(2025, 11, 5)),
+        payrollPeriodId: 'period-2025-12-01',
+        calculatedAmount: (parseFloat(beaUser.hourlyRate) * 1.25 * 2).toFixed(2),
+      });
+      console.log('   ✅ Created Bea OT exception log (2 hrs, Dec 5)');
+    }
 
     console.log('✅ Sample schedules and payroll seeded successfully');
   } catch (error) {

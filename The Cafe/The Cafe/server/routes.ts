@@ -1409,6 +1409,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Payroll period is not open" });
       }
 
+      // Clear any existing entries for this period (e.g., from seed data or re-processing)
+      const existingEntries = await storage.getPayrollEntriesByPeriod(id);
+      for (const entry of existingEntries) {
+        await storage.deletePayrollEntry(entry.id);
+      }
+
       // Get all employees in the branch
       const employees = await storage.getUsersByBranch(branchId);
       const payrollEntries = [];
