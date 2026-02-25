@@ -169,10 +169,10 @@ export default function MobilePayroll() {
     if (overtimePay > 0) {
       earnings.push({
         code: "OT",
-        label: "Overtime Pay (130%)",
+        label: "Overtime Pay (125%)",
         amount: overtimePay,
         is_overtime: true,
-        multiplier: 130,
+        multiplier: 125,
       });
     }
     

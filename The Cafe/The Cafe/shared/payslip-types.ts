@@ -367,7 +367,7 @@ export const SAMPLE_PAYSLIP_DATA: PayslipData = {
   },
   earnings: [
     { code: "BASIC", label: "Basic Salary", hours: 88, rate: 90.91, amount: 8000.00 },
-    { code: "OT", label: "Overtime Pay (130%)", hours: 5, rate: 118.18, amount: 590.91, is_overtime: true, multiplier: 130 },
+    { code: "OT", label: "Overtime Pay (125%)", hours: 5, rate: 113.64, amount: 568.18, is_overtime: true, multiplier: 125 },
     { code: "ND", label: "Night Differential (10%)", hours: 16, rate: 9.09, amount: 145.45 },
     { 
       code: "RH", 

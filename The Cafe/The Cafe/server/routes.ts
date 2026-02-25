@@ -1550,16 +1550,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         grossPay = grossPay + manualOtPay - lateDeduction - undertimeDeduction;
         overtimeHours += manualOtHours;
 
-        // COMPLIANCE: Mandatory Philippine government deductions are ALWAYS applied
-        // Per DOLE/BIR/SSS/PhilHealth/Pag-IBIG 2026 regulations
-        // These cannot be toggled off - they are required by law
-        const settings = {
-          deductSSS: true,           // SSS contribution - MANDATORY
-          deductPhilHealth: true,    // PhilHealth contribution - MANDATORY
-          deductPagibig: true,       // Pag-IBIG/HDMF contribution - MANDATORY
-          deductWithholdingTax: true, // BIR withholding tax - MANDATORY (threshold-based)
-        };
-
         // Calculate monthly equivalent salary for deduction calculations
         // For Philippine statutory deductions (SSS/PhilHealth/Pag-IBIG), we need monthly basis
         const periodStartDate = new Date(period.startDate);
@@ -1579,15 +1569,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Import deduction calculator
-        const { calculateAllDeductions } = await import('./utils/deductions');
-        const deductionBreakdown = await calculateAllDeductions(monthlyBasicSalary, settings);
+        const { calculateAllDeductions, calculateWithholdingTax } = await import('./utils/deductions');
 
+        // Philippine statutory deductions use MONTHLY salary basis.
+        // SSS, PhilHealth, Pag-IBIG are computed once per month.
+        // For semi-monthly (15-day) periods, we calculate on the monthly equivalent
+        // but only deduct HALF per cutoff (the other half comes from the 2nd cutoff).
+        const isSemiMonthly = daysInPeriod < 28; // 15-day period = semi-monthly
 
-        // Calculate total deductions
-        const sssContribution = deductionBreakdown.sssContribution;
-        const philHealthContribution = deductionBreakdown.philHealthContribution;
-        const pagibigContribution = deductionBreakdown.pagibigContribution;
-        const withholdingTax = deductionBreakdown.withholdingTax;
+        // Step 1: Calculate SSS, PhilHealth, Pag-IBIG on monthly basis
+        const mandatorySettings = {
+          deductSSS: true,
+          deductPhilHealth: true,
+          deductPagibig: true,
+          deductWithholdingTax: false, // Tax computed separately on taxable income
+        };
+        const mandatoryBreakdown = await calculateAllDeductions(monthlyBasicSalary, mandatorySettings);
+
+        // For semi-monthly payroll, each cutoff pays half the monthly contribution
+        const periodFraction = isSemiMonthly ? 0.5 : 1;
+        const sssContribution = Math.round(mandatoryBreakdown.sssContribution * periodFraction * 100) / 100;
+        const philHealthContribution = Math.round(mandatoryBreakdown.philHealthContribution * periodFraction * 100) / 100;
+        const pagibigContribution = Math.round(mandatoryBreakdown.pagibigContribution * periodFraction * 100) / 100;
+
+        // Step 2: BIR withholding tax is computed on TAXABLE INCOME
+        // Taxable = monthly gross - SSS - PhilHealth - Pag-IBIG (mandatory deductions)
+        const monthlyMandatory = mandatoryBreakdown.sssContribution + mandatoryBreakdown.philHealthContribution + mandatoryBreakdown.pagibigContribution;
+        const monthlyTaxableIncome = Math.max(0, monthlyBasicSalary - monthlyMandatory);
+        const monthlyTax = await calculateWithholdingTax(monthlyTaxableIncome);
+        const withholdingTax = Math.round(monthlyTax * periodFraction * 100) / 100;
 
         // Get recurring deductions from employee record
         const sssLoan = parseFloat(employee.sssLoanDeduction || '0');
@@ -1818,11 +1828,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(403).json({ message: "Unauthorized access to payroll entry" });
     }
 
-    // Get user details
-    const user = await storage.getUser(userId);
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
+    // Get user details — use the EMPLOYEE's userId from the entry, not the logged-in user
+    const employeeUser = await storage.getUser(entry.userId);
+    if (!employeeUser) {
+      return res.status(404).json({ message: "Employee not found" });
     }
+    const user = employeeUser;
 
     // Parse the pay breakdown JSON if it exists
     let breakdown = null;

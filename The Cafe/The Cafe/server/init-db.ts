@@ -436,42 +436,15 @@ export async function seedDeductionRates() {
       return;
     }
 
-    // Insert SSS contribution table (2024 rates)
-    const sssRates = [
-      { minSalary: '0', maxSalary: '4249.99', employeeContribution: '180.00' },
-      { minSalary: '4250', maxSalary: '4749.99', employeeContribution: '202.50' },
-      { minSalary: '4750', maxSalary: '5249.99', employeeContribution: '225.00' },
-      { minSalary: '5250', maxSalary: '5749.99', employeeContribution: '247.50' },
-      { minSalary: '5750', maxSalary: '6249.99', employeeContribution: '270.00' },
-      { minSalary: '6250', maxSalary: '6749.99', employeeContribution: '292.50' },
-      { minSalary: '6750', maxSalary: '7249.99', employeeContribution: '315.00' },
-      { minSalary: '7250', maxSalary: '7749.99', employeeContribution: '337.50' },
-      { minSalary: '7750', maxSalary: '8249.99', employeeContribution: '360.00' },
-      { minSalary: '8250', maxSalary: '8749.99', employeeContribution: '382.50' },
-      { minSalary: '8750', maxSalary: '9249.99', employeeContribution: '405.00' },
-      { minSalary: '9250', maxSalary: '9749.99', employeeContribution: '427.50' },
-      { minSalary: '9750', maxSalary: '10249.99', employeeContribution: '450.00' },
-      { minSalary: '10250', maxSalary: '10749.99', employeeContribution: '472.50' },
-      { minSalary: '10750', maxSalary: '11249.99', employeeContribution: '495.00' },
-      { minSalary: '11250', maxSalary: '11749.99', employeeContribution: '517.50' },
-      { minSalary: '11750', maxSalary: '12249.99', employeeContribution: '540.00' },
-      { minSalary: '12250', maxSalary: '12749.99', employeeContribution: '562.50' },
-      { minSalary: '12750', maxSalary: '13249.99', employeeContribution: '585.00' },
-      { minSalary: '13250', maxSalary: '13749.99', employeeContribution: '607.50' },
-      { minSalary: '13750', maxSalary: '14249.99', employeeContribution: '630.00' },
-      { minSalary: '14250', maxSalary: '14749.99', employeeContribution: '652.50' },
-      { minSalary: '14750', maxSalary: '15249.99', employeeContribution: '675.00' },
-      { minSalary: '15250', maxSalary: '15749.99', employeeContribution: '697.50' },
-      { minSalary: '15750', maxSalary: '16249.99', employeeContribution: '720.00' },
-      { minSalary: '16250', maxSalary: '16749.99', employeeContribution: '742.50' },
-      { minSalary: '16750', maxSalary: '17249.99', employeeContribution: '765.00' },
-      { minSalary: '17250', maxSalary: '17749.99', employeeContribution: '787.50' },
-      { minSalary: '17750', maxSalary: '18249.99', employeeContribution: '810.00' },
-      { minSalary: '18250', maxSalary: '18749.99', employeeContribution: '832.50' },
-      { minSalary: '18750', maxSalary: '19249.99', employeeContribution: '855.00' },
-      { minSalary: '19250', maxSalary: '19749.99', employeeContribution: '877.50' },
-      { minSalary: '19750', maxSalary: null, employeeContribution: '900.00' },
-    ];
+    // Insert SSS contribution table — 2026 rates (61 brackets)
+    // 15% total: 5% Employee / 10% Employer, MSC ₱5,000–₱35,000
+    // MPF/WISP applies for salaries above ₱20,000
+    const { sss2026Brackets } = await import('../shared/sss-2026-rates');
+    const sssRates = sss2026Brackets.map(b => ({
+      minSalary: String(b.minSalary),
+      maxSalary: b.maxSalary !== null ? String(b.maxSalary) : null,
+      employeeContribution: String(b.totalEE.toFixed(2)),
+    }));
 
     for (const rate of sssRates) {
       await db.insert(deductionRates).values({
@@ -505,8 +478,8 @@ export async function seedDeductionRates() {
       minSalary: '0',
       maxSalary: null,
       employeeRate: '2',
-      employeeContribution: '100', // Max cap (will be ₱200 soon)
-      description: '2% of salary, max ₱100 (soon ₱200)',
+      employeeContribution: '200', // Max cap ₱200 (effective 2026)
+      description: '2% of salary, max ₱200 (2026 rate)',
       isActive: true,
     });
 
@@ -564,7 +537,7 @@ export async function seedDeductionRates() {
       });
     }
 
-    console.log('✅ Deduction rates seeded (SSS 33 brackets, PhilHealth, Pag-IBIG, BIR TRAIN law)');
+    console.log('✅ Deduction rates seeded (SSS 61 brackets 2026, PhilHealth 2.5%, Pag-IBIG 2% max ₱200, BIR TRAIN law)');
   } catch (error) {
     console.error('❌ Error seeding deduction rates:', error);
     throw error;
