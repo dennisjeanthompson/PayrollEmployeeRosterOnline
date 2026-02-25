@@ -583,18 +583,39 @@ export async function seedPhilippineHolidays() {
       { name: "New Year's Eve", date: '2025-12-31', type: 'special_non_working', isRecurring: true },
     ];
 
-    // 2026 Skeleton (forward planning)
+    // 2026 Philippine Holidays — Complete official list from timeanddate.com
+    // Based on expected Proclamation for 2026
     const holidays2026 = [
+      // ===== Regular Holidays (200% pay if worked, 100% if not worked) =====
       { name: "New Year's Day", date: '2026-01-01', type: 'regular', isRecurring: true },
-      { name: 'Araw ng Kagitingan', date: '2026-04-09', type: 'regular', isRecurring: true },
+      { name: 'Eid\'l Fitr', date: '2026-03-20', type: 'regular', isRecurring: false, notes: 'Tentative date — subject to NCMF announcement' },
       { name: 'Maundy Thursday', date: '2026-04-02', type: 'regular', isRecurring: false },
       { name: 'Good Friday', date: '2026-04-03', type: 'regular', isRecurring: false },
+      { name: 'Araw ng Kagitingan (Day of Valor)', date: '2026-04-09', type: 'regular', isRecurring: true },
       { name: 'Labor Day', date: '2026-05-01', type: 'regular', isRecurring: true },
+      { name: 'Eid\'l Adha', date: '2026-05-27', type: 'regular', isRecurring: false, notes: 'Tentative date — subject to NCMF announcement' },
       { name: 'Independence Day', date: '2026-06-12', type: 'regular', isRecurring: true },
-      { name: 'National Heroes Day', date: '2026-08-31', type: 'regular', isRecurring: false },
+      { name: 'National Heroes Day', date: '2026-08-31', type: 'regular', isRecurring: false, notes: 'Last Monday of August' },
       { name: 'Bonifacio Day', date: '2026-11-30', type: 'regular', isRecurring: true },
       { name: 'Christmas Day', date: '2026-12-25', type: 'regular', isRecurring: true },
       { name: 'Rizal Day', date: '2026-12-30', type: 'regular', isRecurring: true },
+
+      // ===== Special Non-Working Days (130% pay if worked, no pay if not worked) =====
+      { name: 'Lunar New Year (Chinese New Year)', date: '2026-02-17', type: 'special_non_working', isRecurring: false },
+      { name: 'Black Saturday', date: '2026-04-04', type: 'special_non_working', isRecurring: false },
+      { name: 'Ninoy Aquino Day', date: '2026-08-21', type: 'special_non_working', isRecurring: true },
+      { name: "All Saints' Day", date: '2026-11-01', type: 'special_non_working', isRecurring: true },
+      { name: "All Souls' Day", date: '2026-11-02', type: 'special_non_working', isRecurring: true },
+      { name: 'Feast of the Immaculate Conception', date: '2026-12-08', type: 'special_non_working', isRecurring: true },
+      { name: 'Christmas Eve', date: '2026-12-24', type: 'special_non_working', isRecurring: true },
+      { name: "New Year's Eve", date: '2026-12-31', type: 'special_non_working', isRecurring: true },
+
+      // ===== Special Working Days (normal 100% pay, commemorative only) =====
+      { name: 'First Philippine Republic Day', date: '2026-01-23', type: 'special_working', isRecurring: true },
+      { name: 'Founding Anniversary of Iglesia ni Cristo', date: '2026-07-27', type: 'special_working', isRecurring: true },
+      { name: 'Yamashita Surrender Day', date: '2026-09-03', type: 'special_working', isRecurring: true },
+      { name: 'Feast of the Nativity of Mary', date: '2026-09-08', type: 'special_working', isRecurring: true },
+      { name: "Sheikh Karim'ul Makhdum Day", date: '2026-11-07', type: 'special_working', isRecurring: true },
     ];
 
     const allHolidays = [...holidays2025, ...holidays2026];
@@ -613,7 +634,7 @@ export async function seedPhilippineHolidays() {
       });
     }
 
-    console.log('✅ Philippine holidays seeded (2025 Proclamation 727 + 2026 skeleton)');
+    console.log('✅ Philippine holidays seeded (2025 Proclamation 727 + 2026 complete official list)');
   } catch (error) {
     console.error('❌ Error seeding holidays:', error);
     throw error;
