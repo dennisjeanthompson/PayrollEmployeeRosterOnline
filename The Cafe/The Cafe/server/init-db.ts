@@ -810,8 +810,9 @@ export async function seedSampleSchedulesAndPayroll() {
     const branchId = branch[0].id;
 
     // ═══════════════════════════════════════════════════════════════
-    // CREATE SHIFTS (December 2025 Schedule — absolute dates)
+    // CREATE SHIFTS (January–February 2026 Schedule)
     // Each employee works 8-hour shifts, consistent with payroll.
+    // All 2026 rates apply (SSS 2026, PhilHealth 2.5%, Pag-IBIG ₱200 cap)
     // ═══════════════════════════════════════════════════════════════
     
     const shiftPatterns = [
@@ -820,56 +821,48 @@ export async function seedSampleSchedulesAndPayroll() {
       { name: 'Afternoon', start: 14, end: 22 }, // 8 hours
     ];
 
-    // Dec 1-15, 2025 working days (skip Sundays Dec 7 & Dec 14)
-    // = 13 working days × 8h = 104h per employee
-    // But give each employee 1 additional rest day per week for realism
-    // Pattern: employee index determines which Saturday they skip
-    const dec2025WorkingDays: Date[] = [];
-    for (let d = 1; d <= 15; d++) {
-      const dt = new Date(Date.UTC(2025, 11, d)); // month is 0-indexed, so 11=Dec
-      if (dt.getUTCDay() === 0) continue; // Skip Sundays
-      dec2025WorkingDays.push(dt);
+    // Helper: generate working days (Mon-Sat, skip Sundays + holidays)
+    function getWorkingDays(year: number, month: number, startDay: number, endDay: number, holidayDates: string[] = []): Date[] {
+      const days: Date[] = [];
+      for (let d = startDay; d <= endDay; d++) {
+        const dt = new Date(Date.UTC(year, month, d));
+        if (dt.getUTCDay() === 0) continue; // Skip Sundays
+        const dateStr = dt.toISOString().slice(0, 10);
+        if (holidayDates.includes(dateStr)) continue; // Skip holidays
+        days.push(dt);
+      }
+      return days;
     }
-    // 13 working days total
 
-    // Also create shifts for Nov 1-15 and Nov 16-30 periods
-    const nov1_15WorkingDays: Date[] = [];
-    for (let d = 1; d <= 15; d++) {
-      const dt = new Date(Date.UTC(2025, 10, d)); // 10=Nov
-      if (dt.getUTCDay() === 0) continue;
-      nov1_15WorkingDays.push(dt);
-    }
-    const nov16_30WorkingDays: Date[] = [];
-    for (let d = 16; d <= 30; d++) {
-      const dt = new Date(Date.UTC(2025, 10, d));
-      if (dt.getUTCDay() === 0) continue;
-      nov16_30WorkingDays.push(dt);
-    }
+    // 2026 holidays that affect working days in Jan-Feb
+    const jan2026Holidays = ['2026-01-01']; // New Year's Day (regular holiday — paid day off)
+    const feb2026Holidays = ['2026-02-17']; // Lunar New Year (special non-working)
+
+    // Generate working days for each semi-monthly period
+    const jan1_15 = getWorkingDays(2026, 0, 1, 15, jan2026Holidays);  // Jan (month=0)
+    const jan16_31 = getWorkingDays(2026, 0, 16, 31, jan2026Holidays);
+    const feb1_15 = getWorkingDays(2026, 1, 1, 15, feb2026Holidays);   // Feb (month=1)
 
     const allPeriodDays = [
-      { periodId: 'period-2025-11-01', days: nov1_15WorkingDays },
-      { periodId: 'period-2025-11-16', days: nov16_30WorkingDays },
-      { periodId: 'period-2025-12-01', days: dec2025WorkingDays },
+      { periodId: 'period-2026-01-01', days: jan1_15 },
+      { periodId: 'period-2026-01-16', days: jan16_31 },
+      { periodId: 'period-2026-02-01', days: feb1_15 },
     ];
 
     // All staff including manager get shifts
     const allStaff = [...employees, manager].filter(Boolean) as typeof employees;
 
     for (const { periodId, days } of allPeriodDays) {
-      const isCurrent = periodId === 'period-2025-12-01';
       for (const shiftDate of days) {
         for (let i = 0; i < allStaff.length; i++) {
           const emp = allStaff[i];
           const pattern = shiftPatterns[i % shiftPatterns.length];
 
-          // TIMEZONE FIX: Use setUTCHours so shift times are stored consistently
           const startTime = new Date(shiftDate);
           startTime.setUTCHours(pattern.start, 0, 0, 0);
 
           const endTime = new Date(shiftDate);
           endTime.setUTCHours(pattern.end, 0, 0, 0);
-
-          const status = isCurrent ? 'completed' : 'completed';
 
           await db.insert(shifts).values({
             id: randomUUID(),
@@ -878,47 +871,48 @@ export async function seedSampleSchedulesAndPayroll() {
             startTime: startTime,
             endTime: endTime,
             position: emp.position,
-            status: status,
+            status: 'completed',
           });
         }
       }
     }
-    console.log('   ✅ Created shifts for Nov-Dec 2025 (aligned with payroll periods)');
+    console.log('   ✅ Created shifts for Jan–Feb 2026 (aligned with payroll periods)');
 
     // ═══════════════════════════════════════════════════════════════
-    // CREATE PAYROLL PERIODS (November 16-30 and December 1-15, 2025)
+    // CREATE PAYROLL PERIODS (Jan 1-15, Jan 16-31, Feb 1-15, 2026)
+    // All deductions use 2026 rates — no year-mismatch issue
     // ═══════════════════════════════════════════════════════════════
 
     const payrollPeriodsList = [
       { 
-        startDate: new Date('2025-11-01'), 
-        endDate: new Date('2025-11-15'), 
+        startDate: new Date('2026-01-01'), 
+        endDate: new Date('2026-01-15'), 
         status: 'closed',
-        id: 'period-2025-11-01'
+        id: 'period-2026-01-01'
       },
       { 
-        startDate: new Date('2025-11-16'), 
-        endDate: new Date('2025-11-30'), 
+        startDate: new Date('2026-01-16'), 
+        endDate: new Date('2026-01-31'), 
         status: 'closed',
-        id: 'period-2025-11-16'
+        id: 'period-2026-01-16'
       },
       { 
-        startDate: new Date('2025-12-01'), 
-        endDate: new Date('2025-12-15'), 
+        startDate: new Date('2026-02-01'), 
+        endDate: new Date('2026-02-15'), 
         status: 'open',
-        id: 'period-2025-12-01'
+        id: 'period-2026-02-01'
       },
     ];
 
     // Count working days per period for consistent hour calculations
     const periodWorkingDays: Record<string, number> = {
-      'period-2025-11-01': nov1_15WorkingDays.length,
-      'period-2025-11-16': nov16_30WorkingDays.length,
-      'period-2025-12-01': dec2025WorkingDays.length,
+      'period-2026-01-01': jan1_15.length,
+      'period-2026-01-16': jan16_31.length,
+      'period-2026-02-01': feb1_15.length,
     };
 
     for (const period of payrollPeriodsList) {
-      const workingDays = periodWorkingDays[period.id] || 13;
+      const workingDays = periodWorkingDays[period.id] || 12;
 
       await db.insert(payrollPeriods).values({
         id: period.id,
@@ -931,27 +925,35 @@ export async function seedSampleSchedulesAndPayroll() {
       });
 
       // Create payroll entries for all employees AND the manager
-      // NO random OT — shifts are exactly 8h, so all hours are regular.
       // Only Bea gets OT (from her exception log, seeded below).
       for (const emp of allStaff) {
         const hourlyRate = parseFloat(emp.hourlyRate);
-        const regularHours = workingDays * 8; // Exactly 8h per working day
+        const regularHours = workingDays * 8;
         const isBea = emp.id === 'user-emp-bea';
         // Only Bea has OT via exception log (2 hrs regular OT at 125%)
-        const overtimeHours = isBea && period.id === 'period-2025-12-01' ? 2 : 0;
-        const nightDiffHours = 0; // No seeded night shifts cross 10PM-6AM
+        const overtimeHours = isBea && period.id === 'period-2026-02-01' ? 2 : 0;
+        const nightDiffHours = 0;
 
         const basicPay = regularHours * hourlyRate;
         const overtimePay = overtimeHours * hourlyRate * 1.25;
         const nightDiffPay = 0;
-        // Bonifacio Day (Nov 30) falls in period-2025-11-16
-        const holidayPay = period.id === 'period-2025-11-16' ? hourlyRate * 8 * 2 : 0;
+
+        // Holiday pay calculation:
+        // Jan 1 (New Year's Day) — regular holiday, 200% → extra 100% for 8h
+        // Feb 17 (Lunar New Year) — special non-working, employees stay home, no extra pay if not worked
+        // Workers did NOT work on holidays (they're excluded from working days)
+        // Regular holidays = paid even if not worked (100% of daily rate)
+        let holidayPay = 0;
+        if (period.id === 'period-2026-01-01') {
+          // New Year's Day (Jan 1) — regular holiday, employee gets daily rate even if not worked
+          holidayPay = hourlyRate * 8; // 100% of daily rate for unworked regular holiday
+        }
 
         const grossPay = basicPay + overtimePay + nightDiffPay + holidayPay;
 
         // Calculate deductions (2026 rates — DOLE-compliant)
         const { calculateAllDeductions } = await import('./utils/deductions');
-        const monthlyBasicSalary = (grossPay / (periodWorkingDays[period.id] || 15)) * 30;
+        const monthlyBasicSalary = (grossPay / (periodWorkingDays[period.id] || 12)) * 30;
         const deductionBreakdown = await calculateAllDeductions(monthlyBasicSalary, {
           deductSSS: true,
           deductPhilHealth: true,
@@ -996,16 +998,16 @@ export async function seedSampleSchedulesAndPayroll() {
         });
       }
     }
-    console.log('   ✅ Created 3 payroll periods with consistent entries (only Bea has OT)');
+    console.log('   ✅ Created 3 payroll periods (Jan–Feb 2026) with 2026 deduction rates');
 
     // ═══════════════════════════════════════════════════════════════
-    // CREATE TIME-OFF REQUESTS
+    // CREATE TIME-OFF REQUESTS (2026 dates)
     // ═══════════════════════════════════════════════════════════════
 
     const timeOffRequests_data = [
-      { userId: employees[0].id, startDate: new Date('2025-12-24'), endDate: new Date('2025-12-25'), type: 'vacation', reason: 'Christmas family gathering', status: 'approved' },
-      { userId: employees[1].id, startDate: new Date('2025-12-10'), endDate: new Date('2025-12-10'), type: 'sick', reason: 'Medical checkup', status: 'pending' },
-      { userId: employees[2].id, startDate: new Date('2025-12-31'), endDate: new Date('2026-01-01'), type: 'vacation', reason: 'New Year celebration', status: 'pending' },
+      { userId: employees[0].id, startDate: new Date('2026-02-23'), endDate: new Date('2026-02-24'), type: 'vacation', reason: 'Family event', status: 'approved' },
+      { userId: employees[1].id, startDate: new Date('2026-02-10'), endDate: new Date('2026-02-10'), type: 'sick', reason: 'Medical checkup', status: 'pending' },
+      { userId: employees[2].id, startDate: new Date('2026-03-02'), endDate: new Date('2026-03-03'), type: 'vacation', reason: 'Personal travel', status: 'pending' },
     ];
 
     for (const req of timeOffRequests_data) {
@@ -1026,11 +1028,11 @@ export async function seedSampleSchedulesAndPayroll() {
     // ═══════════════════════════════════════════════════════════════
 
     const notificationsList = [
-      { userId: employees[0].id, type: 'payroll', title: 'Payslip Available', message: 'Your payslip for Nov 16-30, 2025 is now available.' },
-      { userId: employees[0].id, type: 'schedule', title: 'New Shift Assigned', message: 'You have been assigned morning shift for Dec 10, 2025.' },
-      { userId: employees[1].id, type: 'time_off', title: 'Time-Off Request Pending', message: 'Your sick leave request for Dec 10 is under review.' },
+      { userId: employees[0].id, type: 'payroll', title: 'Payslip Available', message: 'Your payslip for Jan 16-31, 2026 is now available.' },
+      { userId: employees[0].id, type: 'schedule', title: 'New Shift Assigned', message: 'You have been assigned morning shift for Feb 10, 2026.' },
+      { userId: employees[1].id, type: 'time_off', title: 'Time-Off Request Pending', message: 'Your sick leave request for Feb 10 is under review.' },
       { userId: manager?.id || employees[0].id, type: 'approval', title: 'Pending Approvals', message: 'You have 2 time-off requests awaiting your approval.' },
-      { userId: manager?.id || employees[0].id, type: 'payroll', title: 'Payroll Due', message: 'December 1-15 payroll needs to be processed by Dec 20.' },
+      { userId: manager?.id || employees[0].id, type: 'payroll', title: 'Payroll Due', message: 'February 1-15 payroll needs to be processed by Feb 20.' },
     ];
 
     for (const notif of notificationsList) {
@@ -1057,18 +1059,18 @@ export async function seedSampleSchedulesAndPayroll() {
         employeeId: beaUser.id,
         branchId: branchId,
         loggedBy: manager.id,
-        date: new Date(Date.UTC(2025, 11, 5)), // Dec 5, 2025
+        date: new Date(Date.UTC(2026, 1, 5)), // Feb 5, 2026
         type: 'overtime',
         value: '2',
         remarks: 'approved by manager',
         status: 'approved',
         verifiedByEmployee: false,
         approvedBy: manager.id,
-        approvedAt: new Date(Date.UTC(2025, 11, 5)),
-        payrollPeriodId: 'period-2025-12-01',
+        approvedAt: new Date(Date.UTC(2026, 1, 5)),
+        payrollPeriodId: 'period-2026-02-01',
         calculatedAmount: (parseFloat(beaUser.hourlyRate) * 1.25 * 2).toFixed(2),
       });
-      console.log('   ✅ Created Bea OT exception log (2 hrs, Dec 5)');
+      console.log('   ✅ Created Bea OT exception log (2 hrs, Feb 5, 2026)');
     }
 
     console.log('✅ Sample schedules and payroll seeded successfully');
