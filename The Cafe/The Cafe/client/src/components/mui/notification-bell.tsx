@@ -37,6 +37,14 @@ import {
   MarkEmailRead as MarkReadIcon,
   OpenInNew as OpenIcon,
   NotificationsNone as EmptyIcon,
+  AttachMoney as MoneyIcon,
+  CalendarMonth as ScheduleIcon,
+  Login as ClockInIcon,
+  Logout as ClockOutIcon,
+  EventAvailable as TimeOffApprovedIcon,
+  EventBusy as TimeOffRejectedIcon,
+  Tune as AdjustmentIcon,
+  Info as InfoIcon,
 } from '@mui/icons-material';
 
 interface Notification {
@@ -53,16 +61,34 @@ interface Notification {
 // Get icon based on notification type
 const getNotificationIcon = (type: string, data?: any) => {
   switch (type) {
+    case 'payroll':
+    case 'payment':
+      return <MoneyIcon sx={{ color: 'info.main' }} />;
+    case 'schedule':
+    case 'shift_update':
+    case 'shift_assigned':
+      return <ScheduleIcon sx={{ color: 'primary.main' }} />;
     case 'time_off':
       return <TimeOffIcon sx={{ color: 'primary.main' }} />;
+    case 'time_off_approved':
+      return <TimeOffApprovedIcon sx={{ color: 'success.main' }} />;
+    case 'time_off_rejected':
+      return <TimeOffRejectedIcon sx={{ color: 'error.main' }} />;
     case 'shift_trade':
+    case 'trade_request':
       return <TradeIcon sx={{ color: 'secondary.main' }} />;
     case 'approval':
       return <ApprovedIcon sx={{ color: 'success.main' }} />;
     case 'rejection':
       return <RejectedIcon sx={{ color: 'error.main' }} />;
+    case 'clock_in':
+      return <ClockInIcon sx={{ color: 'success.main' }} />;
+    case 'clock_out':
+      return <ClockOutIcon sx={{ color: 'warning.main' }} />;
+    case 'adjustment':
+      return <AdjustmentIcon sx={{ color: 'info.main' }} />;
     default:
-      return <PendingIcon sx={{ color: 'warning.main' }} />;
+      return <InfoIcon sx={{ color: 'text.secondary' }} />;
   }
 };
 

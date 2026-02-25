@@ -199,10 +199,16 @@ export default function MuiNotifications() {
       shift_trade: "Shift Trade",
       trade_request: "Trade Request",
       time_off: "Time Off",
-      time_off_approved: "Time Off Approved",
-      time_off_rejected: "Time Off Rejected",
+      time_off_approved: "Approved",
+      time_off_rejected: "Rejected",
       payroll: "Payroll",
       payment: "Payment",
+      approval: "Approval",
+      rejection: "Rejected",
+      schedule: "Schedule",
+      clock_in: "Clock In",
+      clock_out: "Clock Out",
+      adjustment: "Adjustment",
       warning: "Warning",
       success: "Success",
       error: "Error",
@@ -215,16 +221,27 @@ export default function MuiNotifications() {
     switch (type) {
       case "shift_update":
       case "shift_assigned":
+      case "schedule":
         return <ScheduleIcon />;
       case "shift_trade":
       case "trade_request":
         return <SwapIcon />;
       case "time_off":
-      case "time_off_approved":
-      case "time_off_rejected":
         return <EventIcon />;
+      case "time_off_approved":
+      case "approval":
+        return <SuccessIcon />;
+      case "time_off_rejected":
+      case "rejection":
+        return <ErrorIcon />;
       case "payroll":
       case "payment":
+        return <MoneyIcon />;
+      case "clock_in":
+        return <ScheduleIcon />;
+      case "clock_out":
+        return <ScheduleIcon />;
+      case "adjustment":
         return <MoneyIcon />;
       case "warning":
         return <WarningIcon />;
@@ -241,22 +258,29 @@ export default function MuiNotifications() {
     switch (type) {
       case "shift_update":
       case "shift_assigned":
+      case "schedule":
         return theme.palette.primary.main;
       case "shift_trade":
       case "trade_request":
         return theme.palette.secondary.main;
+      case "time_off":
+        return theme.palette.primary.main;
       case "time_off_approved":
+      case "approval":
       case "success":
         return theme.palette.success.main;
       case "time_off_rejected":
+      case "rejection":
       case "error":
         return theme.palette.error.main;
       case "warning":
         return theme.palette.warning.main;
       case "payroll":
       case "payment":
+      case "adjustment":
         return theme.palette.info.main;
       case "clock_in":
+        return theme.palette.success.main;
       case "clock_out":
         return theme.palette.warning.main;
       default:

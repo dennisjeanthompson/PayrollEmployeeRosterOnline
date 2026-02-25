@@ -12,7 +12,13 @@ import {
   Gift,
   MessageCircle,
   CheckCheck,
-  Trash2
+  Trash2,
+  Clock,
+  LogIn,
+  LogOut,
+  XCircle,
+  SlidersHorizontal,
+  Info,
 } from "lucide-react";
 import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
@@ -106,7 +112,22 @@ export default function MobileNotifications() {
         color: 'text-blue-600', 
         bg: 'bg-blue-100 dark:bg-blue-950' 
       },
+      shift_update: { 
+        icon: Calendar, 
+        color: 'text-blue-600', 
+        bg: 'bg-blue-100 dark:bg-blue-950' 
+      },
+      shift_assigned: { 
+        icon: Calendar, 
+        color: 'text-blue-600', 
+        bg: 'bg-blue-100 dark:bg-blue-950' 
+      },
       payroll: { 
+        icon: DollarSign, 
+        color: 'text-green-600', 
+        bg: 'bg-green-100 dark:bg-green-950' 
+      },
+      payment: { 
         icon: DollarSign, 
         color: 'text-green-600', 
         bg: 'bg-green-100 dark:bg-green-950' 
@@ -116,10 +137,75 @@ export default function MobileNotifications() {
         color: 'text-purple-600', 
         bg: 'bg-purple-100 dark:bg-purple-950' 
       },
+      trade_request: { 
+        icon: ArrowRightLeft, 
+        color: 'text-purple-600', 
+        bg: 'bg-purple-100 dark:bg-purple-950' 
+      },
+      time_off: { 
+        icon: Calendar, 
+        color: 'text-blue-600', 
+        bg: 'bg-blue-100 dark:bg-blue-950' 
+      },
+      time_off_approved: { 
+        icon: CheckCircle, 
+        color: 'text-green-600', 
+        bg: 'bg-green-100 dark:bg-green-950' 
+      },
+      approval: { 
+        icon: CheckCircle, 
+        color: 'text-green-600', 
+        bg: 'bg-green-100 dark:bg-green-950' 
+      },
+      time_off_rejected: { 
+        icon: XCircle, 
+        color: 'text-red-600', 
+        bg: 'bg-red-100 dark:bg-red-950' 
+      },
+      rejection: { 
+        icon: XCircle, 
+        color: 'text-red-600', 
+        bg: 'bg-red-100 dark:bg-red-950' 
+      },
+      clock_in: { 
+        icon: LogIn, 
+        color: 'text-green-600', 
+        bg: 'bg-green-100 dark:bg-green-950' 
+      },
+      clock_out: { 
+        icon: LogOut, 
+        color: 'text-orange-600', 
+        bg: 'bg-orange-100 dark:bg-orange-950' 
+      },
+      adjustment: { 
+        icon: SlidersHorizontal, 
+        color: 'text-cyan-600', 
+        bg: 'bg-cyan-100 dark:bg-cyan-950' 
+      },
       alert: { 
         icon: AlertCircle, 
         color: 'text-red-600', 
         bg: 'bg-red-100 dark:bg-red-950' 
+      },
+      warning: { 
+        icon: AlertCircle, 
+        color: 'text-yellow-600', 
+        bg: 'bg-yellow-100 dark:bg-yellow-950' 
+      },
+      success: { 
+        icon: CheckCircle, 
+        color: 'text-green-600', 
+        bg: 'bg-green-100 dark:bg-green-950' 
+      },
+      error: { 
+        icon: XCircle, 
+        color: 'text-red-600', 
+        bg: 'bg-red-100 dark:bg-red-950' 
+      },
+      info: { 
+        icon: Info, 
+        color: 'text-blue-600', 
+        bg: 'bg-blue-100 dark:bg-blue-950' 
       },
       reward: { 
         icon: Gift, 
@@ -133,8 +219,8 @@ export default function MobileNotifications() {
       },
       default: { 
         icon: Bell, 
-        color: 'text-orange-600', 
-        bg: 'bg-orange-100 dark:bg-orange-950' 
+        color: 'text-gray-600', 
+        bg: 'bg-gray-100 dark:bg-gray-950' 
       },
     };
     return configs[type] || configs.default;
