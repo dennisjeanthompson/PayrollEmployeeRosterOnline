@@ -3813,16 +3813,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Now process payroll for the current period to generate entries with hours
-      // Get or create payroll period for Dec 1-15, 2025
-      const periodStart = new Date('2025-12-01');
-      const periodEnd = new Date('2025-12-15');
+      // Now process payroll for the current semi-monthly period
+      // Determine current period: 1st-15th or 16th-end of month
+      const currentDay = now.getDate();
+      let periodStart: Date;
+      let periodEnd: Date;
+      if (currentDay <= 15) {
+        periodStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 1));
+        periodEnd = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 15));
+      } else {
+        periodStart = new Date(Date.UTC(now.getFullYear(), now.getMonth(), 16));
+        // Last day of month
+        periodEnd = new Date(Date.UTC(now.getFullYear(), now.getMonth() + 1, 0));
+      }
       
       let payrollPeriod = null;
       const existingPeriods = await storage.getPayrollPeriods(branchId);
       payrollPeriod = existingPeriods.find(p => {
         const pStart = new Date(p.startDate);
-        return pStart.getMonth() === 11 && pStart.getDate() <= 5;
+        const pEnd = new Date(p.endDate);
+        return pStart.getTime() === periodStart.getTime() && pEnd.getTime() === periodEnd.getTime();
       });
 
       if (!payrollPeriod) {
@@ -3875,11 +3885,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const overtimePay = overtimeHours * hourlyRate * 1.25;
         const grossPay = basicPay + overtimePay;
 
-        // Philippine deductions (2025 rates)
-        const sssContribution = grossPay >= 20000 ? 900 : grossPay >= 15000 ? 675 : grossPay >= 10000 ? 450 : 225;
-        const philhealthContribution = Math.min(grossPay * 0.025, 500);
-        const pagibigContribution = Math.min(grossPay * 0.02, 200);
-        const withholdingTax = grossPay > 20833 ? (grossPay - 20833) * 0.15 : 0;
+        // Use proper 2026 deduction calculator (SSS, PhilHealth, Pag-IBIG, withholding tax)
+        const { calculateAllDeductions } = await import('./utils/deductions');
+        const monthlyBasicSalary = (grossPay / Math.max(regularHours / 8, 1)) * 30; // project to monthly
+        const deductionBreakdown = await calculateAllDeductions(monthlyBasicSalary, {
+          deductSSS: true,
+          deductPhilHealth: true,
+          deductPagibig: true,
+          deductWithholdingTax: true,
+        });
+
+        // Semi-monthly: deduct half of monthly contributions
+        const periodFraction = 0.5;
+        const sssContribution = deductionBreakdown.sssContribution * periodFraction;
+        const philhealthContribution = deductionBreakdown.philHealthContribution * periodFraction;
+        const pagibigContribution = deductionBreakdown.pagibigContribution * periodFraction;
+        const withholdingTax = deductionBreakdown.withholdingTax * periodFraction;
         const totalDeductions = sssContribution + philhealthContribution + pagibigContribution + withholdingTax;
         const netPay = grossPay - totalDeductions;
 
