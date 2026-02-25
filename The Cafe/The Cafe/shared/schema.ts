@@ -111,6 +111,7 @@ export const payrollEntries = pgTable("payroll_entries", {
   transactionHash: text("transaction_hash"),
   verified: boolean("verified").default(false),
   createdAt: timestamp("created_at").defaultNow(),
+  paidAt: timestamp("paid_at"),
 });
 
 export const approvals = pgTable("approvals", {

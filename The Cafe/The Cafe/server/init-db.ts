@@ -4,6 +4,7 @@ import {
   approvals, timeOffRequests, notifications, setupStatus, deductionSettings, 
   deductionRates, holidays, archivedPayrollPeriods, adjustmentLogs 
 } from '@shared/schema';
+import { getPaymentDate } from '@shared/payroll-dates';
 import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { eq, sql } from 'drizzle-orm';
@@ -1101,6 +1102,7 @@ export async function seedSampleSchedulesAndPayroll() {
           deductions: totalDeductions.toFixed(2),
           netPay: netPay.toFixed(2),
           status: period.status === 'closed' ? 'paid' : 'pending',
+          paidAt: period.status === 'closed' ? getPaymentDate(period.endDate) : null,
         });
       }
 

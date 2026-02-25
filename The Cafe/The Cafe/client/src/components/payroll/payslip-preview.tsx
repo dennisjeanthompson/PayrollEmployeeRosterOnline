@@ -13,6 +13,7 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { jsPDF } from "jspdf";
+import { getPaymentDate } from "@shared/payroll-dates";
 import { 
   Dialog, 
   DialogContent, 
@@ -442,9 +443,10 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
 
     const dateStart = payslipData.periodStart ? format(new Date(payslipData.periodStart), "MMMM d") : "";
     const dateEnd = payslipData.periodEnd ? format(new Date(payslipData.periodEnd), "MMMM d, yyyy") : "";
+    const payDate = payslipData.periodEnd ? format(getPaymentDate(payslipData.periodEnd), "MMMM d, yyyy") : "";
     
     y = drawInfoRow(y, "EMPLOYEE:", payslipData.employeeName, "PERIOD:", `${dateStart} - ${dateEnd}`);
-    y = drawInfoRow(y, "POSITION:", payslipData.position, "PAY DATE:", dateEnd);
+    y = drawInfoRow(y, "POSITION:", payslipData.position, "PAY DATE:", payDate);
     y = drawInfoRow(y, "EMP ID:", payslipData.employeeId || "N/A", "DEPT:", payslipData.department || "Operations");
     
     y += 10;
@@ -669,7 +671,7 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
                   <td className="value">{payslip.position}</td>
                   <td className="label">PAY DATE:</td>
                   <td className="value">
-                    {payslip.periodEnd ? format(new Date(payslip.periodEnd), "MMMM d, yyyy") : ""}
+                    {payslip.periodEnd ? format(getPaymentDate(payslip.periodEnd), "MMMM d, yyyy") : ""}
                   </td>
                 </tr>
                 <tr>

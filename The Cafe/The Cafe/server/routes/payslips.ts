@@ -12,6 +12,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { generatePayslipPDF, generatePayslipHash } from '../services/payslip-pdf-generator';
 import { PayslipData, validatePayslipData, SAMPLE_PAYSLIP_DATA } from '../../shared/payslip-types';
 import { dbStorage } from '../db-storage';
+import { getPaymentDateString } from '../../shared/payroll-dates';
 import crypto from 'crypto';
 
 const router = Router();
@@ -241,7 +242,9 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
       pay_period: {
         start: period.startDate.toISOString().split('T')[0],
         end: period.endDate.toISOString().split('T')[0],
-        payment_date: new Date().toISOString().split('T')[0],
+        payment_date: entry.paidAt
+          ? new Date(entry.paidAt).toISOString().split('T')[0]
+          : getPaymentDateString(period.endDate),
         frequency: 'semi-monthly',
       },
       earnings,

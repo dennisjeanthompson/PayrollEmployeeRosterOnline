@@ -16,6 +16,7 @@ import MuiMobileHeader from "@/components/mui/mui-mobile-header";
 import MuiMobileBottomNav from "@/components/mui/mui-mobile-bottom-nav";
 import { PayslipViewer } from "@/components/payroll/payslip-viewer";
 import { PayslipData, PayslipEarning, PayslipDeduction } from "@shared/payslip-types";
+import { getPaymentDate } from "@shared/payroll-dates";
 
 interface PayrollEntry {
   id: string;
@@ -27,22 +28,7 @@ interface PayrollEntry {
   createdAt: string;
   periodStartDate?: string | null;
   periodEndDate?: string | null;
-}
-
-/**
- * Derives the actual payment date from the pay period end date.
- * Philippine semi-monthly payroll convention:
- *   - Period ending around the 15th → paid on the 25th of the same month
- *   - Period ending at end of month  → paid on the 10th of the next month
- */
-function getPaymentDate(periodEndDate: string | Date): Date {
-  const end = new Date(periodEndDate);
-  const day = end.getDate();
-  if (day <= 15) {
-    return new Date(end.getFullYear(), end.getMonth(), 25);
-  } else {
-    return new Date(end.getFullYear(), end.getMonth() + 1, 10);
-  }
+  paidAt?: string | null;
 }
 
 interface PayslipResponse {
@@ -281,7 +267,7 @@ export default function MobilePayroll() {
       pay_period: {
         start: format(startDate, "yyyy-MM-dd"),
         end: format(periodDate, "yyyy-MM-dd"),
-        payment_date: format(periodDate, "yyyy-MM-dd"),
+        payment_date: format(getPaymentDate(periodDate), "yyyy-MM-dd"),
         frequency: "semi-monthly"
       },
       earnings,
@@ -501,7 +487,9 @@ export default function MobilePayroll() {
                       </p>
                       <p className="text-base text-muted-foreground mt-1">
                         {entry.periodEndDate
-                          ? `Paid ${format(getPaymentDate(entry.periodEndDate), "MMM d, yyyy")}`
+                          ? `Paid ${entry.paidAt
+                              ? format(new Date(entry.paidAt), "MMM d, yyyy")
+                              : format(getPaymentDate(entry.periodEndDate), "MMM d, yyyy")}`
                           : "Pay Period"}
                       </p>
                     </div>

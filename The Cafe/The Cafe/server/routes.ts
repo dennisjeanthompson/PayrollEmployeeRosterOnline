@@ -24,6 +24,7 @@ import bcrypt from "bcrypt";
 import { format } from "date-fns";
 import crypto from "crypto";
 import { validateShiftTimes, calculatePeriodPay, calculateShiftPay, buildPayrollEntryBreakdownPayload } from "./payroll-utils";
+import { getPaymentDateString } from "@shared/payroll-dates";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
 import RealTimeManager from "./services/realtime-manager";
@@ -1339,6 +1340,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...entry,
             periodStartDate: period?.startDate ?? null,
             periodEndDate: period?.endDate ?? null,
+            paidAt: entry.paidAt ?? null,
           };
         } catch {
           return { ...entry, periodStartDate: null, periodEndDate: null };
@@ -1674,7 +1676,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Mark all entries in this period as 'paid' when period is closed
       for (const entry of payrollEntries) {
-        await storage.updatePayrollEntry(entry.id, { status: 'paid' });
+        await storage.updatePayrollEntry(entry.id, { status: 'paid', paidAt: new Date() });
       }
 
       res.json({
@@ -1743,6 +1745,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             ...entry,
             periodStartDate,
             periodEndDate,
+            paidAt: entry.paidAt ?? null,
             employee: {
               id: employee.id,
               firstName: employee.firstName,
@@ -1795,7 +1798,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       
-      const entry = await storage.updatePayrollEntry(id, { status: 'paid' });
+      const entry = await storage.updatePayrollEntry(id, { status: 'paid', paidAt: new Date() });
       
       if (!entry) {
         return res.status(404).json({ message: "Payroll entry not found" });
