@@ -51,7 +51,6 @@ const MobileNotifications = lazy(() => import("@/pages/mobile-notifications"));
 const MobileTimeOff = lazy(() => import("@/pages/mobile-time-off"));
 const MobileProfile = lazy(() => import("@/pages/mobile-profile"));
 const MobileMore = lazy(() => import("@/pages/mobile-more"));
-const MobileClock = lazy(() => import("@/pages/mobile-clock"));
 
 function LoadingFallback() {
   return (
@@ -162,7 +161,7 @@ function AppRoutes() {
             <Switch>
               {/* Legacy mobile paths -> new /employee/* namespace */}
               <Route path="/mobile-dashboard" component={() => <Redirect to="/employee/dashboard" />} />
-              <Route path="/mobile-clock" component={() => <Redirect to="/employee/clock" />} />
+
               <Route path="/mobile-schedule" component={() => <Redirect to="/employee/schedule" />} />
               <Route path="/mobile-payroll" component={() => <Redirect to="/employee/payroll" />} />
               <Route path="/mobile-notifications" component={() => <Redirect to="/employee/notifications" />} />
@@ -207,10 +206,6 @@ function AppRoutes() {
                 <Route
                   path="/employee/payroll"
                   component={() => (isMobile ? <MobilePayroll /> : <MuiPayroll />)}
-                />
-                <Route
-                  path="/employee/clock"
-                  component={() => (isMobile ? <MobileClock /> : <MuiDashboard />)}
                 />
                 <Route
                   path="/employee/notifications"

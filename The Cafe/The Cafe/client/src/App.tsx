@@ -55,7 +55,6 @@ const MobileTimeOff = lazy(() => import("@/pages/mobile-time-off"));
 const MobileShiftTrading = lazy(() => import("@/pages/mobile-shift-trading"));
 const MobileProfile = lazy(() => import("@/pages/mobile-profile"));
 const MobileMore = lazy(() => import("@/pages/mobile-more"));
-const MobileClock = lazy(() => import("@/pages/mobile-clock"));
 
 // Loading Screen Component (MUI)
 function LoadingScreen() {
@@ -500,22 +499,6 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
         )}
       </Route>
 
-      <Route path="/employee/clock">
-        {isMobile ? (
-          <RouteLoader>
-            <ErrorBoundary>
-              <MobileClock />
-            </ErrorBoundary>
-          </RouteLoader>
-        ) : (
-          <DesktopLayout>
-            <RouteLoader>
-              <MuiDashboard />
-            </RouteLoader>
-          </DesktopLayout>
-        )}
-      </Route>
-
       <Route path="/employee/schedule">
         {isMobile ? (
           <RouteLoader>
@@ -715,9 +698,6 @@ function App() {
               {/* Legacy mobile paths -> new /employee/* namespace */}
               <Route path="/mobile-dashboard">
                 <Redirect to="/employee/dashboard" />
-              </Route>
-              <Route path="/mobile-clock">
-                <Redirect to="/employee/clock" />
               </Route>
               <Route path="/mobile-schedule">
                 <Redirect to="/employee/schedule" />

@@ -279,7 +279,6 @@ The Cafe/
 - `mobile-dashboard` - Employee home
 - `mobile-schedule` - View shifts
 - `mobile-payroll` - View payslips
-- `mobile-clock` - Time in/out
 - `mobile-notifications` - Push notifications
 - `mobile-shift-trading` - Trade shifts
 - `mobile-time-off` - Request leave
