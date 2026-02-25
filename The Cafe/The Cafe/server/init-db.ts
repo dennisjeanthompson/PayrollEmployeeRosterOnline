@@ -1045,7 +1045,11 @@ export async function seedSampleSchedulesAndPayroll() {
         // 2. Apply periodFraction = 0.5 (semi-monthly cutoff)
         // 3. Tax on TAXABLE income (gross minus mandatory deductions)
         const { calculateAllDeductions, calculateWithholdingTax } = await import('./utils/deductions');
-        const monthlyBasicSalary = (grossPay / (periodWorkingDays[period.id] || 12)) * 30;
+        // Use calendar days (not working days) to prorate to monthly — matches runtime in routes.ts
+        const periodStart = period.startDate;
+        const periodEnd = period.endDate;
+        const calendarDaysInPeriod = Math.ceil((periodEnd.getTime() - periodStart.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+        const monthlyBasicSalary = (grossPay / calendarDaysInPeriod) * 30;
 
         // Step 1: SSS, PhilHealth, Pag-IBIG on monthly basis (tax excluded)
         const mandatoryBreakdown = await calculateAllDeductions(monthlyBasicSalary, {
