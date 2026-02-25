@@ -1005,6 +1005,17 @@ export default function MuiPayrollManagement() {
                         <TableCell align="right" sx={{ color: "error.main" }}>
                           -₱{parseFloat(String(entry.deductions)).toLocaleString()}
                         </TableCell>
+                        <TableCell align="right" sx={{ fontWeight: 600, color: "success.main" }}>
+                          ₱{parseFloat(String(entry.netPay)).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <Chip
+                            size="small"
+                            label={entry.status === 'paid' ? 'Paid' : entry.status === 'approved' ? 'Approved' : 'Pending'}
+                            color={entry.status === 'paid' ? 'success' : entry.status === 'approved' ? 'info' : 'warning'}
+                            variant="outlined"
+                          />
+                        </TableCell>
                         <TableCell align="right">
                           <Stack direction="row" spacing={0.5} justifyContent="flex-end">
                             <Tooltip title="View digital payslip (PH — Compliant 2026)">

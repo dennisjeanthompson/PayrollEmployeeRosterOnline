@@ -107,23 +107,42 @@ router.get('/api/employees/stats', requireAuth, requireRole(['manager']), async 
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
+    // Get payroll periods that overlap with the current month (used for hours fallback + payroll calc)
+    const allPeriods = await storage.getPayrollPeriodsByBranch(branchId);
+    const periodsThisMonth = allPeriods.filter(p => {
+      const pStart = new Date(p.startDate);
+      const pEnd = new Date(p.endDate);
+      return pStart <= monthEnd && pEnd >= monthStart;
+    });
+
     let totalHoursThisMonth = 0;
     for (const user of users) {
       const shifts = await storage.getShiftsByUser(user.id, monthStart, monthEnd);
+      let userHours = 0;
       for (const shift of shifts) {
         const hours = (new Date(shift.endTime).getTime() - new Date(shift.startTime).getTime()) / (1000 * 60 * 60);
-        totalHoursThisMonth += hours;
+        userHours += hours;
       }
+      // Fall back to payroll entry hours if no shifts found for this period
+      if (userHours === 0 && periodsThisMonth.length > 0) {
+        const entries = await storage.getPayrollEntriesByUser(user.id);
+        for (const entry of entries) {
+          if (periodsThisMonth.some(p => p.id === entry.payrollPeriodId)) {
+            userHours += parseFloat(entry.totalHours || '0');
+          }
+        }
+      }
+      totalHoursThisMonth += userHours;
     }
 
     // Calculate total payroll this month from payroll entries
+    // Filter by payroll period dates (not createdAt which is just the DB insert timestamp)
     let totalPayrollThisMonth = 0;
     for (const user of users) {
       const entries = await storage.getPayrollEntriesByUser(user.id);
       for (const entry of entries) {
-        if (!entry.createdAt) continue;
-        const entryDate = new Date(entry.createdAt);
-        if (entryDate >= monthStart && entryDate <= monthEnd) {
+        // Only include entries whose payroll period falls within this month
+        if (periodsThisMonth.some(p => p.id === entry.payrollPeriodId)) {
           totalPayrollThisMonth += parseFloat(entry.grossPay);
         }
       }

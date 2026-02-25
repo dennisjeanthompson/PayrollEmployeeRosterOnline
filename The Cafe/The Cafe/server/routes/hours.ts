@@ -350,10 +350,28 @@ router.get('/api/hours/all-employees', requireAuth, requireRole(['manager']), as
 
     const allEmployees = await storage.getUsersByBranch(branchId);
     
+    // Get payroll periods that overlap with the requested date range (for fallback)
+    const allPeriods = await storage.getPayrollPeriodsByBranch(branchId);
+    const overlappingPeriods = allPeriods.filter(p => {
+      const pStart = new Date(p.startDate);
+      const pEnd = new Date(p.endDate);
+      return pStart <= periodEnd && pEnd >= periodStart;
+    });
+
     const employeesWithHours = await Promise.all(allEmployees.map(async (employee) => {
       const shifts = await storage.getShiftsByUser(employee.id, periodStart, periodEnd);
       // Show ALL scheduled shifts (not just completed) for employee grid/profile view
-      const totalHours = calculateAllScheduledHours(shifts);
+      let totalHours = calculateAllScheduledHours(shifts);
+
+      // If no shifts found for this period, fall back to payroll entry hours
+      if (totalHours === 0 && overlappingPeriods.length > 0) {
+        const entries = await storage.getPayrollEntriesByUser(employee.id);
+        for (const entry of entries) {
+          if (overlappingPeriods.some(p => p.id === entry.payrollPeriodId)) {
+            totalHours += parseFloat(entry.totalHours || '0');
+          }
+        }
+      }
 
       return {
         ...employee,

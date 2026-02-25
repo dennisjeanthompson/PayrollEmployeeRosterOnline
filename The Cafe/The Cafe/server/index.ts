@@ -86,11 +86,11 @@ if (process.env.NODE_ENV === 'production') {
   // Seed sample users (manager + employees)
   await seedSampleUsers();
 
-  // Seed sample schedules and payroll data
-  await seedSampleSchedulesAndPayroll();
-
-  // Seed default deduction rates if table is empty
+  // Seed default deduction rates FIRST (payroll entries need these for calculations)
   await seedDeductionRates();
+
+  // Seed sample schedules and payroll data (uses deduction rates)
+  await seedSampleSchedulesAndPayroll();
 
   // Seed Philippine holidays if table is empty
   await seedPhilippineHolidays();

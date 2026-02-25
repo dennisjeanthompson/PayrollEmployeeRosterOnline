@@ -544,24 +544,12 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
       );
     }
 
-    // Subtotal row
-    doc.setFillColor(232, 232, 232);
-    doc.setDrawColor(...black);
-    doc.setLineWidth(0.5);
-    const halfWidth = (pageWidth - 40) / 2;
-    doc.rect(20, y, halfWidth, 8, 'FD');
-    doc.rect(20 + halfWidth, y, halfWidth, 8, 'FD');
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text("GROSS PAY:", 22, y + 5.5);
-    doc.text(formatCurrency(payslipData.grossPay), 20 + halfWidth - 2, y + 5.5, { align: "right" });
-    doc.text("TOTAL DEDUCTION:", 20 + halfWidth + 2, y + 5.5);
-    doc.text(formatCurrency(payslipData.totalDeductions), pageWidth - 22, y + 5.5, { align: "right" });
-    y += 8;
-
     // Summary section
+    const halfWidth = (pageWidth - 40) / 2;
     y += 5;
     doc.setFillColor(...lightGray);
+    doc.setDrawColor(...black);
+    doc.setLineWidth(0.5);
     doc.rect(20, y, halfWidth, 8, 'FD');
     doc.rect(20 + halfWidth, y, halfWidth, 8, 'FD');
     doc.setFont("helvetica", "bold");
@@ -722,13 +710,6 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
                   );
                 })}
                 
-                {/* Subtotal Row */}
-                <tr className="payslip-subtotal-row">
-                  <td className="item-label">GROSS PAY:</td>
-                  <td className="item-amount">{formatCurrency(payslip.grossPay)}</td>
-                  <td className="item-label">TOTAL DEDUCTION:</td>
-                  <td className="item-amount">{formatCurrency(payslip.totalDeductions)}</td>
-                </tr>
               </tbody>
             </table>
 
