@@ -54,24 +54,23 @@ export default function MobileNotifications() {
 
   // Fetch notifications with real-time updates
   const { data: notificationsData, isLoading, refetch } = useQuery({
-    queryKey: ['mobile-notifications', currentUser?.id],
+    queryKey: ['/api/notifications'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/notifications');
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time notifications
-    refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true, // Keep polling even when tab is not focused
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
+    refetchOnWindowFocus: true
   });
 
   // Mark notification as read
   const markAsReadMutation = useMutation({
     mutationFn: async (notificationId: string) => {
-      const response = await apiRequest('PUT', `/api/notifications/${notificationId}/read`);
+      const response = await apiRequest('PATCH', `/api/notifications/${notificationId}/read`);
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['mobile-notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
     },
     onError: (error: any) => {
       toast({
@@ -85,11 +84,11 @@ export default function MobileNotifications() {
   // Mark all as read
   const markAllAsReadMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest('PUT', '/api/notifications/read-all');
+      const response = await apiRequest('PATCH', '/api/notifications/read-all');
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['mobile-notifications'] });
+      queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       toast({
         title: "Success",
         description: "All notifications marked as read",

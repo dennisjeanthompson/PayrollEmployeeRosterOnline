@@ -193,7 +193,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     socket.on("notification:created", (data) => {
       console.log("🔔 New notification:", data);
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      queryClient.invalidateQueries({ queryKey: ["notifications"] }); // Alias if mapped differently
       onEventRef.current?.("notification:created", data);
     });
 

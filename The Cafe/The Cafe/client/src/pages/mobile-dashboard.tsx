@@ -289,14 +289,13 @@ export default function MobileDashboard() {
 
   // Fetch notifications with real-time updates
   const { data: notificationsData } = useQuery({
-    queryKey: ['mobile-notifications'],
+    queryKey: ['/api/notifications'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/notifications');
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time notifications
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   const shifts: Shift[] = shiftsData?.shifts || [];

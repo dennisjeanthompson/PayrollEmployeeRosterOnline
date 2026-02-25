@@ -106,14 +106,13 @@ export default function MobilePayroll() {
 
   // Fetch notifications to show unread count in nav
   const { data: notificationsData } = useQuery({
-    queryKey: ['mobile-notifications', currentUser?.id],
+    queryKey: ['/api/notifications'],
     queryFn: async () => {
       const response = await apiRequest('GET', '/api/notifications');
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time notifications
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   const unreadNotificationCount = (notificationsData?.notifications || []).filter(

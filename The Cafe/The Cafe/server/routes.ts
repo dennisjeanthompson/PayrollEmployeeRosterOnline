@@ -3511,7 +3511,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ message: "Request deleted successfully" });
   });
   // Notification routes
-  // Notification routes
   app.get("/api/notifications", requireAuth, async (req, res) => {
     const userId = req.user!.id;
     const notifications = await storage.getUserNotifications(userId);

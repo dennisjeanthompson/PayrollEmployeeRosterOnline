@@ -5,6 +5,7 @@ import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useLocation } from "wouter";
+import { useRealtime } from "@/hooks/use-realtime";
 
 // MUI Components
 import {
@@ -113,16 +114,21 @@ export default function MuiNotifications() {
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const [, setLocation] = useLocation();
 
+  // Subscribe to real-time notification updates via WebSocket
+  useRealtime({
+    enabled: true,
+    queryKeys: ['/api/notifications'],
+  });
+
   // Fetch notifications with real-time updates
   const { data: notificationsResponse, isLoading, refetch } = useQuery({
-    queryKey: ["notifications"],
+    queryKey: ["/api/notifications"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/notifications");
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time notifications
-    refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true, // Keep polling even when tab is not focused
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
+    refetchOnWindowFocus: true
   });
 
   const notifications: Notification[] = notificationsResponse?.notifications || [];
@@ -130,24 +136,24 @@ export default function MuiNotifications() {
   const unreadNotifications = notifications.filter((n) => !n.isRead);
   const readNotifications = notifications.filter((n) => n.isRead);
 
-  // Mark as read mutation - Fixed: use PUT instead of PATCH
+  // Mark as read mutation
   const markAsRead = useMutation({
     mutationFn: async (id: string) => {
-      await apiRequest("PUT", `/api/notifications/${id}/read`);
+      await apiRequest("PATCH", `/api/notifications/${id}/read`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       toast({ title: "Notification marked as read" });
     },
   });
 
-  // Mark all as read mutation - Fixed: use PUT instead of PATCH
+  // Mark all as read mutation
   const markAllAsRead = useMutation({
     mutationFn: async () => {
-      await apiRequest("PUT", "/api/notifications/read-all");
+      await apiRequest("PATCH", "/api/notifications/read-all");
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       toast({ title: "All notifications marked as read" });
     },
   });
@@ -158,7 +164,7 @@ export default function MuiNotifications() {
       await apiRequest("DELETE", `/api/notifications/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       toast({ title: "Notification deleted" });
       setDeleteConfirmOpen(false);
       setNotificationToDelete(null);

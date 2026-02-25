@@ -84,8 +84,14 @@ export default function NotificationBell() {
   });
 
   // Subscribe to real-time updates
-  useRealtime('notification', () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+  useRealtime({
+    enabled: true,
+    queryKeys: ['/api/notifications'],
+    onEvent: (event) => {
+      if (event === 'notification:created') {
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+      }
+    },
   });
 
   const notifications = notificationsData?.notifications || [];
