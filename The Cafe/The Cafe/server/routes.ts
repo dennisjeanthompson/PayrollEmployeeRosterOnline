@@ -3891,21 +3891,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const grossPay = basicPay + overtimePay;
 
         // Use proper 2026 deduction calculator (SSS, PhilHealth, Pag-IBIG, withholding tax)
-        const { calculateAllDeductions } = await import('./utils/deductions');
+        const { calculateAllDeductions, calculateWithholdingTax } = await import('./utils/deductions');
         const monthlyBasicSalary = (grossPay / Math.max(regularHours / 8, 1)) * 30; // project to monthly
-        const deductionBreakdown = await calculateAllDeductions(monthlyBasicSalary, {
+        const mandatoryBreakdown = await calculateAllDeductions(monthlyBasicSalary, {
           deductSSS: true,
           deductPhilHealth: true,
           deductPagibig: true,
-          deductWithholdingTax: true,
+          deductWithholdingTax: false, // Tax computed separately on taxable income
         });
 
         // Semi-monthly: deduct half of monthly contributions
         const periodFraction = 0.5;
-        const sssContribution = deductionBreakdown.sssContribution * periodFraction;
-        const philhealthContribution = deductionBreakdown.philHealthContribution * periodFraction;
-        const pagibigContribution = deductionBreakdown.pagibigContribution * periodFraction;
-        const withholdingTax = deductionBreakdown.withholdingTax * periodFraction;
+        const sssContribution = mandatoryBreakdown.sssContribution * periodFraction;
+        const philhealthContribution = mandatoryBreakdown.philHealthContribution * periodFraction;
+        const pagibigContribution = mandatoryBreakdown.pagibigContribution * periodFraction;
+
+        // BIR tax on taxable income (gross minus mandatory deductions)
+        const monthlyMandatory = mandatoryBreakdown.sssContribution +
+          mandatoryBreakdown.philHealthContribution + mandatoryBreakdown.pagibigContribution;
+        const monthlyTaxableIncome = Math.max(0, monthlyBasicSalary - monthlyMandatory);
+        const monthlyTax = await calculateWithholdingTax(monthlyTaxableIncome);
+        const withholdingTax = monthlyTax * periodFraction;
         const totalDeductions = sssContribution + philhealthContribution + pagibigContribution + withholdingTax;
         const netPay = grossPay - totalDeductions;
 

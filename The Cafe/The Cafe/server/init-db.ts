@@ -602,6 +602,7 @@ export async function seedPhilippineHolidays() {
 
       // ===== Special Non-Working Days (130% pay if worked, no pay if not worked) =====
       { name: 'Lunar New Year (Chinese New Year)', date: '2026-02-17', type: 'special_non_working', isRecurring: false },
+      { name: 'EDSA People Power Revolution Anniversary', date: '2026-02-25', type: 'special_non_working', isRecurring: true },
       { name: 'Black Saturday', date: '2026-04-04', type: 'special_non_working', isRecurring: false },
       { name: 'Ninoy Aquino Day', date: '2026-08-21', type: 'special_non_working', isRecurring: true },
       { name: "All Saints' Day", date: '2026-11-01', type: 'special_non_working', isRecurring: true },
@@ -663,9 +664,11 @@ export async function seedSampleUsers() {
     const branchId = branch[0].id;
     const hashedPassword = await bcrypt.hash('password123', 10);
 
-    // Realistic Philippine café employees for December 2025
+    // Realistic NCR café employees — 2026 minimum-wage-based rates
+    // NCR daily minimum ~₱645 (2026 est.) = ₱80.63/hr
+    // Rates: Manager ~₱120/hr, Shift Lead ~₱97.50, Barista ~₱85, Cashier ~₱82, Kitchen ~₱82.50, Server ~₱80
     const sampleUsers = [
-      // Manager
+      // Manager (monthly ~₱24,960)
       { 
         id: 'user-mgr-sarah',
         username: 'sarah', 
@@ -674,7 +677,7 @@ export async function seedSampleUsers() {
         email: 'sarah.cruz@thecafe.ph', 
         role: 'manager', 
         position: 'Branch Manager', 
-        hourlyRate: '187.50',
+        hourlyRate: '120.00',
         sssLoan: '0',
         pagibigLoan: '0',
       },
@@ -686,8 +689,8 @@ export async function seedSampleUsers() {
         lastName: 'Santos', 
         email: 'sam.santos@thecafe.ph', 
         role: 'employee', 
-        position: 'Barista', 
-        hourlyRate: '112.50',
+        position: 'Senior Barista', 
+        hourlyRate: '85.00',
         sssLoan: '0',
         pagibigLoan: '0',
       },
@@ -699,7 +702,7 @@ export async function seedSampleUsers() {
         email: 'ana.garcia@thecafe.ph', 
         role: 'employee', 
         position: 'Cashier', 
-        hourlyRate: '93.75',
+        hourlyRate: '82.00',
         sssLoan: '0',
         pagibigLoan: '0',
       },
@@ -711,8 +714,8 @@ export async function seedSampleUsers() {
         email: 'pedro.reyes@thecafe.ph', 
         role: 'employee', 
         position: 'Kitchen Staff', 
-        hourlyRate: '100.00',
-        sssLoan: '2000',
+        hourlyRate: '82.50',
+        sssLoan: '800',
         pagibigLoan: '0',
       },
       {
@@ -723,9 +726,9 @@ export async function seedSampleUsers() {
         email: 'sofia.mendoza@thecafe.ph',
         role: 'employee',
         position: 'Shift Lead',
-        hourlyRate: '150.00',
+        hourlyRate: '97.50',
         sssLoan: '0',
-        pagibigLoan: '1000',
+        pagibigLoan: '500',
       },
       {
         id: 'user-emp-miguel',
@@ -735,7 +738,7 @@ export async function seedSampleUsers() {
         email: 'miguel.torres@thecafe.ph',
         role: 'employee',
         position: 'Barista',
-        hourlyRate: '112.50',
+        hourlyRate: '80.00',
         sssLoan: '0',
         pagibigLoan: '0',
       },
@@ -747,7 +750,7 @@ export async function seedSampleUsers() {
         email: 'bea.alonzo@thecafe.ph',
         role: 'employee',
         position: 'Server',
-        hourlyRate: '100.00',
+        hourlyRate: '80.00',
         sssLoan: '0',
         pagibigLoan: '0',
       },
@@ -836,7 +839,7 @@ export async function seedSampleSchedulesAndPayroll() {
 
     // 2026 holidays that affect working days in Jan-Feb
     const jan2026Holidays = ['2026-01-01']; // New Year's Day (regular holiday — paid day off)
-    const feb2026Holidays = ['2026-02-17']; // Lunar New Year (special non-working)
+    const feb2026Holidays = ['2026-02-17', '2026-02-25']; // Lunar New Year + EDSA (special non-working)
 
     // Generate working days for each semi-monthly period
     const jan1_15 = getWorkingDays(2026, 0, 1, 15, jan2026Holidays);  // Jan (month=0)
@@ -880,6 +883,33 @@ export async function seedSampleSchedulesAndPayroll() {
     }
     console.log('   ✅ Created shifts for Jan–Feb 2026 (aligned with payroll periods)');
 
+    // ── HOLIDAY SHIFTS — skeleton crew works on holidays ─────────
+    // In a real café, some staff work on holidays for premium pay.
+    const holidayShiftAssignments = [
+      // Sam & Sofia work on New Year's Day (regular holiday — 200% rate)
+      { userId: 'user-emp-sam', date: new Date(Date.UTC(2026, 0, 1)), staffIdx: 0 },
+      { userId: 'user-emp-sofia', date: new Date(Date.UTC(2026, 0, 1)), staffIdx: 3 },
+      // Miguel works on Lunar New Year (special non-working — 130% rate)
+      { userId: 'user-emp-miguel', date: new Date(Date.UTC(2026, 1, 17)), staffIdx: 4 },
+    ];
+    for (const hs of holidayShiftAssignments) {
+      const pattern = shiftPatterns[hs.staffIdx % shiftPatterns.length];
+      const startTime = new Date(hs.date);
+      startTime.setUTCHours(pattern.start, 0, 0, 0);
+      const endTime = new Date(hs.date);
+      endTime.setUTCHours(pattern.end, 0, 0, 0);
+      await db.insert(shifts).values({
+        id: randomUUID(),
+        userId: hs.userId,
+        branchId: branchId,
+        startTime,
+        endTime,
+        position: allStaff.find(s => s.id === hs.userId)?.position || 'Staff',
+        status: 'completed',
+      });
+    }
+    console.log('   ✅ Created holiday shifts for skeleton crew (New Year, Lunar New Year)');
+
     // ═══════════════════════════════════════════════════════════════
     // CREATE PAYROLL PERIODS (Jan 1-15, Jan 16-31, Feb 1-15, 2026)
     // All deductions use 2026 rates — no year-mismatch issue
@@ -920,6 +950,35 @@ export async function seedSampleSchedulesAndPayroll() {
       'period-2026-02-16': feb16_28.length,
     };
 
+    // ── HOLIDAY & OT CONFIG PER EMPLOYEE/PERIOD ────────────────────
+    // Holiday details per period (for pay calculation)
+    const periodHolidayDetails: Record<string, { date: string; type: 'regular' | 'special_non_working' }[]> = {
+      'period-2026-01-01': [{ date: '2026-01-01', type: 'regular' }],       // New Year's Day
+      'period-2026-01-16': [],                                               // Jan 23 special_working = normal pay
+      'period-2026-02-01': [],                                               // No holidays
+      'period-2026-02-16': [
+        { date: '2026-02-17', type: 'special_non_working' },                // Lunar New Year
+        { date: '2026-02-25', type: 'special_non_working' },                // EDSA Anniversary
+      ],
+    };
+
+    // Employee-specific OT hours and holiday work assignments
+    const empPeriodConfig: Record<string, Record<string, { overtimeHours: number; workedHolidays: string[] }>> = {
+      'user-emp-sam': {
+        'period-2026-01-01': { overtimeHours: 3, workedHolidays: ['2026-01-01'] },    // 3h OT Jan 10 + worked NY
+      },
+      'user-emp-sofia': {
+        'period-2026-01-01': { overtimeHours: 0, workedHolidays: ['2026-01-01'] },    // worked NY
+        'period-2026-02-01': { overtimeHours: 1.5, workedHolidays: [] },              // 1.5h OT Feb 5
+      },
+      'user-emp-miguel': {
+        'period-2026-02-16': { overtimeHours: 0, workedHolidays: ['2026-02-17'] },    // worked Lunar New Year
+      },
+      'user-emp-bea': {
+        'period-2026-02-16': { overtimeHours: 2, workedHolidays: [] },                // 2h OT Feb 20
+      },
+    };
+
     for (const period of payrollPeriodsList) {
       const workingDays = periodWorkingDays[period.id] || 12;
 
@@ -930,63 +989,101 @@ export async function seedSampleSchedulesAndPayroll() {
         endDate: period.endDate,
         status: period.status,
         totalHours: (workingDays * 8 * allStaff.length).toString(),
-        totalPay: '75000',
+        totalPay: '0', // Updated after entries are calculated
       });
 
+      let periodTotalPay = 0;
+
       // Create payroll entries for all employees AND the manager
-      // Only Bea gets OT (from her exception log, seeded below).
       for (const emp of allStaff) {
         const hourlyRate = parseFloat(emp.hourlyRate);
-        const regularHours = workingDays * 8;
-        const isBea = emp.id === 'user-emp-bea';
-        // Only Bea has OT via exception log (2 hrs regular OT at 125%)
-        const overtimeHours = isBea && period.id === 'period-2026-02-16' ? 2 : 0;
+        const config = empPeriodConfig[emp.id]?.[period.id] || { overtimeHours: 0, workedHolidays: [] };
+        const overtimeHours = config.overtimeHours;
+        const workedHolidays = config.workedHolidays;
         const nightDiffHours = 0;
 
-        const basicPay = regularHours * hourlyRate;
+        // Regular hours = normal working days × 8 (holidays excluded from working days)
+        const regularHoursBase = workingDays * 8;
+        // Holiday work hours (employee physically works on the holiday)
+        const holidayWorkHours = workedHolidays.length * 8;
+
+        // Basic pay: 1x rate for all hours (regular + holiday-worked)
+        const basicPay = (regularHoursBase + holidayWorkHours) * hourlyRate;
         const overtimePay = overtimeHours * hourlyRate * 1.25;
         const nightDiffPay = 0;
 
-        // Holiday pay calculation:
-        // Jan 1 (New Year's Day) — regular holiday, 200% → extra 100% for 8h
-        // Feb 17 (Lunar New Year) — special non-working, employees stay home, no extra pay if not worked
-        // Workers did NOT work on holidays (they're excluded from working days)
-        // Regular holidays = paid even if not worked (100% of daily rate)
+        // ── Holiday Pay (DOLE-compliant) ─────────────────────────
+        // Regular holiday WORKED:     200% total (1x in basicPay + 1x premium here)
+        // Regular holiday NOT WORKED: 100% paid holiday (DOLE Art. 94)
+        // SNWD WORKED:               130% total (1x in basicPay + 0.30x premium here)
+        // SNWD NOT WORKED:           ₱0 (no work, no pay)
         let holidayPay = 0;
-        if (period.id === 'period-2026-01-01') {
-          // New Year's Day (Jan 1) — regular holiday, employee gets daily rate even if not worked
-          holidayPay = hourlyRate * 8; // 100% of daily rate for unworked regular holiday
+        const holidays = periodHolidayDetails[period.id] || [];
+        for (const hol of holidays) {
+          if (workedHolidays.includes(hol.date)) {
+            // Employee worked on this holiday — premium on top of base
+            if (hol.type === 'regular') {
+              holidayPay += hourlyRate * 8 * 1.0;   // Extra 100% premium (200% total)
+            } else {
+              holidayPay += hourlyRate * 8 * 0.30;  // Extra 30% premium (130% total)
+            }
+          } else {
+            // Employee did NOT work on this holiday
+            if (hol.type === 'regular') {
+              holidayPay += hourlyRate * 8;          // Paid regular holiday (100%)
+            }
+            // SNWD: no pay if not worked
+          }
         }
 
         const grossPay = basicPay + overtimePay + nightDiffPay + holidayPay;
 
-        // Calculate deductions (2026 rates — DOLE-compliant)
-        const { calculateAllDeductions } = await import('./utils/deductions');
+        // ── Deductions (DOLE-compliant, semi-monthly) ─────────────
+        // Matches the live payroll processor logic in routes.ts:
+        // 1. Calculate mandatory on MONTHLY salary basis
+        // 2. Apply periodFraction = 0.5 (semi-monthly cutoff)
+        // 3. Tax on TAXABLE income (gross minus mandatory deductions)
+        const { calculateAllDeductions, calculateWithholdingTax } = await import('./utils/deductions');
         const monthlyBasicSalary = (grossPay / (periodWorkingDays[period.id] || 12)) * 30;
-        const deductionBreakdown = await calculateAllDeductions(monthlyBasicSalary, {
+
+        // Step 1: SSS, PhilHealth, Pag-IBIG on monthly basis (tax excluded)
+        const mandatoryBreakdown = await calculateAllDeductions(monthlyBasicSalary, {
           deductSSS: true,
           deductPhilHealth: true,
           deductPagibig: true,
-          deductWithholdingTax: true,
+          deductWithholdingTax: false,
         });
 
-        const sssContribution = deductionBreakdown.sssContribution;
-        const philhealthContribution = deductionBreakdown.philHealthContribution;
-        const pagibigContribution = deductionBreakdown.pagibigContribution;
-        const withholdingTax = deductionBreakdown.withholdingTax;
+        // Step 2: Semi-monthly = half the monthly contributions
+        const periodFraction = 0.5;
+        const sssContribution = Math.round(mandatoryBreakdown.sssContribution * periodFraction * 100) / 100;
+        const philhealthContribution = Math.round(mandatoryBreakdown.philHealthContribution * periodFraction * 100) / 100;
+        const pagibigContribution = Math.round(mandatoryBreakdown.pagibigContribution * periodFraction * 100) / 100;
 
+        // Step 3: BIR withholding tax on TAXABLE income (gross minus mandatory)
+        const monthlyMandatory = mandatoryBreakdown.sssContribution +
+          mandatoryBreakdown.philHealthContribution + mandatoryBreakdown.pagibigContribution;
+        const monthlyTaxableIncome = Math.max(0, monthlyBasicSalary - monthlyMandatory);
+        const monthlyTax = await calculateWithholdingTax(monthlyTaxableIncome);
+        const withholdingTax = Math.round(monthlyTax * periodFraction * 100) / 100;
+
+        // Recurring loan deductions
         const sssLoan = parseFloat(emp.sssLoanDeduction || '0');
         const pagibigLoan = parseFloat(emp.pagibigLoanDeduction || '0');
 
-        const totalDeductions = sssContribution + philhealthContribution + pagibigContribution + withholdingTax + sssLoan + pagibigLoan;
+        const totalDeductions = sssContribution + philhealthContribution +
+          pagibigContribution + withholdingTax + sssLoan + pagibigLoan;
         const netPay = grossPay - totalDeductions;
+        periodTotalPay += grossPay;
+
+        const totalHours = regularHoursBase + holidayWorkHours + overtimeHours;
 
         await db.insert(payrollEntries).values({
           id: randomUUID(),
           userId: emp.id,
           payrollPeriodId: period.id,
-          totalHours: (regularHours + overtimeHours).toFixed(2),
-          regularHours: regularHours.toFixed(2),
+          totalHours: totalHours.toFixed(2),
+          regularHours: (regularHoursBase + holidayWorkHours).toFixed(2),
           overtimeHours: overtimeHours.toFixed(2),
           nightDiffHours: nightDiffHours.toFixed(2),
           basicPay: basicPay.toFixed(2),
@@ -1006,8 +1103,13 @@ export async function seedSampleSchedulesAndPayroll() {
           status: period.status === 'closed' ? 'paid' : 'pending',
         });
       }
+
+      // Update period totalPay with actual calculated sum
+      await db.update(payrollPeriods)
+        .set({ totalPay: periodTotalPay.toFixed(2) })
+        .where(eq(payrollPeriods.id, period.id));
     }
-    console.log('   ✅ Created 4 payroll periods (Jan–Feb 2026) with 2026 deduction rates');
+    console.log('   ✅ Created 4 payroll periods (Jan–Feb 2026) with DOLE-compliant deductions');
 
     // ═══════════════════════════════════════════════════════════════
     // CREATE TIME-OFF REQUESTS (2026 dates)
@@ -1057,29 +1159,59 @@ export async function seedSampleSchedulesAndPayroll() {
     console.log('   ✅ Created notifications');
 
     // ═══════════════════════════════════════════════════════════════
-    // CREATE ADJUSTMENT LOG — Bea's 2-hour OT (Dec 1-15 period only)
-    // This is the ONLY exception log. No other employee has OT.
+    // CREATE ADJUSTMENT LOGS — OT records for Sam, Sofia, and Bea
+    // These match the empPeriodConfig above used in payroll calculation.
     // ═══════════════════════════════════════════════════════════════
 
-    const beaUser = allStaff.find(u => u.id === 'user-emp-bea');
-    if (beaUser && manager) {
-      await db.insert(adjustmentLogs).values({
-        id: randomUUID(),
-        employeeId: beaUser.id,
-        branchId: branchId,
-        loggedBy: manager.id,
-        date: new Date(Date.UTC(2026, 1, 20)), // Feb 20, 2026
-        type: 'overtime',
-        value: '2',
-        remarks: 'approved by manager',
-        status: 'approved',
-        verifiedByEmployee: false,
-        approvedBy: manager.id,
-        approvedAt: new Date(Date.UTC(2026, 1, 20)),
-        payrollPeriodId: 'period-2026-02-16',
-        calculatedAmount: (parseFloat(beaUser.hourlyRate) * 1.25 * 2).toFixed(2),
-      });
-      console.log('   ✅ Created Bea OT exception log (2 hrs, Feb 20, 2026)');
+    if (manager) {
+      const otEntries = [
+        // Sam: 3 hrs OT on Jan 10 (busy morning shift)
+        {
+          employeeId: 'user-emp-sam',
+          date: new Date(Date.UTC(2026, 0, 10)),
+          value: '3',
+          payrollPeriodId: 'period-2026-01-01',
+          remarks: 'busy morning — extra orders during holiday weekend',
+        },
+        // Sofia: 1.5 hrs OT on Feb 5 (closing duties)
+        {
+          employeeId: 'user-emp-sofia',
+          date: new Date(Date.UTC(2026, 1, 5)),
+          value: '1.5',
+          payrollPeriodId: 'period-2026-02-01',
+          remarks: 'extended closing duties — inventory count',
+        },
+        // Bea: 2 hrs OT on Feb 20 (server coverage)
+        {
+          employeeId: 'user-emp-bea',
+          date: new Date(Date.UTC(2026, 1, 20)),
+          value: '2',
+          payrollPeriodId: 'period-2026-02-16',
+          remarks: 'covered absent server — approved by manager',
+        },
+      ];
+
+      for (const ot of otEntries) {
+        const emp = allStaff.find(u => u.id === ot.employeeId);
+        if (!emp) continue;
+        await db.insert(adjustmentLogs).values({
+          id: randomUUID(),
+          employeeId: ot.employeeId,
+          branchId: branchId,
+          loggedBy: manager.id,
+          date: ot.date,
+          type: 'overtime',
+          value: ot.value,
+          remarks: ot.remarks,
+          status: 'approved',
+          verifiedByEmployee: false,
+          approvedBy: manager.id,
+          approvedAt: ot.date,
+          payrollPeriodId: ot.payrollPeriodId,
+          calculatedAmount: (parseFloat(emp.hourlyRate) * 1.25 * parseFloat(ot.value)).toFixed(2),
+        });
+      }
+      console.log('   ✅ Created OT exception logs (Sam 3h, Sofia 1.5h, Bea 2h)');
     }
 
     console.log('✅ Sample schedules and payroll seeded successfully');
