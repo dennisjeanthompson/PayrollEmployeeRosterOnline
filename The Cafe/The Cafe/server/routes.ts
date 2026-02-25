@@ -1672,6 +1672,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalPay: totalPay.toString()
       });
 
+      // Mark all entries in this period as 'paid' when period is closed
+      for (const entry of payrollEntries) {
+        await storage.updatePayrollEntry(entry.id, { status: 'paid' });
+      }
+
       res.json({
         message: `Payroll processed successfully for ${payrollEntries.length} employees`,
         entriesCreated: payrollEntries.length,

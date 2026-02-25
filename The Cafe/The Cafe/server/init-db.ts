@@ -842,11 +842,13 @@ export async function seedSampleSchedulesAndPayroll() {
     const jan1_15 = getWorkingDays(2026, 0, 1, 15, jan2026Holidays);  // Jan (month=0)
     const jan16_31 = getWorkingDays(2026, 0, 16, 31, jan2026Holidays);
     const feb1_15 = getWorkingDays(2026, 1, 1, 15, feb2026Holidays);   // Feb (month=1)
+    const feb16_28 = getWorkingDays(2026, 1, 16, 28, feb2026Holidays); // Feb 16-28
 
     const allPeriodDays = [
       { periodId: 'period-2026-01-01', days: jan1_15 },
       { periodId: 'period-2026-01-16', days: jan16_31 },
       { periodId: 'period-2026-02-01', days: feb1_15 },
+      { periodId: 'period-2026-02-16', days: feb16_28 },
     ];
 
     // All staff including manager get shifts
@@ -899,8 +901,14 @@ export async function seedSampleSchedulesAndPayroll() {
       { 
         startDate: new Date('2026-02-01'), 
         endDate: new Date('2026-02-15'), 
-        status: 'open',
+        status: 'closed',
         id: 'period-2026-02-01'
+      },
+      { 
+        startDate: new Date('2026-02-16'), 
+        endDate: new Date('2026-02-28'), 
+        status: 'open',
+        id: 'period-2026-02-16'
       },
     ];
 
@@ -909,6 +917,7 @@ export async function seedSampleSchedulesAndPayroll() {
       'period-2026-01-01': jan1_15.length,
       'period-2026-01-16': jan16_31.length,
       'period-2026-02-01': feb1_15.length,
+      'period-2026-02-16': feb16_28.length,
     };
 
     for (const period of payrollPeriodsList) {
@@ -931,7 +940,7 @@ export async function seedSampleSchedulesAndPayroll() {
         const regularHours = workingDays * 8;
         const isBea = emp.id === 'user-emp-bea';
         // Only Bea has OT via exception log (2 hrs regular OT at 125%)
-        const overtimeHours = isBea && period.id === 'period-2026-02-01' ? 2 : 0;
+        const overtimeHours = isBea && period.id === 'period-2026-02-16' ? 2 : 0;
         const nightDiffHours = 0;
 
         const basicPay = regularHours * hourlyRate;
@@ -998,7 +1007,7 @@ export async function seedSampleSchedulesAndPayroll() {
         });
       }
     }
-    console.log('   ✅ Created 3 payroll periods (Jan–Feb 2026) with 2026 deduction rates');
+    console.log('   ✅ Created 4 payroll periods (Jan–Feb 2026) with 2026 deduction rates');
 
     // ═══════════════════════════════════════════════════════════════
     // CREATE TIME-OFF REQUESTS (2026 dates)
@@ -1028,11 +1037,11 @@ export async function seedSampleSchedulesAndPayroll() {
     // ═══════════════════════════════════════════════════════════════
 
     const notificationsList = [
-      { userId: employees[0].id, type: 'payroll', title: 'Payslip Available', message: 'Your payslip for Jan 16-31, 2026 is now available.' },
-      { userId: employees[0].id, type: 'schedule', title: 'New Shift Assigned', message: 'You have been assigned morning shift for Feb 10, 2026.' },
+      { userId: employees[0].id, type: 'payroll', title: 'Payslip Available', message: 'Your payslip for Feb 1-15, 2026 is now available.' },
+      { userId: employees[0].id, type: 'schedule', title: 'New Shift Assigned', message: 'You have been assigned morning shift for Feb 20, 2026.' },
       { userId: employees[1].id, type: 'time_off', title: 'Time-Off Request Pending', message: 'Your sick leave request for Feb 10 is under review.' },
       { userId: manager?.id || employees[0].id, type: 'approval', title: 'Pending Approvals', message: 'You have 2 time-off requests awaiting your approval.' },
-      { userId: manager?.id || employees[0].id, type: 'payroll', title: 'Payroll Due', message: 'February 1-15 payroll needs to be processed by Feb 20.' },
+      { userId: manager?.id || employees[0].id, type: 'payroll', title: 'Payroll Due', message: 'February 16-28 payroll needs to be processed by Mar 5.' },
     ];
 
     for (const notif of notificationsList) {
@@ -1059,18 +1068,18 @@ export async function seedSampleSchedulesAndPayroll() {
         employeeId: beaUser.id,
         branchId: branchId,
         loggedBy: manager.id,
-        date: new Date(Date.UTC(2026, 1, 5)), // Feb 5, 2026
+        date: new Date(Date.UTC(2026, 1, 20)), // Feb 20, 2026
         type: 'overtime',
         value: '2',
         remarks: 'approved by manager',
         status: 'approved',
         verifiedByEmployee: false,
         approvedBy: manager.id,
-        approvedAt: new Date(Date.UTC(2026, 1, 5)),
-        payrollPeriodId: 'period-2026-02-01',
+        approvedAt: new Date(Date.UTC(2026, 1, 20)),
+        payrollPeriodId: 'period-2026-02-16',
         calculatedAmount: (parseFloat(beaUser.hourlyRate) * 1.25 * 2).toFixed(2),
       });
-      console.log('   ✅ Created Bea OT exception log (2 hrs, Feb 5, 2026)');
+      console.log('   ✅ Created Bea OT exception log (2 hrs, Feb 20, 2026)');
     }
 
     console.log('✅ Sample schedules and payroll seeded successfully');
