@@ -63,7 +63,7 @@ import {
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
-import { format, subDays, addDays, startOfMonth, endOfMonth } from "date-fns";
+import { format, subDays, addDays, startOfMonth, endOfMonth, differenceInDays } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
@@ -753,7 +753,10 @@ export default function MuiPayrollManagement() {
                               {format(new Date(period.endDate), "MMM d, yyyy")}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
-                              Created {format(new Date(period.createdAt || period.startDate), "MMM d, yyyy")}
+                              {(() => {
+                                const days = differenceInDays(new Date(period.endDate), new Date(period.startDate)) + 1;
+                                return days <= 16 ? "Semi-Monthly" : days <= 31 ? "Monthly" : `${days}-day period`;
+                              })()}
                             </Typography>
                           </Box>
                         </Box>
