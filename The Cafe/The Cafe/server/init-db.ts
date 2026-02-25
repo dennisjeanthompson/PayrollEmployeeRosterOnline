@@ -351,6 +351,20 @@ export async function initializeDatabase() {
       )
     `);
 
+    // Session table for connect-pg-simple (express-session)
+    // Must exist before any auth middleware runs
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "session" (
+        "sid" VARCHAR NOT NULL COLLATE "default",
+        "sess" JSON NOT NULL,
+        "expire" TIMESTAMP(6) NOT NULL,
+        CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
+      )
+    `);
+    await db.execute(sql`
+      CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")
+    `);
+
     console.log('✅ All database tables created successfully');
   } catch (error) {
     console.error('❌ Database initialization error:', error);
