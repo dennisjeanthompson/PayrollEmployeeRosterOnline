@@ -1233,6 +1233,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       res.json({ logs: enriched });
     } catch (error: any) {
+      // Gracefully handle missing table (not yet migrated)
+      if (error.message?.includes('does not exist') || error.message?.includes('relation')) {
+        return res.json({ logs: [] });
+      }
       res.status(500).json({ message: error.message || "Failed to get adjustment logs" });
     }
   });
@@ -1244,6 +1248,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const logs = await storage.getAdjustmentLogsByEmployee(userId);
       res.json({ logs });
     } catch (error: any) {
+      if (error.message?.includes('does not exist') || error.message?.includes('relation')) {
+        return res.json({ logs: [] });
+      }
       res.status(500).json({ message: error.message || "Failed to get adjustment logs" });
     }
   });

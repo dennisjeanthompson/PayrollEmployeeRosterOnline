@@ -329,6 +329,28 @@ export async function initializeDatabase() {
       )
     `);
 
+    // Adjustment logs for manager OT/lateness exceptions
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS adjustment_logs (
+        id TEXT PRIMARY KEY,
+        employee_id TEXT REFERENCES users(id) NOT NULL,
+        branch_id TEXT REFERENCES branches(id) NOT NULL,
+        logged_by TEXT REFERENCES users(id) NOT NULL,
+        date TIMESTAMP NOT NULL,
+        type TEXT NOT NULL,
+        value TEXT NOT NULL,
+        remarks TEXT,
+        status TEXT DEFAULT 'pending',
+        verified_by_employee BOOLEAN DEFAULT false,
+        verified_at TIMESTAMP,
+        approved_by TEXT REFERENCES users(id),
+        approved_at TIMESTAMP,
+        payroll_period_id TEXT REFERENCES payroll_periods(id),
+        calculated_amount TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     console.log('✅ All database tables created successfully');
   } catch (error) {
     console.error('❌ Database initialization error:', error);

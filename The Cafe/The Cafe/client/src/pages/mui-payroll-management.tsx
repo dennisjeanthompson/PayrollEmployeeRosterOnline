@@ -154,6 +154,33 @@ export default function MuiPayrollManagement() {
     setPayslipViewerOpen(true);
   };
 
+  // Get the current semi-monthly period dates (Philippine standard: 1-15, 16-end)
+  const getCurrentSemiMonthlyDates = () => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const day = today.getDate();
+    if (day <= 15) {
+      return {
+        start: new Date(today.getFullYear(), today.getMonth(), 1),
+        end: new Date(today.getFullYear(), today.getMonth(), 15),
+      };
+    } else {
+      return {
+        start: new Date(today.getFullYear(), today.getMonth(), 16),
+        end: endOfMonth(today),
+      };
+    }
+  };
+
+  // Open create dialog with smart date initialization
+  const openCreateDialog = () => {
+    const { start, end } = getCurrentSemiMonthlyDates();
+    setStartDate(start);
+    setEndDate(end);
+    setPeriodType('custom');
+    setIsCreateDialogOpen(true);
+  };
+
   // Handle period type change
   const handlePeriodTypeChange = (type: PeriodType) => {
     setPeriodType(type);
@@ -531,7 +558,7 @@ export default function MuiPayrollManagement() {
           <Button
             variant="contained"
             startIcon={<AddIcon />}
-            onClick={() => setIsCreateDialogOpen(true)}
+            onClick={openCreateDialog}
             sx={{
               borderRadius: 3,
               px: 3,
@@ -670,7 +697,7 @@ export default function MuiPayrollManagement() {
                   variant="contained"
                   size="large"
                   startIcon={<AddIcon />}
-                  onClick={() => setIsCreateDialogOpen(true)}
+                  onClick={openCreateDialog}
                   sx={{ borderRadius: 3, px: 4, textTransform: "none", fontWeight: 600 }}
                 >
                   Create Payroll Period
@@ -1499,8 +1526,8 @@ export default function MuiPayrollManagement() {
             <LocalizationProvider dateAdapter={AdapterDateFns}>
               <DatePicker
                 label="Date"
-                value={adjDate ? new Date(adjDate) : null}
-                onChange={(val) => setAdjDate(val ? format(val, "yyyy-MM-dd") : "")}
+                value={adjDate}
+                onChange={(val: Date | null) => setAdjDate(val)}
                 slotProps={{ textField: { size: "small", fullWidth: true } }}
               />
             </LocalizationProvider>
