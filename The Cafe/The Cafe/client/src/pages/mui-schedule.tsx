@@ -100,6 +100,29 @@ function toUTCDate(date: Date | string): Date {
   return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
 }
 
+// Helper: Format a UTC ISO string for <input type="datetime-local"> (always shows UTC time)
+// datetime-local inputs display in browser local time, so we must manually format UTC values
+function formatForDatetimeInput(isoStr: string): string {
+  if (!isoStr) return '';
+  // Handle date-only strings from FullCalendar month view clicks (e.g. "2026-03-03")
+  const d = new Date(isoStr.length <= 10 ? isoStr + 'T00:00:00Z' : isoStr);
+  if (isNaN(d.getTime())) return '';
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const hh = String(d.getUTCHours()).padStart(2, '0');
+  const min = String(d.getUTCMinutes()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
+}
+
+// Helper: Parse a datetime-local input value as UTC ISO string
+// The visible time in the input is treated as UTC (matching FullCalendar's timeZone="UTC")
+function parseDatetimeInputAsUTC(value: string): string {
+  if (!value) return '';
+  // datetime-local gives "YYYY-MM-DDTHH:mm" — append Z to interpret as UTC
+  return new Date(value + ':00.000Z').toISOString();
+}
+
 // ---Types ---
 interface Shift {
   id: string;
@@ -1219,17 +1242,18 @@ const EnhancedScheduler = () => {
     return emp?.role || '';
   };
 
-  // Feature 4: Apply Shift Template
+  // Feature 4: Apply Shift Template (uses UTC to match calendar timeZone="UTC")
   const applyShiftTemplate = useCallback((template: keyof typeof SHIFT_TEMPLATES) => {
     const { start, end } = SHIFT_TEMPLATES[template];
-    const today = new Date();
+    const now = new Date();
     
-    let startDate = setMinutes(setHours(today, start), 0);
-    let endDate = setMinutes(setHours(today, end), 0);
+    // Construct dates in UTC to match FullCalendar's UTC timezone
+    let startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), start, 0, 0));
+    let endDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), end, 0, 0));
     
     // Handle overnight shifts
     if (end < start) {
-      endDate = addDays(endDate, 1);
+      endDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
     }
 
     setNewShiftData(prev => ({
@@ -1438,11 +1462,12 @@ const EnhancedScheduler = () => {
   const handleEventDrop = useCallback(async (info: any) => {
     if (!isManagerRole || isPublished) {
       info.revert();
+      if (isPublished) toast.warning('Switch to Draft mode to move shifts');
       return;
     }
 
-    const { event } = info;
-    if (event.extendedProps.type === 'timeoff') {
+    const { event, oldEvent } = info;
+    if (event.extendedProps.type === 'timeoff' || event.extendedProps.type === 'time-off-approved') {
       info.revert();
       return;
     }
@@ -1455,14 +1480,21 @@ const EnhancedScheduler = () => {
       return;
     }
 
+    // Save old times for undo
+    const oldStart = oldEvent?.startStr || '';
+    const oldEnd = oldEvent?.endStr || '';
+    const shiftId = event.id;
+
     try {
       await updateShiftMutation.mutateAsync({
-        id: event.id,
+        id: shiftId,
         startTime: event.startStr,
         endTime: event.endStr,
       });
+      // Show success with new time range
+      const newTimeStr = `${format(toUTCDate(event.startStr), 'MMM d, h:mm a')} – ${format(toUTCDate(event.endStr), 'h:mm a')}`;
+      toast.success(`✅ Shift moved to ${newTimeStr}`);
     } catch (error) {
-      // Revert the change on the calendar UI if the server update fails
       info.revert();
     }
   }, [updateShiftMutation, checkOverlap, isPublished, isManagerRole]);
@@ -1470,11 +1502,12 @@ const EnhancedScheduler = () => {
   const handleEventResize = useCallback(async (info: any) => {
     if (!isManagerRole || isPublished) {
       info.revert();
+      if (isPublished) toast.warning('Switch to Draft mode to resize shifts');
       return;
     }
 
-    const { event } = info;
-    if (event.extendedProps.type === 'timeoff') {
+    const { event, oldEvent } = info;
+    if (event.extendedProps.type === 'timeoff' || event.extendedProps.type === 'time-off-approved') {
       info.revert();
       return;
     }
@@ -1487,12 +1520,20 @@ const EnhancedScheduler = () => {
       return;
     }
 
+    // Save old times for undo
+    const oldStart = oldEvent?.startStr || '';
+    const oldEnd = oldEvent?.endStr || '';
+    const shiftId = event.id;
+
     try {
       await updateShiftMutation.mutateAsync({
-        id: event.id,
+        id: shiftId,
         startTime: event.startStr,
         endTime: event.endStr,
       });
+      // Show duration change feedback
+      const newTimeStr = `${format(toUTCDate(event.startStr), 'h:mm a')} – ${format(toUTCDate(event.endStr), 'h:mm a')}`;
+      toast.success(`✅ Shift resized to ${newTimeStr}`);
     } catch (error) {
        info.revert();
     }
@@ -3125,6 +3166,9 @@ const EnhancedScheduler = () => {
             droppable={isManagerRole && !isPublished}
             selectable={true}
             selectMirror={true}
+            snapDuration="00:15:00"
+            eventDragMinDistance={5}
+            dragRevertDuration={300}
             events={calendarEvents}
             eventDrop={handleEventDrop}
             eventResize={handleEventResize}
@@ -3132,6 +3176,7 @@ const EnhancedScheduler = () => {
             select={handleDateSelect}
             dateClick={handleDateClick}
             selectLongPressDelay={200} // Reduce delay for faster selection on mobile
+            eventLongPressDelay={150} // Faster long-press drag on mobile
             eventReceive={handleEventReceive}
             
             // HOVER DETAILS: Show summary tooltip on day cells
@@ -3357,19 +3402,19 @@ const EnhancedScheduler = () => {
               </Select>
             </FormControl>
             <TextField
-              label="Start Time"
+              label="Start Time (UTC)"
               type="datetime-local"
-              value={newShiftData.startTime ? format(new Date(newShiftData.startTime), "yyyy-MM-dd'T'HH:mm") : ''}
-              onChange={(e) => setNewShiftData(prev => ({ ...prev, startTime: new Date(e.target.value).toISOString() }))}
+              value={formatForDatetimeInput(newShiftData.startTime)}
+              onChange={(e) => setNewShiftData(prev => ({ ...prev, startTime: parseDatetimeInputAsUTC(e.target.value) }))}
               slotProps={{ inputLabel: { shrink: true } }}
               fullWidth
               error={!!overlapWarning}
             />
             <TextField
-              label="End Time"
+              label="End Time (UTC)"
               type="datetime-local"
-              value={newShiftData.endTime ? format(new Date(newShiftData.endTime), "yyyy-MM-dd'T'HH:mm") : ''}
-              onChange={(e) => setNewShiftData(prev => ({ ...prev, endTime: new Date(e.target.value).toISOString() }))}
+              value={formatForDatetimeInput(newShiftData.endTime)}
+              onChange={(e) => setNewShiftData(prev => ({ ...prev, endTime: parseDatetimeInputAsUTC(e.target.value) }))}
               slotProps={{ inputLabel: { shrink: true } }}
               fullWidth
               error={!!overlapWarning}
@@ -3427,26 +3472,26 @@ const EnhancedScheduler = () => {
                 </Box>
               </Box>
               <TextField
-                label="Start Time"
+                label="Start Time (UTC)"
                 type="datetime-local"
-                defaultValue={format(new Date(selectedShift.startTime), "yyyy-MM-dd'T'HH:mm")}
+                defaultValue={formatForDatetimeInput(selectedShift.startTime)}
                 slotProps={{ inputLabel: { shrink: true } }}
                 fullWidth
                 onChange={(e) => {
                   if (selectedShift) {
-                    selectedShift.startTime = new Date(e.target.value).toISOString();
+                    selectedShift.startTime = parseDatetimeInputAsUTC(e.target.value);
                   }
                 }}
               />
               <TextField
-                label="End Time"
+                label="End Time (UTC)"
                 type="datetime-local"
-                defaultValue={format(new Date(selectedShift.endTime), "yyyy-MM-dd'T'HH:mm")}
+                defaultValue={formatForDatetimeInput(selectedShift.endTime)}
                 slotProps={{ inputLabel: { shrink: true } }}
                 fullWidth
                 onChange={(e) => {
                   if (selectedShift) {
-                    selectedShift.endTime = new Date(e.target.value).toISOString();
+                    selectedShift.endTime = parseDatetimeInputAsUTC(e.target.value);
                   }
                 }}
               />
@@ -4277,15 +4322,40 @@ const EnhancedScheduler = () => {
         
         /* Dragging state enhancement */
         .fc-event-dragging {
-          opacity: 0.9 !important;
-          transform: scale(1.02);
+          opacity: 0.85 !important;
+          transform: scale(1.03) !important;
+          transition: transform 0.1s ease, opacity 0.1s ease !important;
+          filter: brightness(1.1) !important;
+          z-index: 9999 !important;
         }
         
-        /* Mirror element while dragging */
+        /* Mirror element while dragging - shows drop preview */
         .fc-event-mirror {
-          border: 2px dashed rgba(255, 255, 255, 0.8) !important;
+          border: 2px dashed rgba(16, 185, 129, 0.9) !important;
           border-radius: 8px !important;
-          box-shadow: 0 12px 32px rgba(16, 185, 129, 0.4) !important;
+          box-shadow: 0 12px 32px rgba(16, 185, 129, 0.4), 0 0 0 1px rgba(16, 185, 129, 0.3) !important;
+          background: rgba(16, 185, 129, 0.15) !important;
+        }
+
+        /* Highlight valid drop zones when dragging */
+        .fc-event-dragging ~ .fc-timegrid-slot,
+        .fc-highlight {
+          background: rgba(16, 185, 129, 0.08) !important;
+        }
+
+        /* Resize handle styling - more visible grab indicator */
+        .fc-event .fc-event-resizer {
+          opacity: 0 !important;
+          transition: opacity 0.15s ease !important;
+        }
+        .fc-event:hover .fc-event-resizer {
+          opacity: 1 !important;
+        }
+        .fc-event .fc-event-resizer-end {
+          cursor: s-resize !important;
+        }
+        .fc-event .fc-event-resizer-start {
+          cursor: n-resize !important;
         }
         
         /* NEW: Coverage gap styling - understaffed slots */
