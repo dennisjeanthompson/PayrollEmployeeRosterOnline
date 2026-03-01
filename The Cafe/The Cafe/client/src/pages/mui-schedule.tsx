@@ -93,36 +93,6 @@ import '../styles/calendar-responsive.css';
 // Real-time WebSocket updates for instant sync (2025 best practice)
 import { useRealtime } from '@/hooks/use-realtime';
 
-// Helper: Convert a UTC date to a "fake local" Date so date-fns format() displays UTC values
-// This is needed because FullCalendar uses timeZone="UTC" but date-fns always formats in local time
-function toUTCDate(date: Date | string): Date {
-  const d = typeof date === 'string' ? new Date(date) : date;
-  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds());
-}
-
-// Helper: Format a UTC ISO string for <input type="datetime-local"> (always shows UTC time)
-// datetime-local inputs display in browser local time, so we must manually format UTC values
-function formatForDatetimeInput(isoStr: string): string {
-  if (!isoStr) return '';
-  // Handle date-only strings from FullCalendar month view clicks (e.g. "2026-03-03")
-  const d = new Date(isoStr.length <= 10 ? isoStr + 'T00:00:00Z' : isoStr);
-  if (isNaN(d.getTime())) return '';
-  const yyyy = d.getUTCFullYear();
-  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(d.getUTCDate()).padStart(2, '0');
-  const hh = String(d.getUTCHours()).padStart(2, '0');
-  const min = String(d.getUTCMinutes()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}T${hh}:${min}`;
-}
-
-// Helper: Parse a datetime-local input value as UTC ISO string
-// The visible time in the input is treated as UTC (matching FullCalendar's timeZone="UTC")
-function parseDatetimeInputAsUTC(value: string): string {
-  if (!value) return '';
-  // datetime-local gives "YYYY-MM-DDTHH:mm" — append Z to interpret as UTC
-  return new Date(value + ':00.000Z').toISOString();
-}
-
 // ---Types ---
 interface Shift {
   id: string;
@@ -645,7 +615,7 @@ const EnhancedScheduler = () => {
   const dailyHoursSummary = useMemo(() => {
     const summary: Record<string, number> = {};
     shifts.forEach(shift => {
-      const day = format(toUTCDate(shift.startTime), 'yyyy-MM-dd');
+      const day = format(new Date(shift.startTime), 'yyyy-MM-dd');
       const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
       summary[day] = (summary[day] || 0) + hours;
     });
@@ -695,7 +665,7 @@ const EnhancedScheduler = () => {
 
     // MONTH VIEW: Compact pill-style events with color dot
     if (isMonthView) {
-      const timeStr = event.start ? format(toUTCDate(event.start), 'h:mm a') : '';
+      const timeStr = event.start ? format(event.start, 'h:mm a') : '';
       return (
         <div style={{
           display: 'flex',
@@ -735,7 +705,7 @@ const EnhancedScheduler = () => {
         ? `${nameParts[0]} ${nameParts[nameParts.length - 1][0]}.`
         : nameParts[0];
       const timeStr = event.start && event.end
-        ? `${format(toUTCDate(event.start), 'h:mma').toLowerCase()}-${format(toUTCDate(event.end), 'h:mma').toLowerCase()}`
+        ? `${format(event.start, 'h:mma').toLowerCase()}-${format(event.end, 'h:mma').toLowerCase()}`
         : '';
       return (
         <div style={{
@@ -1242,18 +1212,17 @@ const EnhancedScheduler = () => {
     return emp?.role || '';
   };
 
-  // Feature 4: Apply Shift Template (uses UTC to match calendar timeZone="UTC")
+  // Feature 4: Apply Shift Template (local time)
   const applyShiftTemplate = useCallback((template: keyof typeof SHIFT_TEMPLATES) => {
     const { start, end } = SHIFT_TEMPLATES[template];
-    const now = new Date();
+    const today = new Date();
     
-    // Construct dates in UTC to match FullCalendar's UTC timezone
-    let startDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), start, 0, 0));
-    let endDate = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), end, 0, 0));
+    let startDate = setMinutes(setHours(today, start), 0);
+    let endDate = setMinutes(setHours(today, end), 0);
     
     // Handle overnight shifts
     if (end < start) {
-      endDate = new Date(endDate.getTime() + 24 * 60 * 60 * 1000);
+      endDate = addDays(endDate, 1);
     }
 
     setNewShiftData(prev => ({
@@ -1282,7 +1251,7 @@ const EnhancedScheduler = () => {
         ? `${shift.user.firstName} ${shift.user.lastName}` 
         : getEmployeeName(shift.userId);
       const role = shift.user?.role || getEmployeeRole(shift.userId);
-      const timeRange = format(toUTCDate(shift.startTime), 'h:mm a') + ' - ' + format(toUTCDate(shift.endTime), 'h:mm a');
+      const timeRange = format(new Date(shift.startTime), 'h:mm a') + ' - ' + format(new Date(shift.endTime), 'h:mm a');
       
       return {
         id: shift.id,
@@ -1474,25 +1443,25 @@ const EnhancedScheduler = () => {
 
     // Feature 2: Check overlap on drop
     const employeeId = event.extendedProps.employeeId;
-    if (checkOverlap(employeeId, event.startStr, event.endStr, event.id)) {
+    const startISO = event.start ? event.start.toISOString() : event.startStr;
+    const endISO = event.end ? event.end.toISOString() : event.endStr;
+
+    if (checkOverlap(employeeId, startISO, endISO, event.id)) {
       setSnackbar({ open: true, message: '⚠️ Overlap detected with existing shift!', severity: 'warning' });
       info.revert();
       return;
     }
 
-    // Save old times for undo
-    const oldStart = oldEvent?.startStr || '';
-    const oldEnd = oldEvent?.endStr || '';
     const shiftId = event.id;
 
     try {
       await updateShiftMutation.mutateAsync({
         id: shiftId,
-        startTime: event.startStr,
-        endTime: event.endStr,
+        startTime: startISO,
+        endTime: endISO,
       });
       // Show success with new time range
-      const newTimeStr = `${format(toUTCDate(event.startStr), 'MMM d, h:mm a')} – ${format(toUTCDate(event.endStr), 'h:mm a')}`;
+      const newTimeStr = `${format(event.start!, 'MMM d, h:mm a')} – ${format(event.end!, 'h:mm a')}`;
       toast.success(`✅ Shift moved to ${newTimeStr}`);
     } catch (error) {
       info.revert();
@@ -1514,25 +1483,25 @@ const EnhancedScheduler = () => {
 
     // Feature 2: Check overlap on resize
     const employeeId = event.extendedProps.employeeId;
-    if (checkOverlap(employeeId, event.startStr, event.endStr, event.id)) {
+    const startISO = event.start ? event.start.toISOString() : event.startStr;
+    const endISO = event.end ? event.end.toISOString() : event.endStr;
+
+    if (checkOverlap(employeeId, startISO, endISO, event.id)) {
       setSnackbar({ open: true, message: '⚠️ Overlap detected with existing shift!', severity: 'warning' });
       info.revert();
       return;
     }
 
-    // Save old times for undo
-    const oldStart = oldEvent?.startStr || '';
-    const oldEnd = oldEvent?.endStr || '';
     const shiftId = event.id;
 
     try {
       await updateShiftMutation.mutateAsync({
         id: shiftId,
-        startTime: event.startStr,
-        endTime: event.endStr,
+        startTime: startISO,
+        endTime: endISO,
       });
       // Show duration change feedback
-      const newTimeStr = `${format(toUTCDate(event.startStr), 'h:mm a')} – ${format(toUTCDate(event.endStr), 'h:mm a')}`;
+      const newTimeStr = `${format(event.start!, 'h:mm a')} – ${format(event.end!, 'h:mm a')}`;
       toast.success(`✅ Shift resized to ${newTimeStr}`);
     } catch (error) {
        info.revert();
@@ -1700,8 +1669,8 @@ const EnhancedScheduler = () => {
     setNewShiftData(prev => ({
       ...prev,
       employeeId: employeeId,
-      startTime: info.startStr,
-      endTime: info.endStr,
+      startTime: info.start instanceof Date ? info.start.toISOString() : new Date(info.startStr).toISOString(),
+      endTime: info.end instanceof Date ? info.end.toISOString() : (info.endStr ? new Date(info.endStr).toISOString() : new Date(info.startStr).toISOString()),
     }));
     setCreateModalOpen(true);
     
@@ -1741,10 +1710,9 @@ const EnhancedScheduler = () => {
     }
 
     const { event } = info;
-    const start = event.startStr;
+    const startDate = event.start || new Date(event.startStr);
 
-    if (start) {
-      const startDate = new Date(start);
+    if (startDate) {
       
       // Check if date falls on a work-restricted holiday
       const { blocked, holiday } = isDateBlocked(startDate);
@@ -3160,7 +3128,7 @@ const EnhancedScheduler = () => {
             slotMaxTime="23:00:00"
             slotDuration="00:30:00"
             scrollTime="05:30:00"
-            timeZone="UTC"
+            timeZone="local"
             allDaySlot={true}
             editable={isManagerRole && !isPublished}
             droppable={isManagerRole && !isPublished}
@@ -3230,7 +3198,7 @@ const EnhancedScheduler = () => {
                     <div style="padding: 8px;">
                       <strong>${employee?.firstName} ${employee?.lastName}</strong><br/>
                       ${shift.position || 'Staff'}<br/>
-                      <span style="color: #10B981;">${format(toUTCDate(shift.startTime), 'h:mm a')} - ${format(toUTCDate(shift.endTime), 'h:mm a')}</span><br/>
+                      <span style="color: #10B981;">${format(new Date(shift.startTime), 'h:mm a')} - ${format(new Date(shift.endTime), 'h:mm a')}</span><br/>
                       ${shift.notes ? `<i>${shift.notes}</i>` : ''}
                     </div>
                   `;
@@ -3270,57 +3238,70 @@ const EnhancedScheduler = () => {
               })();
               
               if (tooltipContent) {
-                // Use native browser tooltip for simplicity (works on mobile too)
                 info.el.title = '';
                 info.el.setAttribute('data-tooltip', 'true');
                 
-                // Create MUI-style tooltip on hover
-                info.el.addEventListener('mouseenter', (e) => {
-                  const tooltip = document.createElement('div');
-                  tooltip.id = `tooltip-${info.event.id}`;
-                  tooltip.innerHTML = tooltipContent;
-                  tooltip.style.cssText = `
-                    position: fixed;
-                    z-index: 10000;
-                    background: #1e1e1e;
-                    color: white;
-                    padding: 12px;
-                    border-radius: 8px;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                    max-width: 250px;
-                    font-size: 0.875rem;
-                    pointer-events: none;
-                    border: 1px solid rgba(255,255,255,0.1);
-                  `;
-                  
-                  document.body.appendChild(tooltip);
-                  
-                  const rect = info.el.getBoundingClientRect();
-                  const viewportH = window.innerHeight;
-                  const viewportW = window.innerWidth;
-                  
-                  // Position tooltip above event, but flip below if not enough space
-                  let left = rect.left + rect.width / 2;
-                  let top = rect.top - tooltip.offsetHeight - 8;
-                  
-                  // Flip below if tooltip goes above viewport
-                  if (top < 8) {
-                    top = rect.bottom + 8;
+                // Create tooltip on hover with safety checks for DOM removal
+                const handleMouseEnter = () => {
+                  try {
+                    // Check if element is still in DOM
+                    if (!info.el || !info.el.isConnected) return;
+                    
+                    // Remove any existing tooltip for this event
+                    const existing = document.getElementById(`tooltip-${info.event.id}`);
+                    if (existing) existing.remove();
+                    
+                    const tooltip = document.createElement('div');
+                    tooltip.id = `tooltip-${info.event.id}`;
+                    tooltip.innerHTML = tooltipContent;
+                    tooltip.style.cssText = `
+                      position: fixed;
+                      z-index: 10000;
+                      background: #1e1e1e;
+                      color: white;
+                      padding: 12px;
+                      border-radius: 8px;
+                      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                      max-width: 250px;
+                      font-size: 0.875rem;
+                      pointer-events: none;
+                      border: 1px solid rgba(255,255,255,0.1);
+                    `;
+                    
+                    document.body.appendChild(tooltip);
+                    
+                    const rect = info.el.getBoundingClientRect();
+                    const viewportW = window.innerWidth;
+                    
+                    let left = rect.left + rect.width / 2;
+                    let top = rect.top - tooltip.offsetHeight - 8;
+                    
+                    if (top < 8) {
+                      top = rect.bottom + 8;
+                    }
+                    const tooltipW = tooltip.offsetWidth;
+                    if (left - tooltipW / 2 < 8) left = tooltipW / 2 + 8;
+                    if (left + tooltipW / 2 > viewportW - 8) left = viewportW - tooltipW / 2 - 8;
+                    
+                    tooltip.style.left = `${left}px`;
+                    tooltip.style.top = `${top}px`;
+                    tooltip.style.transform = 'translateX(-50%)';
+                  } catch (err) {
+                    // Silently handle DOM errors (element removed during render)
                   }
-                  // Keep within horizontal bounds
-                  const tooltipW = tooltip.offsetWidth;
-                  if (left - tooltipW / 2 < 8) left = tooltipW / 2 + 8;
-                  if (left + tooltipW / 2 > viewportW - 8) left = viewportW - tooltipW / 2 - 8;
-                  
-                  tooltip.style.left = `${left}px`;
-                  tooltip.style.top = `${top}px`;
-                  tooltip.style.transform = 'translateX(-50%)';
-                });
+                };
                 
-                info.el.addEventListener('mouseleave', () => {
-                  const tooltip = document.getElementById(`tooltip-${info.event.id}`);
-                  if (tooltip) tooltip.remove();
-                });
+                const handleMouseLeave = () => {
+                  try {
+                    const tooltip = document.getElementById(`tooltip-${info.event.id}`);
+                    if (tooltip) tooltip.remove();
+                  } catch (err) {
+                    // Silently handle
+                  }
+                };
+                
+                info.el.addEventListener('mouseenter', handleMouseEnter);
+                info.el.addEventListener('mouseleave', handleMouseLeave);
               }
             }}
             datesSet={handleDatesSet}
@@ -3402,19 +3383,19 @@ const EnhancedScheduler = () => {
               </Select>
             </FormControl>
             <TextField
-              label="Start Time (UTC)"
+              label="Start Time"
               type="datetime-local"
-              value={formatForDatetimeInput(newShiftData.startTime)}
-              onChange={(e) => setNewShiftData(prev => ({ ...prev, startTime: parseDatetimeInputAsUTC(e.target.value) }))}
+              value={newShiftData.startTime ? format(new Date(newShiftData.startTime), "yyyy-MM-dd'T'HH:mm") : ''}
+              onChange={(e) => setNewShiftData(prev => ({ ...prev, startTime: new Date(e.target.value).toISOString() }))}
               slotProps={{ inputLabel: { shrink: true } }}
               fullWidth
               error={!!overlapWarning}
             />
             <TextField
-              label="End Time (UTC)"
+              label="End Time"
               type="datetime-local"
-              value={formatForDatetimeInput(newShiftData.endTime)}
-              onChange={(e) => setNewShiftData(prev => ({ ...prev, endTime: parseDatetimeInputAsUTC(e.target.value) }))}
+              value={newShiftData.endTime ? format(new Date(newShiftData.endTime), "yyyy-MM-dd'T'HH:mm") : ''}
+              onChange={(e) => setNewShiftData(prev => ({ ...prev, endTime: new Date(e.target.value).toISOString() }))}
               slotProps={{ inputLabel: { shrink: true } }}
               fullWidth
               error={!!overlapWarning}
@@ -3472,26 +3453,26 @@ const EnhancedScheduler = () => {
                 </Box>
               </Box>
               <TextField
-                label="Start Time (UTC)"
+                label="Start Time"
                 type="datetime-local"
-                defaultValue={formatForDatetimeInput(selectedShift.startTime)}
+                defaultValue={format(new Date(selectedShift.startTime), "yyyy-MM-dd'T'HH:mm")}
                 slotProps={{ inputLabel: { shrink: true } }}
                 fullWidth
                 onChange={(e) => {
                   if (selectedShift) {
-                    selectedShift.startTime = parseDatetimeInputAsUTC(e.target.value);
+                    selectedShift.startTime = new Date(e.target.value).toISOString();
                   }
                 }}
               />
               <TextField
-                label="End Time (UTC)"
+                label="End Time"
                 type="datetime-local"
-                defaultValue={formatForDatetimeInput(selectedShift.endTime)}
+                defaultValue={format(new Date(selectedShift.endTime), "yyyy-MM-dd'T'HH:mm")}
                 slotProps={{ inputLabel: { shrink: true } }}
                 fullWidth
                 onChange={(e) => {
                   if (selectedShift) {
-                    selectedShift.endTime = parseDatetimeInputAsUTC(e.target.value);
+                    selectedShift.endTime = new Date(e.target.value).toISOString();
                   }
                 }}
               />
@@ -3795,7 +3776,7 @@ const EnhancedScheduler = () => {
                   <Stack spacing={0.5} sx={{ ml: 2 }}>
                     {conflictingShifts.slice(0, 3).map(shift => (
                       <Typography key={shift.id} variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        • {format(toUTCDate(shift.startTime), 'MMM d, yyyy h:mm a')} - {format(toUTCDate(shift.endTime), 'h:mm a')}
+                        • {format(new Date(shift.startTime), 'MMM d, yyyy h:mm a')} - {format(new Date(shift.endTime), 'h:mm a')}
                         {shift.position && <Chip label={shift.position} size="small" sx={{ height: 16, fontSize: '0.65rem' }} />}
                       </Typography>
                     ))}
@@ -3885,7 +3866,7 @@ const EnhancedScheduler = () => {
                   .filter(s => new Date(s.startTime) > new Date()) // Only future shifts
                   .map((shift) => (
                     <MenuItem key={shift.id} value={shift.id}>
-                      {format(toUTCDate(shift.startTime), 'MMM d, yyyy h:mm a')} - {format(toUTCDate(shift.endTime), 'h:mm a')}
+                      {format(new Date(shift.startTime), 'MMM d, yyyy h:mm a')} - {format(new Date(shift.endTime), 'h:mm a')}
                       {shift.position && ` (${shift.position})`}
                     </MenuItem>
                   ))}
@@ -4602,7 +4583,7 @@ const EnhancedScheduler = () => {
                       }
                       secondary={
                         <Typography variant="caption" color="text.secondary">
-                          {format(toUTCDate(shift.startTime), 'h:mm a')} - {format(toUTCDate(shift.endTime), 'h:mm a')}
+                          {format(new Date(shift.startTime), 'h:mm a')} - {format(new Date(shift.endTime), 'h:mm a')}
                           {shift.notes && ` • ${shift.notes}`}
                         </Typography>
                       }
