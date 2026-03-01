@@ -9,6 +9,21 @@ import bcrypt from 'bcrypt';
 import { randomUUID } from 'crypto';
 import { eq, sql } from 'drizzle-orm';
 
+// Startup migrations - automatic data cleanup
+export async function runMigrations() {
+  console.log('🔄 Running startup migrations...');
+  try {
+    // Migration: Delete any shifts that land on Sunday (rest day per Philippine Labor Law)
+    // Sunday = day 0 in PostgreSQL EXTRACT(DOW FROM timestamp)
+    const result = await db.execute(
+      sql`DELETE FROM shifts WHERE EXTRACT(DOW FROM start_time) = 0`
+    );
+    console.log('  ✅ Sunday shifts cleanup complete');
+  } catch (error) {
+    console.warn('  ⚠️ Sunday cleanup migration skipped:', error);
+  }
+}
+
 export async function resetDatabase() {
   console.log('🗑️ Resetting database (dropping all tables)...');
   try {

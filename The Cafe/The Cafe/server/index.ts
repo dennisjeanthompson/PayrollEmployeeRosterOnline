@@ -4,7 +4,7 @@ import cors from "cors";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
 import { networkInterfaces } from "os";
-import { initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll, resetDatabase, markSetupComplete, seedSampleShiftTrades } from "./init-db";
+import { initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll, resetDatabase, markSetupComplete, seedSampleShiftTrades, runMigrations } from "./init-db";
 import { promptDatabaseChoice, deleteDatabaseFile, displayDatabaseStats, loadSampleData } from "./db-manager";
 import { recreateConnection } from "./db";
 
@@ -79,6 +79,9 @@ if (process.env.NODE_ENV === 'production') {
   if (loadSample) {
     await loadSampleData();
   }
+
+  // Run startup migrations (cleanup Sunday shifts, etc.)
+  await runMigrations();
 
   // Create admin account if it doesn't exist
   await createAdminAccount();
