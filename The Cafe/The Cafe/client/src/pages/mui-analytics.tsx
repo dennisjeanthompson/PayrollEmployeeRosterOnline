@@ -1,6 +1,6 @@
 /**
- * Analytics & Forecasting Dashboard
- * Predictive analytics for labor hours, payroll costs, and staffing
+ * Forecasting Dashboard
+ * Predicted labor hours & payroll costs
  */
 
 import { useState } from "react";
@@ -14,7 +14,6 @@ import {
   Paper,
   Chip,
   Alert,
-  AlertTitle,
   CircularProgress,
   ToggleButton,
   ToggleButtonGroup,
@@ -28,10 +27,6 @@ import {
   Analytics as AnalyticsIcon,
   Schedule as ScheduleIcon,
   AttachMoney as MoneyIcon,
-  Warning as WarningIcon,
-  CalendarMonth as CalendarIcon,
-  Celebration as HolidayIcon,
-  Groups as GroupsIcon,
 } from "@mui/icons-material";
 import {
   AreaChart,
@@ -93,45 +88,6 @@ interface PayrollForecast {
   };
 }
 
-interface PeaksData {
-  peakDaysOfWeek: Array<{
-    dayOfWeek: string;
-    avgHours: number;
-    isPeak: boolean;
-  }>;
-  upcomingPeaks: Array<{
-    date: string;
-    dayOfWeek: string;
-    reason: string;
-    type: string;
-  }>;
-  upcomingHolidays: Array<{
-    date: string;
-    name: string;
-    type: string;
-  }>;
-}
-
-interface StaffingAlerts {
-  alerts: Array<{
-    date: string;
-    dayOfWeek: string;
-    type: string;
-    severity: string;
-    scheduledShifts: number;
-    expectedNeed: number;
-    message: string;
-    holiday?: string | null;
-  }>;
-  summary: {
-    totalAlerts: number;
-    highSeverity: number;
-    mediumSeverity: number;
-    activeEmployees: number;
-    upcomingTimeOff: number;
-  };
-}
-
 // ── Component ──────────────────────────────────────────
 
 export default function MuiAnalytics() {
@@ -139,7 +95,6 @@ export default function MuiAnalytics() {
   const [forecastDays, setForecastDays] = useState<number>(14);
 
   // ── Data queries ──
-  // Trends: fetch 56 days (8 weeks) so weekly-pattern averages match forecast history window
   const { data: trendsData, isLoading: trendsLoading } = useQuery<TrendsData>({
     queryKey: ["analytics-trends"],
     queryFn: async () => {
@@ -173,33 +128,10 @@ export default function MuiAnalytics() {
     },
   });
 
-  const { data: peaksData } = useQuery<PeaksData>({
-    queryKey: ["forecast-peaks", forecastDays],
-    queryFn: async () => {
-      const res = await fetch(`/api/forecast/peaks?days=${forecastDays}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch peaks");
-      return res.json();
-    },
-  });
-
-  const { data: staffingData } = useQuery<StaffingAlerts>({
-    queryKey: ["forecast-staffing", forecastDays],
-    queryFn: async () => {
-      const res = await fetch(`/api/forecast/staffing?days=${forecastDays}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch staffing alerts");
-      return res.json();
-    },
-  });
-
   // ── Derived data ──
   const isLoading = trendsLoading || laborLoading || payrollLoading;
   const hoursChange = trendsData?.comparison?.hoursChange || 0;
 
-  // Labor forecast chart — use "band" for proper confidence area range
   const forecastChartData =
     laborForecast?.forecasts.map((f) => ({
       date: format(parseISO(f.date), "MMM d"),
@@ -208,27 +140,18 @@ export default function MuiAnalytics() {
       isHoliday: f.isHoliday?.name || null,
     })) || [];
 
-  // Weekly patterns from the same 8-week window
   const patternsData =
     trendsData?.weeklyPatterns?.map((p) => ({
       day: p.dayOfWeek,
       hours: Math.round(p.avgHours * 10) / 10,
     })) || [];
 
-  // Payroll forecast chart
   const payrollChartData =
     payrollForecast?.forecasts.map((f) => ({
       date: format(parseISO(f.date), "MMM d"),
       predicted: f.predicted,
-      band: [f.lower, f.upper] as [number, number],
       isHoliday: f.isHoliday?.name || null,
     })) || [];
-
-  // Staffing alerts — compact grouping
-  const highAlerts = staffingData?.alerts?.filter((a) => a.severity === "high") || [];
-  const totalAlerts = staffingData?.summary?.totalAlerts || 0;
-  const visibleAlerts = staffingData?.alerts?.slice(0, 3) || [];
-  const remainingAlerts = Math.max(0, totalAlerts - 3);
 
   // ── Render ──
   return (
@@ -253,7 +176,7 @@ export default function MuiAnalytics() {
             Forecasting
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Predicted labor hours, payroll costs & staffing needs
+            Predicted labor hours & payroll costs
           </Typography>
         </Box>
       </Box>
@@ -266,8 +189,8 @@ export default function MuiAnalytics() {
         <Stack spacing={3}>
           {/* ── Summary Cards ── */}
           <Grid container spacing={2}>
-            {/* This Week vs Last Week */}
-            <Grid size={{ xs: 6, md: 3 }}>
+            {/* This Week Hours */}
+            <Grid size={{ xs: 6 }}>
               <Card
                 elevation={0}
                 sx={{
@@ -289,7 +212,7 @@ export default function MuiAnalytics() {
                   <Chip
                     size="small"
                     icon={hoursChange >= 0 ? <TrendingUpIcon /> : <TrendingDownIcon />}
-                    label={`${hoursChange >= 0 ? "+" : ""}${hoursChange.toFixed(0)}%`}
+                    label={`${hoursChange >= 0 ? "+" : ""}${hoursChange.toFixed(0)}% vs last week`}
                     color={hoursChange >= 0 ? "success" : "error"}
                     variant="outlined"
                     sx={{ height: 22 }}
@@ -299,7 +222,7 @@ export default function MuiAnalytics() {
             </Grid>
 
             {/* Predicted Payroll */}
-            <Grid size={{ xs: 6, md: 3 }}>
+            <Grid size={{ xs: 6 }}>
               <Card
                 elevation={0}
                 sx={{
@@ -312,7 +235,7 @@ export default function MuiAnalytics() {
                   <Stack direction="row" alignItems="center" spacing={1}>
                     <MoneyIcon color="success" fontSize="small" />
                     <Typography variant="caption" color="text.secondary">
-                      Payroll ({forecastDays}d)
+                      Est. Payroll ({forecastDays}d)
                     </Typography>
                   </Stack>
                   <Typography variant="h4" fontWeight={700} sx={{ mt: 1, mb: 0.5 }}>
@@ -320,77 +243,6 @@ export default function MuiAnalytics() {
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     ~₱{(payrollForecast?.summary?.avgDaily || 0).toLocaleString()}/day
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Upcoming Peak / Holiday Days */}
-            <Grid size={{ xs: 6, md: 3 }}>
-              <Card
-                elevation={0}
-                sx={{
-                  borderRadius: 3,
-                  bgcolor: alpha(theme.palette.warning.main, 0.05),
-                  border: `1px solid ${alpha(theme.palette.warning.main, 0.12)}`,
-                }}
-              >
-                <CardContent sx={{ py: 2 }}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <CalendarIcon color="warning" fontSize="small" />
-                    <Typography variant="caption" color="text.secondary">
-                      Busy Days Ahead
-                    </Typography>
-                  </Stack>
-                  <Typography variant="h4" fontWeight={700} sx={{ mt: 1, mb: 0.5 }}>
-                    {peaksData?.upcomingPeaks?.length || 0}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {peaksData?.upcomingPeaks?.length
-                      ? `Next ${forecastDays} days`
-                      : "No peaks expected"}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Staffing Alerts */}
-            <Grid size={{ xs: 6, md: 3 }}>
-              <Card
-                elevation={0}
-                sx={{
-                  borderRadius: 3,
-                  bgcolor:
-                    highAlerts.length > 0
-                      ? alpha(theme.palette.error.main, 0.05)
-                      : alpha(theme.palette.info.main, 0.05),
-                  border: `1px solid ${
-                    highAlerts.length > 0
-                      ? alpha(theme.palette.error.main, 0.12)
-                      : alpha(theme.palette.info.main, 0.12)
-                  }`,
-                }}
-              >
-                <CardContent sx={{ py: 2 }}>
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <GroupsIcon
-                      color={highAlerts.length > 0 ? "error" : "info"}
-                      fontSize="small"
-                    />
-                    <Typography variant="caption" color="text.secondary">
-                      Staffing Alerts
-                    </Typography>
-                  </Stack>
-                  <Typography variant="h4" fontWeight={700} sx={{ mt: 1, mb: 0.5 }}>
-                    {totalAlerts}
-                  </Typography>
-                  <Typography
-                    variant="caption"
-                    color={highAlerts.length > 0 ? "error" : "text.secondary"}
-                  >
-                    {highAlerts.length > 0
-                      ? `${highAlerts.length} need attention`
-                      : "All staffed"}
                   </Typography>
                 </CardContent>
               </Card>
@@ -464,7 +316,6 @@ export default function MuiAnalytics() {
                       return holiday ? `${label} — ${holiday}` : label;
                     }}
                   />
-                  {/* Confidence band as a proper range area */}
                   <Area
                     type="monotone"
                     dataKey="band"
@@ -473,7 +324,6 @@ export default function MuiAnalytics() {
                     strokeWidth={0}
                     name="Range"
                   />
-                  {/* Predicted line on top */}
                   <Line
                     type="monotone"
                     dataKey="predicted"
@@ -583,69 +433,6 @@ export default function MuiAnalytics() {
               </Paper>
             </Grid>
           </Grid>
-
-          {/* ── Alerts & Holidays ── */}
-          <Paper
-            elevation={0}
-            sx={{
-              p: 3,
-              borderRadius: 3,
-              border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
-            }}
-          >
-            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-              <WarningIcon color="warning" fontSize="small" />
-              <Typography variant="h6" fontWeight={600}>
-                Alerts
-              </Typography>
-            </Stack>
-
-            {/* Upcoming Holidays */}
-            {peaksData?.upcomingHolidays && peaksData.upcomingHolidays.length > 0 && (
-              <Alert severity="info" icon={<HolidayIcon />} sx={{ mb: 2, borderRadius: 2 }}>
-                <AlertTitle>Upcoming Holidays</AlertTitle>
-                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                  {peaksData.upcomingHolidays.slice(0, 5).map((h) => (
-                    <Chip
-                      key={h.date}
-                      size="small"
-                      label={`${h.name} · ${format(parseISO(h.date), "MMM d")}`}
-                      color={h.type === "regular" ? "error" : "warning"}
-                      variant="outlined"
-                    />
-                  ))}
-                </Stack>
-              </Alert>
-            )}
-
-            {/* Staffing Alerts — compact view */}
-            {totalAlerts > 0 ? (
-              <Stack spacing={1.5}>
-                {visibleAlerts.map((alert, idx) => (
-                  <Alert
-                    key={idx}
-                    severity={alert.severity === "high" ? "error" : "warning"}
-                    sx={{ borderRadius: 2, py: 0.5 }}
-                  >
-                    <strong>{format(parseISO(alert.date), "EEE, MMM d")}</strong>
-                    {alert.holiday ? ` (${alert.holiday})` : ""} — {alert.message}
-                    <Typography variant="caption" display="block" color="text.secondary">
-                      Scheduled: {alert.scheduledShifts} / Expected: {alert.expectedNeed}
-                    </Typography>
-                  </Alert>
-                ))}
-                {remainingAlerts > 0 && (
-                  <Alert severity="warning" sx={{ borderRadius: 2, py: 0.5 }}>
-                    +{remainingAlerts} more day{remainingAlerts > 1 ? "s" : ""} with staffing gaps in the next {forecastDays} days.
-                  </Alert>
-                )}
-              </Stack>
-            ) : (
-              <Alert severity="success" sx={{ borderRadius: 2 }}>
-                No staffing issues for the next {forecastDays} days.
-              </Alert>
-            )}
-          </Paper>
         </Stack>
       )}
     </Box>
