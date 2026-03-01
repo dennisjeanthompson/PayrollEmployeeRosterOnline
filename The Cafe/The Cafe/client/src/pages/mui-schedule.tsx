@@ -2082,8 +2082,15 @@ const EnhancedScheduler = () => {
     rangeEnd.setDate(rangeEnd.getDate() - 1); // Adjust since info.end is exclusive
     rangeEnd.setHours(23, 59, 59, 999);
     
-    setCurrentWeekStart(rangeStart);
-    setVisibleRangeEnd(rangeEnd);
+    // Only update state if the range actually changed (prevents infinite loops)
+    setCurrentWeekStart(prev => {
+      if (prev.getTime() === rangeStart.getTime()) return prev;
+      return rangeStart;
+    });
+    setVisibleRangeEnd(prev => {
+      if (prev.getTime() === rangeEnd.getTime()) return prev;
+      return rangeEnd;
+    });
   }, []);
 
   if (shiftsLoading || employeesLoading) {
@@ -3207,7 +3214,6 @@ const EnhancedScheduler = () => {
             scrollTime="05:30:00"
             timeZone="local"
             allDaySlot={true}
-            hiddenDays={[0]}
             businessHours={{
               daysOfWeek: [1, 2, 3, 4, 5, 6], // Mon-Sat (exclude Sunday)
               startTime: '06:00',
@@ -3232,10 +3238,17 @@ const EnhancedScheduler = () => {
             
             // HOVER DETAILS: Show summary tooltip on day cells + Sunday rest day styling
             dayCellDidMount={(args) => {
-              // Sunday rest day - dim the cell
+              // Sunday rest day - block the cell visually
               if (args.date.getDay() === 0) {
-                args.el.style.backgroundColor = 'rgba(239, 68, 68, 0.04)';
-                args.el.setAttribute('title', '🚫 Sunday — Rest Day (no shifts)');
+                args.el.style.backgroundColor = 'rgba(239, 68, 68, 0.08)';
+                args.el.style.position = 'relative';
+                args.el.setAttribute('title', '🚫 Sunday — Rest Day (no shifts allowed)');
+                
+                // Add "REST DAY" overlay text
+                const overlay = document.createElement('div');
+                overlay.textContent = 'REST DAY';
+                overlay.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-20deg);font-size:0.7rem;font-weight:800;color:rgba(239,68,68,0.2);pointer-events:none;white-space:nowrap;z-index:1;letter-spacing:2px;';
+                args.el.appendChild(overlay);
                 return;
               }
               
