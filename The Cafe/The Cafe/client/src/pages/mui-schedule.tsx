@@ -233,9 +233,21 @@ const softenColor = (hex: string, opacity: number = 0.75): string => {
   return `rgba(${r}, ${g}, ${b}, ${opacity})`;
 };
 
-const getEmployeeColor = (employeeId: string, employees: Employee[]) => {
-  const index = employees.findIndex(e => e.id === employeeId);
-  return EMPLOYEE_COLORS[index % EMPLOYEE_COLORS.length] || EMPLOYEE_COLORS[0];
+// Stable color assignment: hash the employee ID so colors don't shift
+// when the employee list order changes or employees are filtered
+const hashCode = (str: string): number => {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + ch;
+    hash |= 0; // Convert to 32-bit int
+  }
+  return Math.abs(hash);
+};
+
+const getEmployeeColor = (employeeId: string, _employees: Employee[]) => {
+  const idx = hashCode(employeeId) % EMPLOYEE_COLORS.length;
+  return EMPLOYEE_COLORS[idx];
 };
 
 // --- PHILIPPINE-COMPLIANT TIME-OFF NOTICE POLICY ---
@@ -1271,7 +1283,7 @@ const EnhancedScheduler = () => {
           : `${empName}${displayRole ? ` • ${displayRole}` : ''}`,
         start: shift.startTime,
         end: shift.endTime,
-        backgroundColor: softenColor(colors.bg, 0.82),
+        backgroundColor: colors.bg,
         borderColor: colors.bg,
         textColor: colors.text,
         extendedProps: { shift, employeeId: shift.userId, type: 'shift' },

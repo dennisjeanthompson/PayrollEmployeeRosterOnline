@@ -747,6 +747,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Creating shift with data:', req.body);
       const shiftData = insertShiftSchema.parse(req.body);
 
+      // Block Sunday shifts (Rest Day per Philippine Labor Law)
+      const shiftDay = new Date(shiftData.startTime).getDay();
+      if (shiftDay === 0) {
+        return res.status(400).json({ message: 'Cannot create shifts on Sunday (Rest Day). Rest day pay rules apply per Philippine Labor Code.' });
+      }
+
       // Validate shift times - end time must be after start time
       const timeError = validateShiftTimes(shiftData.startTime, shiftData.endTime);
       if (timeError) {
@@ -809,6 +815,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newStartTime = updateData.startTime ? new Date(updateData.startTime) : new Date(existingShift.startTime);
       const newEndTime = updateData.endTime ? new Date(updateData.endTime) : new Date(existingShift.endTime);
       const newUserId = updateData.userId || existingShift.userId;
+
+      // Block Sunday shifts (Rest Day per Philippine Labor Law)
+      if (newStartTime.getDay() === 0) {
+        return res.status(400).json({ message: 'Cannot schedule shifts on Sunday (Rest Day).' });
+      }
 
       // If both times are provided, validate them
       if (updateData.startTime && updateData.endTime) {
