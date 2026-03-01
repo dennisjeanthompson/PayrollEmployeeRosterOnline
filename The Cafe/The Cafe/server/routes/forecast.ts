@@ -103,8 +103,8 @@ const requireManagerRole = (req: Request, res: Response, next: Function) => {
 router.get("/api/analytics/trends", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const branchId = req.user!.branchId;
-    const { days = "30", view = "daily" } = req.query;
-    const numDays = Math.min(parseInt(days as string) || 30, 90);
+    const { days = "56", view = "daily" } = req.query;
+    const numDays = Math.min(parseInt(days as string) || 56, 90);
     
     const endDate = endOfDay(new Date());
     const startDate = startOfDay(subDays(endDate, numDays - 1));
@@ -278,7 +278,6 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
       const holiday = getHoliday(forecastDate);
       
       let predicted = dowAverages[dow].avg;
-      let confidence = dowAverages[dow].std * 0.1; // ±10% confidence band
       
       // Adjust for holidays (typically lower traffic)
       if (holiday) {
@@ -289,12 +288,16 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
         }
       }
 
+      // ±10% confidence band around predicted value
+      const lower = predicted * 0.9;
+      const upper = predicted * 1.1;
+
       forecasts.push({
         date: format(forecastDate, "yyyy-MM-dd"),
         dayOfWeek: format(forecastDate, "EEE"),
         predicted: Math.round(predicted * 10) / 10,
-        lower: Math.round((predicted - confidence) * 10) / 10,
-        upper: Math.round((predicted + confidence) * 10) / 10,
+        lower: Math.round(lower * 10) / 10,
+        upper: Math.round(upper * 10) / 10,
         isHoliday: holiday,
       });
     }
