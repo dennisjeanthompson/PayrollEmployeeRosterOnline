@@ -1209,8 +1209,14 @@ const EnhancedScheduler = () => {
 
   const getEmployeeRole = (userId: string) => {
     const emp = employees.find(e => e.id === userId);
-    return emp?.role || '';
+    return emp?.position || emp?.role || '';
   };
+
+  // REST DAY CHECK: Sunday (day 0) is the default rest day per Philippine labor law
+  // Consistent with payroll-utils.ts isRestDay() which uses restDay=0 (Sunday)
+  const isRestDay = useCallback((date: Date): boolean => {
+    return date.getDay() === 0; // Sunday
+  }, []);
 
   // Feature 4: Apply Shift Template (local time)
   const applyShiftTemplate = useCallback((template: keyof typeof SHIFT_TEMPLATES) => {
@@ -1245,12 +1251,16 @@ const EnhancedScheduler = () => {
       ? shifts.filter(s => s.userId === currentUser.id)
       : shifts;
 
-    const shiftEvents = filteredShifts.map(shift => {
+    const shiftEvents = filteredShifts
+      // Filter out any shifts that somehow landed on Sunday (rest day)
+      .filter(shift => new Date(shift.startTime).getDay() !== 0)
+      .map(shift => {
       const colors = getEmployeeColor(shift.userId, employees);
       const empName = shift.user 
         ? `${shift.user.firstName} ${shift.user.lastName}` 
         : getEmployeeName(shift.userId);
-      const role = shift.user?.role || getEmployeeRole(shift.userId);
+      const emp = employees.find(e => e.id === shift.userId);
+      const displayRole = emp?.position || shift.user?.role || shift.position || getEmployeeRole(shift.userId);
       const timeRange = format(new Date(shift.startTime), 'h:mm a') + ' - ' + format(new Date(shift.endTime), 'h:mm a');
       
       return {
@@ -1258,7 +1268,7 @@ const EnhancedScheduler = () => {
         resourceId: shift.userId, // NEW: Link to resource for timeline view
         title: viewMode === 'timeline' 
           ? timeRange
-          : `${empName}${role ? ` • ${role}` : ''}`,
+          : `${empName}${displayRole ? ` • ${displayRole}` : ''}`,
         start: shift.startTime,
         end: shift.endTime,
         backgroundColor: softenColor(colors.bg, 0.82),
@@ -1446,6 +1456,13 @@ const EnhancedScheduler = () => {
     const startISO = event.start ? event.start.toISOString() : event.startStr;
     const endISO = event.end ? event.end.toISOString() : event.endStr;
 
+    // Block drops on Sunday (rest day) - consistent with payroll
+    if (event.start && isRestDay(event.start)) {
+      toast.warning('🚫 Cannot schedule shifts on Sunday (Rest Day)');
+      info.revert();
+      return;
+    }
+
     if (checkOverlap(employeeId, startISO, endISO, event.id)) {
       setSnackbar({ open: true, message: '⚠️ Overlap detected with existing shift!', severity: 'warning' });
       info.revert();
@@ -1466,7 +1483,7 @@ const EnhancedScheduler = () => {
     } catch (error) {
       info.revert();
     }
-  }, [updateShiftMutation, checkOverlap, isPublished, isManagerRole]);
+  }, [updateShiftMutation, checkOverlap, isPublished, isManagerRole, isRestDay]);
 
   const handleEventResize = useCallback(async (info: any) => {
     if (!isManagerRole || isPublished) {
@@ -1477,6 +1494,13 @@ const EnhancedScheduler = () => {
 
     const { event, oldEvent } = info;
     if (event.extendedProps.type === 'timeoff' || event.extendedProps.type === 'time-off-approved') {
+      info.revert();
+      return;
+    }
+
+    // Block resize into Sunday (rest day)
+    if (event.end && isRestDay(event.end)) {
+      toast.warning('🚫 Cannot extend shift into Sunday (Rest Day)');
       info.revert();
       return;
     }
@@ -1506,7 +1530,7 @@ const EnhancedScheduler = () => {
     } catch (error) {
        info.revert();
     }
-  }, [updateShiftMutation, checkOverlap, isPublished, isManagerRole]);
+  }, [updateShiftMutation, checkOverlap, isPublished, isManagerRole, isRestDay]);
 
   // UNIFIED SCHEDULE: Enhanced Event Click Handler with Role-Based Logic
   const handleEventClick = useCallback((info: any) => {
@@ -1619,8 +1643,15 @@ const EnhancedScheduler = () => {
   } | null>(null);
 
   const handleDateSelect = useCallback((info: any) => {
+    // Block Sunday (rest day) - consistent with payroll rest day rules
+    const selectedDate = new Date(info.startStr);
+    if (isRestDay(selectedDate)) {
+      toast.warning('🚫 Sunday is a Rest Day — no shifts can be scheduled. Rest day pay applies per Philippine labor law.');
+      return;
+    }
+
     // Check if date falls on a work-restricted holiday
-    const { blocked, holiday } = isDateBlocked(new Date(info.startStr));
+    const { blocked, holiday } = isDateBlocked(selectedDate);
     if (blocked && holiday) {
       toast.error(`🚫 ${holiday.name} - work not allowed on this holiday`);
       return;
@@ -1636,7 +1667,6 @@ const EnhancedScheduler = () => {
     }
     
     const isOwnRow = employeeId === currentUser?.id;
-    const selectedDate = new Date(info.startStr);
 
     // EMPLOYEE CLICK: Show contextual action menu
     if (!isManagerRole) {
@@ -1678,7 +1708,7 @@ const EnhancedScheduler = () => {
     if (!isDesktop && mobileSelectedEmployee) {
       setMobileSelectedEmployee(null);
     }
-  }, [isPublished, isDateBlocked, isManagerRole, currentUser, isDesktop, mobileSelectedEmployee]);
+  }, [isPublished, isDateBlocked, isRestDay, isManagerRole, currentUser, isDesktop, mobileSelectedEmployee]);
 
   // MOBILE FIX: Handle single date taps (which don't trigger 'select' easily on touch)
   const handleDateClick = useCallback((arg: any) => {
@@ -1713,6 +1743,12 @@ const EnhancedScheduler = () => {
     const startDate = event.start || new Date(event.startStr);
 
     if (startDate) {
+      
+      // Block Sunday (rest day) - consistent with payroll
+      if (isRestDay(startDate)) {
+        toast.warning('🚫 Sunday is a Rest Day — no shifts can be scheduled.');
+        return;
+      }
       
       // Check if date falls on a work-restricted holiday
       const { blocked, holiday } = isDateBlocked(startDate);
@@ -1750,7 +1786,7 @@ const EnhancedScheduler = () => {
       });
       setCreateModalOpen(true);
     }
-  }, [isPublished, isDateBlocked, isManagerRole]);
+  }, [isPublished, isDateBlocked, isRestDay, isManagerRole]);
 
   // Initialize external draggable for employee roster
   useEffect(() => {
@@ -1790,6 +1826,12 @@ const EnhancedScheduler = () => {
   const handlePasteShift = useCallback((start: Date) => {
     if (!clipboardShift) return;
     if (!isManagerRole) return; // SECURITY: Only managers can paste/create shifts
+
+    // Block Sunday (rest day)
+    if (isRestDay(start)) {
+      toast.warning('🚫 Sunday is a Rest Day — no shifts can be scheduled.');
+      return;
+    }
 
     const originalStart = new Date(clipboardShift.startTime);
     const originalEnd = new Date(clipboardShift.endTime);
@@ -1941,6 +1983,12 @@ const EnhancedScheduler = () => {
     for (const shift of clipboardWeek) {
       const newStart = new Date(new Date(shift.startTime).getTime() + daysDiff);
       const newEnd = new Date(new Date(shift.endTime).getTime() + daysDiff);
+      
+      // Skip shifts that would land on Sunday (rest day)
+      if (isRestDay(newStart)) {
+        skippedCount++;
+        continue;
+      }
       
       // Check for overlap before creating
       const hasOverlap = checkOverlap(shift.userId, newStart.toISOString(), newEnd.toISOString());
@@ -2247,6 +2295,23 @@ const EnhancedScheduler = () => {
         }
         .fc-timegrid-col.fc-day-today {
           background: rgba(59, 130, 246, 0.03) !important;
+        }
+
+        /* Sunday (Rest Day) styling - dim column with subtle red tint */
+        .fc-day-sun {
+          background: rgba(239, 68, 68, 0.04) !important;
+        }
+        .fc-day-sun .fc-col-header-cell-cushion {
+          color: #ef4444 !important;
+          opacity: 0.7;
+        }
+        .fc-day-sun .fc-daygrid-day-number {
+          color: #ef4444 !important;
+          opacity: 0.6;
+        }
+        /* Non-business hours background (works with businessHours config) */
+        .fc-non-business {
+          background: rgba(239, 68, 68, 0.03) !important;
         }
 
         /* Now indicator (red line for current time) */
@@ -3130,6 +3195,11 @@ const EnhancedScheduler = () => {
             scrollTime="05:30:00"
             timeZone="local"
             allDaySlot={true}
+            businessHours={{
+              daysOfWeek: [1, 2, 3, 4, 5, 6], // Mon-Sat (exclude Sunday)
+              startTime: '06:00',
+              endTime: '22:00',
+            }}
             editable={isManagerRole && !isPublished}
             droppable={isManagerRole && !isPublished}
             selectable={true}
@@ -3147,8 +3217,15 @@ const EnhancedScheduler = () => {
             eventLongPressDelay={150} // Faster long-press drag on mobile
             eventReceive={handleEventReceive}
             
-            // HOVER DETAILS: Show summary tooltip on day cells
+            // HOVER DETAILS: Show summary tooltip on day cells + Sunday rest day styling
             dayCellDidMount={(args) => {
+              // Sunday rest day - dim the cell
+              if (args.date.getDay() === 0) {
+                args.el.style.backgroundColor = 'rgba(239, 68, 68, 0.04)';
+                args.el.setAttribute('title', '🚫 Sunday — Rest Day (no shifts)');
+                return;
+              }
+              
               // Calculate stats for this day
               const dateStr = format(args.date, 'yyyy-MM-dd');
               const dayEvents = calendarEvents.filter(e => e.start && e.start.toString().startsWith(dateStr));
@@ -3194,10 +3271,11 @@ const EnhancedScheduler = () => {
                 
                 if (type === 'shift' && shift) {
                   const employee = employees.find(e => e.id === shift.userId);
+                  const tooltipRole = employee?.position || employee?.role || shift.position || 'Staff';
                   return `
                     <div style="padding: 8px;">
                       <strong>${employee?.firstName} ${employee?.lastName}</strong><br/>
-                      ${shift.position || 'Staff'}<br/>
+                      ${tooltipRole}<br/>
                       <span style="color: #10B981;">${format(new Date(shift.startTime), 'h:mm a')} - ${format(new Date(shift.endTime), 'h:mm a')}</span><br/>
                       ${shift.notes ? `<i>${shift.notes}</i>` : ''}
                     </div>
@@ -3377,7 +3455,7 @@ const EnhancedScheduler = () => {
               >
                 {employees.map((emp) => (
                   <MenuItem key={emp.id} value={emp.id}>
-                    {emp.firstName} {emp.lastName} {emp.role && `• ${emp.role}`}
+                    {emp.firstName} {emp.lastName} {(emp.position || emp.role) && `• ${emp.position || emp.role}`}
                   </MenuItem>
                 ))}
               </Select>
@@ -3415,6 +3493,11 @@ const EnhancedScheduler = () => {
           <Button
             variant="contained"
             onClick={() => {
+              // Block Sunday shifts in create dialog too
+              if (newShiftData.startTime && isRestDay(new Date(newShiftData.startTime))) {
+                toast.warning('🚫 Sunday is a Rest Day — no shifts can be scheduled.');
+                return;
+              }
               const selectedEmployee = employees.find(e => e.id === newShiftData.employeeId);
               createShiftMutation.mutate({
                 userId: newShiftData.employeeId,
@@ -3448,7 +3531,7 @@ const EnhancedScheduler = () => {
                     {selectedShift.user ? `${selectedShift.user.firstName} ${selectedShift.user.lastName}` : getEmployeeName(selectedShift.userId)}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {selectedShift.user?.role || getEmployeeRole(selectedShift.userId)}
+                    {(() => { const emp = employees.find(e => e.id === selectedShift.userId); return emp?.position || emp?.role || selectedShift.position || getEmployeeRole(selectedShift.userId); })()}
                   </Typography>
                 </Box>
               </Box>
