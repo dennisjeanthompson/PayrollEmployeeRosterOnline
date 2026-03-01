@@ -2385,7 +2385,7 @@ const EnhancedScheduler = () => {
           <Box sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
               <Typography variant="h6" fontWeight={700}>
-                Employee Roster
+                Roster
               </Typography>
               <IconButton size="small" onClick={() => setRosterOpen(false)}>
                 <CloseIcon />
@@ -2544,7 +2544,7 @@ const EnhancedScheduler = () => {
           <Box sx={{ p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
               <Typography variant="h6" fontWeight={700}>
-                Employee Roster
+                Roster
               </Typography>
               <IconButton size="small" onClick={() => setRosterOpen(false)}>
                 <CloseIcon />
