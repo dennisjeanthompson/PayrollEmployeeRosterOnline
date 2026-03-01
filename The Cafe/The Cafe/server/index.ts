@@ -89,6 +89,9 @@ if (process.env.NODE_ENV === 'production') {
   // Seed default deduction rates FIRST (payroll entries need these for calculations)
   await seedDeductionRates();
 
+  // Run startup migrations BEFORE seeds (cleanup old shifts/patterns)
+  await runMigrations();
+
   // Seed sample schedules and payroll data (uses deduction rates)
   await seedSampleSchedulesAndPayroll();
 
@@ -97,9 +100,6 @@ if (process.env.NODE_ENV === 'production') {
 
   // Seed sample shift trades (pending, approved, open)
   await seedSampleShiftTrades();
-
-  // Run startup migrations AFTER all seeds (cleanup Sunday shifts etc.)
-  await runMigrations();
 
   // Mark setup as complete since we have seeded data
   await markSetupComplete();

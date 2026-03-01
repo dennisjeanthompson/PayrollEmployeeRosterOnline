@@ -3213,6 +3213,7 @@ const EnhancedScheduler = () => {
             slotDuration="00:30:00"
             scrollTime="05:30:00"
             timeZone="local"
+            nextDayThreshold="06:00:00"
             allDaySlot={true}
             businessHours={{
               daysOfWeek: [1, 2, 3, 4, 5, 6], // Mon-Sat (exclude Sunday)

@@ -13,24 +13,43 @@ import { eq, sql } from 'drizzle-orm';
 export async function runMigrations() {
   console.log('🔄 Running startup migrations...');
   try {
-    // Migration: Delete any shifts on Sunday in Philippine time (UTC+8 hours)
-    // Timestamps are stored as UTC in a 'timestamp without time zone' column
-    // Adding 8 hours converts to Philippine Standard Time before checking DOW
-    const result = await db.execute(
+    // Migration 1: Delete any shifts on Sunday in Philippine time (UTC+8 hours)
+    // First delete related shift_trades to respect FK constraints
+    await db.execute(
+      sql`DELETE FROM shift_trades WHERE shift_id IN (
+        SELECT id FROM shifts WHERE EXTRACT(DOW FROM start_time + INTERVAL '8 hours') = 0
+        OR EXTRACT(DOW FROM start_time) = 0
+      )`
+    );
+    await db.execute(
       sql`DELETE FROM shifts WHERE EXTRACT(DOW FROM start_time + INTERVAL '8 hours') = 0`
     );
-    console.log('  ✅ Sunday shifts cleanup (PHT = UTC+8) complete');
-  } catch (error) {
-    console.warn('  ⚠️ Sunday cleanup migration error:', error);
-    // Fallback: also try plain UTC check
-    try {
-      await db.execute(
-        sql`DELETE FROM shifts WHERE EXTRACT(DOW FROM start_time) = 0`
-      );
-      console.log('  ✅ Sunday shifts cleanup (UTC fallback) complete');
-    } catch (e2) {
-      console.warn('  ⚠️ Fallback also failed:', e2);
+    await db.execute(
+      sql`DELETE FROM shifts WHERE EXTRACT(DOW FROM start_time) = 0`
+    );
+    console.log('  ✅ Sunday shifts cleanup complete');
+
+    // Migration 2: Delete old-pattern shifts that used raw UTC hours (6,10,14)
+    // These cause midnight-crossing in PHT and display on wrong days
+    // New pattern uses PHT-aware UTC hours (0,3,7) that don't cross midnight in PHT
+    const oldPattern = await db.execute(
+      sql`SELECT COUNT(*) as cnt FROM shifts WHERE EXTRACT(HOUR FROM start_time) IN (6, 10, 14)`
+    );
+    const oldCount = Number((oldPattern as any)?.[0]?.cnt || (oldPattern as any)?.rows?.[0]?.cnt || 0);
+    if (oldCount > 0) {
+      console.log(`  🔄 Found ${oldCount} old-pattern shifts (UTC hours 6/10/14), deleting for re-seed...`);
+      // Delete in correct order to respect foreign key constraints
+      await db.execute(sql`DELETE FROM shift_trades`);
+      await db.execute(sql`DELETE FROM shifts`);
+      // Clear payroll data (respect FK: adjustment_logs → payroll_periods)
+      await db.execute(sql`DELETE FROM adjustment_logs`);
+      await db.execute(sql`DELETE FROM archived_payroll_periods`);
+      await db.execute(sql`DELETE FROM payroll_entries`);
+      await db.execute(sql`DELETE FROM payroll_periods`);
+      console.log('  ✅ Old data cleared — will re-seed with PHT-correct timestamps');
     }
+  } catch (error) {
+    console.warn('  ⚠️ Migration error:', error);
   }
 }
 
@@ -825,6 +844,21 @@ export async function seedSampleSchedulesAndPayroll() {
       return;
     }
 
+    // If shifts were cleared but payroll data remains (e.g., after migration cleanup),
+    // also clear the orphaned payroll data so we can re-seed cleanly
+    const existingPayroll = await db.select().from(payrollPeriods).limit(1);
+    if (existingPayroll.length > 0) {
+      console.log('  🧹 Clearing orphaned payroll data (shifts were cleared by migration)...');
+      try {
+        await db.execute(sql`DELETE FROM adjustment_logs`);
+        await db.execute(sql`DELETE FROM archived_payroll_periods`);
+        await db.execute(sql`DELETE FROM payroll_entries`);
+        await db.execute(sql`DELETE FROM payroll_periods`);
+      } catch (e) {
+        console.warn('  ⚠️ Could not clear payroll data:', e);
+      }
+    }
+
     // Get branch and employees
     const branch = await db.select().from(branches).limit(1);
     const allUsers = await db.select().from(users);
@@ -839,15 +873,19 @@ export async function seedSampleSchedulesAndPayroll() {
     const branchId = branch[0].id;
 
     // ═══════════════════════════════════════════════════════════════
-    // CREATE SHIFTS (January–February 2026 Schedule)
+    // CREATE SHIFTS (January–March 2026 Schedule)
     // Each employee works 8-hour shifts, consistent with payroll.
     // All 2026 rates apply (SSS 2026, PhilHealth 2.5%, Pag-IBIG ₱200 cap)
+    //
+    // IMPORTANT: Hours are stored as UTC but represent Philippine Time (PHT = UTC+8).
+    // We subtract 8 from the desired PHT hour to get the UTC hour.
+    // This ensures no shift crosses midnight in the user's PHT browser.
     // ═══════════════════════════════════════════════════════════════
     
     const shiftPatterns = [
-      { name: 'Morning', start: 6, end: 14 },   // 8 hours
-      { name: 'Day', start: 10, end: 18 },       // 8 hours
-      { name: 'Afternoon', start: 14, end: 22 }, // 8 hours
+      { name: 'Morning', start: 0, end: 8 },     // 8AM-4PM PHT (UTC: 0-8)
+      { name: 'Day', start: 3, end: 11 },         // 11AM-7PM PHT (UTC: 3-11)
+      { name: 'Afternoon', start: 7, end: 15 },   // 3PM-11PM PHT (UTC: 7-15)
     ];
 
     // Helper: generate working days (Mon-Sat, skip Sundays + holidays)
@@ -863,21 +901,26 @@ export async function seedSampleSchedulesAndPayroll() {
       return days;
     }
 
-    // 2026 holidays that affect working days in Jan-Feb
+    // 2026 holidays that affect working days in Jan-Mar
     const jan2026Holidays = ['2026-01-01']; // New Year's Day (regular holiday — paid day off)
     const feb2026Holidays = ['2026-02-17', '2026-02-25']; // Lunar New Year + EDSA (special non-working)
+    const mar2026Holidays = ['2026-03-20', '2026-03-28']; // Eid'l Fitr (tentative) + Black Saturday
 
     // Generate working days for each semi-monthly period
     const jan1_15 = getWorkingDays(2026, 0, 1, 15, jan2026Holidays);  // Jan (month=0)
     const jan16_31 = getWorkingDays(2026, 0, 16, 31, jan2026Holidays);
     const feb1_15 = getWorkingDays(2026, 1, 1, 15, feb2026Holidays);   // Feb (month=1)
     const feb16_28 = getWorkingDays(2026, 1, 16, 28, feb2026Holidays); // Feb 16-28
+    const mar1_15 = getWorkingDays(2026, 2, 1, 15, mar2026Holidays);   // Mar (month=2)
+    const mar16_31 = getWorkingDays(2026, 2, 16, 31, mar2026Holidays); // Mar 16-31
 
     const allPeriodDays = [
       { periodId: 'period-2026-01-01', days: jan1_15 },
       { periodId: 'period-2026-01-16', days: jan16_31 },
       { periodId: 'period-2026-02-01', days: feb1_15 },
       { periodId: 'period-2026-02-16', days: feb16_28 },
+      { periodId: 'period-2026-03-01', days: mar1_15 },
+      { periodId: 'period-2026-03-16', days: mar16_31 },
     ];
 
     // All staff including manager get shifts
@@ -907,7 +950,7 @@ export async function seedSampleSchedulesAndPayroll() {
         }
       }
     }
-    console.log('   ✅ Created shifts for Jan–Feb 2026 (aligned with payroll periods)');
+    console.log('   ✅ Created shifts for Jan–Mar 2026 (PHT-aware UTC timestamps)');
 
     // ── HOLIDAY SHIFTS — skeleton crew works on holidays ─────────
     // In a real café, some staff work on holidays for premium pay.
@@ -937,7 +980,7 @@ export async function seedSampleSchedulesAndPayroll() {
     console.log('   ✅ Created holiday shifts for skeleton crew (New Year, Lunar New Year)');
 
     // ═══════════════════════════════════════════════════════════════
-    // CREATE PAYROLL PERIODS (Jan 1-15, Jan 16-31, Feb 1-15, 2026)
+    // CREATE PAYROLL PERIODS (Jan 1-15, Jan 16-31, Feb 1-15, Feb 16-28, Mar 1-15, Mar 16-31 2026)
     // All deductions use 2026 rates — no year-mismatch issue
     // ═══════════════════════════════════════════════════════════════
 
@@ -963,8 +1006,20 @@ export async function seedSampleSchedulesAndPayroll() {
       { 
         startDate: new Date('2026-02-16'), 
         endDate: new Date('2026-02-28'), 
-        status: 'open',
+        status: 'closed',
         id: 'period-2026-02-16'
+      },
+      { 
+        startDate: new Date('2026-03-01'), 
+        endDate: new Date('2026-03-15'), 
+        status: 'open',
+        id: 'period-2026-03-01'
+      },
+      { 
+        startDate: new Date('2026-03-16'), 
+        endDate: new Date('2026-03-31'), 
+        status: 'open',
+        id: 'period-2026-03-16'
       },
     ];
 
@@ -974,6 +1029,8 @@ export async function seedSampleSchedulesAndPayroll() {
       'period-2026-01-16': jan16_31.length,
       'period-2026-02-01': feb1_15.length,
       'period-2026-02-16': feb16_28.length,
+      'period-2026-03-01': mar1_15.length,
+      'period-2026-03-16': mar16_31.length,
     };
 
     // ── HOLIDAY & OT CONFIG PER EMPLOYEE/PERIOD ────────────────────
@@ -985,6 +1042,11 @@ export async function seedSampleSchedulesAndPayroll() {
       'period-2026-02-16': [
         { date: '2026-02-17', type: 'special_non_working' },                // Lunar New Year
         { date: '2026-02-25', type: 'special_non_working' },                // EDSA Anniversary
+      ],
+      'period-2026-03-01': [],                                               // No holidays in early March
+      'period-2026-03-16': [
+        { date: '2026-03-20', type: 'special_non_working' },                // Eid'l Fitr (tentative)
+        { date: '2026-03-28', type: 'special_non_working' },                // Black Saturday
       ],
     };
 
@@ -1140,7 +1202,7 @@ export async function seedSampleSchedulesAndPayroll() {
         .set({ totalPay: periodTotalPay.toFixed(2) })
         .where(eq(payrollPeriods.id, period.id));
     }
-    console.log('   ✅ Created 4 payroll periods (Jan–Feb 2026) with DOLE-compliant deductions');
+    console.log('   ✅ Created 6 payroll periods (Jan–Mar 2026) with DOLE-compliant deductions');
 
     // ═══════════════════════════════════════════════════════════════
     // CREATE TIME-OFF REQUESTS (2026 dates)
