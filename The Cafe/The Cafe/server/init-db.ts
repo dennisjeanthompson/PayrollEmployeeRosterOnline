@@ -13,14 +13,24 @@ import { eq, sql } from 'drizzle-orm';
 export async function runMigrations() {
   console.log('🔄 Running startup migrations...');
   try {
-    // Migration: Delete any shifts that land on Sunday (rest day per Philippine Labor Law)
-    // Sunday = day 0 in PostgreSQL EXTRACT(DOW FROM timestamp)
+    // Migration: Delete any shifts on Sunday in Philippine time (UTC+8 hours)
+    // Timestamps are stored as UTC in a 'timestamp without time zone' column
+    // Adding 8 hours converts to Philippine Standard Time before checking DOW
     const result = await db.execute(
-      sql`DELETE FROM shifts WHERE EXTRACT(DOW FROM start_time) = 0`
+      sql`DELETE FROM shifts WHERE EXTRACT(DOW FROM start_time + INTERVAL '8 hours') = 0`
     );
-    console.log('  ✅ Sunday shifts cleanup complete');
+    console.log('  ✅ Sunday shifts cleanup (PHT = UTC+8) complete');
   } catch (error) {
-    console.warn('  ⚠️ Sunday cleanup migration skipped:', error);
+    console.warn('  ⚠️ Sunday cleanup migration error:', error);
+    // Fallback: also try plain UTC check
+    try {
+      await db.execute(
+        sql`DELETE FROM shifts WHERE EXTRACT(DOW FROM start_time) = 0`
+      );
+      console.log('  ✅ Sunday shifts cleanup (UTC fallback) complete');
+    } catch (e2) {
+      console.warn('  ⚠️ Fallback also failed:', e2);
+    }
   }
 }
 

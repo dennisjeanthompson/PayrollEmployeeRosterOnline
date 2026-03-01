@@ -3207,6 +3207,7 @@ const EnhancedScheduler = () => {
             scrollTime="05:30:00"
             timeZone="local"
             allDaySlot={true}
+            hiddenDays={[0]}
             businessHours={{
               daysOfWeek: [1, 2, 3, 4, 5, 6], // Mon-Sat (exclude Sunday)
               startTime: '06:00',

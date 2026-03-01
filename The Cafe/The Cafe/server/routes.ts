@@ -748,8 +748,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const shiftData = insertShiftSchema.parse(req.body);
 
       // Block Sunday shifts (Rest Day per Philippine Labor Law)
-      const shiftDay = new Date(shiftData.startTime).getDay();
-      if (shiftDay === 0) {
+      // Check in both UTC and local Philippine time (UTC+8)
+      const shiftDate = new Date(shiftData.startTime);
+      const phHour = shiftDate.getUTCHours() + 8;
+      const phDate = new Date(shiftDate.getTime() + 8 * 60 * 60 * 1000);
+      if (phDate.getUTCDay() === 0) {
         return res.status(400).json({ message: 'Cannot create shifts on Sunday (Rest Day). Rest day pay rules apply per Philippine Labor Code.' });
       }
 
@@ -817,7 +820,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newUserId = updateData.userId || existingShift.userId;
 
       // Block Sunday shifts (Rest Day per Philippine Labor Law)
-      if (newStartTime.getDay() === 0) {
+      const phStartTime = new Date(newStartTime.getTime() + 8 * 60 * 60 * 1000);
+      if (phStartTime.getUTCDay() === 0) {
         return res.status(400).json({ message: 'Cannot schedule shifts on Sunday (Rest Day).' });
       }
 

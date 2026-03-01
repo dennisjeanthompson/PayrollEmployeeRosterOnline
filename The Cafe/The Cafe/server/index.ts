@@ -80,9 +80,6 @@ if (process.env.NODE_ENV === 'production') {
     await loadSampleData();
   }
 
-  // Run startup migrations (cleanup Sunday shifts, etc.)
-  await runMigrations();
-
   // Create admin account if it doesn't exist
   await createAdminAccount();
 
@@ -100,6 +97,9 @@ if (process.env.NODE_ENV === 'production') {
 
   // Seed sample shift trades (pending, approved, open)
   await seedSampleShiftTrades();
+
+  // Run startup migrations AFTER all seeds (cleanup Sunday shifts etc.)
+  await runMigrations();
 
   // Mark setup as complete since we have seeded data
   await markSetupComplete();
