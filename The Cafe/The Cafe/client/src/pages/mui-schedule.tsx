@@ -1800,7 +1800,7 @@ const EnhancedScheduler = () => {
     }
   }, [isPublished, isDateBlocked, isRestDay, isManagerRole]);
 
-  // Initialize external draggable for employee roster
+  // Initialize external draggable for roster
   useEffect(() => {
     if (rosterRef.current && rosterOpen) {
       const draggable = new Draggable(rosterRef.current, {
@@ -2454,7 +2454,7 @@ const EnhancedScheduler = () => {
         </Paper>
       )}
 
-      {/* Employee Roster Sidebar - Responsive Drawer - MANAGERS ONLY */}
+      {/* Roster Sidebar - Responsive Drawer - MANAGERS ONLY */}
       {isManagerRole && !isDesktop ? (
         <SwipeableDrawer
           anchor="left"
@@ -2821,7 +2821,7 @@ const EnhancedScheduler = () => {
         
         {/* Roster Toggle - MANAGERS ONLY */}
         {isManagerRole && (
-          <Tooltip title="Toggle Employee Roster">
+          <Tooltip title="Toggle Roster">
             <Button
               variant={rosterOpen ? 'contained' : 'outlined'}
               startIcon={<PeopleIcon />}
