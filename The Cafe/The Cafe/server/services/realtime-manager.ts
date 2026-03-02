@@ -296,6 +296,12 @@ class RealTimeManager {
     this.io.emit("payroll:sent", { entryId, netPay });
   }
 
+  // AUDIT LOG EVENTS
+  public broadcastAuditLogCreated(auditLog: any) {
+    // Broadcast to all managers and admins
+    this.io.to("managers").emit("audit:created", { auditLog });
+  }
+
   // NOTIFICATION EVENTS
   public broadcastNotification(notification: any) {
     if (notification.userId) {

@@ -196,6 +196,14 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       onEventRef.current?.("notification:created", data);
     });
 
+    // Audit log events - real-time updates for audit logs page
+    socket.on("audit:created", (data) => {
+      console.log("📝 New audit log:", data);
+      queryClient.invalidateQueries({ queryKey: ["/api/audit-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/audit-logs/stats"] });
+      onEventRef.current?.("audit:created", data);
+    });
+
     // Invalidate custom query keys if provided
     socket.on("data-refresh-needed", () => {
       const keys = queryKeysRef.current;

@@ -6,6 +6,13 @@
 import { Router, Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { dbStorage as storage } from "../db-storage";
+import RealTimeManager from "../services/realtime-manager";
+
+let _realTimeManager: RealTimeManager | null = null;
+
+export function setAuditRealTimeManager(rtm: RealTimeManager) {
+  _realTimeManager = rtm;
+}
 
 const router = Router();
 
@@ -47,7 +54,22 @@ router.get("/api/audit-logs", requireAuth, requireManagerRole, async (req, res) 
       offset: parseInt(offset as string),
     });
 
-    res.json({ logs });
+    // Enrich logs with user names
+    const enrichedLogs = await Promise.all(logs.map(async (log) => {
+      let userName = "Unknown";
+      try {
+        const user = await storage.getUser(log.userId);
+        if (user) {
+          userName = `${user.firstName} ${user.lastName}`;
+        }
+      } catch (e) { /* ignore */ }
+      return { ...log, userName };
+    }));
+
+    // Get total count for pagination
+    const stats = await storage.getAuditLogStats();
+
+    res.json({ logs: enrichedLogs, total: stats.totalLogs });
   } catch (error) {
     console.error("Error fetching audit logs:", error);
     res.status(500).json({ message: "Failed to fetch audit logs" });
@@ -76,6 +98,16 @@ router.post("/api/audit-logs", requireAuth, async (req, res) => {
       userAgent: req.headers["user-agent"],
     });
 
+    // Broadcast real-time update
+    if (_realTimeManager) {
+      let userName = "Unknown";
+      try {
+        const user = await storage.getUser(req.user!.id);
+        if (user) userName = `${user.firstName} ${user.lastName}`;
+      } catch (e) { /* ignore */ }
+      _realTimeManager.broadcastAuditLogCreated({ ...log, userName });
+    }
+
     res.status(201).json({ log });
   } catch (error) {
     console.error("Error creating audit log:", error);
@@ -94,6 +126,55 @@ router.get("/api/audit-logs/stats", requireAuth, requireManagerRole, async (req,
   }
 });
 
+// GET /api/audit-logs/export - Export audit logs as CSV
+router.get("/api/audit-logs/export", requireAuth, requireManagerRole, async (req, res) => {
+  try {
+    const { entityType, action, startDate, endDate } = req.query;
+
+    const logs = await storage.getAuditLogs({
+      entityType: entityType as string,
+      action: action as string,
+      startDate: startDate ? new Date(startDate as string) : undefined,
+      endDate: endDate ? new Date(endDate as string) : undefined,
+      limit: 10000,
+      offset: 0,
+    });
+
+    // Enrich with user names
+    const enrichedLogs = await Promise.all(logs.map(async (log) => {
+      let userName = "Unknown";
+      try {
+        const user = await storage.getUser(log.userId);
+        if (user) userName = `${user.firstName} ${user.lastName}`;
+      } catch (e) { /* ignore */ }
+      return { ...log, userName };
+    }));
+
+    // Build CSV
+    const headers = ["Timestamp", "Action", "Entity Type", "Entity ID", "User", "Old Values", "New Values", "Reason", "IP Address"];
+    const rows = enrichedLogs.map(log => [
+      log.createdAt ? new Date(log.createdAt).toISOString() : "",
+      log.action,
+      log.entityType,
+      log.entityId,
+      log.userName,
+      log.oldValues || "",
+      log.newValues || "",
+      log.reason || "",
+      log.ipAddress || "",
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
+
+    const csv = [headers.join(","), ...rows].join("\n");
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename=audit-logs-${new Date().toISOString().split("T")[0]}.csv`);
+    res.send(csv);
+  } catch (error) {
+    console.error("Error exporting audit logs:", error);
+    res.status(500).json({ message: "Failed to export audit logs" });
+  }
+});
+
 export { router as auditRouter };
 
 // Helper function to create audit log from anywhere in the codebase
@@ -108,16 +189,33 @@ export async function createAuditLog(params: {
   ipAddress?: string;
   userAgent?: string;
 }) {
-  return storage.createAuditLog({
-    id: uuidv4(),
-    action: params.action,
-    entityType: params.entityType,
-    entityId: params.entityId,
-    userId: params.userId,
-    oldValues: params.oldValues ? JSON.stringify(params.oldValues) : null,
-    newValues: params.newValues ? JSON.stringify(params.newValues) : null,
-    reason: params.reason || null,
-    ipAddress: params.ipAddress || null,
-    userAgent: params.userAgent || null,
-  });
+  try {
+    const log = await storage.createAuditLog({
+      id: uuidv4(),
+      action: params.action,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      userId: params.userId,
+      oldValues: params.oldValues ? JSON.stringify(params.oldValues) : null,
+      newValues: params.newValues ? JSON.stringify(params.newValues) : null,
+      reason: params.reason || null,
+      ipAddress: params.ipAddress || null,
+      userAgent: params.userAgent || null,
+    });
+
+    // Broadcast real-time update
+    if (_realTimeManager) {
+      let userName = "Unknown";
+      try {
+        const user = await storage.getUser(params.userId);
+        if (user) userName = `${user.firstName} ${user.lastName}`;
+      } catch (e) { /* ignore */ }
+      _realTimeManager.broadcastAuditLogCreated({ ...log, userName });
+    }
+
+    return log;
+  } catch (error) {
+    console.error("Failed to create audit log:", error);
+    // Don't throw - audit logging should not break the main operation
+  }
 }

@@ -13,7 +13,7 @@ import { registerBranchesRoutes } from "./routes/branches";
 import { createEmployeeRouter } from "./routes/employees";
 import { router as hoursRoutes } from "./routes/hours";
 import payslipsRouter from "./routes/payslips";
-import { auditRouter } from "./routes/audit";
+import { auditRouter, setAuditRealTimeManager, createAuditLog } from "./routes/audit";
 import { reportsRouter } from "./routes/reports";
 import { forecastRouter } from "./routes/forecast";
 import { seedRatesRouter } from "./routes/seed-rates";
@@ -68,6 +68,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create server first to support WebSocket initialization
   const httpServer = createServer(app);
   const realTimeManager = new RealTimeManager(httpServer);
+
+  // Wire up realTimeManager for audit log broadcasting
+  setAuditRealTimeManager(realTimeManager);
 
   // Type for authenticated requests
   interface AuthenticatedRequest extends Request {
@@ -780,6 +783,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const shift = await storage.createShift(shiftData);
+
+      // Audit log for shift creation
+      await createAuditLog({
+        action: 'shift_create',
+        entityType: 'shift',
+        entityId: shift.id,
+        userId: req.user!.id,
+        newValues: { userId: shift.userId, branchId: shift.branchId, startTime: shift.startTime, endTime: shift.endTime, position: shift.position },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       res.json({ shift });
     } catch (error: any) {
       console.error('Shift creation error:', error);
@@ -858,6 +873,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Shift not found" });
       }
 
+      // Audit log for shift update
+      await createAuditLog({
+        action: 'shift_update',
+        entityType: 'shift',
+        entityId: id,
+        userId: req.user!.id,
+        newValues: updateData,
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       res.json({ shift });
     } catch (error) {
       console.error('❌ [PUT /api/shifts/:id] Error:', error);
@@ -888,6 +914,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // TODO: Broadcast shift deletion to connected clients when websocket is available
       // realtimeManager.broadcastShiftDeleted(id);
+
+      // Audit log for shift deletion
+      await createAuditLog({
+        action: 'shift_delete',
+        entityType: 'shift',
+        entityId: id,
+        userId: req.user!.id,
+        oldValues: { userId: shift.userId, branchId: shift.branchId, startTime: shift.startTime, endTime: shift.endTime, position: shift.position },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
 
       res.json({ message: "Shift deleted successfully", shiftId: id });
     } catch (error) {
@@ -1701,6 +1738,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         totalPay: totalPay.toFixed(2)
       });
 
+      // Audit log for payroll processing
+      await createAuditLog({
+        action: 'payroll_process',
+        entityType: 'payroll_period',
+        entityId: id,
+        userId: req.user!.id,
+        newValues: { entriesCreated: payrollEntries.length, totalHours: totalHours.toFixed(2), totalPay: totalPay.toFixed(2) },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       realTimeManager.broadcastPayrollProcessed(id, {
         entriesCreated: payrollEntries.length,
         totalHours,
@@ -1799,6 +1847,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({ entry });
 
+      // Audit log for payroll entry approval
+      await createAuditLog({
+        action: 'payroll_approve',
+        entityType: 'payroll_entry',
+        entityId: id,
+        userId: req.user!.id,
+        newValues: { status: 'approved' },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       realTimeManager.broadcastPayrollEntryUpdated(id, 'approved', entry);
     } catch (error: any) {
       console.error('Approve payroll entry error:', error);
@@ -1820,6 +1879,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       res.json({ entry });
+
+      // Audit log for payroll marked paid
+      await createAuditLog({
+        action: 'payroll_paid',
+        entityType: 'payroll_entry',
+        entityId: id,
+        userId: req.user!.id,
+        newValues: { status: 'paid' },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
 
       realTimeManager.broadcastPayrollEntryUpdated(id, 'paid', entry);
     } catch (error: any) {
@@ -2584,7 +2654,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // CRITICAL: Broadcast real-time approval with updated shift
       // This triggers instant schedule updates on all clients
       realTimeManager.broadcastTradeApproved(id, enrichedTrade, shift!);
-      
+
+      // Audit log for trade approval
+      await createAuditLog({
+        action: 'trade_approve',
+        entityType: 'shift_trade',
+        entityId: id,
+        userId: managerId,
+        newValues: { status: 'approved', fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       res.json({ trade: enrichedTrade });
     } catch (error: any) {
       console.error("Approve trade error:", error);
@@ -2638,6 +2719,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       };
 
       console.log(`❌ Shift trade ${id} rejected by manager ${managerId}`);
+
+      // Audit log for trade rejection
+      await createAuditLog({
+        action: 'trade_reject',
+        entityType: 'shift_trade',
+        entityId: id,
+        userId: managerId,
+        newValues: { status: 'rejected', fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       res.json({ trade: enrichedTrade });
     } catch (error: any) {
       console.error("Reject trade error:", error);
@@ -2731,6 +2824,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isActive: true,
       });
 
+      // Audit log
+      await createAuditLog({
+        action: 'rate_create',
+        entityType: 'deduction_rate',
+        entityId: rate.id,
+        userId: req.user!.id,
+        newValues: { type, minSalary, maxSalary, employeeRate, employeeContribution },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       res.json({ rate });
     } catch (error: any) {
       console.error('Create deduction rate error:', error);
@@ -2756,6 +2860,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Deduction rate not found" });
       }
 
+      // Audit log
+      await createAuditLog({
+        action: 'rate_update',
+        entityType: 'deduction_rate',
+        entityId: id,
+        userId: req.user!.id,
+        newValues: { type, minSalary, maxSalary, employeeRate, employeeContribution },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       res.json({ rate });
     } catch (error: any) {
       console.error('Update deduction rate error:', error);
@@ -2771,6 +2886,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!success) {
         return res.status(404).json({ message: "Deduction rate not found" });
       }
+
+      // Audit log
+      await createAuditLog({
+        action: 'rate_delete',
+        entityType: 'deduction_rate',
+        entityId: id,
+        userId: req.user!.id,
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
 
       res.json({ message: "Deduction rate deleted successfully" });
     } catch (error: any) {
@@ -2818,6 +2943,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!settings) {
         return res.status(404).json({ message: "Deduction settings not found" });
       }
+
+      // Audit log
+      await createAuditLog({
+        action: 'settings_update',
+        entityType: 'deduction_settings',
+        entityId: id,
+        userId: req.user!.id,
+        newValues: { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
 
       res.json({ settings });
     } catch (error: any) {
@@ -3418,6 +3554,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } as any);
     realTimeManager.broadcastNotification(notification);
 
+    // Audit log for time-off approval
+    await createAuditLog({
+      action: 'time_off_approve',
+      entityType: 'time_off_request',
+      entityId: id,
+      userId: req.user!.id,
+      newValues: { status: 'approved', employeeId: request.userId, startDate: request.startDate, endDate: request.endDate, type: request.type },
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      userAgent: req.headers["user-agent"],
+    });
+
     res.json({ request });
   });
 
@@ -3464,6 +3611,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })
     } as any);
     realTimeManager.broadcastNotification(notification);
+
+    // Audit log for time-off rejection
+    await createAuditLog({
+      action: 'time_off_reject',
+      entityType: 'time_off_request',
+      entityId: id,
+      userId: req.user!.id,
+      newValues: { status: 'rejected', employeeId: request.userId, startDate: request.startDate, endDate: request.endDate, type: request.type },
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      userAgent: req.headers["user-agent"],
+    });
 
     res.json({ request });
   });

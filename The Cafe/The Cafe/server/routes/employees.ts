@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { dbStorage } from '../db-storage';
 import crypto from 'crypto';
+import { createAuditLog } from './audit';
 
 const storage = dbStorage;
 
@@ -312,6 +313,18 @@ router.post('/api/employees', requireAuth, requireRole(['manager']), async (req,
     const { password: _, ...result } = newEmployee;
 
     realTimeManager.broadcastEmployeeCreated(result);
+
+    // Audit log
+    await createAuditLog({
+      action: 'employee_create',
+      entityType: 'employee',
+      entityId: newEmployee.id,
+      userId: req.session.user!.id,
+      newValues: { firstName: result.firstName, lastName: result.lastName, email: result.email, role: result.role, position: result.position, branchId: result.branchId },
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      userAgent: req.headers["user-agent"],
+    });
+
     res.status(201).json(result);
   } catch (error: any) {
     console.error('Error creating employee:', error);
@@ -372,6 +385,19 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager']), async (r
     const { password, ...result } = updatedEmployee;
 
     realTimeManager.broadcastEmployeeUpdated(result);
+
+    // Audit log
+    await createAuditLog({
+      action: 'employee_update',
+      entityType: 'employee',
+      entityId: id,
+      userId: req.session.user!.id,
+      oldValues: { firstName: existingEmployee.firstName, lastName: existingEmployee.lastName, email: existingEmployee.email, position: existingEmployee.position, hourlyRate: existingEmployee.hourlyRate },
+      newValues: updates,
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      userAgent: req.headers["user-agent"],
+    });
+
     res.json(result);
   } catch (error) {
     console.error('Error updating employee:', error);
@@ -467,6 +493,29 @@ router.put('/api/employees/:id/deductions', requireAuth, requireRole(['manager']
     const { password, ...result } = updatedEmployee;
 
     realTimeManager.broadcastEmployeeUpdated(result);
+
+    // Audit log for deduction change
+    await createAuditLog({
+      action: 'deduction_change',
+      entityType: 'employee',
+      entityId: id,
+      userId: req.session.user!.id,
+      oldValues: {
+        sssLoanDeduction: existingEmployee.sssLoanDeduction,
+        pagibigLoanDeduction: existingEmployee.pagibigLoanDeduction,
+        cashAdvanceDeduction: existingEmployee.cashAdvanceDeduction,
+        otherDeductions: existingEmployee.otherDeductions,
+      },
+      newValues: {
+        sssLoanDeduction: updatedEmployee.sssLoanDeduction,
+        pagibigLoanDeduction: updatedEmployee.pagibigLoanDeduction,
+        cashAdvanceDeduction: updatedEmployee.cashAdvanceDeduction,
+        otherDeductions: updatedEmployee.otherDeductions,
+      },
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      userAgent: req.headers["user-agent"],
+    });
+
     res.json(result);
   } catch (error) {
     console.error('Error updating employee deductions:', error);
@@ -503,6 +552,19 @@ router.patch('/api/employees/:id/status', requireAuth, requireRole(['manager']),
     const { password, ...result } = updatedEmployee;
 
     realTimeManager.broadcastEmployeeUpdated(result);
+
+    // Audit log for status change
+    await createAuditLog({
+      action: isActive ? 'employee_activate' : 'employee_deactivate',
+      entityType: 'employee',
+      entityId: id,
+      userId: req.session.user!.id,
+      oldValues: { isActive: existingEmployee.isActive },
+      newValues: { isActive },
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      userAgent: req.headers["user-agent"],
+    });
+
     res.json(result);
   } catch (error) {
     console.error('Error updating employee status:', error);
@@ -600,6 +662,19 @@ router.delete('/api/employees/:id', requireAuth, requireRole(['manager']), async
       console.log(`🗑️ FORCE deleted employee: ${existingEmployee.firstName} ${existingEmployee.lastName} (${id}) by ${req.session.user.username}`);
       
       realTimeManager.broadcastEmployeeDeleted(id);
+
+      // Audit log for force delete
+      await createAuditLog({
+        action: 'employee_delete',
+        entityType: 'employee',
+        entityId: id,
+        userId: req.session.user!.id,
+        oldValues: { firstName: existingEmployee.firstName, lastName: existingEmployee.lastName, email: existingEmployee.email, role: existingEmployee.role },
+        reason: reason,
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       return res.json({ 
         message: 'Employee and all related data permanently deleted',
         forceDeleted: true 
@@ -633,6 +708,18 @@ router.delete('/api/employees/:id', requireAuth, requireRole(['manager']), async
     console.log(`🗑️ Employee deleted: ${existingEmployee.firstName} ${existingEmployee.lastName} (${existingEmployee.id})`);
 
     realTimeManager.broadcastEmployeeDeleted(id);
+
+    // Audit log for delete
+    await createAuditLog({
+      action: 'employee_delete',
+      entityType: 'employee',
+      entityId: id,
+      userId: req.session.user!.id,
+      oldValues: { firstName: existingEmployee.firstName, lastName: existingEmployee.lastName, email: existingEmployee.email, role: existingEmployee.role },
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      userAgent: req.headers["user-agent"],
+    });
+
     res.json({ message: 'Employee deleted successfully' });
   } catch (error: any) {
     console.error('Error deleting employee:', error);
