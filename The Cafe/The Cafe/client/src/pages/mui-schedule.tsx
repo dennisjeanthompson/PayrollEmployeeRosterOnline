@@ -457,6 +457,10 @@ const EnhancedScheduler = () => {
     reason: '',
   });
 
+  // EMPLOYEE SHIFT DETAIL: View shift details before trading
+  const [shiftDetailModalOpen, setShiftDetailModalOpen] = useState(false);
+  const [shiftDetailData, setShiftDetailData] = useState<Shift | null>(null);
+
   // UNIFIED SCHEDULE: Shift Trading Modal State
   const [shiftTradeModalOpen, setShiftTradeModalOpen] = useState(false);
   const [shiftTradeFormData, setShiftTradeFormData] = useState({
@@ -637,14 +641,70 @@ const EnhancedScheduler = () => {
   const renderEventContent = useCallback((arg: any) => {
     const { event, view } = arg;
     const isMobile = !isDesktop;
-    const { type, trade, shift } = event.extendedProps;
+    const { type, trade, shift, timeOff } = event.extendedProps;
     const viewType = view?.type || '';
   
     const isTrade = type === 'shift-trade';
+    const isTimeOff = type === 'time-off-approved' || type === 'time-off-pending' || type === 'timeoff';
     const isTimeGrid = viewType.startsWith('timeGrid');
     const isDayView = viewType === 'timeGridDay';
     const isWeekView = viewType === 'timeGridWeek' || viewType === 'dayGridWeek';
     const isMonthView = viewType === 'dayGridMonth';
+
+    // ─── TIME-OFF EVENTS: Render with distinct styling ─────────
+    if (isTimeOff) {
+      const isPending = type === 'time-off-pending';
+      const icon = isPending ? '⏳' : '🏖️';
+      const label = timeOff?.type || 'Time Off';
+      const name = timeOff?.userName || '';
+      const statusText = isPending ? 'Pending' : 'Approved';
+      
+      if (isMonthView) {
+        return (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '2px 6px',
+            fontSize: '0.72rem',
+            lineHeight: '1.4',
+            overflow: 'hidden',
+            whiteSpace: 'nowrap',
+            borderRadius: '4px',
+          }}>
+            <span>{icon}</span>
+            <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {label}
+            </span>
+          </div>
+        );
+      }
+      
+      return (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '6px',
+          padding: '4px 8px',
+          fontSize: isMobile ? '0.7rem' : '0.78rem',
+          lineHeight: '1.3',
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+          borderRadius: '4px',
+          minHeight: '24px',
+        }}>
+          <span style={{ fontSize: '1rem', flexShrink: 0 }}>{icon}</span>
+          <div style={{ overflow: 'hidden', flex: 1 }}>
+            <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {name ? `${name} — ${label}` : label}
+            </div>
+            <div style={{ fontSize: '0.62rem', opacity: 0.8, fontWeight: 500 }}>
+              {statusText}
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     // ─── MONTH VIEW: Simplified — colored role dot only ─────────
     if (isMonthView) {
@@ -1064,10 +1124,16 @@ const EnhancedScheduler = () => {
 
   const updateTimeOffMutation = useMutation({
     mutationFn: async ({ id, status }: { id: string; status?: string }) => {
-      const endpoint = status 
-        ? `/api/time-off-requests/${id}/approve` 
-        : `/api/time-off-requests/${id}`;
-      const res = await apiRequest('PUT', endpoint, status ? { status } : timeOffFormData);
+      let endpoint: string;
+      if (status === 'approved') {
+        endpoint = `/api/time-off-requests/${id}/approve`;
+      } else if (status === 'rejected') {
+        endpoint = `/api/time-off-requests/${id}/reject`;
+      } else {
+        endpoint = `/api/time-off-requests/${id}`;
+      }
+      const body = status ? { status } : timeOffFormData;
+      const res = await apiRequest('PUT', endpoint, body);
       if (!res.ok) {
         const error = await res.json();
         throw new Error(error.message || 'Failed to update time-off request');
@@ -1385,7 +1451,7 @@ const EnhancedScheduler = () => {
       extendedProps: { type: 'timeoff', timeOff: to },
     }));
 
-    // UNIFIED SCHEDULE: Approved Time-Off (semi-transparent overlay)
+    // UNIFIED SCHEDULE: Approved Time-Off (visible foreground events)
     // Filter for non-managers
     const filteredTimeOff = (!isManagerRole && currentUser)
       ? timeOffRequests.filter(req => req.userId === currentUser.id)
@@ -1402,9 +1468,10 @@ const EnhancedScheduler = () => {
           : `🏖️ ${req.type}`,
         start: req.startDate,
         end: req.endDate,
-        display: 'background' as const,
-        backgroundColor: 'rgba(59, 130, 246, 0.15)', // Blue semi-transparent
-        borderColor: '#3b82f6',
+        allDay: true,
+        backgroundColor: '#3b82f6',
+        borderColor: '#2563eb',
+        textColor: '#FFFFFF',
         classNames: ['time-off-approved'],
         editable: false,
         extendedProps: { type: 'time-off-approved', timeOff: req },
@@ -1422,6 +1489,7 @@ const EnhancedScheduler = () => {
           : `⚠️ ${req.type}`,
         start: req.startDate,
         end: req.endDate,
+        allDay: true,
         backgroundColor: '#F59E0B', // Orange
         borderColor: '#F59E0B',
         textColor: '#000000',
@@ -1693,14 +1761,10 @@ const EnhancedScheduler = () => {
     if (type === 'shift') {
       const isOwnShift = shift.userId === currentUser?.id;
       
-      // Employees clicking own shift: Open trade modal (always allowed, even when published)
+      // Employees clicking own shift: Show shift detail dialog with option to trade
       if (!isManagerRole && isOwnShift) {
-        setShiftTradeFormData({
-          shiftId: shift.id,
-          targetUserId: '',
-          reason: '',
-        });
-        setShiftTradeModalOpen(true);
+        setShiftDetailData(shift);
+        setShiftDetailModalOpen(true);
         return;
       }
 
@@ -3413,14 +3477,14 @@ const EnhancedScheduler = () => {
                 eventDisplay: 'auto' as const,
                 dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
                 slotEventOverlap: true,
-                allDaySlot: false,
+                allDaySlot: true,
               },
               timeGridDay: {
                 slotDuration: '00:30:00',
                 slotLabelInterval: '01:00:00',
                 eventDisplay: 'auto' as const,
                 slotEventOverlap: true,
-                allDaySlot: false,
+                allDaySlot: true,
               },
               listWeek: {
                 dayMaxEvents: false,
@@ -3526,7 +3590,7 @@ const EnhancedScheduler = () => {
               
               if (dayEvents.length > 0) {
                 const shiftCount = dayEvents.filter(e => e.extendedProps?.type === 'shift').length;
-                const timeOffCount = dayEvents.filter(e => e.extendedProps?.type === 'time-off').length;
+                const timeOffCount = dayEvents.filter(e => e.extendedProps?.type?.startsWith('time-off') || e.extendedProps?.type === 'timeoff').length;
                 const tradeCount = dayEvents.filter(e => e.extendedProps?.type === 'shift-trade').length;
                 
                 let tooltipText = `${dayEvents.length} Events:\n`;
@@ -3583,7 +3647,7 @@ const EnhancedScheduler = () => {
                   `;
                 }
                 
-                if (type === 'timeOff' && timeOff) {
+                if ((type === 'time-off-approved' || type === 'time-off-pending' || type === 'timeoff') && timeOff) {
                   return `
                     <div style="padding: 8px;">
                       <strong>Time Off Request</strong><br/>
@@ -3594,7 +3658,7 @@ const EnhancedScheduler = () => {
                   `;
                 }
                 
-                if (type === 'trade' && trade) {
+                if (type === 'shift-trade' && trade) {
                   return `
                     <div style="padding: 8px;">
                       <strong>Shift Trade</strong><br/>
@@ -4252,6 +4316,73 @@ const EnhancedScheduler = () => {
               ? 'Submitting...' 
               : selectedTimeOff ? 'Update' : 'Submit Request'}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* EMPLOYEE SHIFT DETAIL MODAL */}
+      <Dialog
+        open={shiftDetailModalOpen}
+        onClose={() => { setShiftDetailModalOpen(false); setShiftDetailData(null); }}
+        maxWidth="sm"
+        fullWidth
+        fullScreen={!isDesktop}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+          <ScheduleIcon /> My Shift Details
+        </DialogTitle>
+        <DialogContent>
+          {shiftDetailData && (() => {
+            const emp = employees.find(e => e.id === shiftDetailData.userId);
+            const empName = emp ? `${emp.firstName} ${emp.lastName}` : 'Me';
+            const role = emp?.position || shiftDetailData.position || 'Staff';
+            const startDate = new Date(shiftDetailData.startTime);
+            const endDate = new Date(shiftDetailData.endTime);
+            const hours = ((endDate.getTime() - startDate.getTime()) / 3600000).toFixed(1);
+            return (
+              <Stack spacing={2} sx={{ mt: 1 }}>
+                <Typography variant="body2">
+                  <strong>Employee:</strong> {empName}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Position:</strong> {role}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Date:</strong> {format(startDate, 'EEEE, MMMM d, yyyy')}
+                </Typography>
+                <Typography variant="body2">
+                  <strong>Time:</strong> {format(startDate, 'h:mm a')} – {format(endDate, 'h:mm a')} ({hours}h)
+                </Typography>
+                {shiftDetailData.notes && (
+                  <Typography variant="body2">
+                    <strong>Notes:</strong> {shiftDetailData.notes}
+                  </Typography>
+                )}
+              </Stack>
+            );
+          })()}
+        </DialogContent>
+        <DialogActions sx={{ p: 2, pt: 0 }}>
+          <Button onClick={() => { setShiftDetailModalOpen(false); setShiftDetailData(null); }}>
+            Close
+          </Button>
+          {shiftDetailData && new Date(shiftDetailData.startTime) > new Date() && (
+            <Button
+              variant="contained"
+              color="primary"
+              startIcon={<SwapIcon />}
+              onClick={() => {
+                setShiftDetailModalOpen(false);
+                setShiftTradeFormData({
+                  shiftId: shiftDetailData.id,
+                  targetUserId: '',
+                  reason: '',
+                });
+                setShiftTradeModalOpen(true);
+              }}
+            >
+              Request Trade
+            </Button>
+          )}
         </DialogActions>
       </Dialog>
 
