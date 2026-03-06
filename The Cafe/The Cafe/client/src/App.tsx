@@ -27,6 +27,7 @@ import MuiHeader from "@/components/mui/mui-header";
 const MuiDashboard = lazy(() => import("@/pages/mui-dashboard"));
 const MuiEmployees = lazy(() => import("@/pages/mui-employees"));
 const MuiSchedule = lazy(() => import("@/pages/mui-schedule"));
+const ScheduleV2 = lazy(() => import("@/pages/schedule-v2"));
 const MuiPayroll = lazy(() => import("@/pages/mui-payroll"));
 const MuiNotifications = lazy(() => import("@/pages/mui-notifications"));
 const MuiShiftTrading = lazy(() => import("@/pages/mui-shift-trading"));
@@ -238,6 +239,17 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
       </Route>
 
       <Route path="/schedule">
+        <DesktopLayout>
+          <RouteLoader>
+            <ErrorBoundary>
+              <ScheduleV2 />
+            </ErrorBoundary>
+          </RouteLoader>
+        </DesktopLayout>
+      </Route>
+
+      {/* Old schedule for reference — remove when v2 is stable */}
+      <Route path="/schedule-old">
         <DesktopLayout>
           <RouteLoader>
             <ErrorBoundary>
@@ -500,19 +512,11 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
       </Route>
 
       <Route path="/employee/schedule">
-        {isMobile ? (
-          <RouteLoader>
-            <ErrorBoundary>
-              <MobileSchedule />
-            </ErrorBoundary>
-          </RouteLoader>
-        ) : (
-          <DesktopLayout>
-            <RouteLoader>
-              <MuiSchedule />
-            </RouteLoader>
-          </DesktopLayout>
-        )}
+        <RouteLoader>
+          <ErrorBoundary>
+            <ScheduleV2 />
+          </ErrorBoundary>
+        </RouteLoader>
       </Route>
 
       <Route path="/employee/payroll">

@@ -130,9 +130,9 @@
     -webkit-overflow-scrolling: touch !important;
   }
   
-  /* More link in day grid */
+  /* More link hidden — all events shown inline */
   .fc-daygrid-more-link {
-    font-size: 0.7rem !important;
+    display: none !important;
   }
 
   /* MOBILE timegrid week: allow horizontal scroll, tighter columns */
@@ -258,30 +258,20 @@
     padding: 10px 16px !important;
   }
   
-  /* More link padding */
+  /* More link hidden */
   .fc-daygrid-more-link {
-    padding: 6px !important;
-    font-size: 0.75rem !important;
+    display: none !important;
   }
 }
 
-/* Dark Theme Improvements for "+X more" link */
-.fc-daygrid-more-link {
-  background-color: rgba(255, 255, 255, 0.1) !important;
-  color: #fff !important;
-  border-radius: 4px !important;
-  padding: 2px 6px !important;
-  font-weight: 600 !important;
-  transition: all 0.2s !important;
-  text-decoration: none !important;
-  display: inline-block !important;
-  margin-top: 2px !important;
+/* +more links fully hidden — all events rendered inline */
+.fc-daygrid-more-link,
+.fc-timegrid-more-link {
+  display: none !important;
 }
-
-.fc-daygrid-more-link:hover {
-  background-color: rgba(255, 255, 255, 0.2) !important;
-  transform: translateY(-1px) !important;
-  text-decoration: none !important;
+.fc-popover,
+.fc-more-popover {
+  display: none !important;
 }
 
 /* Fix day cell hover highlight */

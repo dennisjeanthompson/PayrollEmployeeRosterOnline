@@ -2321,8 +2321,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: 'Direct Shift Trade Request',
           message: `${requesterName} wants to trade their ${shiftDate} shift with you.`,
           data: JSON.stringify({ 
-            tradeId: trade.id, 
-            shiftId: trade.shiftId,
             shiftDate,
             requesterName,
             tradeType: 'direct'
@@ -2342,8 +2340,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             title: 'New Shift Available',
             message: `${requesterName} posted a ${shiftDate} shift for trade.`,
             data: JSON.stringify({ 
-              tradeId: trade.id, 
-              shiftId: trade.shiftId,
               shiftDate,
               requesterName,
               tradeType: 'open'
@@ -2367,8 +2363,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: 'New Shift Trade Posted',
           message: `${requesterName} has posted a shift trade for ${shiftDate}.`,
           data: JSON.stringify({ 
-            tradeId: trade.id, 
-            shiftId: trade.shiftId,
             shiftDate,
             requesterName,
             tradeType: trade.toUserId ? 'direct' : 'open'
@@ -2477,6 +2471,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Enrich with shift data
       const shift = await storage.getShift(trade.shiftId);
+      const shiftDate = shift?.startTime ? format(new Date(shift.startTime), "MMM d") : "a shift";
       const enrichedTrade = {
         ...updatedTrade,
         shift: shift ? {
@@ -2486,6 +2481,86 @@ export async function registerRoutes(app: Express): Promise<Server> {
           position: shift.position,
         } : null,
       };
+
+      // ── Real-time notifications for both approve & reject ──
+      // Look up employee names for richer messages
+      const fromUser = await storage.getUser(trade.fromUserId);
+      const toUser = trade.toUserId ? await storage.getUser(trade.toUserId) : null;
+      const fromName = fromUser ? `${fromUser.firstName} ${fromUser.lastName}` : 'An employee';
+      const toName = toUser ? `${toUser.firstName} ${toUser.lastName}` : 'another employee';
+      const manager = await storage.getUser(managerId);
+      const managerName = manager ? `${manager.firstName} ${manager.lastName}` : 'A manager';
+
+      if (status === "approved") {
+        // Notify requester
+        const nReq = await storage.createNotification({
+          userId: trade.fromUserId,
+          type: 'shift_trade',
+          title: 'Shift Trade Approved ✅',
+          message: `Great news! Your trade for the ${shiftDate} shift has been approved by ${managerName}. ${toName} will now cover this shift.`,
+          data: JSON.stringify({ shiftDate, status: 'approved' })
+        } as any);
+        realTimeManager.broadcastNotification(nReq);
+
+        // Notify target
+        if (trade.toUserId) {
+          const nTarget = await storage.createNotification({
+            userId: trade.toUserId,
+            type: 'shift_trade',
+            title: 'New Shift Assigned',
+            message: `You've been assigned ${fromName}'s ${shiftDate} shift from an approved trade.`,
+            data: JSON.stringify({ shiftDate, status: 'approved' })
+          } as any);
+          realTimeManager.broadcastNotification(nTarget);
+        }
+
+        // Broadcast trade approval for live schedule refresh
+        realTimeManager.broadcastTradeApproved(id, enrichedTrade, shift!);
+
+        // Audit log
+        await createAuditLog({
+          action: 'trade_approve',
+          entityType: 'shift_trade',
+          entityId: id,
+          userId: managerId,
+          newValues: { status: 'approved', fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId },
+          ipAddress: req.ip || req.socket?.remoteAddress,
+          userAgent: req.headers["user-agent"],
+        });
+      } else {
+        // Notify requester of rejection
+        const nReq = await storage.createNotification({
+          userId: trade.fromUserId,
+          type: 'shift_trade',
+          title: 'Shift Trade Rejected',
+          message: `Your shift trade request for ${shiftDate} was not approved by ${managerName}. Your original shift remains unchanged.`,
+          data: JSON.stringify({ shiftDate, status: 'rejected' })
+        } as any);
+        realTimeManager.broadcastNotification(nReq);
+
+        // Notify target too if they accepted it
+        if (trade.toUserId) {
+          const nTarget = await storage.createNotification({
+            userId: trade.toUserId,
+            type: 'shift_trade',
+            title: 'Trade Request Declined',
+            message: `The shift trade for ${shiftDate} with ${fromName} was not approved. No changes to your schedule.`,
+            data: JSON.stringify({ shiftDate, status: 'rejected' })
+          } as any);
+          realTimeManager.broadcastNotification(nTarget);
+        }
+
+        // Audit log
+        await createAuditLog({
+          action: 'trade_reject',
+          entityType: 'shift_trade',
+          entityId: id,
+          userId: managerId,
+          newValues: { status: 'rejected', fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId },
+          ipAddress: req.ip || req.socket?.remoteAddress,
+          userAgent: req.headers["user-agent"],
+        });
+      }
 
       const action = status === "approved" ? "✅ approved" : "❌ rejected";
       console.log(`${action} shift trade ${id} by manager ${managerId}`);
@@ -2541,8 +2616,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         title: 'Shift Trade Taken',
         message: `${takerName} has accepted your ${shiftDate} shift trade. It is now pending manager approval.`,
         data: JSON.stringify({ 
-          tradeId: id, 
-          shiftId: trade.shiftId,
           shiftDate,
           takerName,
           status: 'taken'
@@ -2560,8 +2633,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: 'Shift Trade Awaiting Approval',
           message: `${takerName} has taken a shift trade from another employee. Please review it.`,
           data: JSON.stringify({ 
-            tradeId: id, 
-            shiftId: trade.shiftId,
             shiftDate,
             takerName,
             status: 'pending_approval'
@@ -2613,11 +2684,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const notificationRequester = await storage.createNotification({
         userId: trade.fromUserId,
         type: 'shift_trade',
-        title: 'Shift Trade Approved',
-        message: `Your trade for the ${shiftDate} shift has been approved.`,
+        title: 'Shift Trade Approved ✅',
+        message: `Great news! Your trade for the ${shiftDate} shift has been approved.`,
         data: JSON.stringify({ 
-          tradeId: id,
-          shiftId: trade.shiftId,
           shiftDate,
           status: 'approved'
         })
@@ -2627,11 +2696,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const notificationTarget = await storage.createNotification({
         userId: trade.toUserId,
         type: 'shift_trade',
-        title: 'Shift Trade Approved',
-        message: `You have been assigned a new shift (${shiftDate}) from a trade.`,
+        title: 'New Shift Assigned',
+        message: `You've been assigned a new shift on ${shiftDate} from an approved trade.`,
         data: JSON.stringify({ 
-          tradeId: id,
-          shiftId: trade.shiftId,
           shiftDate,
           status: 'approved'
         })
@@ -2697,10 +2764,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: trade.fromUserId,
         type: 'shift_trade',
         title: 'Shift Trade Rejected',
-        message: `Your shift trade request for ${shiftDate} has been rejected.`,
+        message: `Your shift trade request for ${shiftDate} was not approved. Your original shift remains unchanged.`,
         data: JSON.stringify({ 
-          tradeId: id,
-          shiftId: trade.shiftId,
           shiftDate,
           status: 'rejected'
         })
@@ -3473,14 +3538,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           message: `${employee?.firstName} ${employee?.lastName} has requested time off from ${format(new Date(request.startDate), "MMM d")} to ${format(new Date(request.endDate), "MMM d, yyyy")} (${requestPayload.type})${shortNoticeText}`,
           isRead: false,
           data: JSON.stringify({
-            requestId: request.id,
-            employeeId: req.user!.id,
+            employeeName: `${employee?.firstName} ${employee?.lastName}`,
             type: requestPayload.type,
-            startDate: request.startDate,
-            endDate: request.endDate,
+            startDate: format(new Date(request.startDate), "MMM d, yyyy"),
+            endDate: format(new Date(request.endDate), "MMM d, yyyy"),
             advanceDays,
-            shortNotice,
-            minimumAdvanceDays
+            status: 'pending'
           })
         } as any);
         realTimeManager.broadcastNotification(notification);
@@ -3545,7 +3608,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       message: `Your time off request from ${format(new Date(request.startDate), "MMM d")} to ${format(new Date(request.endDate), "MMM d, yyyy")} has been approved`,
       isRead: false,
       data: JSON.stringify({
-        requestId: request.id,
         status: 'approved',
         startDate: format(new Date(request.startDate), "MMM d, yyyy"),
         endDate: format(new Date(request.endDate), "MMM d, yyyy"),
@@ -3603,7 +3665,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       message: `Your time off request from ${format(new Date(request.startDate), "MMM d")} to ${format(new Date(request.endDate), "MMM d, yyyy")} has been rejected`,
       isRead: false,
       data: JSON.stringify({
-        requestId: request.id,
         status: 'rejected',
         startDate: format(new Date(request.startDate), "MMM d, yyyy"),
         endDate: format(new Date(request.endDate), "MMM d, yyyy"),

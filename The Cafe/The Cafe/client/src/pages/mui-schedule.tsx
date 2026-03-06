@@ -7,6 +7,7 @@ import listPlugin from '@fullcalendar/list';
 import interactionPlugin, { Draggable } from '@fullcalendar/interaction';
 import { EventInput } from '@fullcalendar/core';
 import { EmployeeProfilePopover } from '@/components/schedule/EmployeeProfilePopover';
+import { getRoleColor, getUniqueRoleColors, CAFE_PALETTE, HOLIDAY_COLORS as REDESIGNED_HOLIDAY_COLORS, SHIFT_TEMPLATES as REDESIGNED_SHIFT_TEMPLATES, type RoleColor } from '@/lib/schedule-theme';
 import {
   Box,
   Paper,
@@ -196,59 +197,29 @@ interface Holiday {
   payRule?: { worked: string; notWorked: string };
 }
 
-// Holiday color mapping
-const HOLIDAY_COLORS: Record<string, { bg: string; border: string; label: string }> = {
-  regular: { bg: 'rgba(239, 68, 68, 0.15)', border: '#ef4444', label: 'Regular Holiday' },
-  special_non_working: { bg: 'rgba(249, 115, 22, 0.15)', border: '#f97316', label: 'Special Non-Working' },
-  special_working: { bg: 'rgba(234, 179, 8, 0.1)', border: '#eab308', label: 'Special Working' },
-  company: { bg: 'rgba(59, 130, 246, 0.1)', border: '#3b82f6', label: 'Company Holiday' },
+// ─── 2026 REDESIGN: Role-based color system (from schedule-theme.ts) ─────
+// Holiday colors & shift templates imported from schedule-theme.ts
+const HOLIDAY_COLORS = REDESIGNED_HOLIDAY_COLORS;
+const SHIFT_TEMPLATES = REDESIGNED_SHIFT_TEMPLATES;
+
+// ROLE-BASED color lookup — replaces the old per-employee rainbow palette.
+// Every employee with the same role shares the same color. Employees are
+// distinguished by name + avatar initials inside the shift block.
+const getEmployeeColor = (employeeId: string, allEmployees: Employee[]): { bg: string; text: string } => {
+  const emp = allEmployees.find(e => e.id === employeeId);
+  const rc = getRoleColor(emp?.position, emp?.role);
+  return { bg: rc.bg, text: rc.text };
 };
 
-// Shift Templates
-const SHIFT_TEMPLATES = {
-  morning: { start: 7, end: 15, label: 'Morning (7AM-3PM)' },
-  afternoon: { start: 15, end: 23, label: 'Afternoon (3PM-11PM)' },
-  night: { start: 23, end: 7, label: 'Night (11PM-7AM)' },
-};
-
-// Employee color palette - 2025 modern colors
+// Keep EMPLOYEE_COLORS as a compat shim for legacy refs (timeline resource list)
 const EMPLOYEE_COLORS = [
-  { bg: '#3B82F6', text: '#FFFFFF' }, // Blue
-  { bg: '#10B981', text: '#FFFFFF' }, // Emerald
-  { bg: '#8B5CF6', text: '#FFFFFF' }, // Violet
-  { bg: '#F59E0B', text: '#000000' }, // Amber
-  { bg: '#EF4444', text: '#FFFFFF' }, // Red
-  { bg: '#EC4899', text: '#FFFFFF' }, // Pink
-  { bg: '#06B6D4', text: '#FFFFFF' }, // Cyan
-  { bg: '#84CC16', text: '#000000' }, // Lime
-  { bg: '#6366F1', text: '#FFFFFF' }, // Indigo
-  { bg: '#14B8A6', text: '#FFFFFF' }, // Teal
+  { bg: '#14B8A6', text: '#FFFFFF' },
+  { bg: '#92400E', text: '#FFFFFF' },
+  { bg: '#D97706', text: '#FFFFFF' },
+  { bg: '#4D7C0F', text: '#FFFFFF' },
+  { bg: '#166534', text: '#FFFFFF' },
+  { bg: '#6B7280', text: '#FFFFFF' },
 ];
-
-// Softer colors for timegrid views (week/day) to reduce visual noise
-const softenColor = (hex: string, opacity: number = 0.75): string => {
-  const r = parseInt(hex.slice(1, 3), 16);
-  const g = parseInt(hex.slice(3, 5), 16);
-  const b = parseInt(hex.slice(5, 7), 16);
-  return `rgba(${r}, ${g}, ${b}, ${opacity})`;
-};
-
-// Stable color assignment: hash the employee ID so colors don't shift
-// when the employee list order changes or employees are filtered
-const hashCode = (str: string): number => {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const ch = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + ch;
-    hash |= 0; // Convert to 32-bit int
-  }
-  return Math.abs(hash);
-};
-
-const getEmployeeColor = (employeeId: string, _employees: Employee[]) => {
-  const idx = hashCode(employeeId) % EMPLOYEE_COLORS.length;
-  return EMPLOYEE_COLORS[idx];
-};
 
 // --- PHILIPPINE-COMPLIANT TIME-OFF NOTICE POLICY ---
 // Based on common Philippine company policies for SMEs/cafes
@@ -419,14 +390,13 @@ const EnhancedScheduler = () => {
   // NEW: Role Filter State
   const [roleFilter, setRoleFilter] = useState<string>('all');
 
-  // NEW: View Mode Toggle with localStorage persistence (2025 best practice)
+  // 2026 REDESIGN: Default to Day view for clarity (user request + best practice for small teams)
   const [viewMode, setViewMode] = useState<'timeline' | 'week' | 'list'>(() => {
-    // Load saved preference or default based on device
     const saved = localStorage.getItem('schedule-view-mode');
     if (saved && ['timeline', 'week', 'list'].includes(saved)) {
       return saved as 'timeline' | 'week' | 'list';
     }
-    return isDesktop ? 'timeline' : 'list';
+    return 'week'; // Default to grid (timeGridDay) — small-team clarity
   });
   
   // Persist view mode preference
@@ -637,10 +607,11 @@ const EnhancedScheduler = () => {
   // NEW: Coverage gap detection - find understaffed time slots
   const coverageGaps = useMemo(() => {
     const gaps: Array<{ start: Date; end: Date; staffCount: number }> = [];
+    const weekStart = startOfWeek(currentWeekStart, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
     
     // Check each hour of the week
-    for (let d = new Date(currentWeekStart); d <= weekEnd; d = addDays(d, 1)) {
+    for (let d = new Date(weekStart); d <= weekEnd; d = addDays(d, 1)) {
       for (let hour = 6; hour < 22; hour++) { // Operating hours 6AM-10PM
         const slotStart = setHours(setMinutes(d, 0), hour);
         const slotEnd = setHours(setMinutes(d, 0), hour + 1);
@@ -662,45 +633,53 @@ const EnhancedScheduler = () => {
     return gaps;
   }, [shifts, currentWeekStart, minStaffingThreshold]);
 
-  // FIXED: View-aware responsive event content rendering
+  // 2026 REDESIGN: View-aware event rendering — clean, role-colored, readable
   const renderEventContent = useCallback((arg: any) => {
     const { event, view } = arg;
     const isMobile = !isDesktop;
-    const { type, trade } = event.extendedProps;
+    const { type, trade, shift } = event.extendedProps;
     const viewType = view?.type || '';
   
     const isTrade = type === 'shift-trade';
     const isTimeGrid = viewType.startsWith('timeGrid');
     const isDayView = viewType === 'timeGridDay';
-    const isWeekView = viewType === 'timeGridWeek';
+    const isWeekView = viewType === 'timeGridWeek' || viewType === 'dayGridWeek';
     const isMonthView = viewType === 'dayGridMonth';
 
-    // MONTH VIEW: Compact pill-style events with color dot
+    // ─── MONTH VIEW: Simplified — colored role dot only ─────────
     if (isMonthView) {
-      const timeStr = event.start ? format(event.start, 'h:mm a') : '';
+      const timeStr = event.start ? format(event.start, 'h:mma').toLowerCase().replace(':00', '') : '';
+      // Get initials for compact display
+      const fullName = event.title?.split(' • ')[0] || event.title || '';
+      const nameParts = fullName.trim().split(' ');
+      const initials = nameParts.length > 1
+        ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`
+        : nameParts[0]?.[0] || '?';
       return (
         <div style={{
           display: 'flex',
           alignItems: 'center',
           gap: '4px',
-          padding: '1px 4px',
-          fontSize: '0.7rem',
+          padding: '2px 6px',
+          fontSize: '0.72rem',
           lineHeight: '1.4',
           overflow: 'hidden',
           whiteSpace: 'nowrap',
+          borderRadius: '4px',
         }}>
           <span style={{
-            width: '6px',
-            height: '6px',
+            width: '8px',
+            height: '8px',
             borderRadius: '50%',
-            backgroundColor: event.backgroundColor || '#3B82F6',
+            backgroundColor: event.backgroundColor || '#6B7280',
             flexShrink: 0,
+            border: '1.5px solid rgba(255,255,255,0.4)',
           }} />
           <span style={{ fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {event.title}
+            {isTrade ? '↔' : ''}{initials}
           </span>
           {timeStr && (
-            <span style={{ opacity: 0.7, fontSize: '0.6rem', marginLeft: 'auto', flexShrink: 0 }}>
+            <span style={{ opacity: 0.6, fontSize: '0.62rem', marginLeft: 'auto', flexShrink: 0 }}>
               {timeStr}
             </span>
           )}
@@ -708,71 +687,170 @@ const EnhancedScheduler = () => {
       );
     }
 
-    // WEEK VIEW: Name at TOP, short time below, compact
+    // ─── WEEK VIEW: Full-width stacked pill — like 7shifts/Homebase ───
+    // Using dayGridWeek: events stack vertically, full column width. No cramping.
     if (isWeekView) {
-      // Use shortened name to fit narrow columns: "Sofia M." instead of "Sofia Mendoza"
       const fullName = event.title?.split(' • ')[0] || event.title;
       const nameParts = fullName.trim().split(' ');
-      const shortName = nameParts.length > 1 
-        ? `${nameParts[0]} ${nameParts[nameParts.length - 1][0]}.`
-        : nameParts[0];
-      const timeStr = event.start && event.end
-        ? `${format(event.start, 'h:mma').toLowerCase()}-${format(event.end, 'h:mma').toLowerCase()}`
+      const firstName = nameParts[0] || '?';
+      const lastInitial = nameParts.length > 1 ? ` ${nameParts[nameParts.length - 1][0]}.` : '';
+      const initials = nameParts.length > 1
+        ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`
+        : nameParts[0]?.[0] || '?';
+      const startStr = event.start ? format(event.start, 'h:mma').toLowerCase().replace(':00', '') : '';
+      const endStr = event.end ? format(event.end, 'h:mma').toLowerCase().replace(':00', '') : '';
+      const hours = event.start && event.end
+        ? ((event.end.getTime() - event.start.getTime()) / 3600000).toFixed(0)
         : '';
       return (
         <div style={{
-          padding: '2px 3px',
-          fontSize: isMobile ? '0.62rem' : '0.68rem',
-          overflow: 'hidden',
-          lineHeight: '1.25',
           display: 'flex',
-          flexDirection: 'column',
-          gap: '1px',
+          alignItems: 'center',
+          gap: '5px',
+          padding: '3px 6px',
+          fontSize: isMobile ? '0.62rem' : '0.7rem',
+          lineHeight: '1.3',
+          overflow: 'hidden',
+          whiteSpace: 'nowrap',
+          borderRadius: '4px',
+          minHeight: '22px',
         }}>
-          <div style={{
+          <span style={{
             fontWeight: 700,
+            flexShrink: 0,
+            fontSize: '0.68rem',
+          }}>
+            {isTrade ? '↔' : ''}{initials}
+          </span>
+          <span style={{
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
+            fontWeight: 600,
+            flex: 1,
           }}>
-            {isTrade ? '🔄' : ''}{shortName}
-          </div>
-          {timeStr && (
-            <div style={{
-              fontSize: '0.58rem',
-              opacity: 0.75,
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}>
-              {timeStr}
-            </div>
-          )}
+            {firstName}{lastInitial}
+          </span>
+          <span style={{
+            opacity: 0.8,
+            fontSize: '0.6rem',
+            fontWeight: 500,
+            flexShrink: 0,
+            marginLeft: 'auto',
+          }}>
+            {startStr}{endStr ? `–${endStr}` : ''}
+          </span>
         </div>
       );
     }
 
-    // DAY VIEW: Name + role, time shown by FullCalendar natively
+    // ─── DAY VIEW: Compact vertical card — fits in 33% width columns ───
     if (isDayView) {
+      // Handle trade events specially — their titles are labels, not employee names
+      if (isTrade) {
+        const tradeLabel = event.title || 'Shift Trade';
+        const startStr = event.start ? format(event.start, 'h:mm a') : '';
+        const endStr = event.end ? format(event.end, 'h:mm a') : '';
+        return (
+          <div style={{
+            padding: '4px 6px',
+            fontSize: '0.75rem',
+            overflow: 'hidden',
+            lineHeight: '1.3',
+            height: '100%',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '2px',
+          }}>
+            <div style={{ fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {tradeLabel}
+            </div>
+            {trade?.requester && (
+              <div style={{ fontSize: '0.62rem', opacity: 0.85 }}>
+                {trade.requester.firstName} {trade.requester.lastName?.[0]}.
+              </div>
+            )}
+            <div style={{ fontSize: '0.6rem', opacity: 0.7, whiteSpace: 'nowrap' }}>
+              {startStr} – {endStr}
+            </div>
+          </div>
+        );
+      }
+
       const parts = event.title?.split(' • ') || [event.title];
       const empName = parts[0];
       const role = parts[1] || '';
+      const nameParts = empName.trim().split(' ');
+      const firstName = nameParts[0] || '?';
+      const lastInitial = nameParts.length > 1 ? ` ${nameParts[nameParts.length - 1][0]}.` : '';
+      const initials = nameParts.length > 1
+        ? `${nameParts[0][0]}${nameParts[nameParts.length - 1][0]}`
+        : nameParts[0]?.[0] || '?';
+      const startStr = event.start ? format(event.start, 'h:mm a') : '';
+      const endStr = event.end ? format(event.end, 'h:mm a') : '';
+      const hours = event.start && event.end
+        ? ((event.end.getTime() - event.start.getTime()) / 3600000).toFixed(1)
+        : '0';
       return (
         <div style={{
-          padding: '3px 6px',
-          fontSize: isMobile ? '0.78rem' : '0.82rem',
+          padding: '4px 6px',
+          fontSize: isMobile ? '0.72rem' : '0.78rem',
           overflow: 'hidden',
           lineHeight: '1.3',
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
+          gap: '2px',
         }}>
-          <div style={{ fontWeight: 700 }}>
-            {isTrade ? '🔄 ' : ''}{empName}
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+          }}>
+            <span style={{
+              fontWeight: 800,
+              fontSize: '0.7rem',
+              flexShrink: 0,
+              opacity: 0.9,
+            }}>
+              {initials}
+            </span>
+            <span style={{
+              fontWeight: 700,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              flex: 1,
+            }}>
+              {isTrade ? '↔ ' : ''}{firstName}{lastInitial}
+            </span>
           </div>
-          {role && <div style={{ fontSize: '0.72rem', opacity: 0.8, marginTop: '1px' }}>{role}</div>}
+          {role && (
+            <div style={{
+              fontSize: '0.62rem',
+              fontWeight: 600,
+              opacity: 0.9,
+              backgroundColor: 'rgba(255,255,255,0.15)',
+              padding: '0px 4px',
+              borderRadius: '3px',
+              display: 'inline-block',
+              width: 'fit-content',
+              lineHeight: '1.5',
+            }}>
+              {role}
+            </div>
+          )}
+          <div style={{
+            fontSize: '0.6rem',
+            opacity: 0.8,
+            fontWeight: 500,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}>
+            {startStr} – {endStr} · {hours}h
+          </div>
           {isTrade && trade?.requester && (
-            <div style={{ fontSize: '0.7rem', opacity: 0.85, fontStyle: 'italic', marginTop: '1px' }}>
+            <div style={{ fontSize: '0.58rem', opacity: 0.65, fontStyle: 'italic' }}>
               {trade.requester.firstName}'s shift
             </div>
           )}
@@ -841,10 +919,13 @@ const EnhancedScheduler = () => {
 
   // Feature 5: Weekly Hours Summary
   const weeklyHoursSummary = useMemo(() => {
+    // Always snap to Monday–Sunday regardless of which day currentWeekStart falls on
+    const weekStart = startOfWeek(currentWeekStart, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
     const weekShifts = shifts.filter(shift => {
       const shiftDate = new Date(shift.startTime);
-      return shiftDate >= currentWeekStart && shiftDate <= weekEnd;
+      if (shiftDate.getDay() === 0) return false; // Exclude Sunday (rest day)
+      return shiftDate >= weekStart && shiftDate <= weekEnd;
     });
 
     const employeeHours: Record<string, { name: string; hours: number }> = {};
@@ -1866,10 +1947,11 @@ const EnhancedScheduler = () => {
   const handleClearWeek = useCallback(async () => {
     if (!isManagerRole) return; // SECURITY: Only managers can clear week
 
+    const weekStart = startOfWeek(currentWeekStart, { weekStartsOn: 1 });
     const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
     const weekShifts = shifts.filter(shift => {
       const shiftDate = new Date(shift.startTime);
-      return shiftDate >= currentWeekStart && shiftDate <= weekEnd;
+      return shiftDate >= weekStart && shiftDate <= weekEnd;
     });
 
     if (weekShifts.length === 0) {
@@ -2075,12 +2157,17 @@ const EnhancedScheduler = () => {
 
   // Track calendar date changes - store both start and end of visible range
   const handleDatesSet = useCallback((info: any) => {
-    // Use info.start and info.end directly as the visible range
-    // info.start is the first visible date, info.end is the day after the last visible date
-    const rangeStart = new Date(info.start);
-    const rangeEnd = new Date(info.end);
-    rangeEnd.setDate(rangeEnd.getDate() - 1); // Adjust since info.end is exclusive
-    rangeEnd.setHours(23, 59, 59, 999);
+    // FIX: FullCalendar dayGrid views return UTC-midnight dates while timeGrid
+    // returns local-midnight. Normalise by extracting UTC date parts and
+    // re-constructing as local midnight so hours calculations are correct.
+    const raw = info.start;
+    const rangeStart = new Date(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate());
+
+    const rawEnd = new Date(info.end.getTime() - 1); // info.end is exclusive
+    const rangeEnd = new Date(
+      rawEnd.getUTCFullYear(), rawEnd.getUTCMonth(), rawEnd.getUTCDate(),
+      23, 59, 59, 999,
+    );
     
     // Only update state if the range actually changed (prevents infinite loops)
     setCurrentWeekStart(prev => {
@@ -2103,151 +2190,275 @@ const EnhancedScheduler = () => {
 
   return (
     <>
-      {/* Custom CSS for Unified Schedule Event Styling */}
+      {/* 2026 REDESIGN: Coffee-shop aesthetic CSS + dark mode fix */}
       <style>{`
-        /* Time-off pending - dashed border + striped pattern for visibility */
+        /* ───── CAFÉ FOUNDATION ───────────────────────────────── */
+        /* Warm background tones inherited from theme; override FC defaults */
+
+        .fc {
+          --fc-border-color: ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(60,36,21,0.1)'};
+          --fc-today-bg-color: ${theme.palette.mode === 'dark' ? 'rgba(251,191,36,0.06)' : 'rgba(254,243,199,0.5)'};
+          --fc-neutral-bg-color: transparent;
+          --fc-page-bg-color: transparent;
+          --fc-event-border-color: transparent;
+          font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        .fc th, .fc td, .fc .fc-scrollgrid {
+          border-color: var(--fc-border-color) !important;
+        }
+
+        /* Header cells — warm subtle background */
+        .fc .fc-col-header-cell {
+          padding: 8px 4px !important;
+          background: ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.03)' : 'rgba(60,36,21,0.03)'};
+        }
+        .fc .fc-col-header-cell-cushion {
+          font-weight: 600 !important;
+          font-size: 0.82rem !important;
+          color: ${theme.palette.mode === 'dark' ? '#C4AA88' : '#5C4033'};
+          text-transform: uppercase;
+          letter-spacing: 0.03em;
+        }
+
+        /* ───── TIME-OFF EVENTS ──────────────────────────────── */
         .fc-event.time-off-pending {
           border-style: dashed !important;
           border-width: 2px !important;
-          background: repeating-linear-gradient(
-            45deg,
-            transparent,
-            transparent 4px,
-            rgba(245, 158, 11, 0.15) 4px,
-            rgba(245, 158, 11, 0.15) 8px
-          ) !important;
-          animation: pending-pulse 2s ease-in-out infinite;
+          border-color: #D97706 !important;
+          background: ${theme.palette.mode === 'dark'
+            ? 'rgba(217, 119, 6, 0.15)'
+            : 'rgba(217, 119, 6, 0.1)'} !important;
         }
-
-        /* Time-off approved - semi-transparent background */
         .fc-event.time-off-approved {
-          opacity: 0.8;
-          border-left: 3px solid #10B981 !important;
+          opacity: 0.85;
+          border-left: 3px solid #166534 !important;
         }
-
-        /* Shift trade - thick dashed border on left + striped for pending */
         .fc-event.shift-trade {
           border-left: 4px dashed !important;
           position: relative;
         }
-
-        .fc-event.shift-trade::before {
-          content: "🔄";
-          position: absolute;
-          top: 2px;
-          right: 4px;
-          font-size: 14px;
-        }
-
-        /* Pending pulse animation */
-        @keyframes pending-pulse {
-          0%, 100% { opacity: 1; }
-          50% { opacity: 0.7; }
-        }
-
-        /* Holiday background enhancement */
-        .fc-event.holiday-bg {
-          border-radius: 4px !important;
-        }
-
+        .fc-event.holiday-bg { border-radius: 4px !important; }
         .fc-event.holiday-blocked {
-          background: repeating-linear-gradient(
-            -45deg,
-            rgba(107, 114, 128, 0.1),
-            rgba(107, 114, 128, 0.1) 4px,
-            rgba(107, 114, 128, 0.2) 4px,
-            rgba(107, 114, 128, 0.2) 8px
+          background: repeating-linear-gradient(-45deg,
+            rgba(107,114,128,0.06), rgba(107,114,128,0.06) 4px,
+            rgba(107,114,128,0.12) 4px, rgba(107,114,128,0.12) 8px
           ) !important;
         }
 
-        /* Print-friendly styles */
+        /* ───── PRINT ────────────────────────────────────────── */
         @media print {
-          .no-print {
-            display: none !important;
-          }
-          .fc-toolbar {
-            display: none !important;
-          }
-          body {
-            background: white !important;
-          }
+          .no-print { display: none !important; }
+          .fc-toolbar { display: none !important; }
+          body { background: white !important; }
         }
 
-        /* ===== TIMEGRID WEEK/DAY VIEW FIXES ===== */
-
-        /* Timegrid events: clean rounded cards with subtle shadow */
+        /* ───── TIMEGRID (DAY VIEW) SHIFT BLOCKS ─────────────── */
         .fc-timegrid-event {
-          border-radius: 5px !important;
+          border-radius: 6px !important;
           border-left-width: 3px !important;
           border-left-style: solid !important;
-          margin: 0 1px !important;
-          box-shadow: 0 1px 2px rgba(0,0,0,0.15) !important;
+          margin: 0px 1px !important;
+          box-shadow: ${theme.palette.mode === 'dark'
+            ? '0 1px 3px rgba(0,0,0,0.35)'
+            : '0 1px 2px rgba(60,36,21,0.1)'} !important;
           opacity: 0.92 !important;
           transition: opacity 0.15s, box-shadow 0.15s !important;
         }
         .fc-timegrid-event:hover {
           opacity: 1 !important;
-          box-shadow: 0 2px 6px rgba(0,0,0,0.25) !important;
+          box-shadow: ${theme.palette.mode === 'dark'
+            ? '0 3px 8px rgba(0,0,0,0.5)'
+            : '0 3px 8px rgba(60,36,21,0.16)'} !important;
           z-index: 100 !important;
         }
-
-        /* Timegrid event inner content */
         .fc-timegrid-event .fc-event-main {
-          padding: 1px 2px !important;
+          padding: 0 !important;
           overflow: hidden !important;
         }
         .fc-timeGridDay-view .fc-timegrid-event .fc-event-main {
-          padding: 2px 6px !important;
+          padding: 0 !important;
         }
-
-        /* WEEK VIEW: Hide FullCalendar's native time element - we render our own */
-        .fc-timeGridWeek-view .fc-timegrid-event .fc-event-time {
-          display: none !important;
-        }
-
-        /* DAY VIEW: Also hide native time - we render custom content */
+        /* Hide FC native time text — we render our own */
         .fc-timeGridDay-view .fc-timegrid-event .fc-event-time {
           display: none !important;
         }
-
-        /* Week view: events should show content at TOP, not center/bottom */
-        .fc-timeGridWeek-view .fc-timegrid-event .fc-event-main-frame {
+        .fc-timeGridDay-view .fc-timegrid-event .fc-event-main-frame {
           display: flex !important;
           flex-direction: column !important;
           justify-content: flex-start !important;
           align-items: stretch !important;
+          overflow: hidden !important;
+        }
+        .fc-timegrid-col-frame { position: relative !important; }
+        .fc-timegrid-axis { min-width: 44px !important; }
+
+        /* Day view: overlapping events get visible borders */
+        .fc-timeGridDay-view .fc-timegrid-event {
+          border-right: 1px solid ${theme.palette.mode === 'dark' ? 'rgba(0,0,0,0.3)' : 'rgba(255,255,255,0.5)'} !important;
+          opacity: 0.93 !important;
+        }
+        /* Day view "+N more" link — professional look */
+        .fc-timeGridDay-view .fc-timegrid-more-link {
+          background: ${theme.palette.mode === 'dark'
+            ? '#2A2018' : '#FFFFFF'} !important;
+          color: ${theme.palette.mode === 'dark' ? '#C4AA88' : '#5C4033'} !important;
+          font-weight: 700 !important;
+          font-size: 0.65rem !important;
+          border-radius: 8px !important;
+          padding: 2px 8px !important;
+          border: 1px solid ${theme.palette.mode === 'dark' ? '#3D3228' : '#E8E0D4'} !important;
+        }
+        .fc-timeGridDay-view .fc-timegrid-more-link:hover {
+          border-color: ${theme.palette.mode === 'dark' ? '#92400E' : '#92400E'} !important;
+          color: ${theme.palette.mode === 'dark' ? '#FBBF24' : '#92400E'} !important;
         }
 
-        /* Week view: reasonable event width - don't let harness be too narrow */
-        .fc-timeGridWeek-view .fc-timegrid-event-harness {
-          min-width: 0 !important;
+        /* Week dayGrid: stacked pill events — scrollable cells, no popover */
+        .fc-dayGridWeek-view .fc-daygrid-event {
+          margin: 1px 2px !important;
+          padding: 0 !important;
+          border-radius: 5px !important;
+          border: none !important;
+          border-left: 3px solid rgba(0,0,0,0.15) !important;
+          box-shadow: ${theme.palette.mode === 'dark'
+            ? '0 1px 2px rgba(0,0,0,0.3)'
+            : '0 1px 2px rgba(60,36,21,0.08)'} !important;
+          transition: box-shadow 0.15s, opacity 0.15s !important;
+          opacity: 0.92 !important;
+        }
+        .fc-dayGridWeek-view .fc-daygrid-event:hover {
+          opacity: 1 !important;
+          box-shadow: ${theme.palette.mode === 'dark'
+            ? '0 2px 6px rgba(0,0,0,0.45)'
+            : '0 2px 6px rgba(60,36,21,0.15)'} !important;
+        }
+        .fc-dayGridWeek-view .fc-daygrid-event .fc-event-main {
+          padding: 0 !important;
+          color: #FFFFFF !important;
+          text-shadow: 0 1px 1px rgba(0,0,0,0.15);
+        }
+        .fc-dayGridWeek-view .fc-daygrid-day-frame {
+          min-height: 160px !important;
+          max-height: 420px !important;
+          overflow-y: auto !important;
+        }
+        /* Thin styled scrollbar for week cells */
+        .fc-dayGridWeek-view .fc-daygrid-day-frame::-webkit-scrollbar { width: 3px; }
+        .fc-dayGridWeek-view .fc-daygrid-day-frame::-webkit-scrollbar-thumb {
+          background: ${theme.palette.mode === 'dark' ? '#3D3228' : '#D4C4A8'};
+          border-radius: 2px;
+        }
+        .fc-dayGridWeek-view .fc-daygrid-day-frame::-webkit-scrollbar-track {
+          background: transparent;
+        }
+        .fc-dayGridWeek-view .fc-daygrid-event .fc-event-time {
+          display: none !important;
         }
 
-        /* Ensure the col-frame stretches to hold events properly */
-        .fc-timegrid-col-frame {
-          position: relative !important;
+        /* ───── KILL ALL FC POPOVERS ─ no +more needed ───── */
+        .fc-popover,
+        .fc-more-popover,
+        .fc .fc-popover,
+        .fc .fc-more-popover {
+          display: none !important;
         }
 
-        /* Make slot labels wider so time text doesn't crop */
-        .fc-timegrid-axis {
-          min-width: 55px !important;
+        /* Slot grid — warm subtle dividers */
+        .fc-timegrid-slot {
+          border-color: ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : 'rgba(60,36,21,0.07)'} !important;
+          height: 1.8em !important;
+        }
+        .fc-timegrid-slot-minor {
+          border-style: dotted !important;
+          border-color: ${theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.025)' : 'rgba(60,36,21,0.04)'} !important;
+        }
+        .fc-timegrid-slot-label {
+          font-size: 0.72rem !important;
+          color: ${theme.palette.mode === 'dark' ? '#8B7355' : '#8B7355'} !important;
+          font-weight: 500 !important;
         }
 
-        /* ===== RESPONSIVE TIMEGRID OVERRIDES ===== */
-        @media (max-width: 768px) {
-          .fc-timegrid-event {
-            font-size: 0.65rem !important;
-          }
-          .fc-timegrid-axis {
-            min-width: 42px !important;
-            font-size: 0.6rem !important;
-          }
-          .fc-col-header-cell-cushion {
-            font-size: 0.7rem !important;
-          }
+        /* ───── MONTH VIEW ───────────────────────────────────── */
+        .fc-daygrid-day-frame { min-height: 80px !important; }
+        .fc-daygrid-event {
+          margin: 1px 3px !important;
+          padding: 0 !important;
+          border-radius: 6px !important;
+          border: none !important;
+          box-shadow: none !important;
+        }
+        .fc-daygrid-event .fc-event-main { padding: 0 !important; }
+        .fc-daygrid-dot-event { padding: 1px 4px !important; }
+        .fc-daygrid-day-number {
+          font-size: 0.85rem !important;
+          font-weight: 600 !important;
+          padding: 6px 8px !important;
+          color: ${theme.palette.mode === 'dark' ? '#C4AA88' : '#5C4033'} !important;
         }
 
-        /* Tooltip styling - positioned smartly */
+        /* Hide "+X more" links — all events shown inline */
+        .fc-daygrid-more-link,
+        .fc-timegrid-more-link,
+        .fc .fc-more-link {
+          display: none !important;
+        }
+
+        /* ───── TODAY + REST DAY ─────────────────────────────── */
+        .fc-day-today {
+          background: ${theme.palette.mode === 'dark'
+            ? 'rgba(251,191,36,0.06)' : 'rgba(254,243,199,0.4)'} !important;
+        }
+        .fc-timegrid-col.fc-day-today {
+          background: ${theme.palette.mode === 'dark'
+            ? 'rgba(251,191,36,0.04)' : 'rgba(254,243,199,0.25)'} !important;
+        }
+        .fc-day-sun {
+          background: ${theme.palette.mode === 'dark'
+            ? 'rgba(239,68,68,0.05)' : 'rgba(254,226,226,0.5)'} !important;
+        }
+        .fc-day-sat {
+          background: ${theme.palette.mode === 'dark'
+            ? 'rgba(239,68,68,0.025)' : 'rgba(254,226,226,0.25)'} !important;
+        }
+        .fc-day-sun .fc-col-header-cell-cushion,
+        .fc-day-sun .fc-daygrid-day-number {
+          color: ${theme.palette.mode === 'dark' ? '#FCA5A5' : '#DC2626'} !important;
+          opacity: 0.7;
+        }
+        .fc-day-sat .fc-col-header-cell-cushion,
+        .fc-day-sat .fc-daygrid-day-number {
+          color: ${theme.palette.mode === 'dark' ? '#FCA5A5' : '#DC2626'} !important;
+          opacity: 0.5;
+        }
+        .fc-non-business {
+          background: ${theme.palette.mode === 'dark'
+            ? 'rgba(239,68,68,0.03)' : 'rgba(239,68,68,0.02)'} !important;
+        }
+
+        /* Now indicator — warm accent */
+        .fc-timegrid-now-indicator-line {
+          border-color: #D97706 !important;
+          border-width: 2px !important;
+        }
+        .fc-timegrid-now-indicator-arrow {
+          border-color: #D97706 !important;
+        }
+
+        /* ───── DARK MODE READABILITY FIX ────────────────────── */
+        /* Ensure text on shift blocks is always readable */
+        .fc-timegrid-event .fc-event-main,
+        .fc-daygrid-event .fc-event-main {
+          color: #FFFFFF !important;
+          text-shadow: 0 1px 2px rgba(0,0,0,0.2);
+        }
+        /* Scrollbar */
+        .fc-scroller::-webkit-scrollbar { width: 6px; }
+        .fc-scroller::-webkit-scrollbar-thumb {
+          background: ${theme.palette.mode === 'dark' ? '#3D3228' : '#D4C4A8'};
+          border-radius: 3px;
+        }
+
+        /* ───── TOOLTIP ──────────────────────────────────────── */
         div[id^="tooltip-"] {
           pointer-events: none !important;
           animation: tooltipFadeIn 0.15s ease !important;
@@ -2256,120 +2467,25 @@ const EnhancedScheduler = () => {
           from { opacity: 0; transform: translateX(-50%) translateY(4px); }
           to { opacity: 1; transform: translateX(-50%) translateY(0); }
         }
-        /* MOBILE: Hide tooltips on touch devices */
         @media (max-width: 768px), (hover: none) {
-          div[id^="tooltip-"] {
-            display: none !important;
-          }
+          div[id^="tooltip-"] { display: none !important; }
         }
 
-        /* CRITICAL: +X more link styling for dark theme (proven by 7shifts, Deputy) */
-        .fc-more-link-custom,
-        .fc-daygrid-more-link {
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.2) 0%, rgba(139, 92, 246, 0.2) 100%) !important;
-          color: #93c5fd !important;
-          padding: 4px 8px !important;
-          border-radius: 6px !important;
-          font-weight: 600 !important;
-          font-size: 0.75rem !important;
-          text-align: center !important;
-          cursor: pointer !important;
-          transition: all 0.2s ease !important;
-          display: block !important;
-          margin: 2px 4px !important;
-          border: 1px solid rgba(59, 130, 246, 0.3) !important;
-        }
-        
-        .fc-more-link-custom:hover,
-        .fc-daygrid-more-link:hover {
-          background: linear-gradient(135deg, rgba(59, 130, 246, 0.4) 0%, rgba(139, 92, 246, 0.4) 100%) !important;
-          color: #ffffff !important;
-          transform: scale(1.05) !important;
-          box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3) !important;
+        /* ───── RESPONSIVE ───────────────────────────────────── */
+        @media (max-width: 768px) {
+          .fc-timegrid-event { font-size: 0.6rem !important; }
+          .fc-timegrid-slot { height: 1.6em !important; }
+          .fc-timegrid-axis { min-width: 38px !important; font-size: 0.58rem !important; }
+          .fc-col-header-cell-cushion { font-size: 0.68rem !important; }
         }
 
-        /* Day cell minimum height for month view (ensure space for events) */
-        .fc-daygrid-day-frame {
-          min-height: 85px !important;
-        }
-        
-        /* Month view: colored pill events */
-        .fc-daygrid-event {
-          margin: 1px 2px !important;
-          padding: 0 !important;
-          border-radius: 4px !important;
-          border: none !important;
-          box-shadow: none !important;
-        }
-        .fc-daygrid-event .fc-event-main {
-          padding: 0 !important;
-        }
-        .fc-daygrid-dot-event {
-          padding: 1px 4px !important;
-        }
-
-        /* Today highlight */
-        .fc-day-today {
-          background: rgba(59, 130, 246, 0.04) !important;
-        }
-        .fc-timegrid-col.fc-day-today {
-          background: rgba(59, 130, 246, 0.03) !important;
-        }
-
-        /* Sunday (Rest Day) styling - dim column with subtle red tint */
-        .fc-day-sun {
-          background: rgba(239, 68, 68, 0.04) !important;
-        }
-        .fc-day-sun .fc-col-header-cell-cushion {
-          color: #ef4444 !important;
-          opacity: 0.7;
-        }
-        .fc-day-sun .fc-daygrid-day-number {
-          color: #ef4444 !important;
-          opacity: 0.6;
-        }
-        /* Non-business hours background (works with businessHours config) */
-        .fc-non-business {
-          background: rgba(239, 68, 68, 0.03) !important;
-        }
-
-        /* Now indicator (red line for current time) */
-        .fc-timegrid-now-indicator-line {
-          border-color: #ef4444 !important;
-          border-width: 2px !important;
-        }
-        .fc-timegrid-now-indicator-arrow {
-          border-color: #ef4444 !important;
-        }
-
-        /* Col header styling */
-        .fc-col-header-cell {
-          padding: 6px 4px !important;
-        }
-        .fc-col-header-cell-cushion {
-          font-weight: 600 !important;
-          font-size: 0.8rem !important;
-        }
-
-        /* Scrollgrid borders - subtle dividers */
-        .fc-scrollgrid {
-          border-color: rgba(255,255,255,0.08) !important;
-        }
-        .fc-timegrid-slot {
-          border-color: rgba(255,255,255,0.06) !important;
-        }
-        .fc-timegrid-slot-minor {
-          border-style: dotted !important;
-          border-color: rgba(255,255,255,0.03) !important;
-        }
-
-        /* Event time formatting in timegrid */
+        /* Event title container */
         .fc-timegrid-event .fc-event-title-container {
           flex-grow: 1 !important;
           min-height: 0 !important;
         }
       `}</style>
-    <Box sx={{ display: 'flex', height: '100vh', bgcolor: 'background.default' }} className="print-container">
+    <Box sx={{ display: 'flex', height: '100vh', bgcolor: theme.palette.mode === 'dark' ? '#1C1410' : '#FBF8F4' }} className="print-container">
       {/* Feature 6: DRAFT Watermark */}
       {/* Feature 6: DRAFT Watermark - Managers Only & Not in List View */}
       {!isPublished && isManagerRole && viewMode !== 'list' && (
@@ -2490,7 +2606,7 @@ const EnhancedScheduler = () => {
               </Typography>
             )}
             {employees.map((employee, index) => {
-              const colors = EMPLOYEE_COLORS[index % EMPLOYEE_COLORS.length];
+              const roleColor = getRoleColor(employee.position, employee.role);
               const displayRole = employee.position || employee.role || 'employee';
               const isInactive = employee.isActive === false;
               const canDrag = isManagerRole && !isPublished && !isInactive;
@@ -2534,22 +2650,22 @@ const EnhancedScheduler = () => {
                         borderRadius: 2,
                         bgcolor: isInactive 
                           ? 'action.disabledBackground' 
-                          : (mobileSelectedEmployee?.id === employee.id ? alpha(colors.bg, 0.15) : 'background.paper'),
+                          : (mobileSelectedEmployee?.id === employee.id ? alpha(roleColor.bg, 0.15) : 'background.paper'),
                         cursor: canDrag ? (isDesktop ? 'grab' : 'pointer') : 'not-allowed',
                         opacity: isInactive ? 0.5 : (!isPublished ? 1 : 0.6),
                         transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
-                        border: '2px solid', // Thicker border for better visibility
+                        border: '2px solid',
                         borderColor: isInactive 
                           ? 'action.disabled' 
-                          : (mobileSelectedEmployee?.id === employee.id ? colors.bg : 'divider'),
+                          : (mobileSelectedEmployee?.id === employee.id ? roleColor.bg : 'divider'),
                         boxShadow: mobileSelectedEmployee?.id === employee.id 
-                          ? `0 0 0 4px ${alpha(colors.bg, 0.2)}` // Glow effect for selected
+                          ? `0 0 0 4px ${alpha(roleColor.bg, 0.2)}`
                           : '0 1px 2px rgba(0,0,0,0.05)',
                         transform: mobileSelectedEmployee?.id === employee.id ? 'scale(1.02)' : 'none',
                         '&:hover': canDrag ? {
-                          bgcolor: mobileSelectedEmployee?.id === employee.id ? alpha(colors.bg, 0.2) : 'action.hover',
+                          bgcolor: mobileSelectedEmployee?.id === employee.id ? alpha(roleColor.bg, 0.2) : 'action.hover',
                           transform: 'translateX(4px) scale(1.01)',
-                          borderColor: mobileSelectedEmployee?.id === employee.id ? colors.bg : 'primary.main',
+                          borderColor: mobileSelectedEmployee?.id === employee.id ? roleColor.bg : 'primary.main',
                           boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
                         } : {},
                         '&:active': {
@@ -2562,8 +2678,8 @@ const EnhancedScheduler = () => {
                         sx={{
                           width: 40,
                           height: 40,
-                          bgcolor: isInactive ? 'action.disabled' : colors.bg,
-                          color: isInactive ? 'text.disabled' : colors.text,
+                          bgcolor: isInactive ? 'action.disabled' : roleColor.bg,
+                          color: isInactive ? 'text.disabled' : roleColor.text,
                           fontSize: '0.875rem',
                           fontWeight: 600,
                           boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
@@ -2588,7 +2704,7 @@ const EnhancedScheduler = () => {
                       
                       {/* Selection Checkmark */}
                       {mobileSelectedEmployee?.id === employee.id && (
-                        <CheckIcon sx={{ color: colors.bg, fontSize: 20 }} />
+                        <CheckIcon sx={{ color: roleColor.bg, fontSize: 20 }} />
                       )}
                       
                       <Box
@@ -2597,8 +2713,8 @@ const EnhancedScheduler = () => {
                           height: 10,
                           borderRadius: '50%',
                           display: mobileSelectedEmployee?.id === employee.id ? 'none' : 'block', // Hide dot if checkmark shown
-                          bgcolor: isInactive ? 'action.disabled' : colors.bg,
-                          boxShadow: isInactive ? 'none' : `0 0 0 2px ${colors.bg}33`,
+                          bgcolor: isInactive ? 'action.disabled' : roleColor.bg,
+                          boxShadow: isInactive ? 'none' : `0 0 0 2px ${roleColor.bg}33`,
                         }}
                       />
                     </Box>
@@ -2612,14 +2728,14 @@ const EnhancedScheduler = () => {
         <Box
           className="no-print"
           sx={{
-            width: rosterOpen ? 320 : 0,
-            minWidth: rosterOpen ? 320 : 0,
+            width: rosterOpen ? 300 : 0,
+            minWidth: rosterOpen ? 300 : 0,
             flexShrink: 0,
             overflow: 'hidden',
             transition: 'all 225ms cubic-bezier(0.4, 0, 0.2, 1)',
-            borderRight: rosterOpen ? 1 : 0,
-            borderColor: 'divider',
-            bgcolor: 'background.paper',
+            borderRight: rosterOpen ? '1px solid' : 0,
+            borderColor: theme.palette.mode === 'dark' ? '#3D3228' : '#E8E0D4',
+            bgcolor: theme.palette.mode === 'dark' ? '#2A2018' : '#FFFFFF',
             height: '100%',
             display: 'flex',
             flexDirection: 'column',
@@ -2627,7 +2743,9 @@ const EnhancedScheduler = () => {
         >
           <Box sx={{ p: 2 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
-              <Typography variant="h6" fontWeight={700}>
+              <Typography variant="h6" fontWeight={700} sx={{
+                color: theme.palette.mode === 'dark' ? '#F5EDE4' : '#3C2415',
+              }}>
                 Roster
               </Typography>
               <IconButton size="small" onClick={() => setRosterOpen(false)}>
@@ -2635,24 +2753,50 @@ const EnhancedScheduler = () => {
               </IconButton>
             </Box>
             {isPublished && (
-              <Alert severity="info" sx={{ mb: 2 }}>
+              <Alert 
+                severity="info" 
+                sx={{ 
+                  mb: 2, 
+                  bgcolor: theme.palette.mode === 'dark' ? '#064E3B' : '#F0FDF4',
+                  color: theme.palette.mode === 'dark' ? '#6EE7B7' : '#166534',
+                  border: '1px solid',
+                  borderColor: theme.palette.mode === 'dark' ? '#065F46' : '#BBF7D0',
+                  '& .MuiAlert-icon': { color: 'inherit' },
+                }}>
                 Schedule is published. Switch to Draft mode to make changes.
               </Alert>
             )}
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ mb: 2, borderColor: theme.palette.mode === 'dark' ? '#3D3228' : '#E8E0D4' }} />
             
             <Box ref={rosterRef} sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {/* DUPLICATE CONTENT FOR DESKTOP - NEEDED FOR DRAGGABLE REF BINDING */}
             {employees.length === 0 && (
               <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
                 No employees found.
               </Typography>
             )}
-            {employees.map((employee, index) => {
-              const colors = EMPLOYEE_COLORS[index % EMPLOYEE_COLORS.length];
-              const displayRole = employee.position || employee.role || 'employee';
+            {employees.map((employee) => {
+              const roleColor = getRoleColor(employee.position, employee.role);
+              const displayRole = employee.position || employee.role || 'Staff';
               const isInactive = employee.isActive === false;
               const canDrag = isManagerRole && !isPublished && !isInactive;
+              
+              // Check if working today
+              const todayStr = format(new Date(), 'yyyy-MM-dd');
+              const isWorkingToday = shifts.some(s => 
+                s.userId === employee.id && s.startTime.startsWith(todayStr)
+              );
+              
+              // Weekly hours (snap to Mon–Sun regardless of view, exclude rest days)
+              const weekStart = startOfWeek(currentWeekStart, { weekStartsOn: 1 });
+              const weekEnd = endOfWeek(currentWeekStart, { weekStartsOn: 1 });
+              const weekHours = shifts
+                .filter(s => {
+                  if (s.userId !== employee.id) return false;
+                  const d = new Date(s.startTime);
+                  if (d.getDay() === 0) return false; // Exclude Sunday (rest day)
+                  return d >= weekStart && d <= weekEnd;
+                })
+                .reduce((sum, s) => sum + differenceInHours(new Date(s.endTime), new Date(s.startTime)), 0);
               
               return (
                 <Tooltip 
@@ -2673,21 +2817,24 @@ const EnhancedScheduler = () => {
                     sx={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 2,
+                      gap: 1.5,
                       p: 1.5,
                       borderRadius: 2,
-                      bgcolor: isInactive ? 'action.disabledBackground' : 'background.paper',
+                      bgcolor: isInactive 
+                        ? 'action.disabledBackground' 
+                        : (theme.palette.mode === 'dark' ? '#342A1E' : '#FBF8F4'),
                       cursor: canDrag ? 'grab' : 'not-allowed',
                       opacity: isInactive ? 0.5 : (!isPublished ? 1 : 0.6),
                       transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
                       border: '1px solid',
-                      borderColor: isInactive ? 'action.disabled' : 'divider',
-                      boxShadow: '0 1px 2px rgba(0,0,0,0.05)',
+                      borderColor: isInactive 
+                        ? 'action.disabled' 
+                        : (theme.palette.mode === 'dark' ? '#3D3228' : '#E8E0D4'),
                       '&:hover': canDrag ? {
-                        bgcolor: 'action.hover',
-                        transform: 'translateX(4px) scale(1.01)',
-                        borderColor: 'primary.main',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                        bgcolor: theme.palette.mode === 'dark' ? '#3D3228' : '#F7F3ED',
+                        transform: 'translateX(3px)',
+                        borderColor: roleColor.bg,
+                        boxShadow: `0 2px 8px ${roleColor.bg}22`,
                       } : {},
                       '&:active': {
                         cursor: canDrag ? 'grabbing' : 'not-allowed',
@@ -2695,40 +2842,87 @@ const EnhancedScheduler = () => {
                       },
                     }}
                   >
-                    <Avatar
-                      sx={{
-                        width: 40,
-                        height: 40,
-                        bgcolor: isInactive ? 'action.disabled' : colors.bg,
-                        color: isInactive ? 'text.disabled' : colors.text,
-                        fontSize: '0.875rem',
-                        fontWeight: 600,
-                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                      }}
-                    >
-                      {employee.firstName[0]}{employee.lastName[0]}
-                    </Avatar>
+                    {/* Avatar with role-based color */}
+                    <Box sx={{ position: 'relative' }}>
+                      <Avatar
+                        sx={{
+                          width: 38,
+                          height: 38,
+                          bgcolor: isInactive ? 'action.disabled' : roleColor.bg,
+                          color: roleColor.text,
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                        }}
+                      >
+                        {employee.firstName[0]}{employee.lastName[0]}
+                      </Avatar>
+                      {/* Status dot: green = working today, gray = off */}
+                      <Box
+                        sx={{
+                          position: 'absolute',
+                          bottom: -1,
+                          right: -1,
+                          width: 10,
+                          height: 10,
+                          borderRadius: '50%',
+                          bgcolor: isInactive ? '#9CA3AF' : (isWorkingToday ? '#22C55E' : '#9CA3AF'),
+                          border: '2px solid',
+                          borderColor: theme.palette.mode === 'dark' ? '#342A1E' : '#FBF8F4',
+                        }}
+                      />
+                    </Box>
+                    
+                    {/* Name + Role badge */}
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                       <Typography 
                         variant="body2" 
                         fontWeight={600} 
                         noWrap
-                        sx={{ color: isInactive ? 'text.disabled' : 'text.primary' }}
+                        sx={{ 
+                          color: isInactive ? 'text.disabled' : (theme.palette.mode === 'dark' ? '#F5EDE4' : '#3C2415'),
+                          fontSize: '0.85rem',
+                        }}
                       >
                         {employee.firstName} {employee.lastName}
                         {isInactive && ' (Inactive)'}
                       </Typography>
-                      <Typography variant="caption" color={isInactive ? 'text.disabled' : 'text.secondary'}>
-                        {displayRole}
-                      </Typography>
+                      <Chip
+                        size="small"
+                        label={displayRole}
+                        sx={{
+                          height: 18,
+                          fontSize: '0.62rem',
+                          fontWeight: 600,
+                          mt: 0.25,
+                          bgcolor: theme.palette.mode === 'dark' ? roleColor.bgDark : roleColor.bgLight,
+                          color: theme.palette.mode === 'dark' ? roleColor.text : roleColor.bg,
+                          border: 'none',
+                          '& .MuiChip-label': { px: 0.75 },
+                        }}
+                      />
                     </Box>
-                    <Box
+                    
+                    {/* Weekly hours badge */}
+                    <Chip
+                      size="small"
+                      label={`${weekHours}h`}
                       sx={{
-                        width: 10,
-                        height: 10,
-                        borderRadius: '50%',
-                        bgcolor: isInactive ? 'action.disabled' : colors.bg,
-                        boxShadow: isInactive ? 'none' : `0 0 0 2px ${colors.bg}33`,
+                        height: 20,
+                        minWidth: 36,
+                        fontSize: '0.68rem',
+                        fontWeight: 700,
+                        bgcolor: weekHours === 0 
+                          ? (theme.palette.mode === 'dark' ? '#374151' : '#F3F4F6')
+                          : weekHours > 44
+                            ? (theme.palette.mode === 'dark' ? '#7F1D1D' : '#FEF2F2')
+                            : (theme.palette.mode === 'dark' ? '#064E3B' : '#F0FDF4'),
+                        color: weekHours === 0
+                          ? (theme.palette.mode === 'dark' ? '#6B7280' : '#9CA3AF')
+                          : weekHours > 44
+                            ? (theme.palette.mode === 'dark' ? '#FCA5A5' : '#DC2626')
+                            : (theme.palette.mode === 'dark' ? '#6EE7B7' : '#166534'),
+                        border: 'none',
+                        '& .MuiChip-label': { px: 0.75 },
                       }}
                     />
                   </Box>
@@ -2740,29 +2934,36 @@ const EnhancedScheduler = () => {
         </Box>
       ) : null}
 
-      {/* Main Calendar Area */}
+      {/* Main Calendar Area - warm café background */}
       <Box
         component="main"
         sx={{
           flexGrow: 1,
-          p: 3,
+          p: { xs: 1.5, sm: 3 },
           overflow: 'auto',
-          minWidth: 0, // Important for flex children to prevent overflow
+          minWidth: 0,
           transition: 'all 225ms cubic-bezier(0.4, 0, 0.2, 1)',
+          bgcolor: theme.palette.mode === 'dark' ? '#1C1410' : '#FBF8F4',
         }}
       >
-        {/* Toolbar - RESPONSIVE */}
+        {/* 2026 REDESIGNED Toolbar — clean, warm, professional */}
       <Paper 
         sx={{ 
-          p: { xs: 1, sm: 1.5 },
+          p: { xs: 1.5, sm: 2 },
           mb: 2, 
           display: 'flex', 
-          flexWrap: 'wrap',  // CRITICAL: Allow wrapping on small screens
+          flexWrap: 'wrap',
           gap: { xs: 0.5, sm: 1 },
           alignItems: 'center',
-          borderRadius: 2
+          borderRadius: 3,
+          bgcolor: theme.palette.mode === 'dark' ? '#2A2018' : '#FFFFFF',
+          border: '1px solid',
+          borderColor: theme.palette.mode === 'dark' ? '#3D3228' : '#E8E0D4',
+          boxShadow: theme.palette.mode === 'dark'
+            ? '0 1px 4px rgba(0,0,0,0.3)'
+            : '0 1px 4px rgba(60,36,21,0.06)',
         }} 
-        elevation={1}
+        elevation={0}
       >
         <Typography 
           variant="h5" 
@@ -2770,7 +2971,10 @@ const EnhancedScheduler = () => {
             mr: { xs: 'auto', sm: 2 },
             fontSize: { xs: '1.25rem', sm: '1.5rem' },
             width: { xs: '100%', sm: 'auto' },
-            mb: { xs: 0.5, sm: 0 }
+            mb: { xs: 0.5, sm: 0 },
+            fontWeight: 700,
+            color: theme.palette.mode === 'dark' ? '#F5EDE4' : '#3C2415',
+            letterSpacing: '-0.01em',
           }}
         >
           Schedule
@@ -2796,23 +3000,32 @@ const EnhancedScheduler = () => {
           </Tooltip>
         )}
 
-        {/* Feature 6: Published Toggle */}
+        {/* Feature 6: Published Toggle — green lock / amber draft */}
         {isManagerRole && (
-          <FormControlLabel
-            control={
-              <Switch
-                checked={isPublished}
-                onChange={(e) => setIsPublished(e.target.checked)}
-                color="success"
-                size="small"
-              />
-            }
-            label={isPublished ? '✅ Published' : '📝 Draft'}
-            sx={{ 
+          <Chip
+            icon={isPublished ? <CheckIcon /> : <EditIcon />}
+            label={isPublished ? 'Published' : 'Draft'}
+            onClick={() => setIsPublished(!isPublished)}
+            sx={{
               mr: { xs: 0.5, sm: 1 },
-              '& .MuiFormControlLabel-label': {
-                fontSize: { xs: '0.875rem', sm: '1rem' }
-              }
+              fontWeight: 600,
+              fontSize: '0.8rem',
+              height: 32,
+              cursor: 'pointer',
+              bgcolor: isPublished
+                ? (theme.palette.mode === 'dark' ? '#064E3B' : '#F0FDF4')
+                : (theme.palette.mode === 'dark' ? '#451A03' : '#FFFBEB'),
+              color: isPublished
+                ? (theme.palette.mode === 'dark' ? '#6EE7B7' : '#166534')
+                : (theme.palette.mode === 'dark' ? '#FBBF24' : '#92400E'),
+              border: '1px solid',
+              borderColor: isPublished
+                ? (theme.palette.mode === 'dark' ? '#065F46' : '#BBF7D0')
+                : (theme.palette.mode === 'dark' ? '#78350F' : '#FDE68A'),
+              '& .MuiChip-icon': {
+                color: 'inherit',
+                fontSize: '1rem',
+              },
             }}
           />
         )}
@@ -2842,12 +3055,17 @@ const EnhancedScheduler = () => {
           <Button
             variant="contained"
             color="primary"
-            startIcon={<AddIcon />}
+            startIcon={<TimeOffIcon />}
             onClick={() => setTimeOffModalOpen(true)}
             size="small"
             sx={{ 
-              minWidth: { xs: 'auto', sm: 150 },
+              minWidth: { xs: 'auto', sm: 160 },
               fontSize: { xs: '0.75rem', sm: '0.875rem' },
+              fontWeight: 700,
+              borderRadius: 2,
+              textTransform: 'none',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+              '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.2)' },
               '& .MuiButton-startIcon': { 
                 mr: { xs: 0, sm: 1 },
                 ml: { xs: 0, sm: -0.5 }
@@ -2862,9 +3080,9 @@ const EnhancedScheduler = () => {
           {/* UNIFIED SCHEDULE: Request Shift Trade Button */}
           <Tooltip title="Trade one of your shifts with another employee">
             <Button
-              variant="outlined"
+              variant="contained"
               color="secondary"
-              startIcon={<AddIcon />}
+              startIcon={<SwapIcon />}
               onClick={() => {
                 // Check if employee has future shifts
                 const myFutureShifts = shifts.filter(s => 
@@ -2884,9 +3102,17 @@ const EnhancedScheduler = () => {
                 setShiftTradeModalOpen(true);
               }}
               size="small"
-              sx={{ borderStyle: 'dashed' }}
+              sx={{ 
+                minWidth: { xs: 'auto', sm: 160 },
+                fontWeight: 700,
+                borderRadius: 2,
+                textTransform: 'none',
+                boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                '&:hover': { boxShadow: '0 4px 12px rgba(0,0,0,0.2)' },
+              }}
             >
-              Request Shift Trade
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline' } }}>Shift Trade</Box>
+              <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>Trade</Box>
             </Button>
           </Tooltip>
 
@@ -2922,7 +3148,7 @@ const EnhancedScheduler = () => {
               variant={calendarRef.current?.getApi().view.type.includes('Week') ? 'contained' : 'outlined'}
               onClick={() => {
                 const api = calendarRef.current?.getApi();
-                api?.changeView(viewMode === 'timeline' ? 'resourceTimelineWeek' : 'timeGridWeek');
+                api?.changeView(viewMode === 'timeline' ? 'resourceTimelineWeek' : 'dayGridWeek');
               }}
             >
               Week
@@ -2942,7 +3168,7 @@ const EnhancedScheduler = () => {
           </Tooltip>
         </ButtonGroup>
 
-        {/* View Mode Toggle - Timeline/Grid/List */}
+        {/* View Mode Toggle */}
         <Tooltip title={`Current: ${viewMode === 'timeline' ? 'Timeline' : (viewMode === 'list' ? 'List' : 'Grid')}`}>
           <Button
             variant="contained"
@@ -2951,32 +3177,34 @@ const EnhancedScheduler = () => {
             onClick={() => {
               let newMode: 'timeline' | 'week' | 'list' = 'week';
               
-              if (viewMode === 'timeline') newMode = 'week';       // Timeline -> Grid
-              else if (viewMode === 'week') newMode = 'list';      // Grid -> List
-              else newMode = 'timeline';                           // List -> Timeline
+              if (viewMode === 'timeline') newMode = 'week';
+              else if (viewMode === 'week') newMode = 'list';
+              else newMode = 'timeline';
 
               setViewMode(newMode);
               
               const api = calendarRef.current?.getApi();
               if (newMode === 'timeline') api?.changeView('resourceTimelineWeek');
               else if (newMode === 'list') api?.changeView('listWeek');
-              else api?.changeView('timeGridWeek');
+              else api?.changeView('dayGridWeek');
               
               toast.success(`Switched to ${newMode === 'timeline' ? 'Timeline' : (newMode === 'list' ? 'List' : 'Grid')} view`);
             }}
             sx={{
               minWidth: 100,
               fontWeight: 600,
-              background: viewMode === 'timeline' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' :
-                          viewMode === 'list' ? 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)' :
-                          'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+              bgcolor: theme.palette.mode === 'dark' ? '#3D3228' : '#F5F0E8',
+              color: theme.palette.mode === 'dark' ? '#C4AA88' : '#5C4033',
+              border: '1px solid',
+              borderColor: theme.palette.mode === 'dark' ? '#4A3D30' : '#E8E0D4',
+              boxShadow: 'none',
               '&:hover': {
-                transform: 'scale(1.05)',
-                transition: 'transform 0.2s'
+                bgcolor: theme.palette.mode === 'dark' ? '#4A3D30' : '#EDE6DA',
+                boxShadow: 'none',
               }
             }}
           >
-            {viewMode === 'timeline' ? '📊 Timeline' : (viewMode === 'list' ? '📝 List' : '📅 Grid')}
+            {viewMode === 'timeline' ? 'Timeline' : (viewMode === 'list' ? 'List' : 'Grid')}
           </Button>
         </Tooltip>
 
@@ -3086,28 +3314,66 @@ const EnhancedScheduler = () => {
           </Tooltip>
         </Paper>
 
-        {/* Calendar - MOBILE-PERFECT: No horizontal scroll, vertical only */}
+        {/* 2026 REDESIGN: Role Color Legend */}
+        <Box
+          className="no-print"
+          sx={{
+            display: 'flex',
+            flexWrap: 'wrap',
+            gap: 0.75,
+            mb: 1.5,
+            px: 0.5,
+          }}
+        >
+          {getUniqueRoleColors(employees).map((rc) => (
+            <Chip
+              key={rc.label}
+              size="small"
+              label={rc.label}
+              sx={{
+                height: 24,
+                fontSize: '0.68rem',
+                fontWeight: 700,
+                bgcolor: rc.bg,
+                color: rc.text,
+                border: '1.5px solid',
+                borderColor: rc.border,
+                letterSpacing: '0.02em',
+                '& .MuiChip-label': { px: 1 },
+              }}
+            />
+          ))}
+        </Box>
+
+        {/* Calendar — warm paper container */}
         <Paper 
           sx={{ 
             p: { xs: 0.5, sm: 2 }, 
-            height: { xs: 'calc(100vh - 200px)', sm: 'calc(100vh - 180px)' },
+            height: { xs: 'calc(100vh - 220px)', sm: 'calc(100vh - 200px)' },
             minHeight: { xs: '500px', sm: '600px' },
-            borderRadius: 2, 
+            borderRadius: 3, 
             position: 'relative',
-            overflow: 'hidden', // Let FullCalendar manage its own scrolling
+            overflow: 'hidden',
             width: '100%',
+            bgcolor: theme.palette.mode === 'dark' ? '#2A2018' : '#FFFFFF',
+            border: '1px solid',
+            borderColor: theme.palette.mode === 'dark' ? '#3D3228' : '#E8E0D4',
+            boxShadow: theme.palette.mode === 'dark'
+              ? '0 1px 4px rgba(0,0,0,0.3)'
+              : '0 1px 4px rgba(60,36,21,0.06)',
           }} 
+          elevation={0}
           className="print-calendar"
         >
           <FullCalendar
             ref={calendarRef}
             plugins={[dayGridPlugin, timeGridPlugin, resourceTimelinePlugin, interactionPlugin, listPlugin]}
-            // MOBILE: Auto-select best view
+            // 2026 REDESIGN: Default to Day view for small-team clarity
             initialView={(() => {
               const isMobile = window.innerWidth < 768;
               if (viewMode === 'list') return 'listWeek';
               if (viewMode === 'timeline' && !isMobile) return 'resourceTimelineWeek';
-              return 'dayGridMonth'; // Default to month view for best readability
+              return 'timeGridDay'; // Default: Day view — best for small cafés
             })()}
             
             // MOBILE-FRIENDLY: Simplified header
@@ -3128,20 +3394,21 @@ const EnhancedScheduler = () => {
             // Per-view configuration
             views={{
               dayGridMonth: {
-                dayMaxEvents: 4,
+                dayMaxEvents: false, // Show ALL events — small café has ~8 employees
                 eventDisplay: 'block' as const,
                 dayHeaderFormat: { weekday: 'short' },
               },
               dayGridWeek: {
-                dayMaxEvents: true,
+                dayMaxEvents: false,
                 eventDisplay: 'block' as const,
+                dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
               },
               dayGridDay: {
                 dayMaxEvents: false,
                 eventDisplay: 'block' as const,
               },
               timeGridWeek: {
-                slotDuration: '00:30:00',
+                slotDuration: '01:00:00',
                 slotLabelInterval: '01:00:00',
                 eventDisplay: 'auto' as const,
                 dayHeaderFormat: { weekday: 'short', month: 'numeric', day: 'numeric' },
@@ -3273,8 +3540,6 @@ const EnhancedScheduler = () => {
 
             // FIXED: Responsive Event Rendering
             eventContent={renderEventContent}
-
-            moreLinkClick="popover"
             
             // Event overlap settings
             slotEventOverlap={true}
@@ -3299,12 +3564,21 @@ const EnhancedScheduler = () => {
                 if (type === 'shift' && shift) {
                   const employee = employees.find(e => e.id === shift.userId);
                   const tooltipRole = employee?.position || employee?.role || shift.position || 'Staff';
+                  const rc = getRoleColor(employee?.position, employee?.role);
+                  const hours = ((new Date(shift.endTime).getTime() - new Date(shift.startTime).getTime()) / 3600000).toFixed(1);
                   return `
-                    <div style="padding: 8px;">
-                      <strong>${employee?.firstName} ${employee?.lastName}</strong><br/>
-                      ${tooltipRole}<br/>
-                      <span style="color: #10B981;">${format(new Date(shift.startTime), 'h:mm a')} - ${format(new Date(shift.endTime), 'h:mm a')}</span><br/>
-                      ${shift.notes ? `<i>${shift.notes}</i>` : ''}
+                    <div style="padding: 4px 0;">
+                      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                        <span style="width:28px;height:28px;border-radius:50%;background:${rc.bg};color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;">${employee?.firstName?.[0] || ''}${employee?.lastName?.[0] || ''}</span>
+                        <div>
+                          <strong>${employee?.firstName} ${employee?.lastName}</strong><br/>
+                          <span style="font-size:0.75rem;opacity:0.8;">${tooltipRole}</span>
+                        </div>
+                      </div>
+                      <div style="font-size:0.8rem;color:${rc.bg};font-weight:600;">
+                        ${format(new Date(shift.startTime), 'h:mm a')} – ${format(new Date(shift.endTime), 'h:mm a')} · ${hours}h
+                      </div>
+                      ${shift.notes ? `<div style="margin-top:4px;font-size:0.75rem;opacity:0.7;font-style:italic;">${shift.notes}</div>` : ''}
                     </div>
                   `;
                 }
@@ -3362,15 +3636,16 @@ const EnhancedScheduler = () => {
                     tooltip.style.cssText = `
                       position: fixed;
                       z-index: 10000;
-                      background: #1e1e1e;
-                      color: white;
-                      padding: 12px;
-                      border-radius: 8px;
-                      box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-                      max-width: 250px;
-                      font-size: 0.875rem;
+                      background: ${theme.palette.mode === 'dark' ? '#2A2018' : '#3C2415'};
+                      color: ${theme.palette.mode === 'dark' ? '#F5EDE4' : '#FFFFFF'};
+                      padding: 12px 16px;
+                      border-radius: 10px;
+                      box-shadow: 0 8px 24px rgba(0,0,0,0.25);
+                      max-width: 260px;
+                      font-size: 0.82rem;
                       pointer-events: none;
-                      border: 1px solid rgba(255,255,255,0.1);
+                      border: 1px solid ${theme.palette.mode === 'dark' ? '#3D3228' : 'rgba(255,255,255,0.1)'};
+                      line-height: 1.5;
                     `;
                     
                     document.body.appendChild(tooltip);
@@ -3407,7 +3682,29 @@ const EnhancedScheduler = () => {
                 
                 info.el.addEventListener('mouseenter', handleMouseEnter);
                 info.el.addEventListener('mouseleave', handleMouseLeave);
+                
+                // Auto-cleanup: remove tooltip if event is unmounted
+                return () => {
+                  try {
+                    const tooltip = document.getElementById(`tooltip-${info.event.id}`);
+                    if (tooltip) tooltip.remove();
+                  } catch {}
+                };
               }
+            }}
+            // Cleanup all stale tooltips on any view change
+            viewDidMount={() => {
+              document.querySelectorAll('div[id^="tooltip-"]').forEach(el => el.remove());
+              // Global safety: dismiss tooltips on click or scroll anywhere
+              const cleanAll = () => document.querySelectorAll('div[id^="tooltip-"]').forEach(el => el.remove());
+              document.addEventListener('click', cleanAll, { passive: true });
+              document.addEventListener('scroll', cleanAll, { capture: true, passive: true });
+              // Also clean on any FC scroller scroll
+              setTimeout(() => {
+                document.querySelectorAll('.fc-scroller').forEach(scr =>
+                  scr.addEventListener('scroll', cleanAll, { passive: true })
+                );
+              }, 200);
             }}
             datesSet={handleDatesSet}
             eventTimeFormat={{
@@ -3427,17 +3724,22 @@ const EnhancedScheduler = () => {
           />
         </Paper>
 
-        {/* Feature 5: Weekly Hours Summary */}
+        {/* Weekly Hours Summary — warm card */}
         <Card
           className="no-print"
           sx={{
             position: 'fixed',
             bottom: 24,
             right: 24,
-            width: 280,
-            boxShadow: 6,
+            width: 260,
             zIndex: 100,
             display: { xs: 'none', md: 'block' },
+            bgcolor: theme.palette.mode === 'dark' ? '#2A2018' : '#FFFFFF',
+            border: '1px solid',
+            borderColor: theme.palette.mode === 'dark' ? '#3D3228' : '#E8E0D4',
+            boxShadow: theme.palette.mode === 'dark'
+              ? '0 4px 20px rgba(0,0,0,0.5)'
+              : '0 4px 20px rgba(60,36,21,0.1)',
           }}
         >
           <CardContent sx={{ py: 1.5, '&:last-child': { pb: 1.5 } }}>

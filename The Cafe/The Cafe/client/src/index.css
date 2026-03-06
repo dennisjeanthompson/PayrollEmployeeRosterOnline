@@ -1186,19 +1186,9 @@ html {
   box-shadow: 0 1px 2px rgba(0,0,0,0.15) !important;
 }
 
-/* Month view "+X more" link styling */
+/* Month view "+X more" link — hidden (all events shown inline) */
 .fc .fc-daygrid-more-link {
-  font-size: 10px !important;
-  font-weight: 600 !important;
-  color: hsl(var(--primary)) !important;
-  background: hsl(var(--primary) / 0.1) !important;
-  padding: 2px 6px !important;
-  border-radius: 10px !important;
-  margin-top: 2px !important;
-}
-
-.fc .fc-daygrid-more-link:hover {
-  background: hsl(var(--primary) / 0.2) !important;
+  display: none !important;
 }
 
 /* ===== TEXT STYLING ===== */
@@ -1303,24 +1293,10 @@ html {
   font-size: 12px !important;
 }
 
-/* ===== POPOVER STYLING ===== */
-.fc .fc-popover {
-  border-radius: 8px !important;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.25) !important;
-  background: hsl(var(--card)) !important;
-  border: 1px solid hsl(var(--border)) !important;
-}
-
-.fc .fc-popover-header {
-  padding: 10px 12px !important;
-  font-weight: 600 !important;
-  font-size: 12px !important;
-  background: hsl(var(--muted) / 0.5) !important;
-  border-radius: 8px 8px 0 0 !important;
-}
-
-.fc .fc-popover-body {
-  padding: 8px !important;
+/* ===== POPOVER — FULLY HIDDEN ===== */
+.fc .fc-popover,
+.fc .fc-more-popover {
+  display: none !important;
 }
 
 /* ===== TODAY HIGHLIGHT ===== */

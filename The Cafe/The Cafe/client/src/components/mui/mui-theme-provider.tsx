@@ -18,46 +18,46 @@ export function MuiThemeProvider({ children }: MuiThemeProviderProps) {
         palette: {
           mode: isDark ? "dark" : "light",
           primary: {
-            main: "#10b981", // emerald-500
-            light: "#34d399",
-            dark: "#059669",
+            main: "#166534", // deep green (café accent)
+            light: "#22C55E",
+            dark: "#14532D",
             contrastText: "#ffffff",
           },
           secondary: {
-            main: "#8b5cf6", // violet-500
-            light: "#a78bfa",
-            dark: "#7c3aed",
+            main: "#92400E", // coffee brown
+            light: "#B45309",
+            dark: "#78350F",
             contrastText: "#ffffff",
           },
           error: {
-            main: "#ef4444",
-            light: "#f87171",
-            dark: "#dc2626",
+            main: "#DC2626",
+            light: "#EF4444",
+            dark: "#B91C1C",
           },
           warning: {
-            main: "#f59e0b",
-            light: "#fbbf24",
-            dark: "#d97706",
+            main: "#D97706",
+            light: "#F59E0B",
+            dark: "#B45309",
           },
           info: {
-            main: "#3b82f6",
-            light: "#60a5fa",
-            dark: "#2563eb",
+            main: "#0D9488",
+            light: "#14B8A6",
+            dark: "#0F766E",
           },
           success: {
-            main: "#10b981",
-            light: "#34d399",
-            dark: "#059669",
+            main: "#166534",
+            light: "#22C55E",
+            dark: "#14532D",
           },
           background: {
-            default: isDark ? "#0a0a0a" : "#fafafa",
-            paper: isDark ? "#171717" : "#ffffff",
+            default: isDark ? "#1C1410" : "#FBF8F4",
+            paper: isDark ? "#2A2018" : "#FFFFFF",
           },
           text: {
-            primary: isDark ? "#fafafa" : "#0a0a0a",
-            secondary: isDark ? "#a1a1aa" : "#71717a",
+            primary: isDark ? "#F5EDE4" : "#3C2415",
+            secondary: isDark ? "#C4AA88" : "#8B7355",
           },
-          divider: isDark ? "rgba(255, 255, 255, 0.05)" : "rgba(0, 0, 0, 0.05)", // Very subtle - MUI needs valid color for alpha()
+          divider: isDark ? "rgba(255, 255, 255, 0.06)" : "rgba(60, 36, 21, 0.08)",
         },
         typography: {
           fontFamily: '"Inter", "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
