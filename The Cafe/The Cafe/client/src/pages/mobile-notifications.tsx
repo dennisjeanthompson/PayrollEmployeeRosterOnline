@@ -104,6 +104,13 @@ export default function MobileNotifications() {
         description: "All notifications marked as read",
       });
     },
+    onError: (error: Error) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to mark notifications as read",
+        variant: "destructive",
+      });
+    },
   });
 
   const notifications: Notification[] = notificationsData?.notifications || [];

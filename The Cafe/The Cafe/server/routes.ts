@@ -415,7 +415,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Render a lightweight HTML page showing recent reports
       const rows = clientDebugReports.slice(0, 100).map((r, idx) => {
         const p = JSON.stringify(r.payload, null, 2).replace(/</g, '&lt;');
-        return `<section style="border-bottom:1px solid #eee;padding:12px 0"><h3>#${idx+1} - ${r.receivedAt} - ${r.url}</h3><pre style="white-space:pre-wrap;background:#111;color:#fff;padding:8px;border-radius:6px;overflow:auto;max-height:240px">${p}</pre></section>`;
+        const safeUrl = String(r.url || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        return `<section style="border-bottom:1px solid #eee;padding:12px 0"><h3>#${idx+1} - ${r.receivedAt} - ${safeUrl}</h3><pre style="white-space:pre-wrap;background:#111;color:#fff;padding:8px;border-radius:6px;overflow:auto;max-height:240px">${p}</pre></section>`;
       }).join('\n');
 
       const page = `<!doctype html><html><head><meta charset="utf-8"><title>Client Debug Reports</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:Arial,Helvetica,sans-serif;margin:20px"><h1>Client Debug Reports (recent)</h1>${rows||'<p>No reports yet</p>'}</body></html>`;
@@ -2413,6 +2414,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Only pending trades can be accepted/rejected by target user
       if (trade.status !== 'pending') {
         return res.status(400).json({ message: `Cannot ${status} a trade that is already ${trade.status}` });
+      }
+
+      // Prevent self-acceptance: creator cannot accept their own trade
+      if (trade.fromUserId === userId && status === 'accepted') {
+        return res.status(400).json({ message: "You cannot accept your own trade request" });
       }
 
       // If trade has a specific target user, only they can respond

@@ -22,11 +22,11 @@ import {
   SettingsRounded as SettingsIcon,
   HomeRounded as HomeIcon,
   SwapHorizRounded as ShiftIcon,
-  EventRoundedIcon,
-  PeopleRoundedIcon,
-  PaymentsRoundedIcon,
-  AssignmentRoundedIcon,
-  NotificationsRoundedIcon,
+  EventRounded as EventRoundedIcon,
+  PeopleRounded as PeopleRoundedIcon,
+  PaymentsRounded as PaymentsRoundedIcon,
+  AssignmentRounded as AssignmentRoundedIcon,
+  NotificationsRounded as NotificationsRoundedIcon,
 } from "@mui/icons-material";
 import { useLocation } from "wouter";
 import { logout, getCurrentUser } from "@/lib/auth";

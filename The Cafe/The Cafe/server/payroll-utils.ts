@@ -144,27 +144,22 @@ export function isNightDiffHour(hour: number): boolean {
 }
 
 /**
- * Calculate how many hours in a shift fall within night differential window
+ * Calculate how many hours in a shift fall within night differential window (10PM-6AM)
+ * Uses minute-level iteration for accuracy at boundary hours.
  */
 export function calculateNightDiffHours(startTime: Date, endTime: Date): number {
-  let nightHours = 0;
+  let nightMinutes = 0;
   const current = new Date(startTime);
 
   while (current < endTime) {
     const hour = current.getHours();
     if (isNightDiffHour(hour)) {
-      nightHours += 1;
+      nightMinutes += 1;
     }
-    current.setHours(current.getHours() + 1);
+    current.setTime(current.getTime() + 60000); // advance 1 minute
   }
 
-  // Handle partial hours at the end
-  const remainingMinutes = (endTime.getTime() - current.getTime() + 3600000) % 3600000;
-  if (remainingMinutes > 0 && isNightDiffHour(endTime.getHours())) {
-    nightHours += remainingMinutes / 3600000;
-  }
-
-  return Math.max(0, nightHours);
+  return nightMinutes / 60;
 }
 
 /**
@@ -327,7 +322,7 @@ export function splitCrossMidnightShift(startTime: Date, endTime: Date): { start
     segments.push({
       start: segmentStart,
       end: segmentEnd,
-      date: new Date(Date.UTC(segmentStart.getUTCFullYear(), segmentStart.getUTCMonth(), segmentStart.getUTCDate()))
+      date: new Date(segmentStart.getFullYear(), segmentStart.getMonth(), segmentStart.getDate())
     });
 
     current.setTime(nextMidnight.getTime());

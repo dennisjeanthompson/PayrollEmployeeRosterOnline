@@ -160,6 +160,7 @@ export function WeekShiftPicker({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shifts"] });
     },
+    onError: (error: Error) => console.error('Failed to delete shift:', error.message),
   });
 
   const handleApplyPreset = (dayIndex: number) => {

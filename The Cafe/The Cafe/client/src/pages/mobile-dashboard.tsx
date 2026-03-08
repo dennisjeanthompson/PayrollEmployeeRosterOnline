@@ -143,6 +143,7 @@ const AnimatedCounter = ({ value, prefix = "", suffix = "", duration = 1.5 }: {
   useEffect(() => {
     const startTime = Date.now();
     const endValue = value;
+    let rafId: number;
 
     const animate = () => {
       const now = Date.now();
@@ -151,11 +152,12 @@ const AnimatedCounter = ({ value, prefix = "", suffix = "", duration = 1.5 }: {
       setDisplayValue(Math.floor(easeOut * endValue));
 
       if (progress < 1) {
-        requestAnimationFrame(animate);
+        rafId = requestAnimationFrame(animate);
       }
     };
 
-    requestAnimationFrame(animate);
+    rafId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafId);
   }, [value, duration]);
 
   return <span>{prefix}{displayValue.toLocaleString()}{suffix}</span>;

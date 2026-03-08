@@ -111,10 +111,12 @@ export async function generatePayslipPDF(
   y = drawEmployeeInfo(page, fontRegular, fontBold, data, y);
   
   // ===== EARNINGS SECTION =====
+  const earningsStartY = y;
   y = drawEarningsSection(page, fontRegular, fontBold, data, y);
   
   // ===== DEDUCTIONS SECTION =====
-  y = drawDeductionsSection(page, fontRegular, fontBold, data, y);
+  const deductionsEndY = drawDeductionsSection(page, fontRegular, fontBold, data, earningsStartY);
+  y = Math.min(y, deductionsEndY);
   
   // ===== NET PAY SECTION =====
   y = drawNetPaySection(page, fontRegular, fontBold, data, y);
@@ -442,9 +444,6 @@ function drawDeductionsSection(
 ): number {
   const startX = MARGIN + CONTENT_WIDTH / 2 + 10;
   const sectionWidth = CONTENT_WIDTH / 2 - 10;
-  
-  // Move up to align with earnings
-  y = PAGE_HEIGHT - MARGIN - 160; // Adjust to start alongside earnings
   
   // Section header
   page.drawText('DEDUCTIONS', {

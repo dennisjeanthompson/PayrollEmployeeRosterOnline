@@ -103,6 +103,7 @@ export default function NotificationBell() {
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/notifications'] }),
+    onError: (error: Error) => console.error('Failed to mark notification read:', error.message),
   });
 
   const markAllReadMutation = useMutation({
@@ -111,6 +112,7 @@ export default function NotificationBell() {
       return res.json();
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['/api/notifications'] }),
+    onError: (error: Error) => console.error('Failed to mark all notifications read:', error.message),
   });
 
   const handleNotificationClick = (notification: Notification) => {

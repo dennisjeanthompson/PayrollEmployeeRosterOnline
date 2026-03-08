@@ -5,6 +5,7 @@
 
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import {
   Box,
   Card,
@@ -42,6 +43,11 @@ export default function MuiReports() {
 
   const { data: summaryData, isLoading } = useQuery<{ summary: { totalEmployees: number; activeEmployees: number; totalGross: string; totalDeductions: string; totalNet: string; totalHours: string } }>({
     queryKey: ["/api/reports/summary", selectedMonth],
+    queryFn: async () => {
+      const [year, month] = selectedMonth.split("-");
+      const res = await apiRequest("GET", `/api/reports/summary?month=${month}&year=${year}`);
+      return res.json();
+    },
   });
 
   const periods = periodsData?.periods || [];
