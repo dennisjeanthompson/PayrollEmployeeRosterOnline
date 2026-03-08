@@ -134,6 +134,8 @@ export interface PayslipData {
   verification_url?: string;
   notes?: string;
   generated_at?: string;
+  rates_effective_from?: string;
+  tamper_hash?: string;
   
   // New fields for role-based views
   metadata?: PayslipMetadata;

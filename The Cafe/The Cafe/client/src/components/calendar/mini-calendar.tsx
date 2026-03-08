@@ -28,17 +28,17 @@ export function MiniCalendar({ className }: MiniCalendarProps) {
   // Fetch upcoming shifts for the next 7 days
   const { data: upcomingEvents = [], isLoading } = useQuery({
     queryKey: ['upcoming-shifts', currentUser?.id],
-    refetchInterval: 5000, // Poll every 5 seconds for real-time updates
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
     queryFn: async () => {
       const startDate = new Date();
       const endDate = addDays(startDate, 7);
 
       const response = await apiRequest('GET', `/api/shifts?startDate=${startDate.toISOString()}&endDate=${endDate.toISOString()}`);
+      const data = await response.json();
 
       // Convert shifts to mini calendar events
-      const events: MiniCalendarEvent[] = (response.shifts || [])
+      const events: MiniCalendarEvent[] = (data.shifts || [])
         .filter((shift: any) => {
           // For managers, show all shifts; for employees, show only their shifts
           if (isManagerRole) return true;
@@ -56,7 +56,6 @@ export function MiniCalendar({ className }: MiniCalendarProps) {
       return events.slice(0, 5); // Show only next 5 events
     },
     enabled: !!currentUser,
-    refetchInterval: 5 * 60 * 1000, // Refetch every 5 minutes
   });
 
   // Get next 7 days for the mini calendar

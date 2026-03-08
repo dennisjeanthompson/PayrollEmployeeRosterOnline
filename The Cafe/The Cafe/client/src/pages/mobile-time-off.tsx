@@ -89,8 +89,8 @@ export default function MobileTimeOff() {
     mutationFn: async (data: { type: string; reason: string }) => {
       const response = await apiRequest('POST', '/api/time-off-requests', {
         ...data,
-        startDate: startDate.toISOString(),
-        endDate: endDate.toISOString(),
+        startDate: format(startDate, 'yyyy-MM-dd'),
+        endDate: format(endDate, 'yyyy-MM-dd'),
         userId: currentUser?.id,
       });
       return response.json();

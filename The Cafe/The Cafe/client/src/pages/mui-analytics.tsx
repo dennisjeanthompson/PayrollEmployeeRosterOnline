@@ -311,7 +311,7 @@ export default function MuiAnalytics() {
                       }
                       return [`${value} hrs`, "Predicted"];
                     }}
-                    labelFormatter={(label, payload) => {
+                    labelFormatter={(label: any, payload: any[]) => {
                       const holiday = payload?.[0]?.payload?.isHoliday;
                       return holiday ? `${label} — ${holiday}` : label;
                     }}

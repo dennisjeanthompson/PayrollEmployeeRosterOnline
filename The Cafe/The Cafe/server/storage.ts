@@ -177,6 +177,8 @@ export class MemStorage implements IStorage {
       cashAdvanceDeduction: null,
       otherDeductions: null,
       philhealthDeduction: null,
+      photoUrl: null,
+      photoPublicId: null,
     };
     this.users.set(manager.id, manager);
 
@@ -202,6 +204,8 @@ export class MemStorage implements IStorage {
       cashAdvanceDeduction: null,
       otherDeductions: null,
       philhealthDeduction: null,
+      photoUrl: null,
+      photoPublicId: null,
     };
     this.users.set(employee.id, employee);
 
@@ -286,6 +290,8 @@ export class MemStorage implements IStorage {
       cashAdvanceDeduction: null,
       otherDeductions: null,
       philhealthDeduction: null,
+      photoUrl: insertUser.photoUrl ?? null,
+      photoPublicId: insertUser.photoPublicId ?? null,
     };
     this.users.set(id, user);
     return user;
@@ -492,7 +498,8 @@ export class MemStorage implements IStorage {
       blockNumber: (insertEntry.blockNumber ?? null) as number | null,
       transactionHash: (insertEntry.transactionHash ?? null) as string | null,
       blockchainHash: (insertEntry.blockchainHash ?? null) as string | null,
-      verified: false
+      verified: false,
+      paidAt: insertEntry.paidAt ?? null,
     };
     this.payrollEntries.set(id, entry);
     return entry;

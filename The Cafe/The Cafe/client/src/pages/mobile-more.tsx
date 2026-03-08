@@ -150,7 +150,7 @@ export default function MobileMore() {
     },
   ];
 
-  const renderMenuItem = (item: typeof mainMenuItems[0], index: number) => {
+  const renderMenuItem = (item: { label: string; description: string; icon: any; path: string; color: string; bgColor: string; badge?: string | null }, index: number) => {
     const Icon = item.icon;
     return (
       <motion.div key={item.path + index} variants={itemVariants}>

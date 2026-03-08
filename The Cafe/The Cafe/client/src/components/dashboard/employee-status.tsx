@@ -5,11 +5,10 @@ import { getInitials, getStatusColor } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 
 export default function EmployeeStatus() {
-  const { data: employeeStatus, isLoading } = useQuery({
+  const { data: employeeStatus, isLoading } = useQuery<{ employeeStatus: any[] }>({
     queryKey: ["/api/dashboard/employee-status"],
-    refetchInterval: 5000, // Poll every 5 seconds for real-time status
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   const getStatusIcon = (status: string) => {
@@ -94,8 +93,8 @@ export default function EmployeeStatus() {
       </CardHeader>
       <CardContent>
         <div className="space-y-3">
-          {employeeStatus?.employeeStatus?.length > 0 ? (
-            employeeStatus.employeeStatus.slice(0, 5).map((employee: any) => (
+          {(employeeStatus?.employeeStatus?.length ?? 0) > 0 ? (
+            employeeStatus!.employeeStatus.slice(0, 5).map((employee: any) => (
               <div
                 key={employee.user.id}
                 className="group flex items-center justify-between p-4 bg-secondary/30 hover:bg-secondary/50 rounded-xl transition-all duration-200"

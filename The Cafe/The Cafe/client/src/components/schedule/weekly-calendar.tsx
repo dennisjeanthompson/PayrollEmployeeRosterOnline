@@ -11,7 +11,7 @@ export default function WeeklyCalendar() {
   const isManagerRole = isManager();
   const currentUser = getCurrentUser();
 
-  const { data: shifts } = useQuery({
+  const { data: shifts } = useQuery<{ shifts: any[] }>({
     queryKey: [
       isManagerRole ? "/api/shifts/branch" : "/api/shifts",
       {
@@ -19,9 +19,8 @@ export default function WeeklyCalendar() {
         endDate: currentWeek.end.toISOString(),
       }
     ],
-    refetchInterval: 5000, // Poll every 5 seconds for real-time schedule
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   const navigateWeek = (direction: 'prev' | 'next') => {

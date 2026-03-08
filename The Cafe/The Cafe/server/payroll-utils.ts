@@ -9,6 +9,7 @@
  */
 
 import { Holiday, Shift } from "@shared/schema";
+import type { ShiftPayBreakdown, PayrollEntryBreakdownPayload } from "@shared/payroll-types";
 
 // Philippine Holiday Types and their pay rates
 export const HOLIDAY_RATES = {

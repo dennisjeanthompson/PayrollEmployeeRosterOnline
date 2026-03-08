@@ -187,16 +187,10 @@ export function EventModal({
         title,
         type,
         status: type === 'timeoff' ? status : undefined,
-        start: eventStart.toISOString(),
-        breaks: processedBreaks.map(b => ({
-          ...b,
-          start: b.start.toISOString(),
-          end: b.end.toISOString(),
-          actualStart: b.actualStart?.toISOString(),
-          actualEnd: b.actualEnd?.toISOString()
-        })) as Break[],
+        start: eventStart,
+        breaks: processedBreaks as Break[],
         hasUnpaidBreaks: breaks.some(b => !b.paid),
-        end: eventEnd.toISOString(),
+        end: eventEnd,
         employeeId: isManager && employeeId ? employeeId : undefined,
         employeeName: isManager && employeeId
           ? employees.find(e => e.id === employeeId)?.name

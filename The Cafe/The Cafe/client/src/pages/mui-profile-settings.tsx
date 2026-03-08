@@ -120,9 +120,9 @@ export default function MuiProfileSettings() {
 
   // Normalize helper: treat null/undefined/"" as equivalent for comparison
   const norm = (v: string | null | undefined) => v || "";
-  const hasGeneralChanges = norm(email) !== norm(user.email) || 
-    norm(firstName) !== norm(user.firstName) || 
-    norm(lastName) !== norm(user.lastName);
+  const hasGeneralChanges = norm(email) !== norm(user?.email) || 
+    norm(firstName) !== norm(user?.firstName) || 
+    norm(lastName) !== norm(user?.lastName);
 
   const handleUpdateGeneral = () => {
     if (!email.trim()) {
@@ -202,8 +202,8 @@ export default function MuiProfileSettings() {
                   <ProfilePhotoUpload
                     employeeId={user.id}
                     employeeName={fullName}
-                    currentPhotoId={user.photoPublicId}
-                    currentPhotoUrl={user.photoUrl}
+                    currentPhotoId={user.photoPublicId ?? undefined}
+                    currentPhotoUrl={user.photoUrl ?? undefined}
                     size="lg"
                     onUploadComplete={() => {
                         queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });

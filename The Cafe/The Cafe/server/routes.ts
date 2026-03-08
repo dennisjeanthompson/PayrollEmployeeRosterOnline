@@ -140,7 +140,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       schemaName: 'public',
       pruneSessionInterval: 60 * 60, // Prune expired sessions hourly
     }),
-    secret: process.env.SESSION_SECRET || 'cafe-default-secret-key-2024',
+    secret: process.env.SESSION_SECRET || (() => {
+      if (process.env.NODE_ENV === 'production') {
+        throw new Error('SESSION_SECRET environment variable must be set in production');
+      }
+      return 'cafe-dev-secret-key-local-only';
+    })(),
     resave: false, // Don't save unless modified
     saveUninitialized: false, // Don't create empty sessions
     name: 'cafe-session', // Custom session cookie name
@@ -278,56 +283,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Health check endpoint for Render (must respond quickly)
   app.get("/healthz", (req: Request, res: Response) => {
     res.status(200).send('OK');
-  });
-
-  // Debug endpoint to check user password hash (REMOVE IN PRODUCTION)
-  app.get("/api/debug/user/:username", async (req: Request, res: Response) => {
-    try {
-      const { username } = req.params;
-      const user = await storage.getUserByUsername(username);
-
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      res.json({
-        username: user.username,
-        passwordHashPrefix: user.password.substring(0, 20),
-        passwordHashLength: user.password.length,
-        isBcryptHash: user.password.startsWith('$2b$') || user.password.startsWith('$2a$'),
-        createdAt: user.createdAt,
-      });
-    } catch (error) {
-      console.error('Debug error:', error);
-      res.status(500).json({ message: 'Error' });
-    }
-  });
-
-  // Debug endpoint to test password comparison (REMOVE IN PRODUCTION)
-  app.post("/api/debug/test-password", async (req: Request, res: Response) => {
-    try {
-      const { username, password } = req.body;
-      const user = await storage.getUserByUsername(username);
-
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
-      }
-
-      const isValid = await bcrypt.compare(password, user.password);
-
-      res.json({
-        username: user.username,
-        passwordProvided: password,
-        passwordProvidedLength: password.length,
-        storedHashPrefix: user.password.substring(0, 20),
-        storedHashLength: user.password.length,
-        isBcryptHash: user.password.startsWith('$2b$') || user.password.startsWith('$2a$'),
-        isPasswordValid: isValid,
-      });
-    } catch (error) {
-      console.error('Debug error:', error);
-      res.status(500).json({ message: 'Error' });
-    }
   });
 
   // Admin endpoint to fix all unhashed passwords (IMPORTANT: run once after identifying issues)
@@ -784,6 +739,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const shift = await storage.createShift(shiftData);
 
+      // Broadcast real-time shift creation
+      realTimeManager.broadcastShiftCreated(shift);
+
       // Audit log for shift creation
       await createAuditLog({
         action: 'shift_create',
@@ -873,6 +831,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Shift not found" });
       }
 
+      // Broadcast real-time shift update
+      realTimeManager.broadcastShiftUpdated(shift);
+
       // Audit log for shift update
       await createAuditLog({
         action: 'shift_update',
@@ -912,8 +873,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: "Failed to delete shift" });
       }
 
-      // TODO: Broadcast shift deletion to connected clients when websocket is available
-      // realtimeManager.broadcastShiftDeleted(id);
+      // Broadcast real-time shift deletion
+      realTimeManager.broadcastShiftDeleted(id);
 
       // Audit log for shift deletion
       await createAuditLog({
@@ -2220,7 +2181,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             lastName: requesterUser.lastName || "",
           } : null,
           targetUser: null, // Available trades have no target yet
-          fromUser: requesterUser, // Legacy compatibility
+          fromUser: requesterUser ? { id: requesterUser.id, firstName: requesterUser.firstName, lastName: requesterUser.lastName, role: requesterUser.role } : null,
         };
       })
     );
@@ -2259,8 +2220,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             lastName: targetUserData.lastName || "",
           } : null,
           // Legacy compatibility
-          fromUser: requesterUser,
-          toUser: targetUserData,
+          fromUser: requesterUser ? { id: requesterUser.id, firstName: requesterUser.firstName, lastName: requesterUser.lastName, role: requesterUser.role } : null,
+          toUser: targetUserData ? { id: targetUserData.id, firstName: targetUserData.firstName, lastName: targetUserData.lastName, role: targetUserData.role } : null,
         };
       })
     );
@@ -3177,6 +3138,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
+    // Compute totalEmployees given the branch
+    const branchUsers = await storage.getUsersByBranch(branchId);
+    const totalEmployees = branchUsers.length;
+
+    // Scheduled today = total shifts for today
+    const scheduledToday = todayShifts.length;
+
+    // Pending requests = pending time-off + pending shift trades
+    const pendingTrades = await storage.getPendingShiftTrades(branchId);
+    const allTimeOffRequests = await Promise.all(
+      branchUsers.map(u => storage.getTimeOffRequestsByUser(u.id))
+    );
+    const pendingTimeOffCount = allTimeOffRequests.flat().filter(r => r.status === 'pending').length;
+    const pendingRequests = pendingTimeOffCount + (pendingTrades?.length || 0);
+
     console.log('Sending dashboard stats:', {
       clockedIn,
       onBreak,
@@ -3187,6 +3163,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     res.json({
       stats: {
+        totalEmployees,
+        scheduledToday,
+        pendingRequests,
         clockedIn,
         onBreak,
         late,

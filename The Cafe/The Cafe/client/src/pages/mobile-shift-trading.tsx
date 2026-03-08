@@ -125,8 +125,8 @@ export default function MobileShiftTrading() {
     },
   });
 
-  const availableTrades: ShiftTrade[] = (availableData?.trades || []).filter(t => t?.shift?.startTime && t?.shift?.endTime);
-  const myTrades: ShiftTrade[] = (myTradesData?.trades || []).filter(t => t?.shift?.startTime && t?.shift?.endTime);
+  const availableTrades: ShiftTrade[] = (availableData?.trades || []).filter((t: any) => t?.shift?.startTime && t?.shift?.endTime);
+  const myTrades: ShiftTrade[] = (myTradesData?.trades || []).filter((t: any) => t?.shift?.startTime && t?.shift?.endTime);
 
   const getStatusConfig = (status: string) => {
     const configs: Record<string, { variant: any; icon: any; color: string }> = {

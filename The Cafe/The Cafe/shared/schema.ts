@@ -382,6 +382,11 @@ export const insertAdjustmentLogSchema = createInsertSchema(adjustmentLogs).omit
 
 export interface DashboardStats {
   stats: {
+    totalEmployees: number;
+    scheduledToday: number;
+    pendingRequests: number;
+    clockedIn: number;
+    onBreak: number;
     late: number;
     revenue: number;
   };

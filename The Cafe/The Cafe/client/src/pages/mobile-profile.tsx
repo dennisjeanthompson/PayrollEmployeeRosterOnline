@@ -94,7 +94,7 @@ export default function MobileProfile() {
                         </div>
                          <div className="flex-1 min-w-0">
                             <p className="text-sm text-muted-foreground">Phone</p>
-                            <p className="text-base font-medium">{currentUser?.phone || "No phone set"}</p>
+                            <p className="text-base font-medium">{(currentUser as any)?.phone || "No phone set"}</p>
                         </div>
                     </div>
                 </CardContent>
