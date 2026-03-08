@@ -1,5 +1,5 @@
 import { db } from './db';
-import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, auditLogs, timeOffPolicy, adjustmentLogs } from '@shared/schema';
+import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, auditLogs, timeOffPolicy, adjustmentLogs, employeeDocuments } from '@shared/schema';
 import type { IStorage } from './storage';
 import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftTrade, InsertShiftTrade, PayrollPeriod, InsertPayrollPeriod, PayrollEntry, InsertPayrollEntry, Approval, InsertApproval, TimeOffRequest, InsertTimeOffRequest, Notification, InsertNotification, DeductionSettings, InsertDeductionSettings, DeductionRate, InsertDeductionRate, Holiday, InsertHoliday, ArchivedPayrollPeriod, InsertArchivedPayrollPeriod, TimeOffPolicy, InsertTimeOffPolicy, AuditLog, InsertAuditLog, AdjustmentLog, InsertAdjustmentLog } from '@shared/schema';
 import { eq, and, gte, lte, gt, lt, ne, desc, or, sql, isNull } from 'drizzle-orm';
@@ -108,6 +108,21 @@ export class DatabaseStorage implements IStorage {
         throw new Error("Cannot delete employee with existing payroll records. Deactivate them instead.");
       }
 
+      // Clean up remaining FK references before deleting user
+      await db.delete(notifications).where(eq(notifications.userId, id));
+      await db.delete(approvals).where(
+        or(eq(approvals.requestedBy, id), eq(approvals.approvedBy, id))
+      );
+      await db.delete(employeeDocuments).where(
+        or(eq(employeeDocuments.userId, id), eq(employeeDocuments.uploadedBy, id))
+      );
+      await db.delete(timeOffRequests).where(
+        or(eq(timeOffRequests.userId, id), eq(timeOffRequests.approvedBy, id))
+      );
+      await db.delete(adjustmentLogs).where(
+        or(eq(adjustmentLogs.employeeId, id), eq(adjustmentLogs.loggedBy, id), eq(adjustmentLogs.approvedBy, id))
+      );
+
       await db.delete(users).where(eq(users.id, id));
       return true;
     } catch (error: any) {
@@ -188,6 +203,23 @@ export class DatabaseStorage implements IStorage {
         )
       );
 
+      // Delete adjustment logs
+      await tx.delete(adjustmentLogs).where(
+        or(
+          eq(adjustmentLogs.employeeId, id),
+          eq(adjustmentLogs.loggedBy, id),
+          eq(adjustmentLogs.approvedBy, id)
+        )
+      );
+
+      // Delete employee documents
+      await tx.delete(employeeDocuments).where(
+        or(
+          eq(employeeDocuments.userId, id),
+          eq(employeeDocuments.uploadedBy, id)
+        )
+      );
+
       // Delete notifications
       await tx.delete(notifications).where(eq(notifications.userId, id));
 
@@ -234,13 +266,18 @@ export class DatabaseStorage implements IStorage {
    * Check if an employee has any related data (shifts, payroll, etc.)
    */
   async employeeHasRelatedData(id: string): Promise<{ hasShifts: boolean; hasPayroll: boolean; hasTotal: number }> {
-    const shifts = await this.getShiftsByUser(id);
+    const userShifts = await this.getShiftsByUser(id);
     const payroll = await this.getPayrollEntriesByUser(id);
+    const timeOff = await this.getTimeOffRequestsByUser(id);
+    const trades = await this.getShiftTradesByUser(id);
+    const adjLogs = await db.select().from(adjustmentLogs).where(eq(adjustmentLogs.employeeId, id));
+    const docs = await db.select().from(employeeDocuments).where(eq(employeeDocuments.userId, id));
     
+    const total = userShifts.length + payroll.length + timeOff.length + trades.length + adjLogs.length + docs.length;
     return {
-      hasShifts: shifts.length > 0,
+      hasShifts: userShifts.length > 0,
       hasPayroll: payroll.length > 0,
-      hasTotal: shifts.length + payroll.length,
+      hasTotal: total,
     };
   }
 

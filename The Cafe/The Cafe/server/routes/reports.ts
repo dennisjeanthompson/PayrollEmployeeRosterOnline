@@ -29,8 +29,12 @@ const requireManagerRole = (req: Request, res: Response, next: Function) => {
 // Helper to escape CSV values
 const escapeCSV = (value: any): string => {
   if (value === null || value === undefined) return "";
-  const str = String(value);
-  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
+  let str = String(value);
+  // Neutralize formula injection for Excel/Sheets
+  if (/^[=+\-@\t\r]/.test(str)) {
+    str = "'" + str;
+  }
+  if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("'")) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
@@ -239,6 +243,10 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
     const employees = await storage.getUsersByBranch(branchId);
     const activeEmployees = employees.filter(e => e.isActive);
 
+    // Pre-fetch all periods for the branch to filter by period dates (not createdAt)
+    const allPeriods = await storage.getPayrollPeriodsByBranch(branchId);
+    const periodMap = new Map(allPeriods.map(p => [p.id, p]));
+
     let totalGross = 0;
     let totalDeductions = 0;
     let totalNet = 0;
@@ -247,9 +255,10 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
     for (const employee of activeEmployees) {
       const entries = await storage.getPayrollEntriesByUser(employee.id);
       for (const entry of entries) {
-        if (entry.createdAt) {
-          const entryDate = new Date(entry.createdAt);
-          if (entryDate >= startDate && entryDate <= endDate) {
+        const period = periodMap.get(entry.payrollPeriodId);
+        if (period) {
+          const periodEnd = new Date(period.endDate);
+          if (periodEnd >= startDate && periodEnd <= endDate) {
             totalGross += parseFloat(entry.grossPay || "0");
             totalDeductions += parseFloat(entry.totalDeductions || "0");
             totalNet += parseFloat(entry.netPay || "0");

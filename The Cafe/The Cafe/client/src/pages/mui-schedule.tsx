@@ -79,7 +79,7 @@ import { Badge } from '@mui/material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { getCurrentUser, isManager as checkIsManager } from '@/lib/auth';
-import { format, addDays, startOfWeek, endOfWeek, parseISO, differenceInMilliseconds, differenceInHours, areIntervalsOverlapping, setHours, setMinutes } from 'date-fns';
+import { format, addDays, startOfWeek, endOfWeek, parseISO, differenceInMilliseconds, areIntervalsOverlapping, setHours, setMinutes } from 'date-fns';
 
 // React-Toastify for modern notifications
 import { toast } from 'react-toastify';
@@ -611,7 +611,7 @@ const EnhancedScheduler = () => {
     const summary: Record<string, number> = {};
     shifts.forEach(shift => {
       const day = format(new Date(shift.startTime), 'yyyy-MM-dd');
-      const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+      const hours = (new Date(shift.endTime).getTime() - new Date(shift.startTime).getTime()) / 3600000;
       summary[day] = (summary[day] || 0) + hours;
     });
     return summary;
@@ -1001,7 +1001,7 @@ const EnhancedScheduler = () => {
     let totalHours = 0;
 
     weekShifts.forEach(shift => {
-      const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+      const hours = (new Date(shift.endTime).getTime() - new Date(shift.startTime).getTime()) / 3600000;
       totalHours += hours;
 
       const empId = shift.userId;
@@ -2871,7 +2871,7 @@ const EnhancedScheduler = () => {
                   if (d.getDay() === 0) return false; // Exclude Sunday (rest day)
                   return d >= weekStart && d <= weekEnd;
                 })
-                .reduce((sum, s) => sum + differenceInHours(new Date(s.endTime), new Date(s.startTime)), 0);
+                .reduce((sum, s) => sum + (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000, 0);
               
               return (
                 <Tooltip 

@@ -128,6 +128,14 @@ export default function MobileTimeOff() {
       });
       return;
     }
+    if (new Date(endDate) < new Date(startDate)) {
+      toast({
+        title: "Invalid Dates",
+        description: "End date must be on or after start date",
+        variant: "destructive",
+      });
+      return;
+    }
     submitMutation.mutate(formData);
   };
 
