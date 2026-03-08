@@ -279,6 +279,12 @@ router.post('/api/employees', requireAuth, requireRole(['manager']), async (req,
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
+    // Validate hourlyRate is a valid non-negative number
+    const parsedRate = parseFloat(String(hourlyRate));
+    if (isNaN(parsedRate) || parsedRate < 0) {
+      return res.status(400).json({ message: 'hourlyRate must be a non-negative number' });
+    }
+
     // Restrict role — only admins can create admin accounts
     const allowedRoles = req.session.user?.role === 'admin' ? ['employee', 'manager', 'admin'] : ['employee', 'manager'];
     if (!allowedRoles.includes(role)) {
@@ -359,7 +365,7 @@ router.post('/api/employees', requireAuth, requireRole(['manager']), async (req,
 router.put('/api/employees/:id', requireAuth, requireRole(['manager']), async (req, res) => {
   try {
     const { id } = req.params;
-    const updates = req.body;
+    const body = req.body;
 
     // Get the existing employee
     const existingEmployee = await storage.getUser(id);
@@ -373,6 +379,15 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager']), async (r
       return res.status(403).json({ message: 'Unauthorized to update this employee' });
     }
 
+    // Whitelist allowed fields to prevent mass assignment
+    const updates: Record<string, any> = {};
+    const allowedFields = ['firstName', 'lastName', 'email', 'position', 'hourlyRate', 'role', 'isActive'];
+    for (const field of allowedFields) {
+      if (body[field] !== undefined) {
+        updates[field] = body[field];
+      }
+    }
+
     // Restrict role changes — only admins can set role to 'admin'
     if (updates.role) {
       const allowedRoles = req.session.user?.role === 'admin' ? ['employee', 'manager', 'admin'] : ['employee', 'manager'];
@@ -382,8 +397,12 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager']), async (r
     }
 
     // Convert hourlyRate to string if it exists (database stores as text)
-    if (updates.hourlyRate) {
-      updates.hourlyRate = String(updates.hourlyRate);
+    if (updates.hourlyRate !== undefined) {
+      const rate = parseFloat(String(updates.hourlyRate));
+      if (isNaN(rate) || rate < 0) {
+        return res.status(400).json({ message: 'hourlyRate must be a non-negative number' });
+      }
+      updates.hourlyRate = String(rate);
     }
 
     // Note: Don't hash password here - updateUser will handle it

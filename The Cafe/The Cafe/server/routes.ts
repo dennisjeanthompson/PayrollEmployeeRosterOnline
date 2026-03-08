@@ -719,6 +719,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log('Creating shift with data:', req.body);
       const shiftData = insertShiftSchema.parse(req.body);
 
+      // Enforce branch ownership — manager can only create shifts in their own branch
+      if (shiftData.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Cannot create shifts for another branch" });
+      }
+      // Verify the target employee belongs to the manager's branch
+      const targetUser = await storage.getUser(shiftData.userId);
+      if (!targetUser || targetUser.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Employee does not belong to your branch" });
+      }
+
       // Block Sunday shifts (Rest Day per Philippine Labor Law)
       // Check in both UTC and local Philippine time (UTC+8)
       const shiftDate = new Date(shiftData.startTime);
@@ -798,6 +808,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!existingShift) {
         console.log('❌ [PUT /api/shifts/:id] Shift not found:', id);
         return res.status(404).json({ message: "Shift not found" });
+      }
+
+      // Verify the shift belongs to the manager's branch
+      if (existingShift.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Cannot update shift from another branch" });
       }
       console.log('📍 [PUT /api/shifts/:id] Found existing shift:', existingShift);
 
@@ -1348,7 +1363,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const approvedBy = req.user!.id;
-      
+
+      // Verify the adjustment log belongs to the manager's branch
+      const log = await storage.getAdjustmentLog(id);
+      if (!log) return res.status(404).json({ message: "Adjustment log not found" });
+      if (log.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+
       const updated = await storage.updateAdjustmentLog(id, {
         status: 'approved',
         approvedBy,
@@ -1366,7 +1388,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/adjustment-logs/:id/reject", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
-      
+
+      // Verify the adjustment log belongs to the manager's branch
+      const log = await storage.getAdjustmentLog(id);
+      if (!log) return res.status(404).json({ message: "Adjustment log not found" });
+      if (log.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+
       const updated = await storage.updateAdjustmentLog(id, {
         status: 'rejected',
       });
@@ -1505,6 +1534,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (period.status !== 'open') {
         return res.status(400).json({ message: "Payroll period is not open" });
+      }
+
+      // Verify the period belongs to the manager's branch
+      if (period.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Cannot process payroll for another branch" });
       }
 
       // Clear any existing entries for this period (e.g., from seed data or re-processing)
@@ -1882,12 +1916,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/payroll/entries/:id/approve", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
-      
-      const entry = await storage.updatePayrollEntry(id, { status: 'approved' });
-      
-      if (!entry) {
+
+      // Fetch the entry first to verify branch ownership
+      const existing = await storage.getPayrollEntry(id);
+      if (!existing) {
         return res.status(404).json({ message: "Payroll entry not found" });
       }
+      const employee = await storage.getUser(existing.userId);
+      if (!employee || employee.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+
+      const entry = await storage.updatePayrollEntry(id, { status: 'approved' });
 
       res.json({ entry });
 
@@ -1915,7 +1955,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/payroll/entries/:id/paid", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
-      
+
+      // Fetch the entry first to verify branch ownership
+      const existing = await storage.getPayrollEntry(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Payroll entry not found" });
+      }
+      const employee = await storage.getUser(existing.userId);
+      if (!employee || employee.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+
       const entry = await storage.updatePayrollEntry(id, { status: 'paid', paidAt: new Date() });
       
       if (!entry) {
@@ -2122,6 +2172,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
+
+      // Verify the period belongs to the user's branch
+      const period = await storage.getPayrollPeriod(id);
+      if (!period) {
+        return res.status(404).json({ message: "Payroll period not found" });
+      }
+      if (period.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Cannot archive payroll for another branch" });
+      }
 
       // Get all entries for this period
       const entries = await storage.getPayrollEntriesByPeriod(id);
@@ -3272,10 +3331,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard stats routes
   app.get("/api/dashboard/stats", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // Use Philippine time (UTC+8) for "today" boundaries
+    const now = new Date();
+    const phtOffset = 8 * 60 * 60 * 1000;
+    const phtNow = new Date(now.getTime() + phtOffset);
+    const todayUTC = new Date(Date.UTC(phtNow.getUTCFullYear(), phtNow.getUTCMonth(), phtNow.getUTCDate()));
+    const today = new Date(todayUTC.getTime() - phtOffset); // back to UTC for DB query
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
 
     // Get today's shifts for the branch
     const todayShifts = await storage.getShiftsByBranch(branchId, today, tomorrow);
@@ -3348,10 +3410,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard employee status route
   app.get("/api/dashboard/employee-status", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // Use Philippine time (UTC+8) for "today" boundaries
+    const now = new Date();
+    const phtOffset = 8 * 60 * 60 * 1000;
+    const phtNow = new Date(now.getTime() + phtOffset);
+    const todayUTC = new Date(Date.UTC(phtNow.getUTCFullYear(), phtNow.getUTCMonth(), phtNow.getUTCDate()));
+    const today = new Date(todayUTC.getTime() - phtOffset);
+    const tomorrow = new Date(today.getTime() + 24 * 60 * 60 * 1000);
 
     // Get all active employees in the branch
     const allEmployees = await storage.getUsersByBranch(branchId);
@@ -3524,8 +3589,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Only count requests in current year
         if (startDate >= yearStart && startDate <= yearEnd) {
-          // Calculate days (inclusive)
-          const days = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+          // Calculate days (inclusive) — normalize to date-only to avoid time-component over-counting
+          const startDay = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate());
+          const endDay = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate());
+          const days = Math.round((endDay.getTime() - startDay.getTime()) / (1000 * 60 * 60 * 24)) + 1;
 
           if (request.type === 'vacation') {
             vacationUsed += days;

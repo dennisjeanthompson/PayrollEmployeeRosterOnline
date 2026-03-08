@@ -12,6 +12,7 @@
 
 import { PDFDocument, StandardFonts, rgb, PDFFont, PDFPage } from 'pdf-lib';
 import QRCode from 'qrcode';
+import crypto from 'crypto';
 import {
   PayslipData,
   formatPHPforPDF,
@@ -828,14 +829,9 @@ function drawLabelValue(
  * Generate verification hash for payslip
  */
 export function generatePayslipHash(payslipId: string, employeeId: string, timestamp: number): string {
+  const secret = process.env.PAYSLIP_HMAC_SECRET || process.env.SESSION_SECRET || 'the-cafe-payslip-verification';
   const data = `${payslipId}-${employeeId}-${timestamp}`;
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    const char = data.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(36).padStart(8, '0').substring(0, 8);
+  return crypto.createHmac('sha256', secret).update(data).digest('hex').substring(0, 16);
 }
 
 /**
