@@ -74,7 +74,6 @@ class RealTimeManager {
 
       // Join user's personal room
       socket.join(`user:${userId}`);
-      socket.join(`shifts`); // Subscribe to all shifts for real-time updates
 
       // Fetch user details to join role/branch rooms
       try {
@@ -82,12 +81,11 @@ class RealTimeManager {
         if (user) {
           console.log(`Joining user ${userId} to branch room: branch:${user.branchId}`);
           socket.join(`branch:${user.branchId}`);
+          socket.join(`branch:${user.branchId}:shifts`);
           
           if (user.role === 'manager' || user.role === 'admin') {
-            socket.join('managers');
             socket.join(`branch:${user.branchId}:managers`);
           } else {
-            socket.join('employees');
             socket.join(`branch:${user.branchId}:employees`);
           }
         }
@@ -124,15 +122,18 @@ class RealTimeManager {
 
   // Public methods for broadcasting events
   public broadcastShiftCreated(shift: any) {
-    this.io.to("shifts").emit("shift:created", { shift });
+    const room = shift.branchId ? `branch:${shift.branchId}:shifts` : `branch:unknown:shifts`;
+    this.io.to(room).emit("shift:created", { shift });
   }
 
   public broadcastShiftUpdated(shift: any) {
-    this.io.to("shifts").emit("shift:updated", { shift });
+    const room = shift.branchId ? `branch:${shift.branchId}:shifts` : `branch:unknown:shifts`;
+    this.io.to(room).emit("shift:updated", { shift });
   }
 
-  public broadcastShiftDeleted(shiftId: string) {
-    this.io.to("shifts").emit("shift:deleted", { shiftId });
+  public broadcastShiftDeleted(shiftId: string, branchId?: string) {
+    const room = branchId ? `branch:${branchId}:shifts` : `branch:unknown:shifts`;
+    this.io.to(room).emit("shift:deleted", { shiftId });
   }
 
   // ENHANCED SHIFT TRADE EVENTS
@@ -152,10 +153,14 @@ class RealTimeManager {
     }
     
     // Notify all managers in the branch
-    this.io.to("managers").emit("trade:created", payload);
+    if (shift?.branchId) {
+      this.io.to(`branch:${shift.branchId}:managers`).emit("trade:created", payload);
+    }
     
-    // Broadcast to shifts room for schedule updates
-    this.io.to("shifts").emit("trade:created", payload);
+    // Broadcast to branch shifts room for schedule updates
+    if (shift?.branchId) {
+      this.io.to(`branch:${shift.branchId}:shifts`).emit("trade:created", payload);
+    }
   }
 
   public broadcastTradeAccepted(tradeId: string, trade: any, shift?: any) {
@@ -174,13 +179,17 @@ class RealTimeManager {
     }
     
     // Notify managers for approval
-    this.io.to("managers").emit("trade:status-changed", payload);
+    if (shift?.branchId) {
+      this.io.to(`branch:${shift.branchId}:managers`).emit("trade:status-changed", payload);
+    }
     
     // Update shifts view
-    this.io.to("shifts").emit("trade:status-changed", payload);
+    if (shift?.branchId) {
+      this.io.to(`branch:${shift.branchId}:shifts`).emit("trade:status-changed", payload);
+    }
   }
 
-  public broadcastTradeRejected(tradeId: string, trade: any, reason?: string) {
+  public broadcastTradeRejected(tradeId: string, trade: any, reason?: string, branchId?: string) {
     const payload = { tradeId, trade, status: "rejected", reason };
     
     // Notify all relevant parties
@@ -194,8 +203,10 @@ class RealTimeManager {
       this.io.to(`user:${trade.toUserId}`).emit("trade:status-changed", payload);
     }
     
-    this.io.to("managers").emit("trade:status-changed", payload);
-    this.io.to("shifts").emit("trade:status-changed", payload);
+    if (branchId) {
+      this.io.to(`branch:${branchId}:managers`).emit("trade:status-changed", payload);
+      this.io.to(`branch:${branchId}:shifts`).emit("trade:status-changed", payload);
+    }
   }
 
   public broadcastTradeApproved(tradeId: string, trade: any, updatedShift: any) {
@@ -219,14 +230,13 @@ class RealTimeManager {
       this.io.to(`user:${trade.toUserId}`).emit("trade:approved", payload);
     }
     
-    // Notify managers
-    this.io.to("managers").emit("trade:approved", payload);
+    this.io.to(`branch:${updatedShift.branchId}:managers`).emit("trade:approved", payload);
     
     // CRITICAL: Broadcast shift update to all for schedule refresh
     this.broadcastShiftUpdated(updatedShift);
   }
 
-  public broadcastTradeStatusChanged(tradeId: string, status: string, trade: any) {
+  public broadcastTradeStatusChanged(tradeId: string, status: string, trade: any, branchId?: string) {
     // Notify relevant parties
     if (trade.fromUserId) {
       this.io.to(`user:${trade.fromUserId}:trades`).emit("trade:status-changed", { tradeId, status, trade });
@@ -237,9 +247,11 @@ class RealTimeManager {
       this.io.to(`user:${trade.toUserId}`).emit("trade:status-changed", { tradeId, status, trade });
     }
     
-    // Notify managers and update shifts
-    this.io.to("managers").emit("trade:status-changed", { tradeId, status, trade });
-    this.io.to("shifts").emit("trade:status-changed", { tradeId, status, trade });
+    // Notify branch managers and update shifts
+    if (branchId) {
+      this.io.to(`branch:${branchId}:managers`).emit("trade:status-changed", { tradeId, status, trade });
+      this.io.to(`branch:${branchId}:shifts`).emit("trade:status-changed", { tradeId, status, trade });
+    }
   }
 
   public broadcastShiftOwnershipChanged(shiftId: string, fromUserId: string, toUserId: string, shift: any) {
@@ -249,57 +261,82 @@ class RealTimeManager {
     this.io.to(`user:${fromUserId}`).emit("shift:ownership-changed", payload);
     this.io.to(`user:${toUserId}`).emit("shift:ownership-changed", payload);
     
-    // Update all shifts views
-    this.io.to("shifts").emit("shift:ownership-changed", payload);
+    // Update branch shifts views
+    if (shift.branchId) {
+      this.io.to(`branch:${shift.branchId}:shifts`).emit("shift:ownership-changed", payload);
+    }
     this.broadcastShiftUpdated(shift);
   }
 
-  public notifyAvailabilityUpdate(employeeId: string, availability: any) {
-    this.io.to("shifts").emit("availability:updated", { employeeId, availability });
+  public notifyAvailabilityUpdate(employeeId: string, availability: any, branchId?: string) {
+    if (branchId) {
+      this.io.to(`branch:${branchId}:shifts`).emit("availability:updated", { employeeId, availability });
+    }
   }
 
   public broadcastEmployeeCreated(employee: any) {
-    this.io.emit("employee:created", { employee });
+    const room = employee.branchId ? `branch:${employee.branchId}` : undefined;
+    if (room) {
+      this.io.to(room).emit("employee:created", { employee });
+    }
   }
 
   public broadcastEmployeeUpdated(employee: any) {
-    this.io.emit("employee:updated", { employee });
+    const room = employee.branchId ? `branch:${employee.branchId}` : undefined;
+    if (room) {
+      this.io.to(room).emit("employee:updated", { employee });
+    }
   }
 
-  public broadcastEmployeeDeleted(employeeId: string) {
-    this.io.emit("employee:deleted", { employeeId });
+  public broadcastEmployeeDeleted(employeeId: string, branchId?: string) {
+    if (branchId) {
+      this.io.to(`branch:${branchId}`).emit("employee:deleted", { employeeId });
+    }
   }
 
   // PAYROLL EVENTS
   public broadcastPayrollPeriodCreated(period: any) {
-    this.io.emit("payroll:period-created", { period });
+    const room = period.branchId ? `branch:${period.branchId}` : undefined;
+    if (room) {
+      this.io.to(room).emit("payroll:period-created", { period });
+    }
   }
 
   public broadcastPayrollPeriodUpdated(period: any) {
-    this.io.emit("payroll:period-updated", { period });
+    const room = period.branchId ? `branch:${period.branchId}` : undefined;
+    if (room) {
+      this.io.to(room).emit("payroll:period-updated", { period });
+    }
   }
 
-  public broadcastPayrollProcessed(periodId: string, stats: any) {
-    this.io.emit("payroll:processed", { periodId, stats });
+  public broadcastPayrollProcessed(periodId: string, stats: any, branchId?: string) {
+    if (branchId) {
+      this.io.to(`branch:${branchId}`).emit("payroll:processed", { periodId, stats });
+    }
   }
 
   public broadcastPayrollEntryUpdated(entryId: string, status: string, entry?: any) {
     if (entry && entry.userId) {
       this.io.to(`user:${entry.userId}`).emit("payroll:entry-updated", { entryId, status, entry });
     }
-    // Also emit to everyone (managers need to see it updated too)
-    this.io.emit("payroll:entry-updated", { entryId, status, entry });
+    // Also emit to the branch (managers need to see it updated too)
+    if (entry?.branchId) {
+      this.io.to(`branch:${entry.branchId}:managers`).emit("payroll:entry-updated", { entryId, status, entry });
+    }
   }
 
-  public broadcastPayrollSent(entryId: string, userId: string, netPay: string | number) {
+  public broadcastPayrollSent(entryId: string, userId: string, netPay: string | number, branchId?: string) {
     this.io.to(`user:${userId}`).emit("payroll:sent", { entryId, netPay });
-    this.io.emit("payroll:sent", { entryId, netPay });
+    if (branchId) {
+      this.io.to(`branch:${branchId}:managers`).emit("payroll:sent", { entryId, netPay });
+    }
   }
 
   // AUDIT LOG EVENTS
-  public broadcastAuditLogCreated(auditLog: any) {
-    // Broadcast to all managers and admins
-    this.io.to("managers").emit("audit:created", { auditLog });
+  public broadcastAuditLogCreated(auditLog: any, branchId?: string) {
+    if (branchId) {
+      this.io.to(`branch:${branchId}:managers`).emit("audit:created", { auditLog });
+    }
   }
 
   // NOTIFICATION EVENTS
@@ -319,32 +356,33 @@ class RealTimeManager {
 
   // TIME-OFF EVENTS
   public broadcastTimeOffCreated(request: any, branchId?: string) {
-    // Notify managers and the requester
-    this.io.to("managers").emit("time-off:created", { request });
     if (request.userId) {
       this.io.to(`user:${request.userId}`).emit("time-off:created", { request });
     }
     if (branchId) {
-      this.io.to(`branch:${branchId}`).emit("time-off:created", { request });
+      this.io.to(`branch:${branchId}:managers`).emit("time-off:created", { request });
+      this.io.to(`branch:${branchId}:shifts`).emit("time-off:created", { request });
     }
-    // Also broadcast to shifts room so schedule views refresh
-    this.io.to("shifts").emit("time-off:created", { request });
   }
 
-  public broadcastTimeOffApproved(request: any) {
+  public broadcastTimeOffApproved(request: any, branchId?: string) {
     if (request.userId) {
       this.io.to(`user:${request.userId}`).emit("time-off:approved", { request });
     }
-    this.io.to("managers").emit("time-off:approved", { request });
-    this.io.to("shifts").emit("time-off:approved", { request });
+    if (branchId) {
+      this.io.to(`branch:${branchId}:managers`).emit("time-off:approved", { request });
+      this.io.to(`branch:${branchId}:shifts`).emit("time-off:approved", { request });
+    }
   }
 
-  public broadcastTimeOffRejected(request: any) {
+  public broadcastTimeOffRejected(request: any, branchId?: string) {
     if (request.userId) {
       this.io.to(`user:${request.userId}`).emit("time-off:rejected", { request });
     }
-    this.io.to("managers").emit("time-off:rejected", { request });
-    this.io.to("shifts").emit("time-off:rejected", { request });
+    if (branchId) {
+      this.io.to(`branch:${branchId}:managers`).emit("time-off:rejected", { request });
+      this.io.to(`branch:${branchId}:shifts`).emit("time-off:rejected", { request });
+    }
   }
 
   public isUserOnline(userId: string): boolean {

@@ -887,7 +887,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Broadcast real-time shift deletion
-      realTimeManager.broadcastShiftDeleted(id);
+      realTimeManager.broadcastShiftDeleted(id, shift.branchId);
 
       // Audit log for shift deletion
       await createAuditLog({
@@ -1760,7 +1760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         entriesCreated: payrollEntries.length,
         totalHours,
         totalPay
-      });
+      }, req.user!.branchId);
     } catch (error: any) {
       console.error('Process payroll error:', error);
 
@@ -2038,7 +2038,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: "Payslip sent to employee successfully"
       });
 
-      realTimeManager.broadcastPayrollSent(entry.id, entry.userId, entry.netPay);
+      realTimeManager.broadcastPayrollSent(entry.id, entry.userId, entry.netPay, req.user!.branchId);
     } catch (error: any) {
       console.error('Send payslip error:', error);
       res.status(500).json({
@@ -2442,9 +2442,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (status === "accepted") {
         realTimeManager.broadcastTradeAccepted(id, enrichedTrade, shift);
       } else if (status === "rejected") {
-        realTimeManager.broadcastTradeRejected(id, enrichedTrade);
+        realTimeManager.broadcastTradeRejected(id, enrichedTrade, undefined, req.user!.branchId);
       } else {
-        realTimeManager.broadcastTradeStatusChanged(id, status, enrichedTrade);
+        realTimeManager.broadcastTradeStatusChanged(id, status, enrichedTrade, req.user!.branchId);
       }
       
       res.json({ trade: enrichedTrade });
@@ -2675,7 +2675,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // 3. Broadcast status change to update UI lists
-      realTimeManager.broadcastTradeStatusChanged(id, "pending", enrichedTrade);
+      realTimeManager.broadcastTradeStatusChanged(id, "pending", enrichedTrade, req.user!.branchId);
 
       res.json({ trade: enrichedTrade });
     } catch (error: any) {
@@ -3669,7 +3669,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })
     } as any);
     realTimeManager.broadcastNotification(notification);
-    realTimeManager.broadcastTimeOffApproved(request);
+    realTimeManager.broadcastTimeOffApproved(request, req.user!.branchId);
 
     // Audit log for time-off approval
     await createAuditLog({
@@ -3727,7 +3727,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })
     } as any);
     realTimeManager.broadcastNotification(notification);
-    realTimeManager.broadcastTimeOffRejected(request);
+    realTimeManager.broadcastTimeOffRejected(request, req.user!.branchId);
 
     // Audit log for time-off rejection
     await createAuditLog({

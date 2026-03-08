@@ -105,7 +105,7 @@ router.post("/api/audit-logs", requireAuth, async (req, res) => {
         const user = await storage.getUser(req.user!.id);
         if (user) userName = `${user.firstName} ${user.lastName}`;
       } catch (e) { /* ignore */ }
-      _realTimeManager.broadcastAuditLogCreated({ ...log, userName });
+      _realTimeManager.broadcastAuditLogCreated({ ...log, userName }, req.user!.branchId);
     }
 
     res.status(201).json({ log });
@@ -188,6 +188,7 @@ export async function createAuditLog(params: {
   reason?: string;
   ipAddress?: string;
   userAgent?: string;
+  branchId?: string;
 }) {
   try {
     const log = await storage.createAuditLog({
@@ -206,11 +207,15 @@ export async function createAuditLog(params: {
     // Broadcast real-time update
     if (_realTimeManager) {
       let userName = "Unknown";
+      let branchId = params.branchId;
       try {
         const user = await storage.getUser(params.userId);
-        if (user) userName = `${user.firstName} ${user.lastName}`;
+        if (user) {
+          userName = `${user.firstName} ${user.lastName}`;
+          if (!branchId) branchId = user.branchId;
+        }
       } catch (e) { /* ignore */ }
-      _realTimeManager.broadcastAuditLogCreated({ ...log, userName });
+      _realTimeManager.broadcastAuditLogCreated({ ...log, userName }, branchId);
     }
 
     return log;

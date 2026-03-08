@@ -661,9 +661,7 @@ router.delete('/api/employees/:id', requireAuth, requireRole(['manager']), async
       
       console.log(`🗑️ FORCE deleted employee: ${existingEmployee.firstName} ${existingEmployee.lastName} (${id}) by ${req.session.user.username}`);
       
-      realTimeManager.broadcastEmployeeDeleted(id);
-
-      // Audit log for force delete
+      realTimeManager.broadcastEmployeeDeleted(id, existingEmployee.branchId);
       await createAuditLog({
         action: 'employee_delete',
         entityType: 'employee',
@@ -707,9 +705,7 @@ router.delete('/api/employees/:id', requireAuth, requireRole(['manager']), async
 
     console.log(`🗑️ Employee deleted: ${existingEmployee.firstName} ${existingEmployee.lastName} (${existingEmployee.id})`);
 
-    realTimeManager.broadcastEmployeeDeleted(id);
-
-    // Audit log for delete
+    realTimeManager.broadcastEmployeeDeleted(id, existingEmployee.branchId);
     await createAuditLog({
       action: 'employee_delete',
       entityType: 'employee',

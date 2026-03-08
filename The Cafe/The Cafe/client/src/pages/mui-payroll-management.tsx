@@ -265,6 +265,9 @@ export default function MuiPayrollManagement() {
       toast({ title: "✓ Entry Approved" });
       queryClient.invalidateQueries({ queryKey: ["payroll-entries-branch"] });
     },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
   });
 
   const markPaidMutation = useMutation({
@@ -276,6 +279,9 @@ export default function MuiPayrollManagement() {
       toast({ title: "✓ Marked as Paid" });
       queryClient.invalidateQueries({ queryKey: ["payroll-entries-branch"] });
     },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
   });
 
   const sendPayslipMutation = useMutation({
@@ -286,6 +292,9 @@ export default function MuiPayrollManagement() {
     onSuccess: () => {
       toast({ title: "✓ Payslip Sent" });
       queryClient.invalidateQueries({ queryKey: ["payroll-entries-branch"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -349,6 +358,9 @@ export default function MuiPayrollManagement() {
       toast({ title: "✓ Adjustment Approved" });
       queryClient.invalidateQueries({ queryKey: ["adjustment-logs-branch"] });
     },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
   });
 
   const rejectAdjustmentMutation = useMutation({
@@ -359,6 +371,9 @@ export default function MuiPayrollManagement() {
     onSuccess: () => {
       toast({ title: "Adjustment Rejected" });
       queryClient.invalidateQueries({ queryKey: ["adjustment-logs-branch"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1032,6 +1047,7 @@ export default function MuiPayrollManagement() {
                                 <IconButton
                                   size="small"
                                   color="success"
+                                  disabled={approveEntryMutation.isPending}
                                   onClick={() => approveEntryMutation.mutate(entry.id)}
                                 >
                                   <CheckCircle fontSize="small" />
@@ -1043,6 +1059,7 @@ export default function MuiPayrollManagement() {
                                 <IconButton
                                   size="small"
                                   color="primary"
+                                  disabled={markPaidMutation.isPending}
                                   onClick={() => markPaidMutation.mutate(entry.id)}
                                 >
                                   <AttachMoney fontSize="small" />
@@ -1052,6 +1069,7 @@ export default function MuiPayrollManagement() {
                             <Tooltip title="Send Payslip">
                               <IconButton
                                 size="small"
+                                disabled={sendPayslipMutation.isPending}
                                 onClick={() => sendPayslipMutation.mutate(entry.id)}
                               >
                                 <Send fontSize="small" />
@@ -1212,6 +1230,7 @@ export default function MuiPayrollManagement() {
                                   <IconButton
                                     size="small"
                                     color="success"
+                                    disabled={approveAdjustmentMutation.isPending}
                                     onClick={() => approveAdjustmentMutation.mutate(log.id)}
                                   >
                                     <CheckCircle fontSize="small" />
@@ -1221,6 +1240,7 @@ export default function MuiPayrollManagement() {
                                   <IconButton
                                     size="small"
                                     color="error"
+                                    disabled={rejectAdjustmentMutation.isPending}
                                     onClick={() => rejectAdjustmentMutation.mutate(log.id)}
                                   >
                                     <Cancel fontSize="small" />
