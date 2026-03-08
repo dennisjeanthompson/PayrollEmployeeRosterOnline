@@ -45,13 +45,16 @@ router.get("/api/audit-logs", requireAuth, requireManagerRole, async (req, res) 
       offset = "0"
     } = req.query;
 
+    const parsedLimit = Math.min(Math.max(parseInt(limit as string) || 50, 1), 500);
+    const parsedOffset = Math.max(parseInt(offset as string) || 0, 0);
+
     const logs = await storage.getAuditLogs({
       entityType: entityType as string,
       action: action as string,
       startDate: startDate ? new Date(startDate as string) : undefined,
       endDate: endDate ? new Date(endDate as string) : undefined,
-      limit: parseInt(limit as string),
-      offset: parseInt(offset as string),
+      limit: parsedLimit,
+      offset: parsedOffset,
     });
 
     // Enrich logs with user names

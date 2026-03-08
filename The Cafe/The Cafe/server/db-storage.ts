@@ -772,10 +772,10 @@ export class DatabaseStorage implements IStorage {
     });
   }
 
-  async markNotificationRead(id: string): Promise<Notification | undefined> {
+  async markNotificationRead(id: string, userId: string): Promise<Notification | undefined> {
     await db.update(notifications)
       .set({ isRead: true })
-      .where(eq(notifications.id, id));
+      .where(and(eq(notifications.id, id), eq(notifications.userId, userId)));
       
     return this.getNotification(id);
   }
@@ -1220,8 +1220,8 @@ export class DatabaseStorage implements IStorage {
     .where(
       and(
         eq(payrollPeriods.branchId, branchId),
-        gte(payrollPeriods.startDate, startDate),
-        lte(payrollPeriods.endDate, endDate)
+        lte(payrollPeriods.startDate, endDate),
+        gte(payrollPeriods.endDate, startDate)
       )
     );
     

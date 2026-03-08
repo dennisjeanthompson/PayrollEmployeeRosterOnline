@@ -233,6 +233,59 @@ export default function MobileDashboard() {
   // Connect to real-time updates via Socket.IO
   useRealtime({ enabled: !!currentUser?.id });
 
+  // Fetch upcoming shifts with real-time updates
+  const { data: shiftsData } = useQuery({
+    queryKey: ['mobile-shifts', currentUser?.id],
+    queryFn: async () => {
+      const today = new Date();
+      const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const response = await apiRequest(
+        'GET',
+        `/api/shifts?startDate=${today.toISOString()}&endDate=${nextWeek.toISOString()}`
+      );
+      return response.json();
+    },
+    enabled: isAuthenticated && !!user,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  });
+
+  // Fetch recent payroll with real-time updates
+  const { data: payrollData } = useQuery({
+    queryKey: ['mobile-payroll'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/payroll');
+      return response.json();
+    },
+    enabled: isAuthenticated && !!user,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  });
+
+  // Fetch hours summary with real-time updates
+  const { data: hoursSummary } = useQuery({
+    queryKey: ['hours-summary'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/hours/my-summary');
+      return response.json();
+    },
+    enabled: isAuthenticated && !!user,
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+  });
+
+  // Fetch notifications with real-time updates
+  const { data: notificationsData } = useQuery({
+    queryKey: ['/api/notifications'],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/notifications');
+      return response.json();
+    },
+    enabled: isAuthenticated && !!user,
+    refetchInterval: 15000,
+    refetchOnWindowFocus: true,
+  });
+
   // Wait for authentication to load
   if (!isAuthenticated || !user) {
     return (
@@ -251,55 +304,6 @@ export default function MobileDashboard() {
       </div>
     );
   }
-
-  // Fetch upcoming shifts with real-time updates
-  const { data: shiftsData } = useQuery({
-    queryKey: ['mobile-shifts', currentUser?.id],
-    queryFn: async () => {
-      const today = new Date();
-      const nextWeek = new Date(today.getTime() + 7 * 24 * 60 * 60 * 1000);
-      const response = await apiRequest(
-        'GET',
-        `/api/shifts?startDate=${today.toISOString()}&endDate=${nextWeek.toISOString()}`
-      );
-      return response.json();
-    },
-    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
-    refetchOnWindowFocus: true,
-  });
-
-  // Fetch recent payroll with real-time updates
-  const { data: payrollData } = useQuery({
-    queryKey: ['mobile-payroll'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/payroll');
-      return response.json();
-    },
-    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
-    refetchOnWindowFocus: true,
-  });
-
-  // Fetch hours summary with real-time updates
-  const { data: hoursSummary } = useQuery({
-    queryKey: ['hours-summary'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/hours/my-summary');
-      return response.json();
-    },
-    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
-    refetchOnWindowFocus: true,
-  });
-
-  // Fetch notifications with real-time updates
-  const { data: notificationsData } = useQuery({
-    queryKey: ['/api/notifications'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/notifications');
-      return response.json();
-    },
-    refetchInterval: 15000, // Poll every 15 seconds as fallback (real-time via WebSocket)
-    refetchOnWindowFocus: true,
-  });
 
   const shifts: Shift[] = shiftsData?.shifts || [];
   const upcomingShifts = shifts.slice(0, 3);

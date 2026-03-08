@@ -279,6 +279,12 @@ router.post('/api/employees', requireAuth, requireRole(['manager']), async (req,
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
+    // Restrict role — only admins can create admin accounts
+    const allowedRoles = req.session.user?.role === 'admin' ? ['employee', 'manager', 'admin'] : ['employee', 'manager'];
+    if (!allowedRoles.includes(role)) {
+      return res.status(400).json({ message: `Invalid role. Allowed: ${allowedRoles.join(', ')}` });
+    }
+
     // Check if username already exists
     const existingUser = await storage.getUserByUsername(username);
     if (existingUser) {
@@ -365,6 +371,14 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager']), async (r
     if (req.session.user?.role === 'manager' &&
         req.session.user?.branchId !== existingEmployee.branchId) {
       return res.status(403).json({ message: 'Unauthorized to update this employee' });
+    }
+
+    // Restrict role changes — only admins can set role to 'admin'
+    if (updates.role) {
+      const allowedRoles = req.session.user?.role === 'admin' ? ['employee', 'manager', 'admin'] : ['employee', 'manager'];
+      if (!allowedRoles.includes(updates.role)) {
+        return res.status(400).json({ message: `Invalid role. Allowed: ${allowedRoles.join(', ')}` });
+      }
     }
 
     // Convert hourlyRate to string if it exists (database stores as text)

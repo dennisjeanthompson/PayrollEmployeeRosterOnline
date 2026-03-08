@@ -58,7 +58,11 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
     let entries: any[] = [];
 
     if (periodId) {
-      // Get entries for specific period
+      // Verify the period belongs to the manager's branch
+      const period = await storage.getPayrollPeriod(periodId as string);
+      if (!period || period.branchId !== branchId) {
+        return res.status(403).json({ message: "Payroll period not found or access denied" });
+      }
       entries = await storage.getPayrollEntriesByPeriod(periodId as string);
     } else if (startDate && endDate) {
       // Get entries for date range
@@ -176,6 +180,13 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
     
     if (!periodId) {
       return res.status(400).json({ message: "Period ID is required" });
+    }
+
+    // Verify the period belongs to the manager's branch
+    const branchId = req.user!.branchId;
+    const period = await storage.getPayrollPeriod(periodId as string);
+    if (!period || period.branchId !== branchId) {
+      return res.status(403).json({ message: "Payroll period not found or access denied" });
     }
 
     const entries = await storage.getPayrollEntriesByPeriod(periodId as string);

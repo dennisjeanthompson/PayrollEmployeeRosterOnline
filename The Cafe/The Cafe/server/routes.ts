@@ -918,6 +918,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Shift not found" });
       }
 
+      // Verify branch ownership
+      if (shift.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "You can only clock in shifts from your own branch" });
+      }
+
       // Update shift with actual start time
       const updatedShift = await storage.updateShift(id, {
         actualStartTime: new Date(),
@@ -969,6 +974,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!shift) {
         return res.status(404).json({ message: "Shift not found" });
+      }
+
+      // Verify branch ownership
+      if (shift.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "You can only clock out shifts from your own branch" });
       }
 
       // Update shift with actual end time and mark as completed
@@ -1049,14 +1059,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
-    // Calculate total payroll this month from payroll entries
+    // Calculate total payroll this month from payroll entries (filter by period dates, not createdAt)
     let totalPayrollThisMonth = 0;
+    const allPeriods = await storage.getPayrollPeriodsByBranch(branchId);
+    const periodsThisMonth = allPeriods.filter(p => {
+      const pEnd = new Date(p.endDate);
+      return pEnd >= monthStart && pEnd <= monthEnd;
+    });
+    const periodIds = new Set(periodsThisMonth.map(p => p.id));
     for (const user of users) {
       const entries = await storage.getPayrollEntriesByUser(user.id);
       for (const entry of entries) {
-        if (!entry.createdAt) continue;
-        const entryDate = new Date(entry.createdAt);
-        if (entryDate >= monthStart && entryDate <= monthEnd) {
+        if (periodIds.has(entry.payrollPeriodId)) {
           totalPayrollThisMonth += parseFloat(entry.grossPay);
         }
       }
@@ -1439,10 +1453,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Start date and end date are required" });
       }
 
+      const parsedStart = new Date(startDate);
+      const parsedEnd = new Date(endDate);
+
+      if (parsedEnd <= parsedStart) {
+        return res.status(400).json({ message: "End date must be after start date" });
+      }
+
+      // Check for overlapping periods
+      const existingPeriods = await storage.getPayrollPeriodsByBranch(branchId);
+      const hasOverlap = existingPeriods.some(p => {
+        const pStart = new Date(p.startDate);
+        const pEnd = new Date(p.endDate);
+        return parsedStart < pEnd && parsedEnd > pStart;
+      });
+      if (hasOverlap) {
+        return res.status(400).json({ message: "This period overlaps with an existing payroll period" });
+      }
+
       const period = await storage.createPayrollPeriod({
         branchId,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        startDate: parsedStart,
+        endDate: parsedEnd,
         status: 'open'
       });
 
@@ -2290,6 +2322,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Shift not found" });
       }
 
+      // Prevent trading past/completed shifts
+      if (new Date(shift.endTime) < new Date()) {
+        return res.status(400).json({ message: "Cannot trade a shift that has already ended" });
+      }
+
       let fromUserId = req.user!.id;
       
       if (req.user!.role === "manager" || req.user!.role === "admin") {
@@ -3123,15 +3160,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
     const users = await storage.getUsersByBranch(branchId);
+    const allPeriods = await storage.getPayrollPeriodsByBranch(branchId);
+    const periodMap = new Map(allPeriods.map(p => [p.id, p]));
     let totalPayroll = 0;
 
     for (const user of users) {
       const entries = await storage.getPayrollEntriesByUser(user.id);
       for (const entry of entries) {
-        if (!entry.createdAt) continue;
-        const entryDate = new Date(entry.createdAt);
-        if (entryDate >= monthStart && entryDate <= monthEnd) {
-          totalPayroll += parseFloat(entry.grossPay);
+        const period = periodMap.get(entry.payrollPeriodId);
+        if (period) {
+          const periodEnd = new Date(period.endDate);
+          if (periodEnd >= monthStart && periodEnd <= monthEnd) {
+            totalPayroll += parseFloat(entry.grossPay);
+          }
         }
       }
     }
@@ -3288,10 +3329,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (todayShift) {
           if (todayShift.status === 'in-progress') {
             status = 'Clocked In';
-            statusInfo = `Since ${format(new Date(todayShift.actualStartTime!), "h:mm a")}`;
+            statusInfo = todayShift.actualStartTime
+              ? `Since ${format(new Date(todayShift.actualStartTime), "h:mm a")}`
+              : `Scheduled ${format(new Date(todayShift.startTime), "h:mm a")}`;
           } else if (todayShift.status === 'completed') {
             status = 'Completed';
-            statusInfo = `Worked ${format(new Date(todayShift.actualStartTime!), "h:mm a")} - ${format(new Date(todayShift.actualEndTime!), "h:mm a")}`;
+            const start = todayShift.actualStartTime ? format(new Date(todayShift.actualStartTime), "h:mm a") : format(new Date(todayShift.startTime), "h:mm a");
+            const end = todayShift.actualEndTime ? format(new Date(todayShift.actualEndTime), "h:mm a") : format(new Date(todayShift.endTime), "h:mm a");
+            statusInfo = `Worked ${start} - ${end}`;
           } else if (todayShift.status === 'scheduled') {
             status = 'Scheduled';
             statusInfo = `${format(new Date(todayShift.startTime), "h:mm a")} - ${format(new Date(todayShift.endTime), "h:mm a")}`;
@@ -3322,8 +3367,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     let requests;
 
-    // Managers get all requests from their branch, employees get only their own
-    if (userRole === 'manager') {
+    // Managers and admins get all requests from their branch, employees get only their own
+    if (userRole === 'manager' || userRole === 'admin') {
       // Get all employees in the branch
       const employees = await storage.getUsersByBranch(branchId);
       const employeeIds = employees.map(emp => emp.id);
@@ -3647,6 +3692,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/time-off-requests/:id/approve", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
+
+    const existing = await storage.getTimeOffRequest(id);
+    if (!existing) {
+      return res.status(404).json({ message: "Time off request not found" });
+    }
+    if (existing.status !== 'pending') {
+      return res.status(409).json({ message: `Request has already been ${existing.status}` });
+    }
+
     const request = await storage.updateTimeOffRequest(id, {
       status: "approved",
       approvedBy: req.user!.id,
@@ -3705,6 +3759,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/time-off-requests/:id/reject", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
+
+    const existing = await storage.getTimeOffRequest(id);
+    if (!existing) {
+      return res.status(404).json({ message: "Time off request not found" });
+    }
+    if (existing.status !== 'pending') {
+      return res.status(409).json({ message: `Request has already been ${existing.status}` });
+    }
+
     const request = await storage.updateTimeOffRequest(id, {
       status: "rejected",
       approvedBy: req.user!.id,
@@ -3838,7 +3901,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/notifications/:id/read", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
-      const notification = await storage.markNotificationRead(id);
+      const userId = req.user!.id;
+      const notification = await storage.markNotificationRead(id, userId);
       res.json(notification || { success: true });
     } catch (error: any) {
       console.error('Mark notification read error:', error);
