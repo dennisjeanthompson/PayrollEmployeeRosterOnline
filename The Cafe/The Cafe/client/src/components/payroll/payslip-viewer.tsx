@@ -185,6 +185,7 @@ export const PayslipViewer: React.FC<PayslipViewerProps> = ({
                 document.body.removeChild(link);
               } catch (err) {
                 console.error('Failed to generate PDF', err);
+                alert('Failed to generate PDF. Please try again.');
               }
             }}
             className="flex-1 h-14 text-lg font-semibold rounded-xl"

@@ -192,7 +192,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Setup check endpoint (no auth required)
-  app.get("/api/setup/status", async (req: Request, res: Response) => {
+  app.get("/api/setup/status", asyncHandler(async (req: Request, res: Response) => {
     try {
       const isComplete = await storage.isSetupComplete();
       res.json({ 
@@ -202,10 +202,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Setup status check error:', error);
       res.status(500).json({ message: 'Failed to check setup status' });
     }
-  });
+  }));
 
   // Setup endpoint (no auth required, only works if setup not complete)
-  app.post("/api/setup", async (req: Request, res: Response) => {
+  app.post("/api/setup", asyncHandler(async (req: Request, res: Response) => {
     try {
       // Check if setup is already complete
       const isComplete = await storage.isSetupComplete();
@@ -282,7 +282,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.status(500).json({ message: 'Setup failed' });
     }
-  });
+  }));
 
   // Simple health check endpoint
   app.get("/api/health", (req: Request, res: Response) => {
@@ -299,7 +299,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Admin endpoint to fix all unhashed passwords (IMPORTANT: run once after identifying issues)
-  app.post("/api/admin/fix-passwords", requireAuth, requireRole(["admin"]), async (req: Request, res: Response) => {
+  app.post("/api/admin/fix-passwords", requireAuth, requireRole(["admin"]), asyncHandler(async (req: Request, res: Response) => {
     try {
       const { defaultPassword } = req.body;
       const passwordToHash = defaultPassword || 'password123'; // Default password if none provided
@@ -339,10 +339,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Fix passwords error:', error);
       res.status(500).json({ message: 'Failed to fix passwords' });
     }
-  });
+  }));
 
   // Admin endpoint to reset a specific user's password
-  app.post("/api/admin/reset-password", requireAuth, requireRole(["admin", "manager"]), async (req: Request, res: Response) => {
+  app.post("/api/admin/reset-password", requireAuth, requireRole(["admin", "manager"]), asyncHandler(async (req: Request, res: Response) => {
     try {
       const { userId, newPassword } = req.body;
       
@@ -378,13 +378,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Reset password error:', error);
       res.status(500).json({ message: 'Failed to reset password' });
     }
-  });
+  }));
 
   // In-memory store for client-side debug reports (kept only in memory for local debugging)
   const clientDebugReports: Array<any> = [];
 
   // Endpoint to receive client-side debug reports (POSTed by injected script)
-  app.post("/api/client-debug", async (req: Request, res: Response) => {
+  app.post("/api/client-debug", requireAuth, asyncHandler(async (req: Request, res: Response) => {
     try {
       const payload = req.body || {};
       const entry = {
@@ -407,10 +407,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error receiving client debug report:', error);
       res.status(500).json({ message: 'Failed to record client debug report' });
     }
-  });
+  }));
 
   // Simple viewer for collected client debug reports (for local debugging only)
-  app.get("/api/client-debug", async (req: Request, res: Response) => {
+  app.get("/api/client-debug", requireAuth, asyncHandler(async (req: Request, res: Response) => {
     try {
       // Render a lightweight HTML page showing recent reports
       const rows = clientDebugReports.slice(0, 100).map((r, idx) => {
@@ -425,10 +425,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error rendering client debug reports:', error);
       res.status(500).json({ message: 'Failed to render debug reports' });
     }
-  });
+  }));
 
   // Auth routes
-  app.post("/api/auth/login", async (req: Request, res: Response) => {
+  app.post("/api/auth/login", asyncHandler(async (req: Request, res: Response) => {
     try {
       const { username, password } = z.object({
         username: z.string().min(1),
@@ -521,7 +521,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error instanceof Error ? error.message : "Invalid request data"
       });
     }
-  });
+  }));
 
   app.post("/api/auth/logout", (req, res) => {
     req.session.destroy((err) => {
@@ -538,7 +538,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Check session status (no auth required - used on page load)
   // This endpoint checks if a session exists and returns the user data
-  app.get("/api/auth/status", async (req: Request, res: Response) => {
+  app.get("/api/auth/status", asyncHandler(async (req: Request, res: Response) => {
     try {
       if (req.session?.user) {
         console.log(`✅ [AUTH STATUS] Session found for user: ${req.session.user.username}`);
@@ -560,9 +560,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user: null 
       });
     }
-  });
+  }));
 
-  app.get("/api/auth/me", requireAuth, async (req: Request, res: Response) => {
+  app.get("/api/auth/me", requireAuth, asyncHandler(async (req: Request, res: Response) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Not authenticated" });
@@ -585,11 +585,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error instanceof Error ? error.message : "Internal server error" 
       });
     }
-  });
+  }));
 
   // Switch branch (admin/manager only) — updates session branchId so all
   // existing GET endpoints automatically serve data for the new branch.
-  app.put("/api/auth/switch-branch", requireAuth, requireRole(["manager", "admin"]), async (req: Request, res: Response) => {
+  app.put("/api/auth/switch-branch", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req: Request, res: Response) => {
     try {
       const { branchId } = req.body;
       if (!branchId || typeof branchId !== "string") {
@@ -626,7 +626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error switching branch:", error);
       res.status(500).json({ message: "Failed to switch branch" });
     }
-  });
+  }));
 
   // Shifts routes
   app.get("/api/shifts", requireAuth, asyncHandler(async (req, res) => {
@@ -661,7 +661,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ shifts: enrichedShifts });
   }));
 
-  app.get("/api/shifts/branch", requireAuth, requireRole(["manager", "employee", "admin"]), async (req, res) => {
+  app.get("/api/shifts/branch", requireAuth, requireRole(["manager", "employee", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
       const branchId = req.user!.branchId;
@@ -711,9 +711,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('❌ [GET /api/shifts/branch] Error:', error);
       res.status(500).json({ message: 'Failed to fetch shifts' });
     }
-  });
+  }));
 
-  app.post("/api/shifts", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.post("/api/shifts", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       console.log('Creating shift with data:', req.body);
       const shiftData = insertShiftSchema.parse(req.body);
@@ -781,9 +781,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
     }
-  });
+  }));
 
-  app.put("/api/shifts/:id", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.put("/api/shifts/:id", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       console.log('🔧 [PUT /api/shifts/:id] Request for shift:', id);
@@ -863,10 +863,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('❌ [PUT /api/shifts/:id] Error:', error);
       res.status(400).json({ message: "Invalid shift data" });
     }
-  });
+  }));
 
   // DELETE shift
-  app.delete("/api/shifts/:id", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.delete("/api/shifts/:id", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const shift = await storage.getShift(id);
@@ -905,10 +905,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Delete shift error:', error);
       res.status(500).json({ message: "Failed to delete shift" });
     }
-  });
+  }));
 
   // Manager clock in for employee
-  app.post("/api/shifts/:id/clock-in", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.post("/api/shifts/:id/clock-in", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const shift = await storage.getShift(id);
@@ -922,6 +922,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         actualStartTime: new Date(),
         status: 'in-progress'
       });
+
+      if (!updatedShift) {
+        return res.status(500).json({ message: "Failed to update shift" });
+      }
 
       // Get employee details
       const employee = await storage.getUser(shift.userId);
@@ -954,10 +958,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to clock in employee"
       });
     }
-  });
+  }));
 
   // Manager clock out for employee
-  app.post("/api/shifts/:id/clock-out", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.post("/api/shifts/:id/clock-out", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const shift = await storage.getShift(id);
@@ -971,6 +975,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         actualEndTime: new Date(),
         status: 'completed'
       });
+
+      if (!updatedShift) {
+        return res.status(500).json({ message: "Failed to update shift" });
+      }
 
       // Get employee details
       const employee = await storage.getUser(shift.userId);
@@ -1003,7 +1011,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to clock out employee"
       });
     }
-  });
+  }));
   // Employee statistics route - accepts optional startDate and endDate for month selection
   app.get("/api/employees/stats", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
@@ -1192,7 +1200,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== ADJUSTMENT LOGS (Manual OT/Lateness/Exception Logging) =====
   
   // Create adjustment log (Manager only)
-  app.post("/api/adjustment-logs", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.post("/api/adjustment-logs", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { employeeId, date, type, value, remarks } = req.body;
       const branchId = req.user!.branchId;
@@ -1246,10 +1254,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Create adjustment log error:', error);
       res.status(500).json({ message: error.message || "Failed to create adjustment log" });
     }
-  });
+  }));
 
   // Get adjustment logs by branch (Manager)
-  app.get("/api/adjustment-logs/branch", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/adjustment-logs/branch", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
       const { startDate, endDate } = req.query;
@@ -1278,10 +1286,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.status(500).json({ message: error.message || "Failed to get adjustment logs" });
     }
-  });
+  }));
 
   // Get adjustment logs for the current employee (Employee view)
-  app.get("/api/adjustment-logs/mine", requireAuth, async (req, res) => {
+  app.get("/api/adjustment-logs/mine", requireAuth, asyncHandler(async (req, res) => {
     try {
       const userId = req.user!.id;
       const logs = await storage.getAdjustmentLogsByEmployee(userId);
@@ -1292,10 +1300,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       res.status(500).json({ message: error.message || "Failed to get adjustment logs" });
     }
-  });
+  }));
 
   // Employee verify adjustment log
-  app.put("/api/adjustment-logs/:id/verify", requireAuth, async (req, res) => {
+  app.put("/api/adjustment-logs/:id/verify", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
@@ -1314,10 +1322,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       res.status(500).json({ message: error.message || "Failed to verify adjustment log" });
     }
-  });
+  }));
 
   // Approve adjustment log (Manager)
-  app.put("/api/adjustment-logs/:id/approve", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.put("/api/adjustment-logs/:id/approve", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const approvedBy = req.user!.id;
@@ -1333,10 +1341,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       res.status(500).json({ message: error.message || "Failed to approve adjustment log" });
     }
-  });
+  }));
 
   // Reject adjustment log (Manager)
-  app.put("/api/adjustment-logs/:id/reject", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.put("/api/adjustment-logs/:id/reject", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       
@@ -1349,10 +1357,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       res.status(500).json({ message: error.message || "Failed to reject adjustment log" });
     }
-  });
+  }));
 
   // Delete adjustment log (Manager)
-  app.delete("/api/adjustment-logs/:id", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.delete("/api/adjustment-logs/:id", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       await storage.deleteAdjustmentLog(id);
@@ -1360,10 +1368,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       res.status(500).json({ message: error.message || "Failed to delete adjustment log" });
     }
-  });
+  }));
 
   // Payroll routes
-  app.get("/api/payroll", requireAuth, async (req, res) => {
+  app.get("/api/payroll", requireAuth, asyncHandler(async (req, res) => {
     try {
       const userId = req.user!.id;
       const entries = await storage.getPayrollEntriesByUser(userId);
@@ -1390,10 +1398,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Get payroll error:', error);
       res.status(500).json({ message: error.message || "Failed to fetch payroll entries" });
     }
-  });
+  }));
 
   // Get all payroll periods (Manager only)
-  app.get("/api/payroll/periods", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/payroll/periods", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
       const periods = await storage.getPayrollPeriodsByBranch(branchId);
@@ -1402,10 +1410,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Get payroll periods error:', error);
       res.status(500).json({ message: error.message || "Failed to fetch payroll periods" });
     }
-  });
+  }));
 
   // Get current payroll period
-  app.get("/api/payroll/periods/current", requireAuth, async (req, res) => {
+  app.get("/api/payroll/periods/current", requireAuth, asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
       const period = await storage.getCurrentPayrollPeriod(branchId);
@@ -1414,10 +1422,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Get current payroll period error:', error);
       res.status(500).json({ message: error.message || "Failed to fetch current payroll period" });
     }
-  });
+  }));
 
   // Create payroll period (Manager only)
-  app.post("/api/payroll/periods", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.post("/api/payroll/periods", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { startDate, endDate } = req.body;
       const branchId = req.user!.branchId;
@@ -1441,10 +1449,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to create payroll period" 
       });
     }
-  });
+  }));
 
   // Process payroll for a period (Manager only)
-  app.post("/api/payroll/periods/:id/process", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.post("/api/payroll/periods/:id/process", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     // Track created entries for rollback on failure
     const createdEntryIds: string[] = [];
 
@@ -1773,10 +1781,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to process payroll. All changes have been rolled back."
       });
     }
-  });
+  }));
 
   // Get all payroll entries for a branch (Manager only)
-  app.get("/api/payroll/entries/branch", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/payroll/entries/branch", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
       const { periodId } = req.query;
@@ -1831,10 +1839,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to get payroll entries" 
       });
     }
-  });
+  }));
 
   // Approve payroll entry (Manager only)
-  app.put("/api/payroll/entries/:id/approve", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.put("/api/payroll/entries/:id/approve", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       
@@ -1864,10 +1872,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to approve payroll entry" 
       });
     }
-  });
+  }));
 
   // Mark payroll entry as paid (Manager only)
-  app.put("/api/payroll/entries/:id/paid", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.put("/api/payroll/entries/:id/paid", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       
@@ -1897,7 +1905,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to mark payroll as paid" 
       });
     }
-  });
+  }));
 
   // Payslip generation route
   app.get("/api/payroll/payslip/:entryId", requireAuth, asyncHandler(async (req, res) => {
@@ -1991,7 +1999,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
 
   // Manager send payslip to employee
-  app.post("/api/payroll/entries/:entryId/send", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.post("/api/payroll/entries/:entryId/send", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { entryId } = req.params;
       const branchId = req.user!.branchId;
@@ -2037,7 +2045,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to send payslip"
       });
     }
-  });
+  }));
 
   // ============================================
   // HOLIDAY MANAGEMENT ENDPOINTS
@@ -2061,7 +2069,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ============================================
 
   // Get archived payroll periods
-  app.get("/api/payroll/archived", requireAuth, requireRole(["manager", "admin"]), async (req, res) => {
+  app.get("/api/payroll/archived", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
       const archivedPeriods = await storage.getArchivedPayrollPeriods(branchId);
@@ -2070,10 +2078,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Get archived payroll error:', error);
       res.status(500).json({ message: error.message || "Failed to get archived payroll" });
     }
-  });
+  }));
 
   // Archive a payroll period
-  app.post("/api/payroll/periods/:id/archive", requireAuth, requireRole(["manager", "admin"]), async (req, res) => {
+  app.post("/api/payroll/periods/:id/archive", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
@@ -2092,10 +2100,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Archive payroll error:', error);
       res.status(500).json({ message: error.message || "Failed to archive payroll period" });
     }
-  });
+  }));
 
   // Get a specific archived period with entries
-  app.get("/api/payroll/archived/:id", requireAuth, requireRole(["manager", "admin"]), async (req, res) => {
+  app.get("/api/payroll/archived/:id", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const archived = await storage.getArchivedPayrollPeriod(id);
@@ -2115,10 +2123,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Get archived period error:', error);
       res.status(500).json({ message: error.message || "Failed to get archived period" });
     }
-  });
+  }));
 
   // Get all shift trades for current user (with enriched data)
-  app.get("/api/shift-trades", requireAuth, async (req, res) => {
+  app.get("/api/shift-trades", requireAuth, asyncHandler(async (req, res) => {
     try {
       const userId = req.user!.id;
       const branchId = req.user!.branchId;
@@ -2180,7 +2188,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Get shift trades error:", error);
       res.status(500).json({ message: error.message || "Failed to fetch shift trades" });
     }
-  });
+  }));
 
   app.get("/api/shift-trades/available", requireAuth, asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
@@ -2267,7 +2275,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ trades: tradesWithDetails });
   }));
 
-  app.post("/api/shift-trades", requireAuth, async (req, res) => {
+  app.post("/api/shift-trades", requireAuth, asyncHandler(async (req, res) => {
     try {
       const tradeData = insertShiftTradeSchema.parse(req.body);
       
@@ -2378,10 +2386,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Create trade error:", error);
       res.status(400).json({ message: error.message || "Invalid trade data" });
     }
-  });
+  }));
 
   // PATCH endpoint for responding to a trade (accept/reject by target user)
-  app.patch("/api/shift-trades/:id", requireAuth, async (req, res) => {
+  app.patch("/api/shift-trades/:id", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const { status } = req.body;
@@ -2444,10 +2452,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Respond to trade error:", error);
       res.status(500).json({ message: error.message || "Failed to respond to trade" });
     }
-  });
+  }));
 
   // PATCH endpoint for manager approval of trades
-  app.patch("/api/shift-trades/:id/approve", requireAuth, requireRole(["manager", "admin"]), async (req, res) => {
+  app.patch("/api/shift-trades/:id/approve", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const { status } = req.body;
@@ -2584,9 +2592,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Manager approve trade error:", error);
       res.status(500).json({ message: error.message || "Failed to process trade" });
     }
-  });
+  }));
 
-  app.put("/api/shift-trades/:id/take", requireAuth, async (req, res) => {
+  app.put("/api/shift-trades/:id/take", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
@@ -2674,9 +2682,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Take shift trade error:", error);
       res.status(500).json({ message: error.message || "Failed to take shift" });
     }
-  });
+  }));
 
-  app.put("/api/shift-trades/:id/approve", requireAuth, requireRole(["manager", "admin"]), async (req, res) => {
+  app.put("/api/shift-trades/:id/approve", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const managerId = req.user!.id;
@@ -2763,9 +2771,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Approve trade error:", error);
       res.status(500).json({ message: error.message || "Failed to approve trade" });
     }
-  });
+  }));
 
-  app.put("/api/shift-trades/:id/reject", requireAuth, requireRole(["manager", "admin"]), async (req, res) => {
+  app.put("/api/shift-trades/:id/reject", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const managerId = req.user!.id;
@@ -2826,10 +2834,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Reject trade error:", error);
       res.status(500).json({ message: error.message || "Failed to reject trade" });
     }
-  });
+  }));
 
   // DELETE endpoint for canceling shift trades
-  app.delete("/api/shift-trades/:id", requireAuth, async (req, res) => {
+  app.delete("/api/shift-trades/:id", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
@@ -2887,10 +2895,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Delete shift trade error:", error);
       res.status(500).json({ message: error.message || "Failed to cancel trade" });
     }
-  });
+  }));
 
   // Admin Deduction Rates Routes (Admin only)
-  app.get("/api/admin/deduction-rates", requireAuth, requireRole(["admin"]), async (req, res) => {
+  app.get("/api/admin/deduction-rates", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
     try {
       const rates = await storage.getAllDeductionRates();
       res.json({ rates });
@@ -2898,9 +2906,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Get deduction rates error:', error);
       res.status(500).json({ message: error.message || "Failed to get deduction rates" });
     }
-  });
+  }));
 
-  app.post("/api/admin/deduction-rates", requireAuth, requireRole(["admin"]), async (req, res) => {
+  app.post("/api/admin/deduction-rates", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
     try {
       const { type, minSalary, maxSalary, employeeRate, employeeContribution, description } = req.body;
 
@@ -2930,9 +2938,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Create deduction rate error:', error);
       res.status(500).json({ message: error.message || "Failed to create deduction rate" });
     }
-  });
+  }));
 
-  app.put("/api/admin/deduction-rates/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+  app.put("/api/admin/deduction-rates/:id", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const { type, minSalary, maxSalary, employeeRate, employeeContribution, description } = req.body;
@@ -2966,9 +2974,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Update deduction rate error:', error);
       res.status(500).json({ message: error.message || "Failed to update deduction rate" });
     }
-  });
+  }));
 
-  app.delete("/api/admin/deduction-rates/:id", requireAuth, requireRole(["admin"]), async (req, res) => {
+  app.delete("/api/admin/deduction-rates/:id", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const success = await storage.deleteDeductionRate(id);
@@ -2992,10 +3000,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Delete deduction rate error:', error);
       res.status(500).json({ message: error.message || "Failed to delete deduction rate" });
     }
-  });
+  }));
 
   // Deduction Settings Routes (Manager only)
-  app.get("/api/deduction-settings", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/deduction-settings", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
       let settings = await storage.getDeductionSettings(branchId);
@@ -3016,9 +3024,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Get deduction settings error:', error);
       res.status(500).json({ message: error.message || "Failed to get deduction settings" });
     }
-  });
+  }));
 
-  app.put("/api/deduction-settings/:id", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.put("/api/deduction-settings/:id", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax } = req.body;
@@ -3050,7 +3058,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Update deduction settings error:', error);
       res.status(500).json({ message: error.message || "Failed to update deduction settings" });
     }
-  });
+  }));
 
   // Manager approval routes
   app.get("/api/approvals", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
@@ -3450,7 +3458,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
 
   // Time off policy routes (for configurable advance notice)
-  app.get("/api/time-off-policy", requireAuth, async (req, res) => {
+  app.get("/api/time-off-policy", requireAuth, asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
       
@@ -3473,9 +3481,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error fetching time off policy:', error);
       res.status(500).json({ message: error.message || 'Failed to fetch time off policy' });
     }
-  });
+  }));
 
-  app.put("/api/time-off-policy", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.put("/api/time-off-policy", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
       const { leaveType, minimumAdvanceDays } = req.body;
@@ -3502,9 +3510,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Error updating time off policy:', error);
       res.status(500).json({ message: error.message || 'Failed to update time off policy' });
     }
-  });
+  }));
 
-  app.post("/api/time-off-requests", requireAuth, async (req, res) => {
+  app.post("/api/time-off-requests", requireAuth, asyncHandler(async (req, res) => {
     try {
       console.log('📝 Received time off request body:', req.body);
       
@@ -3617,7 +3625,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
     }
-  });
+  }));
 
   app.put("/api/time-off-requests/:id/approve", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -3769,7 +3777,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
 
   // Delete time off request (employee can delete pending requests)
-  app.delete("/api/time-off-requests/:id", requireAuth, async (req, res) => {
+  app.delete("/api/time-off-requests/:id", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
@@ -3796,9 +3804,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Delete time-off request error:', error);
       res.status(500).json({ message: error.message || "Failed to delete request" });
     }
-  });
+  }));
   // Notification routes
-  app.get("/api/notifications", requireAuth, async (req, res) => {
+  app.get("/api/notifications", requireAuth, asyncHandler(async (req, res) => {
     try {
       const userId = req.user!.id;
       const notifications = await storage.getUserNotifications(userId);
@@ -3807,9 +3815,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Get notifications error:', error);
       res.status(500).json({ message: error.message || "Failed to fetch notifications" });
     }
-  });
+  }));
 
-  app.patch("/api/notifications/:id/read", requireAuth, async (req, res) => {
+  app.patch("/api/notifications/:id/read", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const notification = await storage.markNotificationRead(id);
@@ -3818,9 +3826,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Mark notification read error:', error);
       res.status(500).json({ message: "Failed to mark notification as read" });
     }
-  });
+  }));
 
-  app.patch("/api/notifications/read-all", requireAuth, async (req, res) => {
+  app.patch("/api/notifications/read-all", requireAuth, asyncHandler(async (req, res) => {
     try {
       const userId = req.user!.id;
       await storage.markAllNotificationsRead(userId);
@@ -3829,9 +3837,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Mark all notifications read error:', error);
       res.status(500).json({ message: "Failed to mark all notifications as read" });
     }
-  });
+  }));
 
-  app.delete("/api/notifications/:id", requireAuth, async (req, res) => {
+  app.delete("/api/notifications/:id", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
@@ -3847,10 +3855,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Delete notification error:', error);
       res.status(500).json({ message: error.message || "Failed to delete notification" });
     }
-  });
+  }));
 
   // Blockchain payroll record storage
-  app.post("/api/blockchain/payroll/store", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.post("/api/blockchain/payroll/store", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { payrollEntryId } = req.body;
 
@@ -3910,10 +3918,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to store payroll record on blockchain"
       });
     }
-  });
+  }));
 
   // Blockchain record verification
-  app.post("/api/blockchain/payroll/verify", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.post("/api/blockchain/payroll/verify", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { payrollEntryId } = req.body;
 
@@ -3947,10 +3955,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to verify payroll record"
       });
     }
-  });
+  }));
 
   // Get blockchain record details
-  app.get("/api/blockchain/record/:transactionHash", requireAuth, async (req, res) => {
+  app.get("/api/blockchain/record/:transactionHash", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { transactionHash } = req.params;
 
@@ -3963,10 +3971,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to get blockchain record"
       });
     }
-  });
+  }));
 
   // Batch blockchain storage for multiple payroll records
-  app.post("/api/blockchain/payroll/batch-store", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.post("/api/blockchain/payroll/batch-store", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { payrollEntryIds } = req.body;
 
@@ -4032,12 +4040,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to store payroll records on blockchain"
       });
     }
-  });
+  }));
 
   // ═══════════════════════════════════════════════════════════════
   // ADMIN: Force Seed Sample Data with Complete Shifts and Payroll
   // ═══════════════════════════════════════════════════════════════
-  app.post('/api/admin/seed-sample-data', requireAuth, requireRole(['admin', 'manager']), async (req: Request, res: Response) => {
+  app.post('/api/admin/seed-sample-data', requireAuth, requireRole(['admin', 'manager']), asyncHandler(async (req: Request, res: Response) => {
     try {
       const user = getAuthenticatedUser(req);
       if (!user) {
@@ -4284,13 +4292,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to seed sample data"
       });
     }
-  });
+  }));
 
   // Create and start the server
   // const httpServer = createServer(app); // Moved to top
 
   // Update own profile (Self-service)
-  app.put("/api/auth/profile", requireAuth, async (req, res) => {
+  app.put("/api/auth/profile", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { email, password, newPassword, firstName, lastName } = req.body;
       const userId = req.user!.id;
@@ -4356,13 +4364,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         message: error.message || "Failed to update profile" 
       });
     }
-  });
+  }));
 
   // Mount employee uploads router - PROTECTED
   // MOVED UP to avoid conflict with /api/employees/:id
   
   // Debug endpoint to force seeding
-  app.post("/api/debug/seed", requireAuth, async (req, res) => {
+  app.post("/api/debug/seed", requireAuth, asyncHandler(async (req, res) => {
     try {
       // Manual role check with debug output
       if (!['admin', 'manager'].includes(req.user!.role)) {
@@ -4388,11 +4396,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Manual seeding error:', error);
       res.status(500).json({ message: "Seeding failed", error: String(error) });
     }
-  });
+  }));
 
   // Full database reset + reseed (no auth needed — session invalid after reset)
   // In production, this endpoint allows reseeding from browser console after deploy.
-  app.post("/api/debug/reset-and-reseed", async (req, res) => {
+  app.post("/api/debug/reset-and-reseed", asyncHandler(async (req, res) => {
     try {
       console.log('🔄 Full database reset + reseed triggered via API');
 
@@ -4441,7 +4449,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('❌ Reset and reseed error:', error);
       res.status(500).json({ message: "Reset failed", error: String(error) });
     }
-  });
+  }));
 
   return httpServer;
 }

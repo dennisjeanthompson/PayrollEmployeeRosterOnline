@@ -29,7 +29,8 @@ import {
   NotificationsRoundedIcon,
 } from "@mui/icons-material";
 import { useLocation } from "wouter";
-import { logout } from "@/lib/auth";
+import { logout, getCurrentUser } from "@/lib/auth";
+import { getInitials } from "@/lib/utils";
 
 interface ModernLayoutProps {
   children: React.ReactNode;
@@ -54,6 +55,7 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
   const [, navigate] = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(!isMobile);
   const [menuAnchor, setMenuAnchor] = useState<null | HTMLElement>(null);
+  const currentUser = getCurrentUser();
 
   const handleLogout = async () => {
     await logout();
@@ -179,13 +181,13 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
               },
             }}
           >
-            <Avatar sx={{ width: 36, height: 36, bgcolor: "primary.main" }}>JD</Avatar>
+            <Avatar sx={{ width: 36, height: 36, bgcolor: "primary.main" }}>{getInitials(currentUser?.firstName, currentUser?.lastName)}</Avatar>
             <Box sx={{ flex: 1, minWidth: 0 }}>
               <Typography variant="body2" fontWeight={600} noWrap>
-                John Doe
+                {currentUser?.firstName} {currentUser?.lastName}
               </Typography>
-              <Typography variant="caption" color="text.secondary" noWrap>
-                Employee
+              <Typography variant="caption" color="text.secondary" noWrap sx={{ textTransform: 'capitalize' }}>
+                {currentUser?.role || 'Employee'}
               </Typography>
             </Box>
           </Box>
@@ -264,7 +266,7 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
                 }}
               >
                 <Avatar sx={{ width: 32, height: 32, bgcolor: "primary.main", fontSize: "0.875rem" }}>
-                  JD
+                  {getInitials(currentUser?.firstName, currentUser?.lastName)}
                 </Avatar>
               </IconButton>
             </Stack>

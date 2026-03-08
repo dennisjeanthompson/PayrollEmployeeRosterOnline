@@ -192,7 +192,7 @@ export function EmployeeDataGrid({
         flex: 1.5,
         minWidth: 250,
         filterOperators: extendedStringOperators,
-        valueGetter: (value, row) => `${row.firstName} ${row.lastName}`,
+        valueGetter: (value, row) => `${row.firstName || ''} ${row.lastName || ''}`.trim(),
         renderCell: (params: GridRenderCellParams<Employee>) => (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1 }}>
             <Avatar
