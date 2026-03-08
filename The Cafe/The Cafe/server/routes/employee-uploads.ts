@@ -85,7 +85,7 @@ router.get('/upload-signature', (req, res) => {
 router.patch('/:id/photo', async (req, res) => {
   const { id } = req.params;
   const sessionUser = req.session.user;
-  if (sessionUser!.id !== id && sessionUser!.role !== 'manager') {
+  if (sessionUser!.id !== id && sessionUser!.role !== 'manager' && sessionUser!.role !== 'admin') {
     return res.status(403).json({ error: 'Not authorized to update this photo' });
   }
   const { photoUrl, photoPublicId } = req.body;
@@ -117,7 +117,7 @@ router.patch('/:id/photo', async (req, res) => {
 router.delete('/:id/photo', async (req, res) => {
   const { id } = req.params;
   const sessionUser = req.session.user;
-  if (sessionUser!.id !== id && sessionUser!.role !== 'manager') {
+  if (sessionUser!.id !== id && sessionUser!.role !== 'manager' && sessionUser!.role !== 'admin') {
     return res.status(403).json({ error: 'Not authorized to delete this photo' });
   }
 

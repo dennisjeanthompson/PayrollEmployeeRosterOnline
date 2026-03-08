@@ -176,8 +176,8 @@ router.post("/api/admin/seed-tax-rates", requireAdmin, async (req, res) => {
     for (const bracket of taxBrackets) {
       await dbStorage.createDeductionRate({
         type: "tax",
-        minSalary: Math.round(bracket.minAnnual / 12).toString(), // Convert to monthly
-        maxSalary: bracket.maxAnnual ? Math.round(bracket.maxAnnual / 12).toString() : null,
+        minSalary: bracket.minAnnual.toString(),
+        maxSalary: bracket.maxAnnual ? bracket.maxAnnual.toString() : null,
         employeeRate: bracket.rate.toString(),
         employeeContribution: null,
         description: `BIR TRAIN: ${bracket.description}`,

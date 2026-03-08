@@ -109,12 +109,12 @@ router.get("/api/analytics/trends", requireAuth, requireManagerRole, async (req,
     const endDate = endOfDay(new Date());
     const startDate = startOfDay(subDays(endDate, numDays - 1));
     
-    // Get all shifts in range
-    const allShifts = await storage.getShiftsByBranch(branchId);
-    const shiftsInRange = allShifts.filter(shift => {
-      const shiftDate = new Date(shift.startTime);
-      return shiftDate >= startDate && shiftDate <= endDate;
-    });
+    // Get shifts in range (pass date filter to DB instead of loading all)
+    const shiftsInRange = await storage.getShiftsByBranch(branchId, startDate, endDate);
+
+    // Pre-fetch all branch users to avoid N+1 queries
+    const branchUsers = await storage.getUsersByBranch(branchId);
+    const userMap = new Map(branchUsers.map(u => [u.id, u]));
 
     // Aggregate by day
     const dailyData: Record<string, { hours: number; cost: number; shifts: number; date: string }> = {};
@@ -130,8 +130,7 @@ router.get("/api/analytics/trends", requireAuth, requireManagerRole, async (req,
         const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
         dailyData[dateKey].hours += hours;
         dailyData[dateKey].shifts += 1;
-        // Estimate cost (will need hourly rate from user)
-        const user = await storage.getUser(shift.userId);
+        const user = userMap.get(shift.userId);
         const hourlyRate = parseFloat(user?.hourlyRate || "100");
         dailyData[dateKey].cost += hours * hourlyRate;
       }
@@ -190,7 +189,7 @@ router.get("/api/analytics/trends", requireAuth, requireManagerRole, async (req,
       const d = new Date(s.startTime);
       return d >= thisWeekStart && d <= thisWeekEnd;
     });
-    const lastWeekShifts = allShifts.filter(s => {
+    const lastWeekShifts = shiftsInRange.filter(s => {
       const d = new Date(s.startTime);
       return d >= lastWeekStart && d <= lastWeekEnd;
     });
@@ -235,7 +234,7 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
     const today = startOfDay(new Date());
     const historyStart = subWeeks(today, 8);
     
-    const allShifts = await storage.getShiftsByBranch(branchId);
+    const allShifts = await storage.getShiftsByBranch(branchId, historyStart, today);
     const historicalShifts = allShifts.filter(s => {
       const d = new Date(s.startTime);
       return d >= historyStart && d < today;
@@ -330,7 +329,7 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
     const today = startOfDay(new Date());
     const historyStart = subWeeks(today, 8);
     
-    const allShifts = await storage.getShiftsByBranch(branchId);
+    const allShifts = await storage.getShiftsByBranch(branchId, historyStart, today);
     const employees = await storage.getUsersByBranch(branchId);
     
     // Build employee hourly rate map
@@ -428,7 +427,7 @@ router.get("/api/forecast/peaks", requireAuth, requireManagerRole, async (req, r
     const today = startOfDay(new Date());
     const historyStart = subWeeks(today, 8);
     
-    const allShifts = await storage.getShiftsByBranch(branchId);
+    const allShifts = await storage.getShiftsByBranch(branchId, historyStart, today);
     
     // Calculate day-of-week patterns
     const dowHours: Record<number, number[]> = {};
@@ -514,12 +513,14 @@ router.get("/api/forecast/staffing", requireAuth, requireManagerRole, async (req
     const forecastDays = Math.min(parseInt(days as string) || 14, 30);
     
     const today = startOfDay(new Date());
+    const historyStart = subWeeks(today, 8);
     
-    // Get scheduled shifts for forecast period
-    const allShifts = await storage.getShiftsByBranch(branchId);
+    // Get scheduled shifts for forecast period + historical
+    const futureEnd = addDays(today, forecastDays);
+    const allShifts = await storage.getShiftsByBranch(branchId, historyStart, futureEnd);
     const futureShifts = allShifts.filter(s => {
       const d = new Date(s.startTime);
-      return d >= today && d <= addDays(today, forecastDays);
+      return d >= today && d <= futureEnd;
     });
 
     // Get pending time-off requests for all employees in this branch
@@ -535,7 +536,6 @@ router.get("/api/forecast/staffing", requireAuth, requireManagerRole, async (req
     );
 
     // Calculate expected labor need based on historical patterns
-    const historyStart = subWeeks(today, 8);
     const historicalShifts = allShifts.filter(s => {
       const d = new Date(s.startTime);
       return d >= historyStart && d < today;

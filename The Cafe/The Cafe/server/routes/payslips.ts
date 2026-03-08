@@ -220,7 +220,7 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
     
     // Employer contributions (for information only)
     const employerContributions: any[] = [
-      { code: 'SSS_ER', label: 'SSS (Employer Share)', amount: sssContrib * 1.5 }, // Rough estimate
+      { code: 'SSS_ER', label: 'SSS (Employer Share)', amount: sssContrib * 2 },
       { code: 'PH_ER', label: 'PhilHealth (Employer Share)', amount: philHealth },
       { code: 'PB_ER', label: 'Pag-IBIG (Employer Share)', amount: pagibig },
     ].filter(c => c.amount > 0);
@@ -280,6 +280,11 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
       net_pay: parseFloat(String(entry.netPay || 0)),
       payment_date: new Date().toISOString().split('T')[0],
     });
+    // Cap verification records to prevent unbounded memory growth
+    if (verificationRecords.size > 10000) {
+      const keysToDelete = [...verificationRecords.keys()].slice(0, verificationRecords.size - 5000);
+      keysToDelete.forEach(k => verificationRecords.delete(k));
+    }
     
     res.json({
       success: true,
@@ -317,6 +322,8 @@ router.post('/audit-log', requireAuth, async (req: Request, res: Response) => {
     };
     
     auditLogs.push(auditEntry);
+    // Cap audit logs to prevent unbounded memory growth
+    if (auditLogs.length > 10000) auditLogs.splice(0, auditLogs.length - 5000);
     console.log('[Payslip Audit]', auditEntry);
     
     res.json({ success: true, logged: true });

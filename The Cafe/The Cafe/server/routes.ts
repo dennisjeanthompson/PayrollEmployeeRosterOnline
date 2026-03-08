@@ -3253,21 +3253,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return diffMinutes > 15;
     }).length;
 
+    // Compute totalEmployees given the branch (pre-fetch for revenue calc too)
+    const branchUsers = await storage.getUsersByBranch(branchId);
+    const userMap = new Map(branchUsers.map(u => [u.id, u]));
+
     // Calculate revenue from completed shifts (simplified - based on hours worked)
     // In a real system, this would come from a sales/revenue table
     const completedShifts = todayShifts.filter(shift => shift.status === 'completed');
     let revenue = 0;
     for (const shift of completedShifts) {
-      const user = await storage.getUser(shift.userId);
+      const user = userMap.get(shift.userId);
       if (user) {
         const hours = (new Date(shift.endTime).getTime() - new Date(shift.startTime).getTime()) / (1000 * 60 * 60);
         // Estimate revenue as 3x labor cost (typical cafe margin)
         revenue += hours * parseFloat(user.hourlyRate) * 3;
       }
     }
-
-    // Compute totalEmployees given the branch
-    const branchUsers = await storage.getUsersByBranch(branchId);
     const totalEmployees = branchUsers.length;
 
     // Scheduled today = total shifts for today
