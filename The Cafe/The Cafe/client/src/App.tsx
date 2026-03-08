@@ -309,23 +309,27 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
       </Route>
 
       <Route path="/employees">
-        <DesktopLayout>
-          <RouteLoader>
-            <ErrorBoundary>
-              <MuiEmployees />
-            </ErrorBoundary>
-          </RouteLoader>
-        </DesktopLayout>
+        <RequireManagerOrAdmin>
+          <DesktopLayout>
+            <RouteLoader>
+              <ErrorBoundary>
+                <MuiEmployees />
+              </ErrorBoundary>
+            </RouteLoader>
+          </DesktopLayout>
+        </RequireManagerOrAdmin>
       </Route>
 
       <Route path="/payroll-management">
-        <DesktopLayout>
-          <RouteLoader>
-            <ErrorBoundary>
-              <MuiPayrollManagement />
-            </ErrorBoundary>
-          </RouteLoader>
-        </DesktopLayout>
+        <RequireManagerOrAdmin>
+          <DesktopLayout>
+            <RouteLoader>
+              <ErrorBoundary>
+                <MuiPayrollManagement />
+              </ErrorBoundary>
+            </RouteLoader>
+          </DesktopLayout>
+        </RequireManagerOrAdmin>
       </Route>
 
       <Route path="/reports">
@@ -351,23 +355,27 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
       </Route>
 
       <Route path="/branches">
-        <DesktopLayout>
-          <RouteLoader>
-            <ErrorBoundary>
-              <MuiBranches />
-            </ErrorBoundary>
-          </RouteLoader>
-        </DesktopLayout>
+        <RequireManagerOrAdmin>
+          <DesktopLayout>
+            <RouteLoader>
+              <ErrorBoundary>
+                <MuiBranches />
+              </ErrorBoundary>
+            </RouteLoader>
+          </DesktopLayout>
+        </RequireManagerOrAdmin>
       </Route>
 
       <Route path="/deduction-settings">
-        <DesktopLayout>
-          <RouteLoader>
-            <ErrorBoundary>
-              <MuiDeductionSettings />
-            </ErrorBoundary>
-          </RouteLoader>
-        </DesktopLayout>
+        <RequireManagerOrAdmin>
+          <DesktopLayout>
+            <RouteLoader>
+              <ErrorBoundary>
+                <MuiDeductionSettings />
+              </ErrorBoundary>
+            </RouteLoader>
+          </DesktopLayout>
+        </RequireManagerOrAdmin>
       </Route>
 
       <Route path="/admin/deduction-rates">

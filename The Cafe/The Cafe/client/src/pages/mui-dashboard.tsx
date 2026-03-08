@@ -128,17 +128,15 @@ export default function MuiDashboard() {
     refetchInterval: 30000, // Keep slower polling for hours stats as they change frequently with clock-ins
   });
 
-  // Filter today's shifts
+  // Filter today's shifts using Philippine timezone
+  const toDateStringPHT = (d: Date) => d.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' });
+  const todayPHT = toDateStringPHT(new Date());
   const todayShifts = isManagerRole
     ? (shifts?.shifts?.filter((shift: any) => {
-        const shiftDate = new Date(shift.startTime);
-        const today = new Date();
-        return shiftDate.toDateString() === today.toDateString();
+        return toDateStringPHT(new Date(shift.startTime)) === todayPHT;
       }) || [])
     : (employeeShifts?.shifts?.filter((shift: any) => {
-        const shiftDate = new Date(shift.startTime);
-        const today = new Date();
-        return shiftDate.toDateString() === today.toDateString();
+        return toDateStringPHT(new Date(shift.startTime)) === todayPHT;
       }) || []);
 
   const pendingTimeOffRequests = (timeOffResponse?.requests || []).filter(

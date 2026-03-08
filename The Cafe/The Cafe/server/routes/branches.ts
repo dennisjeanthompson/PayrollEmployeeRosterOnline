@@ -91,6 +91,11 @@ export function registerBranchesRoutes(router: Router) {
     try {
       const { id } = req.params;
 
+      // Managers can only modify their own branch
+      if ((req as any).user?.role === 'manager' && (req as any).user?.branchId !== id) {
+        return res.status(403).json({ message: "Managers can only modify their own branch" });
+      }
+
       const schema = z.object({
         name: z.string().min(1, "Name is required").optional(),
         address: z.string().min(1, "Address is required").optional(),
@@ -126,7 +131,12 @@ export function registerBranchesRoutes(router: Router) {
   router.delete("/api/branches/:id", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-      
+
+      // Managers can only deactivate their own branch
+      if ((req as any).user?.role === 'manager' && (req as any).user?.branchId !== id) {
+        return res.status(403).json({ message: "Managers can only modify their own branch" });
+      }
+
       const updatedBranch = await dbStorage.updateBranch(id, { isActive: false });
 
       if (!updatedBranch) {

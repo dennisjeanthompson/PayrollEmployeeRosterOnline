@@ -636,7 +636,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // If querying for another user, require manager role
     const targetUserId = queryUserId as string || currentUser.id;
-    if (targetUserId !== currentUser.id && currentUser.role !== "manager") {
+    if (targetUserId !== currentUser.id && currentUser.role !== "manager" && currentUser.role !== "admin") {
       return res.status(403).json({ message: "Insufficient permissions" });
     }
 
@@ -938,6 +938,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You can only clock in shifts from your own branch" });
       }
 
+      // Prevent double clock-in
+      if (shift.status === 'in-progress' || shift.status === 'completed') {
+        return res.status(409).json({ message: "Shift has already been clocked in" });
+      }
+
       // Update shift with actual start time
       const updatedShift = await storage.updateShift(id, {
         actualStartTime: new Date(),
@@ -994,6 +999,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Verify branch ownership
       if (shift.branchId !== req.user!.branchId) {
         return res.status(403).json({ message: "You can only clock out shifts from your own branch" });
+      }
+
+      // Verify shift is currently in progress
+      if (shift.status !== 'in-progress') {
+        return res.status(409).json({ message: "Shift is not currently in progress" });
       }
 
       // Update shift with actual end time and mark as completed
@@ -1411,6 +1421,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.delete("/api/adjustment-logs/:id", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
+      const log = await storage.getAdjustmentLog(id);
+      if (!log) return res.status(404).json({ message: "Adjustment log not found" });
+      if (log.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
+      }
       await storage.deleteAdjustmentLog(id);
       res.json({ success: true });
     } catch (error: any) {
@@ -3741,6 +3756,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'pending'
       };
 
+      // Check for overlapping time-off requests (pending or approved)
+      const existingRequests = await storage.getTimeOffRequestsByUser(req.user!.id);
+      const hasOverlap = existingRequests.some(r => {
+        if (r.status === 'rejected') return false;
+        const existStart = new Date(r.startDate).getTime();
+        const existEnd = new Date(r.endDate).getTime();
+        return startDate.getTime() <= existEnd && endDate.getTime() >= existStart;
+      });
+      if (hasOverlap) {
+        return res.status(409).json({ message: "You already have a pending or approved time-off request overlapping these dates" });
+      }
+
       console.log(`📅 Advance notice: ${advanceDays} days (minimum: ${minimumAdvanceDays}, shortNotice: ${shortNotice})`);
 
       const request = await storage.createTimeOffRequest(requestPayload);
@@ -3811,6 +3838,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(409).json({ message: `Request has already been ${existing.status}` });
     }
 
+    // Verify the employee belongs to the manager's branch
+    const employee = await storage.getUser(existing.userId);
+    if (!employee || employee.branchId !== req.user!.branchId) {
+      return res.status(403).json({ message: "Not authorized for this branch" });
+    }
+
     const request = await storage.updateTimeOffRequest(id, {
       status: "approved",
       approvedBy: req.user!.id,
@@ -3876,6 +3909,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     if (existing.status !== 'pending') {
       return res.status(409).json({ message: `Request has already been ${existing.status}` });
+    }
+
+    // Verify the employee belongs to the manager's branch
+    const employee = await storage.getUser(existing.userId);
+    if (!employee || employee.branchId !== req.user!.branchId) {
+      return res.status(403).json({ message: "Not authorized for this branch" });
     }
 
     const request = await storage.updateTimeOffRequest(id, {
