@@ -317,6 +317,36 @@ class RealTimeManager {
     this.io.to(`branch:${branchId}:managers`).emit("notification:created", { notification });
   }
 
+  // TIME-OFF EVENTS
+  public broadcastTimeOffCreated(request: any, branchId?: string) {
+    // Notify managers and the requester
+    this.io.to("managers").emit("time-off:created", { request });
+    if (request.userId) {
+      this.io.to(`user:${request.userId}`).emit("time-off:created", { request });
+    }
+    if (branchId) {
+      this.io.to(`branch:${branchId}`).emit("time-off:created", { request });
+    }
+    // Also broadcast to shifts room so schedule views refresh
+    this.io.to("shifts").emit("time-off:created", { request });
+  }
+
+  public broadcastTimeOffApproved(request: any) {
+    if (request.userId) {
+      this.io.to(`user:${request.userId}`).emit("time-off:approved", { request });
+    }
+    this.io.to("managers").emit("time-off:approved", { request });
+    this.io.to("shifts").emit("time-off:approved", { request });
+  }
+
+  public broadcastTimeOffRejected(request: any) {
+    if (request.userId) {
+      this.io.to(`user:${request.userId}`).emit("time-off:rejected", { request });
+    }
+    this.io.to("managers").emit("time-off:rejected", { request });
+    this.io.to("shifts").emit("time-off:rejected", { request });
+  }
+
   public isUserOnline(userId: string): boolean {
     return this.userConnections.has(userId) && (this.userConnections.get(userId)?.size ?? 0) > 0;
   }

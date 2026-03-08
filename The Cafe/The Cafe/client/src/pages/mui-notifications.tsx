@@ -109,12 +109,22 @@ export default function MuiNotifications() {
   const [filter, setFilter] = useState<FilterType>('all');
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  useRealtime({ enabled: true, queryKeys: ['/api/notifications'] });
+  useRealtime({
+    enabled: true,
+    queryKeys: ['/api/notifications'],
+    onEvent: (event: string) => {
+      if (event === 'notification:created' || event === 'notification' ||
+          event.startsWith('time-off:') || event.startsWith('trade:') ||
+          event.startsWith('shift:')) {
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      }
+    },
+  });
 
   const { data: resp, isLoading } = useQuery({
     queryKey: ["/api/notifications"],
     queryFn: async () => { const r = await apiRequest("GET", "/api/notifications"); return r.json(); },
-    refetchInterval: 30000,
+    refetchInterval: 15000,
     refetchOnWindowFocus: true,
   });
 

@@ -78,7 +78,7 @@ export default function NotificationBell() {
       const res = await apiRequest('GET', '/api/notifications');
       return res.json();
     },
-    refetchInterval: 30000,
+    refetchInterval: 15000,
     refetchOnWindowFocus: true,
   });
 
@@ -86,7 +86,9 @@ export default function NotificationBell() {
     enabled: true,
     queryKeys: ['/api/notifications'],
     onEvent: (event) => {
-      if (event === 'notification:created') {
+      if (event === 'notification:created' || event === 'notification' ||
+          event.startsWith('time-off:') || event.startsWith('trade:') ||
+          event.startsWith('shift:')) {
         queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       }
     },

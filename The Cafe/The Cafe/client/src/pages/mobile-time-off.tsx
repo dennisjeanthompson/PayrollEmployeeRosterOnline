@@ -24,6 +24,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { capitalizeFirstLetter } from "@/lib/utils";
 import { getCurrentUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtime } from "@/hooks/use-realtime";
 import MuiMobileHeader from "@/components/mui/mui-mobile-header";
 import MuiMobileBottomNav from "@/components/mui/mui-mobile-bottom-nav";
 import { motion, AnimatePresence } from "framer-motion";
@@ -69,6 +70,9 @@ export default function MobileTimeOff() {
     reason: "",
   });
 
+  // Connect to real-time updates via Socket.IO
+  useRealtime({ enabled: !!currentUser?.id });
+
   // Fetch time off requests with real-time updates
   const { data: requestsData, isLoading, refetch } = useQuery({
     queryKey: ['mobile-time-off', currentUser?.id],
@@ -76,9 +80,8 @@ export default function MobileTimeOff() {
       const response = await apiRequest('GET', '/api/time-off-requests');
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time time off updates
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   // Submit time off request

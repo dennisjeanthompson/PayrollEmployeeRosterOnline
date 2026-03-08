@@ -5,6 +5,7 @@ import { getCurrentUser, isManager } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { capitalizeFirstLetter } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtime } from "@/hooks/use-realtime";
 import { toast as notify } from 'react-toastify';
 
 // MUI Components
@@ -41,6 +42,11 @@ import timeGridPlugin from '@fullcalendar/timegrid';
 import interactionPlugin from '@fullcalendar/interaction';
 import listPlugin from '@fullcalendar/list';
 import { addDays } from 'date-fns';
+
+// MUI Date Pickers
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 
 // MUI Icons
 import AddIcon from "@mui/icons-material/Add";
@@ -108,6 +114,17 @@ export default function MuiTimeOff() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
+  // Real-time updates for time-off requests
+  useRealtime({
+    enabled: true,
+    queryKeys: ['time-off-requests'],
+    onEvent: (event: string) => {
+      if (event.startsWith('time-off:') || event === 'notification:created') {
+        queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+      }
+    },
+  });
+
   const [openDialog, setOpenDialog] = useState(false);
   const [editingRequest, setEditingRequest] = useState<TimeOffRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
@@ -115,8 +132,8 @@ export default function MuiTimeOff() {
 
   const [formData, setFormData] = useState({
     type: "vacation",
-    startDate: format(new Date(), "yyyy-MM-dd"),
-    endDate: format(new Date(), "yyyy-MM-dd"),
+    startDate: new Date() as Date | null,
+    endDate: new Date() as Date | null,
     reason: "",
   });
 
@@ -134,15 +151,19 @@ export default function MuiTimeOff() {
   // Submit time off request
   const submitMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
+      const payload = {
+        type: data.type,
+        startDate: data.startDate ? format(data.startDate, "yyyy-MM-dd") : "",
+        endDate: data.endDate ? format(data.endDate, "yyyy-MM-dd") : "",
+        reason: data.reason,
+        userId: currentUser?.id,
+      };
       const endpoint = editingRequest
         ? `/api/time-off-requests/${editingRequest.id}`
         : "/api/time-off-requests";
       const method = editingRequest ? "PUT" : "POST";
 
-      const response = await apiRequest(method, endpoint, {
-        ...data,
-        userId: currentUser?.id,
-      });
+      const response = await apiRequest(method, endpoint, payload);
       return response.json();
     },
     onSuccess: (response: any) => {
@@ -224,16 +245,16 @@ export default function MuiTimeOff() {
       setEditingRequest(request);
       setFormData({
         type: request.type,
-        startDate: request.startDate.split("T")[0],
-        endDate: request.endDate.split("T")[0],
+        startDate: parseISO(request.startDate.split("T")[0]),
+        endDate: parseISO(request.endDate.split("T")[0]),
         reason: request.reason,
       });
     } else {
       setEditingRequest(null);
       setFormData({
         type: "vacation",
-        startDate: format(new Date(), "yyyy-MM-dd"),
-        endDate: format(new Date(), "yyyy-MM-dd"),
+        startDate: new Date(),
+        endDate: new Date(),
         reason: "",
       });
     }
@@ -245,8 +266,8 @@ export default function MuiTimeOff() {
     setEditingRequest(null);
     setFormData({
       type: "vacation",
-      startDate: format(new Date(), "yyyy-MM-dd"),
-      endDate: format(new Date(), "yyyy-MM-dd"),
+      startDate: new Date(),
+      endDate: new Date(),
       reason: "",
     });
 
@@ -255,10 +276,11 @@ export default function MuiTimeOff() {
   const handleDateClick = (arg: any) => {
     // If user is Employee, clicking a date opens new request
     if (!isManagerRole) {
+      const clickedDate = new Date(arg.dateStr);
       setFormData({
         ...formData,
-        startDate: arg.dateStr,
-        endDate: arg.dateStr,
+        startDate: clickedDate,
+        endDate: clickedDate,
       });
       setOpenDialog(true);
     }
@@ -282,10 +304,16 @@ export default function MuiTimeOff() {
       return;
     }
 
-    const startDate = new Date(formData.startDate);
-    const endDate = new Date(formData.endDate);
+    if (!formData.startDate || !formData.endDate) {
+      toast({
+        title: "Validation Error",
+        description: "Please select start and end dates",
+        variant: "destructive",
+      });
+      return;
+    }
 
-    if (endDate < startDate) {
+    if (formData.endDate < formData.startDate) {
       toast({
         title: "Validation Error",
         description: "End date cannot be before start date",
@@ -533,29 +561,33 @@ export default function MuiTimeOff() {
               </Select>
             </FormControl>
 
-            <TextField
-              label="Start Date"
-              type="date"
-              value={formData.startDate}
-              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-              slotProps={{ inputLabel: { shrink: true } }}
-              fullWidth
-            />
-
-            <TextField
-              label="End Date"
-              type="date"
-              value={formData.endDate}
-              onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-              slotProps={{ inputLabel: { shrink: true } }}
-              fullWidth
-            />
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <DatePicker
+                label="Start Date"
+                value={formData.startDate}
+                onChange={(val) => setFormData(prev => ({
+                  ...prev,
+                  startDate: val,
+                  endDate: (val && prev.endDate && prev.endDate < val) ? val : prev.endDate,
+                }))}
+                slotProps={{ textField: { fullWidth: true } }}
+                disablePast
+              />
+              <DatePicker
+                label="End Date"
+                value={formData.endDate}
+                onChange={(val) => setFormData(prev => ({ ...prev, endDate: val }))}
+                slotProps={{ textField: { fullWidth: true } }}
+                minDate={formData.startDate || undefined}
+                disablePast
+              />
+            </LocalizationProvider>
 
             {formData.startDate && formData.endDate && (
               <>
                 <Paper sx={{ p: 2, bgcolor: "action.hover" }}>
                   <Typography variant="body2" color="textSecondary">
-                    Duration: {getDaysDifference(formData.startDate, formData.endDate)} day(s)
+                    Duration: {differenceInDays(formData.endDate, formData.startDate) + 1} day(s)
                   </Typography>
                 </Paper>
                 

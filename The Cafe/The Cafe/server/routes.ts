@@ -3549,6 +3549,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         realTimeManager.broadcastNotification(notification);
       }
 
+      // Broadcast time-off created event for real-time UI updates
+      realTimeManager.broadcastTimeOffCreated(request, req.user!.branchId);
+
       // Return request with advance notice info for frontend to show appropriate toast
       res.json({ 
         request,
@@ -3615,6 +3618,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })
     } as any);
     realTimeManager.broadcastNotification(notification);
+    realTimeManager.broadcastTimeOffApproved(request);
 
     // Audit log for time-off approval
     await createAuditLog({
@@ -3672,6 +3676,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       })
     } as any);
     realTimeManager.broadcastNotification(notification);
+    realTimeManager.broadcastTimeOffRejected(request);
 
     // Audit log for time-off rejection
     await createAuditLog({

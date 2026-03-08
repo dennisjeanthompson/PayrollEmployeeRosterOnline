@@ -24,6 +24,7 @@ import { format, parseISO, formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { getCurrentUser, getAuthState } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtime } from "@/hooks/use-realtime";
 import MuiMobileHeader from "@/components/mui/mui-mobile-header";
 import MuiMobileBottomNav from "@/components/mui/mui-mobile-bottom-nav";
 import { motion, AnimatePresence } from "framer-motion";
@@ -43,6 +44,9 @@ export default function MobileNotifications() {
   const { isAuthenticated, user } = getAuthState();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  // Connect to real-time updates via Socket.IO
+  useRealtime({ enabled: !!currentUser?.id });
 
   // Wait for authentication to load
   if (!isAuthenticated || !user) {
@@ -65,7 +69,7 @@ export default function MobileNotifications() {
       const response = await apiRequest('GET', '/api/notifications');
       return response.json();
     },
-    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
+    refetchInterval: 15000, // Poll every 15 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true
   });
 

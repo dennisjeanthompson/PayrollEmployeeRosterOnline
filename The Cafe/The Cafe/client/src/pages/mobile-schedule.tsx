@@ -34,6 +34,7 @@ import {
 } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { getCurrentUser, getAuthState } from "@/lib/auth";
+import { useRealtime } from "@/hooks/use-realtime";
 import MuiMobileHeader from "@/components/mui/mui-mobile-header";
 import MuiMobileBottomNav from "@/components/mui/mui-mobile-bottom-nav";
 import { motion, AnimatePresence } from "framer-motion";
@@ -81,6 +82,9 @@ export default function MobileSchedule() {
   const [selectedDay, setSelectedDay] = useState<Date | null>(new Date());
   const [calendarOpen, setCalendarOpen] = useState(false);
 
+  // Connect to real-time updates via Socket.IO
+  useRealtime({ enabled: !!currentUser?.id });
+
   // Wait for authentication to load
   if (!isAuthenticated || !user) {
     return (
@@ -122,9 +126,8 @@ export default function MobileSchedule() {
       );
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time schedule updates
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true, // Keep polling even when tab is not focused
   });
 
   const shifts: Shift[] = shiftsData?.shifts || [];

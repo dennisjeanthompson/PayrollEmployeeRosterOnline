@@ -40,7 +40,7 @@ import { getCurrentUser, isManager as checkIsManager } from '@/lib/auth';
 import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, setHours, setMinutes, differenceInHours, isValid } from 'date-fns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { DateTimePicker } from '@mui/x-date-pickers/DateTimePicker';
+import { DateTimePicker, DatePicker } from '@mui/x-date-pickers';
 import { getRoleColor, getUniqueRoleColors } from '@/lib/schedule-theme';
 import { useRealtime } from '@/hooks/use-realtime';
 import { toast } from 'react-toastify';
@@ -80,7 +80,7 @@ export default function ScheduleV2() {
   // Form data
   const [newShift, setNewShift] = useState({ employeeId: '', startTime: null as Date | null, endTime: null as Date | null, notes: '' });
   const [editForm, setEditForm] = useState({ startTime: null as Date | null, endTime: null as Date | null, notes: '' });
-  const [timeOffForm, setTimeOffForm] = useState({ type: 'vacation', startDate: format(new Date(), 'yyyy-MM-dd'), endDate: format(new Date(), 'yyyy-MM-dd'), reason: '' });
+  const [timeOffForm, setTimeOffForm] = useState({ type: 'vacation', startDate: new Date() as Date | null, endDate: new Date() as Date | null, reason: '' });
   const [tradeForm, setTradeForm] = useState({ shiftId: '', targetUserId: '', reason: '' });
 
   // Real-time updates — refresh calendar data on any schedule/request event
@@ -88,33 +88,38 @@ export default function ScheduleV2() {
     enabled: true,
     queryKeys: ['shifts', 'time-off-requests', 'shift-trades', 'employees', 'notifications'],
     onEvent: (event: string, data: any) => {
-      if (event.startsWith('time-off:') || event.startsWith('trade:') || event.startsWith('shift:')) {
+      // Refresh all schedule-related data on any relevant event
+      if (
+        event.startsWith('time-off:') || event.startsWith('trade:') || event.startsWith('shift:') ||
+        event === 'notification:created' || event === 'notification'
+      ) {
         queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
         queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
         queryClient.invalidateQueries({ queryKey: ['shift-trades'] });
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       }
       // Show inline toast for real-time status changes pushed from server
       if ((event === 'notification' || event === 'notification:created') && data) {
-        const type = data.type || '';
+        const notif = data?.notification || data;
+        const type = notif?.type || '';
         if (type === 'time_off_approved') {
-          toast.success(data.message || 'Your time-off request was approved!');
-          queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
+          toast.success(notif.message || 'Your time-off request was approved!');
         } else if (type === 'time_off_rejected') {
-          toast.error(data.message || 'Your time-off request was rejected.');
-          queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
-        } else if (type === 'shift_trade' && data.data) {
+          toast.error(notif.message || 'Your time-off request was rejected.');
+        } else if (type === 'shift_trade') {
           try {
-            const parsed = typeof data.data === 'string' ? JSON.parse(data.data) : data.data;
-            if (parsed.status === 'approved') {
-              toast.success(data.message || 'Shift trade approved!');
-            } else if (parsed.status === 'rejected') {
-              toast.error(data.message || 'Shift trade was rejected.');
+            const parsed = typeof notif.data === 'string' ? JSON.parse(notif.data) : notif.data;
+            if (parsed?.status === 'approved') {
+              toast.success(notif.message || 'Shift trade approved!');
+            } else if (parsed?.status === 'rejected') {
+              toast.error(notif.message || 'Shift trade was rejected.');
             }
           } catch { /* ignore parse errors */ }
-          queryClient.invalidateQueries({ queryKey: ['shift-trades'] });
-          queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
+        } else if (type === 'trade_request') {
+          toast.info(notif.message || 'New shift trade request received');
+        } else if (type === 'time_off') {
+          toast.info(notif.message || 'New time-off request received');
         }
-        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       }
     },
   });
@@ -126,6 +131,7 @@ export default function ScheduleV2() {
       const res = await apiRequest('GET', '/api/shifts/branch');
       return res.json();
     },
+    refetchInterval: 15000,
   });
 
   const { data: employeesData, isLoading: employeesLoading } = useQuery<{ employees: Employee[] }>({
@@ -152,7 +158,7 @@ export default function ScheduleV2() {
       const res = await apiRequest('GET', '/api/time-off-requests');
       return res.json();
     },
-    staleTime: 30000,
+    refetchInterval: 15000,
   });
 
   const { data: tradesData } = useQuery<{ trades: ShiftTrade[] }>({
@@ -161,7 +167,7 @@ export default function ScheduleV2() {
       const res = await apiRequest('GET', '/api/shift-trades');
       return res.json();
     },
-    staleTime: 30000,
+    refetchInterval: 15000,
   });
 
   // Normalize data
@@ -240,7 +246,13 @@ export default function ScheduleV2() {
 
   const createTimeOffMutation = useMutation({
     mutationFn: async (data: typeof timeOffForm) => {
-      const res = await apiRequest('POST', '/api/time-off-requests', data);
+      const payload = {
+        type: data.type,
+        startDate: data.startDate ? format(data.startDate, 'yyyy-MM-dd') : '',
+        endDate: data.endDate ? format(data.endDate, 'yyyy-MM-dd') : '',
+        reason: data.reason,
+      };
+      const res = await apiRequest('POST', '/api/time-off-requests', payload);
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to submit'); }
       return res.json();
     },
@@ -248,7 +260,7 @@ export default function ScheduleV2() {
       queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
       toast.success('Time-off request submitted');
       setTimeOffModalOpen(false);
-      setTimeOffForm({ type: 'vacation', startDate: format(new Date(), 'yyyy-MM-dd'), endDate: format(new Date(), 'yyyy-MM-dd'), reason: '' });
+      setTimeOffForm({ type: 'vacation', startDate: new Date(), endDate: new Date(), reason: '' });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -380,12 +392,28 @@ export default function ScheduleV2() {
 
   const handleWeekNav = useCallback((direction: 'prev' | 'next' | 'today') => {
     if (direction === 'today') {
-      setWeekStart(startOfWeek(new Date(), { weekStartsOn: 1 }));
+      const newWeekStart = startOfWeek(new Date(), { weekStartsOn: 1 });
+      setWeekStart(newWeekStart);
       setSelectedDay(new Date());
     } else if (direction === 'prev') {
-      setWeekStart(prev => subWeeks(prev, 1));
+      setWeekStart(prev => {
+        const newStart = subWeeks(prev, 1);
+        // Keep day view in sync — move selected day to the same weekday in the new week
+        setSelectedDay(current => {
+          const dayOfWeek = current.getDay() === 0 ? 6 : current.getDay() - 1; // Mon=0
+          return addDays(newStart, dayOfWeek);
+        });
+        return newStart;
+      });
     } else {
-      setWeekStart(prev => addWeeks(prev, 1));
+      setWeekStart(prev => {
+        const newStart = addWeeks(prev, 1);
+        setSelectedDay(current => {
+          const dayOfWeek = current.getDay() === 0 ? 6 : current.getDay() - 1;
+          return addDays(newStart, dayOfWeek);
+        });
+        return newStart;
+      });
     }
   }, []);
 
@@ -817,12 +845,27 @@ export default function ScheduleV2() {
                 <MenuItem value="other">Other</MenuItem>
               </Select>
             </FormControl>
-            <TextField label="Start Date" type="date" value={timeOffForm.startDate}
-              onChange={e => setTimeOffForm(p => ({ ...p, startDate: e.target.value, endDate: p.endDate < e.target.value ? e.target.value : p.endDate }))}
-              slotProps={{ inputLabel: { shrink: true } }} fullWidth />
-            <TextField label="End Date" type="date" value={timeOffForm.endDate}
-              onChange={e => setTimeOffForm(p => ({ ...p, endDate: e.target.value }))}
-              slotProps={{ inputLabel: { shrink: true }, input: { inputProps: { min: timeOffForm.startDate } } }} fullWidth />
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <DatePicker
+                label="Start Date"
+                value={timeOffForm.startDate}
+                onChange={(val) => setTimeOffForm(p => ({
+                  ...p,
+                  startDate: val,
+                  endDate: (val && p.endDate && p.endDate < val) ? val : p.endDate,
+                }))}
+                slotProps={{ textField: { fullWidth: true } }}
+                disablePast
+              />
+              <DatePicker
+                label="End Date"
+                value={timeOffForm.endDate}
+                onChange={(val) => setTimeOffForm(p => ({ ...p, endDate: val }))}
+                slotProps={{ textField: { fullWidth: true } }}
+                minDate={timeOffForm.startDate || undefined}
+                disablePast
+              />
+            </LocalizationProvider>
             <TextField label="Reason" multiline rows={3} required value={timeOffForm.reason}
               onChange={e => setTimeOffForm(p => ({ ...p, reason: e.target.value }))}
               placeholder="Briefly explain your request..." fullWidth />
@@ -830,7 +873,7 @@ export default function ScheduleV2() {
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setTimeOffModalOpen(false)}>Cancel</Button>
-          <Button variant="contained" disabled={!timeOffForm.reason || createTimeOffMutation.isPending}
+          <Button variant="contained" disabled={!timeOffForm.reason || !timeOffForm.startDate || !timeOffForm.endDate || createTimeOffMutation.isPending}
             onClick={() => createTimeOffMutation.mutate(timeOffForm)}>
             {createTimeOffMutation.isPending ? 'Submitting...' : 'Submit'}
           </Button>

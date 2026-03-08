@@ -83,36 +83,108 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       console.error("Socket error:", error);
     });
 
-    // Shift events
+    // Shift events — invalidate all known shift query keys (desktop + mobile)
+    const invalidateShiftQueries = () => {
+      queryClient.invalidateQueries({ queryKey: ["employee-shifts"] });
+      queryClient.invalidateQueries({ queryKey: ["shifts", "branch"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shifts/branch"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
+      // Mobile query keys
+      queryClient.invalidateQueries({ queryKey: ["mobile-schedule-shifts"] });
+      queryClient.invalidateQueries({ queryKey: ["mobile-shifts"] });
+    };
+
+    const invalidateTimeOffQueries = () => {
+      queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-off-requests"] });
+      // Mobile query keys
+      queryClient.invalidateQueries({ queryKey: ["mobile-time-off"] });
+    };
+
+    const invalidateTradeQueries = () => {
+      queryClient.invalidateQueries({ queryKey: ["shift-trades"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/shift-trades"] });
+      // Mobile query keys
+      queryClient.invalidateQueries({ queryKey: ["mobile-shift-trades-available"] });
+      queryClient.invalidateQueries({ queryKey: ["mobile-shift-trades-my"] });
+    };
+
     socket.on("shift:created", (data) => {
       console.log("📍 New shift created:", data);
-      queryClient.invalidateQueries({ queryKey: ["employee-shifts"] });
+      invalidateShiftQueries();
       onEventRef.current?.("shift:created", data);
     });
 
     socket.on("shift:updated", (data) => {
       console.log("🔄 Shift updated:", data);
-      queryClient.invalidateQueries({ queryKey: ["employee-shifts"] });
+      invalidateShiftQueries();
       onEventRef.current?.("shift:updated", data);
     });
 
     socket.on("shift:deleted", (data) => {
       console.log("🗑️ Shift deleted:", data);
-      queryClient.invalidateQueries({ queryKey: ["employee-shifts"] });
+      invalidateShiftQueries();
       onEventRef.current?.("shift:deleted", data);
+    });
+
+    socket.on("shift:ownership-changed", (data) => {
+      console.log("🔄 Shift ownership changed:", data);
+      invalidateShiftQueries();
+      invalidateTradeQueries();
+      onEventRef.current?.("shift:ownership-changed", data);
     });
 
     // Trade events
     socket.on("trade:created", (data) => {
       console.log("📨 New trade request:", data);
-      queryClient.invalidateQueries({ queryKey: ["shift-trades"] });
+      invalidateTradeQueries();
+      invalidateShiftQueries();
       onEventRef.current?.("trade:created", data);
     });
 
     socket.on("trade:status-changed", (data) => {
       console.log("📝 Trade status changed:", data);
-      queryClient.invalidateQueries({ queryKey: ["shift-trades"] });
+      invalidateTradeQueries();
+      invalidateShiftQueries();
       onEventRef.current?.("trade:status-changed", data);
+    });
+
+    socket.on("trade:approved", (data) => {
+      console.log("✅ Trade approved:", data);
+      invalidateTradeQueries();
+      invalidateShiftQueries();
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      onEventRef.current?.("trade:approved", data);
+    });
+
+    // Time-off events
+    socket.on("time-off:created", (data) => {
+      console.log("📅 Time-off request created:", data);
+      invalidateTimeOffQueries();
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      onEventRef.current?.("time-off:created", data);
+    });
+
+    socket.on("time-off:updated", (data) => {
+      console.log("📅 Time-off request updated:", data);
+      invalidateTimeOffQueries();
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      onEventRef.current?.("time-off:updated", data);
+    });
+
+    socket.on("time-off:approved", (data) => {
+      console.log("✅ Time-off approved:", data);
+      invalidateTimeOffQueries();
+      invalidateShiftQueries();
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      onEventRef.current?.("time-off:approved", data);
+    });
+
+    socket.on("time-off:rejected", (data) => {
+      console.log("❌ Time-off rejected:", data);
+      invalidateTimeOffQueries();
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      onEventRef.current?.("time-off:rejected", data);
     });
 
     // Availability events
@@ -186,6 +258,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     socket.on("payroll:sent", (data) => {
       console.log("📧 Payslip sent:", data);
       queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["mobile-payroll"] });
       onEventRef.current?.("payroll:sent", data);
     });
 
@@ -193,7 +266,22 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     socket.on("notification:created", (data) => {
       console.log("🔔 New notification:", data);
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      // Also refresh related data based on notification type
+      const notif = data?.notification || data;
+      if (notif?.type) {
+        if (notif.type.includes('time_off')) invalidateTimeOffQueries();
+        if (notif.type.includes('shift') || notif.type.includes('trade')) {
+          invalidateShiftQueries();
+          invalidateTradeQueries();
+        }
+      }
       onEventRef.current?.("notification:created", data);
+    });
+
+    socket.on("notification", (data) => {
+      console.log("🔔 Notification event:", data);
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      onEventRef.current?.("notification", data);
     });
 
     // Audit log events - real-time updates for audit logs page

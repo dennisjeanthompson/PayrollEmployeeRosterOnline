@@ -84,30 +84,42 @@ export default function MuiDashboard() {
   // Enable real-time updates
   useRealtime({
     enabled: true,
-    // Add specific query keys to invalidate on general updates if needed
-    queryKeys: ["/api/approvals", "/api/time-off-requests", "/api/notifications", "/api/shifts/branch", "/api/shifts"]
+    queryKeys: ["/api/approvals", "/api/time-off-requests", "/api/notifications", "/api/shifts/branch", "/api/shifts"],
+    onEvent: (event: string) => {
+      if (event.startsWith('time-off:') || event.startsWith('trade:') || event.startsWith('shift:') ||
+          event === 'notification:created' || event === 'notification') {
+        queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/time-off-requests"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/shifts/branch"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      }
+    },
   });
 
   // Queries
   const { data: approvals, isLoading: approvalsLoading } = useQuery<ApprovalsResponse>({
     queryKey: ["/api/approvals"],
     enabled: isManagerRole,
-    // Polling removed in favor of real-time updates
+    refetchInterval: 20000,
   });
 
   const { data: timeOffResponse, isLoading: timeOffLoading } = useQuery<TimeOffResponse>({
     queryKey: ["/api/time-off-requests"],
     enabled: isManagerRole,
+    refetchInterval: 20000,
   });
 
   const { data: shifts, isLoading: shiftsLoading } = useQuery<ShiftsResponse>({
     queryKey: ["/api/shifts/branch"],
     enabled: isManagerRole,
+    refetchInterval: 15000,
   });
 
   const { data: employeeShifts, isLoading: employeeShiftsLoading } = useQuery<ShiftsResponse>({
     queryKey: ["/api/shifts"],
     enabled: !isManagerRole,
+    refetchInterval: 15000,
   });
 
   const { data: teamHours, isLoading: teamHoursLoading } = useQuery<TeamHoursResponse>({

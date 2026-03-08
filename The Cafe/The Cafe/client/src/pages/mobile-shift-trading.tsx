@@ -20,6 +20,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { capitalizeFirstLetter } from "@/lib/utils";
 import { getCurrentUser } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { useRealtime } from "@/hooks/use-realtime";
 import MuiMobileHeader from "@/components/mui/mui-mobile-header";
 import MuiMobileBottomNav from "@/components/mui/mui-mobile-bottom-nav";
 import { motion, AnimatePresence } from "framer-motion";
@@ -52,6 +53,9 @@ export default function MobileShiftTrading() {
     urgency: "normal" as "low" | "normal" | "urgent",
   });
 
+  // Connect to real-time updates via Socket.IO
+  useRealtime({ enabled: !!currentUser?.id });
+
   // Fetch available shifts with real-time updates
   const { data: availableData, isLoading: loadingAvailable, refetch: refetchAvailable } = useQuery({
     queryKey: ['mobile-shift-trades-available'],
@@ -59,9 +63,8 @@ export default function MobileShiftTrading() {
       const response = await apiRequest('GET', '/api/shift-trades/available');
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time trade updates
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   // Fetch my trades with real-time updates
@@ -71,9 +74,8 @@ export default function MobileShiftTrading() {
       const response = await apiRequest('GET', '/api/shift-trades');
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time trade updates
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   // Take shift mutation

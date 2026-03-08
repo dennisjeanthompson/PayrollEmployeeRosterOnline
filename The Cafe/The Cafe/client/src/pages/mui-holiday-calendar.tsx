@@ -53,6 +53,9 @@ import interactionPlugin from "@fullcalendar/interaction";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 
 interface Holiday {
   id: string;
@@ -739,23 +742,29 @@ export default function MuiHolidayCalendar() {
               sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
             />
 
-            <TextField
-              label="Date"
-              type="date"
-              value={formData.date}
-              onChange={(e) => {
-                const newDate = e.target.value;
-                setFormData({
-                  ...formData,
-                  date: newDate,
-                  year: new Date(newDate).getFullYear(),
-                });
-              }}
-              fullWidth
-              required
-              InputLabelProps={{ shrink: true }}
-              sx={{ "& .MuiOutlinedInput-root": { borderRadius: 2 } }}
-            />
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <DatePicker
+                label="Date"
+                value={formData.date ? new Date(formData.date) : null}
+                onChange={(val) => {
+                  if (val) {
+                    const newDate = format(val, 'yyyy-MM-dd');
+                    setFormData({
+                      ...formData,
+                      date: newDate,
+                      year: val.getFullYear(),
+                    });
+                  }
+                }}
+                slotProps={{
+                  textField: {
+                    fullWidth: true,
+                    required: true,
+                    sx: { "& .MuiOutlinedInput-root": { borderRadius: 2 } },
+                  },
+                }}
+              />
+            </LocalizationProvider>
 
             <TextField
               select

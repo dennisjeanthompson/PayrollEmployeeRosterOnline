@@ -33,6 +33,7 @@ import { motion } from "framer-motion";
 import { apiRequest } from "@/lib/queryClient";
 import { capitalizeFirstLetter } from "@/lib/utils";
 import { getCurrentUser, getAuthState } from "@/lib/auth";
+import { useRealtime } from "@/hooks/use-realtime";
 import { useLocation } from "wouter";
 import MuiMobileHeader from "@/components/mui/mui-mobile-header";
 import MuiMobileBottomNav from "@/components/mui/mui-mobile-bottom-nav";
@@ -227,6 +228,9 @@ export default function MobileDashboard() {
     }
   }, []);
 
+  // Connect to real-time updates via Socket.IO
+  useRealtime({ enabled: !!currentUser?.id });
+
   // Wait for authentication to load
   if (!isAuthenticated || !user) {
     return (
@@ -258,9 +262,8 @@ export default function MobileDashboard() {
       );
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   // Fetch recent payroll with real-time updates
@@ -270,9 +273,8 @@ export default function MobileDashboard() {
       const response = await apiRequest('GET', '/api/payroll');
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time payslip updates
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   // Fetch hours summary with real-time updates
@@ -282,9 +284,8 @@ export default function MobileDashboard() {
       const response = await apiRequest('GET', '/api/hours/my-summary');
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time
+    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   // Fetch notifications with real-time updates
@@ -294,7 +295,7 @@ export default function MobileDashboard() {
       const response = await apiRequest('GET', '/api/notifications');
       return response.json();
     },
-    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
+    refetchInterval: 15000, // Poll every 15 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
   });
 
