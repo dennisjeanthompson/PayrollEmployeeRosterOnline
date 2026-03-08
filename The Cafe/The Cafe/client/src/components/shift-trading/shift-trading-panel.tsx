@@ -573,7 +573,11 @@ export default function ShiftTradingPanel() {
                 label="Target Employee"
                 onChange={(e) => setTargetEmployee(e.target.value)}
               >
-                {employees.map((emp: { id: number; firstName: string; lastName: string }) => (
+                {employees
+                  .filter((emp: { id: number; firstName: string; lastName: string }) =>
+                    String(emp.id) !== String(currentUser?.id)
+                  )
+                  .map((emp: { id: number; firstName: string; lastName: string }) => (
                   <MenuItem key={emp.id} value={emp.id}>
                     {emp.firstName} {emp.lastName}
                   </MenuItem>

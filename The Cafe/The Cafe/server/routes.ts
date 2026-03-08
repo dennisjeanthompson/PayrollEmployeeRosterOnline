@@ -2190,12 +2190,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const allTrades = Array.from(tradeMap.values());
       
-      // Enrich trades with shift and user data
-      const enrichedTrades = await Promise.all(
-        allTrades.map(async (trade) => {
-          const shift = await storage.getShift(trade.shiftId);
-          const requester = await storage.getUser(trade.fromUserId);
-          const targetUser = trade.toUserId ? await storage.getUser(trade.toUserId) : null;
+      // Batch-fetch unique shifts and users to avoid N+1 queries
+      const shiftIds = [...new Set(allTrades.map(t => t.shiftId))];
+      const userIds = [...new Set(allTrades.flatMap(t => [t.fromUserId, t.toUserId].filter(Boolean) as string[]))];
+
+      const [shifts, users] = await Promise.all([
+        Promise.all(shiftIds.map(sid => storage.getShift(sid))),
+        Promise.all(userIds.map(uid => storage.getUser(uid))),
+      ]);
+
+      const shiftMap2 = new Map(shifts.filter(Boolean).map(s => [s!.id, s!]));
+      const userMap = new Map(users.filter(Boolean).map(u => [u!.id, u!]));
+
+      // Enrich trades with pre-fetched data
+      const enrichedTrades = allTrades.map((trade) => {
+          const shift = shiftMap2.get(trade.shiftId);
+          const requester = userMap.get(trade.fromUserId);
+          const targetUser = trade.toUserId ? userMap.get(trade.toUserId) : null;
           
           return {
             ...trade,
@@ -2217,8 +2228,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             } : null,
             createdAt: trade.requestedAt ?? new Date(),
           };
-        })
-      );
+      });
       
       res.json({ trades: enrichedTrades });
     } catch (error: any) {
@@ -2362,6 +2372,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const requesterName = requester ? `${requester.firstName} ${requester.lastName}` : "An employee";
       const shiftDate = shift?.startTime ? format(new Date(shift.startTime), "MMM d") : "a shift";
 
+      // Fetch branch users once for notifications
+      const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
+      const notifiedUserIds = new Set<string>();
+
       // 1. Notify the target user if this is a direct trade
       if (trade.toUserId) {
         const notification = await storage.createNotification({
@@ -2376,9 +2390,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           })
         } as any);
         realTimeManager.broadcastNotification(notification);
+        notifiedUserIds.add(trade.toUserId);
       } else {
         // 2. If it's an open trade, notify everyone in the branch
-        const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
         for (const user of branchUsers) {
           // Don't notify the person who created it
           if (user.id === fromUserId) continue;
@@ -2395,16 +2409,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             })
           } as any);
           realTimeManager.broadcastNotification(notification);
+          notifiedUserIds.add(user.id);
         }
       }
 
-      // 3. Notify all managers (always)
-      const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
+      // 3. Notify managers not already notified
       const managers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
       for (const manager of managers) {
-        // Don't duplicate if manager was already notified as an employee (though usually managers aren't in branchUsers as employees)
-        // Check if manager is already the requester
-        if (manager.id === req.user!.id) continue;
+        if (manager.id === req.user!.id || notifiedUserIds.has(manager.id)) continue;
 
         const notificationManager = await storage.createNotification({
           userId: manager.id,
@@ -2440,6 +2452,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trade = await storage.getShiftTrade(id);
       if (!trade) {
         return res.status(404).json({ message: "Trade not found" });
+      }
+
+      // Verify trade belongs to user's branch
+      const tradeShift = await storage.getShift(trade.shiftId);
+      if (!tradeShift || tradeShift.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
       }
 
       // Validate status value
@@ -2515,6 +2533,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trade = await storage.getShiftTrade(id);
       if (!trade) {
         return res.status(404).json({ message: "Trade not found" });
+      }
+
+      // Verify trade belongs to manager's branch
+      const tradeShift = await storage.getShift(trade.shiftId);
+      if (!tradeShift || tradeShift.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
       }
 
       // Prevent processing already-finalized trades
@@ -2651,6 +2675,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Trade not found" });
       }
 
+      // Verify trade belongs to user's branch
+      const tradeShift = await storage.getShift(trade.shiftId);
+      if (!tradeShift || tradeShift.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+
       // Only open trades (no toUserId yet) or trades directed at this user can be taken
       if (trade.toUserId && trade.toUserId !== userId) {
         return res.status(403).json({ message: "This trade is reserved for another employee" });
@@ -2739,6 +2769,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trade = await storage.getShiftTrade(id);
       if (!trade) {
         return res.status(404).json({ message: "Trade not found" });
+      }
+
+      // Verify trade belongs to manager's branch
+      const tradeShift = await storage.getShift(trade.shiftId);
+      if (!tradeShift || tradeShift.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
       }
 
       // Prevent re-approving already-finalized trades
@@ -2833,6 +2869,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trade = await storage.getShiftTrade(id);
       if (!trade) {
         return res.status(404).json({ message: "Trade not found" });
+      }
+
+      // Verify trade belongs to manager's branch
+      const tradeShift = await storage.getShift(trade.shiftId);
+      if (!tradeShift || tradeShift.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
       }
 
       const updatedTrade = await storage.updateShiftTrade(id, {

@@ -81,7 +81,10 @@ export default function RequestsPanel({
   const recentResolved = [
     ...timeOffRequests.filter(r => r.status !== 'pending'),
     ...shiftTrades.filter(t => t.status !== 'pending' && t.status !== 'accepted'),
-  ].slice(0, 5);
+  ]
+    .sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt || b.requestedAt || 0).getTime()
+                             - new Date(a.updatedAt || a.createdAt || a.requestedAt || 0).getTime())
+    .slice(0, 5);
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>

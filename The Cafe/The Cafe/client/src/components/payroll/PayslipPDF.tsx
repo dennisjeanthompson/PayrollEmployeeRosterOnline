@@ -1,15 +1,8 @@
 import React from 'react';
-import { Page, Text, View, Document, StyleSheet, Font } from '@react-pdf/renderer';
+import { Page, Text, View, Document, StyleSheet } from '@react-pdf/renderer';
 import { PayslipData, formatPHP, formatPayslipDate, formatPayPeriod, maskId } from '@shared/payslip-types';
 
-// Register standard fonts
-Font.register({
-  family: 'Helvetica',
-  fonts: [
-    { src: 'https://fonts.gstatic.com/s/helveticaneue/v70/1Ptsg8zYS_SKggPNyC0IT4ttDfA.ttf' },
-    { src: 'https://fonts.gstatic.com/s/helveticaneue/v70/1Ptsg8zYS_SKggPNyC0IT4ttDfA.ttf', fontWeight: 'bold' }
-  ]
-});
+// Helvetica is a built-in font in @react-pdf/renderer — no registration needed
 
 const styles = StyleSheet.create({
   page: {

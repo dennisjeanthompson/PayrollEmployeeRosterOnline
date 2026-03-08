@@ -1501,8 +1501,8 @@ export default function MuiEmployees() {
                   const philBase = Math.min(Math.max(estimatedMonthly, 10000), 100000);
                   const philHealth = philBase * 0.025;
                   
-                  // Pag-IBIG: 2% max ₱100
-                  const pagibig = Math.min(estimatedMonthly * 0.02, 100);
+                  // Pag-IBIG: 2% max ₱200 (2026 rate)
+                  const pagibig = Math.min(estimatedMonthly * 0.02, 200);
                   
                   // BIR: 0% if annual <₱250k
                   const annualEstimate = estimatedMonthly * 12;

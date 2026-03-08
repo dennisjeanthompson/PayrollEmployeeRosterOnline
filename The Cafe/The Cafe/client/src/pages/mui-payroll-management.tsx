@@ -312,21 +312,15 @@ export default function MuiPayrollManagement() {
   const { data: employeesData } = useQuery({
     queryKey: ["branch-employees"],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/api/payroll/entries/branch");
+      const response = await apiRequest("GET", "/api/employees");
       return response.json();
     },
   });
   
-  // Get unique employees from entries
+  // Get active employees from the branch
   const branchEmployees = useMemo(() => {
-    const entries = employeesData?.entries || [];
-    const empMap = new Map<string, { id: string; firstName: string; lastName: string; position: string }>();
-    entries.forEach((e: any) => {
-      if (e.employee && !empMap.has(e.employee.id)) {
-        empMap.set(e.employee.id, e.employee);
-      }
-    });
-    return Array.from(empMap.values());
+    const employees = employeesData?.employees || employeesData || [];
+    return employees.filter((e: any) => e.isActive !== false);
   }, [employeesData]);
 
   const createAdjustmentMutation = useMutation({

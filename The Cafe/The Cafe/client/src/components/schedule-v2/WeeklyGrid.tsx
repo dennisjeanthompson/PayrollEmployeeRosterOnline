@@ -245,7 +245,9 @@ export default function WeeklyGrid({
   const recentRejections = timeOffRequests.filter(r => {
     if (r.status !== 'rejected') return false;
     // Show rejected for 24h after rejection
-    const rejectedAt = r.approvalDate ? new Date(r.approvalDate) : new Date(r.requestedAt);
+    const rejectedAt = r.approvalDate
+      ? new Date(r.approvalDate)
+      : (r as any).updatedAt ? new Date((r as any).updatedAt) : new Date(r.requestedAt);
     return (Date.now() - rejectedAt.getTime()) < 24 * 60 * 60 * 1000;
   });
   const allVisibleTimeOff = [...visibleTimeOff, ...recentRejections];

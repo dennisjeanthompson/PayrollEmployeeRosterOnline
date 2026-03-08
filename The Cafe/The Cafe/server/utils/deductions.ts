@@ -183,7 +183,7 @@ export async function calculateWithholdingTax(monthlyBasicSalary: number): Promi
 
     let annualTax = 0;
 
-    // Find the applicable tax bracket
+    // Find the applicable tax bracket and compute tax dynamically from DB values
     for (let i = 0; i < activeRates.length; i++) {
       const bracket = activeRates[i];
       const min = parseFloat(bracket.minSalary);
@@ -191,25 +191,19 @@ export async function calculateWithholdingTax(monthlyBasicSalary: number): Promi
       const rate = bracket.employeeRate ? parseFloat(bracket.employeeRate) / 100 : 0;
 
       if (annualSalary >= min && annualSalary <= max) {
-        // Calculate tax based on bracket
-        if (i === 0) {
-          // First bracket (tax-exempt)
+        if (rate === 0) {
           annualTax = 0;
-        } else if (i === 1) {
-          // Second bracket: 15% on excess over 250,000
-          annualTax = (annualSalary - 250000) * rate;
-        } else if (i === 2) {
-          // Third bracket: 22,500 + 20% on excess over 400,000
-          annualTax = 22500 + (annualSalary - 400000) * rate;
-        } else if (i === 3) {
-          // Fourth bracket: 102,500 + 25% on excess over 800,000
-          annualTax = 102500 + (annualSalary - 800000) * rate;
-        } else if (i === 4) {
-          // Fifth bracket: 402,500 + 30% on excess over 2,000,000
-          annualTax = 402500 + (annualSalary - 2000000) * rate;
-        } else if (i === 5) {
-          // Sixth bracket: 2,202,500 + 35% on excess over 8,000,000
-          annualTax = 2202500 + (annualSalary - 8000000) * rate;
+        } else {
+          // Compute cumulative base tax from all preceding taxable brackets
+          let baseTax = 0;
+          for (let j = 1; j < i; j++) {
+            const prev = activeRates[j];
+            const prevMin = parseFloat(prev.minSalary);
+            const prevMax = prev.maxSalary ? parseFloat(prev.maxSalary) : 0;
+            const prevRate = prev.employeeRate ? parseFloat(prev.employeeRate) / 100 : 0;
+            baseTax += (prevMax - prevMin + 1) * prevRate;
+          }
+          annualTax = baseTax + (annualSalary - min) * rate;
         }
         break;
       }
