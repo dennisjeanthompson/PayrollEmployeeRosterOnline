@@ -29,9 +29,18 @@ router.get('/', requireAuth, async (req: Request, res: Response) => {
     let holidaysList: Holiday[];
 
     if (year) {
-      holidaysList = await storage.getHolidaysByYear(parseInt(year as string));
+      const yearNum = parseInt(year as string);
+      if (isNaN(yearNum)) {
+        return res.status(400).json({ message: 'Invalid year' });
+      }
+      holidaysList = await storage.getHolidaysByYear(yearNum);
     } else if (startDate && endDate) {
-      holidaysList = await storage.getHolidays(new Date(startDate as string), new Date(endDate as string));
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res.status(400).json({ message: 'Invalid date format' });
+      }
+      holidaysList = await storage.getHolidays(start, end);
     } else {
       holidaysList = await storage.getHolidays();
     }

@@ -218,6 +218,9 @@ router.get('/api/hours/report', requireAuth, requireRole(['manager']), async (re
     if (startDate && endDate) {
       start = new Date(startDate as string);
       end = new Date(endDate as string);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
     } else {
       // Default to current month
       const now = new Date();
@@ -340,6 +343,9 @@ router.get('/api/hours/all-employees', requireAuth, requireRole(['manager']), as
     if (startDate && endDate) {
       periodStart = new Date(startDate as string);
       periodEnd = new Date(endDate as string);
+      if (isNaN(periodStart.getTime()) || isNaN(periodEnd.getTime())) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
       // Set end date to end of day
       periodEnd.setHours(23, 59, 59, 999);
     } else {

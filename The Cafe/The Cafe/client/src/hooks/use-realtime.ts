@@ -89,6 +89,11 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       queryClient.invalidateQueries({ queryKey: ["shifts", "branch"] });
       queryClient.invalidateQueries({ queryKey: ["/api/shifts/branch"] });
       queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
+      // Dashboard components that depend on shift data
+      queryClient.invalidateQueries({ queryKey: ["upcoming-shifts"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/employee-status"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/hours/team-summary"] });
       // Mobile query keys
       queryClient.invalidateQueries({ queryKey: ["mobile-schedule-shifts"] });
       queryClient.invalidateQueries({ queryKey: ["mobile-shifts"] });
@@ -201,6 +206,8 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       queryClient.refetchQueries({ queryKey: ["/api/employees"] });
       queryClient.refetchQueries({ queryKey: ["employees"] });
       queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/employee-status"] });
       onEventRef.current?.("employee:created", data);
     });
 
@@ -215,11 +222,12 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     socket.on("employee:deleted", (data) => {
       console.log("👤 Employee deleted:", data);
-      // Refetch all employee-related queries for immediate UI update
       queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
       queryClient.refetchQueries({ queryKey: ["/api/employees"] });
       queryClient.refetchQueries({ queryKey: ["employees"] });
       queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/employee-status"] });
       onEventRef.current?.("employee:deleted", data);
     });
 

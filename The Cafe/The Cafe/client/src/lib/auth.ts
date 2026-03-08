@@ -58,7 +58,12 @@ export function getActiveBranchId(): string | undefined {
   return authState.user?.branchId;
 }
 
-export function logout() {
+export async function logout() {
+  try {
+    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+  } catch (e) {
+    // Best-effort: clear client state even if API fails
+  }
   setAuthState({ user: null, isAuthenticated: false });
 }
 

@@ -58,10 +58,15 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
       entries = await storage.getPayrollEntriesByPeriod(periodId as string);
     } else if (startDate && endDate) {
       // Get entries for date range
+      const start = new Date(startDate as string);
+      const end = new Date(endDate as string);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
       entries = await storage.getPayrollEntriesForDateRange(
         branchId,
-        new Date(startDate as string),
-        new Date(endDate as string)
+        start,
+        end
       );
     } else {
       // Get all entries for branch
@@ -223,6 +228,10 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
     const now = new Date();
     const targetMonth = month ? parseInt(month as string) - 1 : now.getMonth();
     const targetYear = year ? parseInt(year as string) : now.getFullYear();
+
+    if (isNaN(targetMonth) || isNaN(targetYear) || targetMonth < 0 || targetMonth > 11) {
+      return res.status(400).json({ message: "Invalid month or year" });
+    }
 
     const startDate = new Date(targetYear, targetMonth, 1);
     const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
