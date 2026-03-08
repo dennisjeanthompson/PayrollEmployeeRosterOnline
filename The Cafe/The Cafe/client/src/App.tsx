@@ -650,9 +650,12 @@ function App() {
           } else {
             setAuthState({ user: null, isAuthenticated: false });
           }
-        } catch (err) {
-          // If request fails, treat as unauthenticated but don't spam console
-          setAuthState({ user: null, isAuthenticated: false });
+        } catch (err: any) {
+          // Only treat as logged-out if the server explicitly rejected the session (401/403)
+          // Network errors (offline, timeout) should not log the user out
+          if (err?.status === 401 || err?.status === 403) {
+            setAuthState({ user: null, isAuthenticated: false });
+          }
         }
       }
     }, 60000); // 60 seconds (was 5 seconds - way too aggressive)

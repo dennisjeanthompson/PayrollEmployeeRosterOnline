@@ -272,6 +272,12 @@ const isShortNotice = (type: string, startDateStr: string): { isShort: boolean; 
   };
 };
 
+// HTML escape to prevent XSS in tooltip innerHTML
+const escapeHtml = (str: string | null | undefined): string => {
+  if (!str) return '';
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+};
+
 // --- Enhanced Scheduler Component ---
 const EnhancedScheduler = () => {
   const theme = useTheme();
@@ -372,6 +378,9 @@ const EnhancedScheduler = () => {
   const [editModalOpen, setEditModalOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
+  const [editStartTime, setEditStartTime] = useState('');
+  const [editEndTime, setEditEndTime] = useState('');
+  const [editNotes, setEditNotes] = useState('');
   const [overlapWarning, setOverlapWarning] = useState<string | null>(null);
   const [newShiftData, setNewShiftData] = useState({
     employeeId: '',
@@ -1046,7 +1055,6 @@ const EnhancedScheduler = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
-      toast.success('✅ Shift updated!');
       setEditModalOpen(false);
     },
     onError: (error: Error) => {
@@ -1782,6 +1790,9 @@ const EnhancedScheduler = () => {
         return;
       }
       setSelectedShift(shift);
+      setEditStartTime(shift.startTime);
+      setEditEndTime(shift.endTime);
+      setEditNotes(shift.notes || '');
       setEditModalOpen(true);
       return;
     }
@@ -3633,16 +3644,16 @@ const EnhancedScheduler = () => {
                   return `
                     <div style="padding: 4px 0;">
                       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                        <span style="width:28px;height:28px;border-radius:50%;background:${rc.bg};color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;">${employee?.firstName?.[0] || ''}${employee?.lastName?.[0] || ''}</span>
+                        <span style="width:28px;height:28px;border-radius:50%;background:${rc.bg};color:#fff;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;">${escapeHtml(employee?.firstName?.[0])}${escapeHtml(employee?.lastName?.[0])}</span>
                         <div>
-                          <strong>${employee?.firstName} ${employee?.lastName}</strong><br/>
-                          <span style="font-size:0.75rem;opacity:0.8;">${tooltipRole}</span>
+                          <strong>${escapeHtml(employee?.firstName)} ${escapeHtml(employee?.lastName)}</strong><br/>
+                          <span style="font-size:0.75rem;opacity:0.8;">${escapeHtml(tooltipRole)}</span>
                         </div>
                       </div>
                       <div style="font-size:0.8rem;color:${rc.bg};font-weight:600;">
                         ${format(new Date(shift.startTime), 'h:mm a')} – ${format(new Date(shift.endTime), 'h:mm a')} · ${hours}h
                       </div>
-                      ${shift.notes ? `<div style="margin-top:4px;font-size:0.75rem;opacity:0.7;font-style:italic;">${shift.notes}</div>` : ''}
+                      ${shift.notes ? `<div style="margin-top:4px;font-size:0.75rem;opacity:0.7;font-style:italic;">${escapeHtml(shift.notes)}</div>` : ''}
                     </div>
                   `;
                 }
@@ -3651,9 +3662,9 @@ const EnhancedScheduler = () => {
                   return `
                     <div style="padding: 8px;">
                       <strong>Time Off Request</strong><br/>
-                      Type: ${timeOff.type}<br/>
-                      Status: <span style="color: ${timeOff.status === 'approved' ? '#10B981' : '#F59E0B'};">${timeOff.status}</span><br/>
-                      ${timeOff.reason || ''}
+                      Type: ${escapeHtml(timeOff.type)}<br/>
+                      Status: <span style="color: ${timeOff.status === 'approved' ? '#10B981' : '#F59E0B'};">${escapeHtml(timeOff.status)}</span><br/>
+                      ${escapeHtml(timeOff.reason)}
                     </div>
                   `;
                 }
@@ -3662,8 +3673,8 @@ const EnhancedScheduler = () => {
                   return `
                     <div style="padding: 8px;">
                       <strong>Shift Trade</strong><br/>
-                      Status: <span style="color: ${trade.status === 'approved' ? '#10B981' : '#F59E0B'};">${trade.status}</span><br/>
-                      ${trade.reason || ''}
+                      Status: <span style="color: ${trade.status === 'approved' ? '#10B981' : '#F59E0B'};">${escapeHtml(trade.status)}</span><br/>
+                      ${escapeHtml(trade.reason)}
                     </div>
                   `;
                 }
@@ -3671,7 +3682,7 @@ const EnhancedScheduler = () => {
                 if (type === 'holiday' && holiday) {
                   return `
                     <div style="padding: 8px;">
-                      <strong>🎉 ${holiday.name}</strong><br/>
+                      <strong>🎉 ${escapeHtml(holiday.name)}</strong><br/>
                       ${holiday.type === 'federal' ? 'Federal Holiday' : 'Company Holiday'}
                     </div>
                   `;
@@ -3931,37 +3942,31 @@ const EnhancedScheduler = () => {
               <TextField
                 label="Start Time"
                 type="datetime-local"
-                defaultValue={format(new Date(selectedShift.startTime), "yyyy-MM-dd'T'HH:mm")}
+                value={format(new Date(editStartTime), "yyyy-MM-dd'T'HH:mm")}
                 slotProps={{ inputLabel: { shrink: true } }}
                 fullWidth
                 onChange={(e) => {
-                  if (selectedShift) {
-                    selectedShift.startTime = new Date(e.target.value).toISOString();
-                  }
+                  setEditStartTime(new Date(e.target.value).toISOString());
                 }}
               />
               <TextField
                 label="End Time"
                 type="datetime-local"
-                defaultValue={format(new Date(selectedShift.endTime), "yyyy-MM-dd'T'HH:mm")}
+                value={format(new Date(editEndTime), "yyyy-MM-dd'T'HH:mm")}
                 slotProps={{ inputLabel: { shrink: true } }}
                 fullWidth
                 onChange={(e) => {
-                  if (selectedShift) {
-                    selectedShift.endTime = new Date(e.target.value).toISOString();
-                  }
+                  setEditEndTime(new Date(e.target.value).toISOString());
                 }}
               />
               <TextField
                 label="Notes"
                 multiline
                 rows={2}
-                defaultValue={selectedShift.notes || ''}
+                value={editNotes}
                 fullWidth
                 onChange={(e) => {
-                  if (selectedShift) {
-                    selectedShift.notes = e.target.value;
-                  }
+                  setEditNotes(e.target.value);
                 }}
               />
               <Stack direction="row" spacing={2}>
@@ -4001,9 +4006,11 @@ const EnhancedScheduler = () => {
               if (selectedShift) {
                 updateShiftMutation.mutate({
                   id: selectedShift.id,
-                  startTime: selectedShift.startTime,
-                  endTime: selectedShift.endTime,
-                  notes: selectedShift.notes,
+                  startTime: editStartTime,
+                  endTime: editEndTime,
+                  notes: editNotes,
+                }, {
+                  onSuccess: () => toast.success('✅ Shift updated!'),
                 });
               }
             }}
@@ -5034,9 +5041,13 @@ const EnhancedScheduler = () => {
             )}
             
             {/* Manager can edit shift */}
-            {isManagerRole && (
+            {isManagerRole && shiftContextMenu.shift && (
               <MenuItem onClick={() => {
-                setSelectedShift(shiftContextMenu.shift);
+                const shift = shiftContextMenu.shift!;
+                setSelectedShift(shift);
+                setEditStartTime(shift.startTime);
+                setEditEndTime(shift.endTime);
+                setEditNotes(shift.notes || '');
                 setEditModalOpen(true);
                 handleCloseContextMenu();
               }}>

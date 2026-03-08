@@ -91,7 +91,7 @@ export default function MobileMore() {
       path: "/employee/shift-trading",
       color: "text-purple-600",
       bgColor: "bg-purple-100 dark:bg-purple-950",
-      badge: "2",
+      badge: null,
     },
     {
       icon: Bell,
@@ -100,7 +100,7 @@ export default function MobileMore() {
       path: "/employee/notifications",
       color: "text-orange-600",
       bgColor: "bg-orange-100 dark:bg-orange-950",
-      badge: "5",
+      badge: null,
     },
   ];
 

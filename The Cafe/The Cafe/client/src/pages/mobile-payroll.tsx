@@ -126,9 +126,8 @@ export default function MobilePayroll() {
       const response = await apiRequest('GET', '/api/payroll');
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time sync
+    refetchInterval: 60000, // Poll every 60 seconds
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true, // Keep polling even when tab is not focused
   });
 
   const payrollEntries: PayrollEntry[] = payrollData?.entries || [];
