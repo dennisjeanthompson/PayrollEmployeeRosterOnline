@@ -1138,6 +1138,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bulk activate employees
   app.post("/api/employees/bulk-activate", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { employeeIds } = req.body;
+    const managerBranchId = req.user!.branchId;
 
     if (!Array.isArray(employeeIds)) {
       return res.status(400).json({ message: "employeeIds must be an array" });
@@ -1145,9 +1146,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const updatedEmployees = [];
     for (const id of employeeIds) {
-      const employee = await storage.updateUser(id, { isActive: true });
-      if (employee) {
-        updatedEmployees.push(employee);
+      const existing = await storage.getUser(id);
+      if (existing && existing.branchId === managerBranchId) {
+        const employee = await storage.updateUser(id, { isActive: true });
+        if (employee) updatedEmployees.push(employee);
       }
     }
 
@@ -1160,6 +1162,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Bulk deactivate employees
   app.post("/api/employees/bulk-deactivate", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { employeeIds } = req.body;
+    const managerBranchId = req.user!.branchId;
 
     if (!Array.isArray(employeeIds)) {
       return res.status(400).json({ message: "employeeIds must be an array" });
@@ -1167,9 +1170,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     const updatedEmployees = [];
     for (const id of employeeIds) {
-      const employee = await storage.updateUser(id, { isActive: false });
-      if (employee) {
-        updatedEmployees.push(employee);
+      const existing = await storage.getUser(id);
+      if (existing && existing.branchId === managerBranchId) {
+        const employee = await storage.updateUser(id, { isActive: false });
+        if (employee) updatedEmployees.push(employee);
       }
     }
 
@@ -2694,6 +2698,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Trade not found" });
       }
 
+      // Prevent re-approving already-finalized trades
+      if (trade.status === 'approved' || trade.status === 'rejected') {
+        return res.status(409).json({ message: `Trade has already been ${trade.status}` });
+      }
+
       if (!trade.toUserId) {
         return res.status(400).json({ message: "Cannot approve trade without a target user" });
       }
@@ -3552,24 +3561,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Determine if this is a short notice request (soft warning only, never block)
       const shortNotice = advanceDays < minimumAdvanceDays && !['sick', 'emergency'].includes(leaveType);
 
-      // Explicit payload construction
+      // Explicit payload construction with validation
+      const validTypes = ['vacation', 'sick', 'emergency', 'personal', 'other'];
+      const leaveTypeValue = req.body.type as string;
+      if (!leaveTypeValue || !validTypes.includes(leaveTypeValue)) {
+        return res.status(400).json({ message: `Invalid type. Must be one of: ${validTypes.join(', ')}` });
+      }
+      if (!req.user!.id) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
       const requestPayload: any = {
         userId: req.user!.id,
         startDate: startDate,
         endDate: endDate,
-        type: req.body.type,
+        type: leaveTypeValue,
         reason: req.body.reason || '',
         status: 'pending'
       };
 
-      console.log('🔍 Validating payload manually (Bypassing Zod check to debug):', requestPayload);
       console.log(`📅 Advance notice: ${advanceDays} days (minimum: ${minimumAdvanceDays}, shortNotice: ${shortNotice})`);
-      
-      // Manual Validation Check
-      if (!requestPayload.type) throw new Error("Missing 'type' field");
-      if (!requestPayload.userId) throw new Error("Missing 'userId' field (User not authenticated properly?)");
 
-      // DIRECT STORAGE CALL - skipping Zod for diagnosis
       const request = await storage.createTimeOffRequest(requestPayload);
 
       // Get the employee who made the request
@@ -3866,32 +3878,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Payroll entry ID is required" });
       }
 
-      // Get payroll entry details
-      const userId = req.user!.id;
-      const entries = await storage.getPayrollEntriesByUser(userId);
-      const entry = entries.find(e => e.id === payrollEntryId);
+      // Get payroll entry by ID directly
+      const entry = await storage.getPayrollEntry(payrollEntryId);
 
       if (!entry) {
         return res.status(404).json({ message: "Payroll entry not found" });
       }
 
-      // Get user details
-      const user = await storage.getUser(userId);
-      if (!user) {
-        return res.status(404).json({ message: "User not found" });
+      // Get the employee who owns this entry
+      const employee = await storage.getUser(entry.userId);
+      if (!employee) {
+        return res.status(404).json({ message: "Employee not found" });
       }
+
+      // Get payroll period for accurate dates
+      const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
 
       // Prepare blockchain record
       const blockchainRecord = {
         id: entry.id,
-        employeeId: user.id,
-        employeeName: `${user.firstName} ${user.lastName}`,
-        periodStart: entry.createdAt!.toISOString(),
-        periodEnd: entry.createdAt!.toISOString(),
+        employeeId: employee.id,
+        employeeName: `${employee.firstName} ${employee.lastName}`,
+        periodStart: period?.startDate ? new Date(period.startDate).toISOString() : entry.createdAt!.toISOString(),
+        periodEnd: period?.endDate ? new Date(period.endDate).toISOString() : entry.createdAt!.toISOString(),
         totalHours: parseFloat(entry.totalHours),
         regularHours: parseFloat(entry.regularHours),
         overtimeHours: parseFloat(entry.overtimeHours || "0"),
-        hourlyRate: parseFloat(user.hourlyRate),
+        hourlyRate: parseFloat(employee.hourlyRate),
         grossPay: parseFloat(entry.grossPay),
         deductions: parseFloat(entry.deductions || "0"),
         netPay: parseFloat(entry.netPay),
@@ -3929,10 +3942,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Payroll entry ID is required" });
       }
 
-      // Get payroll entry
-      const userId = req.user!.id;
-      const entries = await storage.getPayrollEntriesByUser(userId);
-      const entry = entries.find(e => e.id === payrollEntryId);
+      // Get payroll entry by ID directly
+      const entry = await storage.getPayrollEntry(payrollEntryId);
 
       if (!entry) {
         return res.status(404).json({ message: "Payroll entry not found" });
@@ -3982,39 +3993,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "payrollEntryIds must be an array" });
       }
 
-      const userId = req.user!.id;
-      const entries = await storage.getPayrollEntriesByUser(userId);
-      const selectedEntries = entries.filter(e => payrollEntryIds.includes(e.id));
+      // Fetch entries by ID directly
+      const selectedEntries = (await Promise.all(
+        payrollEntryIds.map((id: string) => storage.getPayrollEntry(id))
+      )).filter((e): e is NonNullable<typeof e> => e != null);
 
       if (selectedEntries.length === 0) {
         return res.status(404).json({ message: "No valid payroll entries found" });
       }
 
-      // Get user details for all entries
-      const users = await Promise.all(
-        selectedEntries.map(async (entry) => await storage.getUser(entry.userId))
+      // Get employee details and period dates for all entries
+      const enrichedData = await Promise.all(
+        selectedEntries.map(async (entry) => {
+          const employee = await storage.getUser(entry.userId);
+          const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
+          return { entry, employee, period };
+        })
       );
 
       // Prepare blockchain records
-      const blockchainRecords = selectedEntries.map((entry, index) => {
-        const user = users[index];
-        if (!user) throw new Error(`User not found for entry ${entry.id}`);
-
-        return {
+      const blockchainRecords = enrichedData
+        .filter(({ employee }) => employee != null)
+        .map(({ entry, employee, period }) => ({
           id: entry.id,
-          employeeId: user.id,
-          employeeName: `${user.firstName} ${user.lastName}`,
-          periodStart: entry.createdAt!.toISOString(),
-          periodEnd: entry.createdAt!.toISOString(),
+          employeeId: employee!.id,
+          employeeName: `${employee!.firstName} ${employee!.lastName}`,
+          periodStart: period?.startDate ? new Date(period.startDate).toISOString() : entry.createdAt!.toISOString(),
+          periodEnd: period?.endDate ? new Date(period.endDate).toISOString() : entry.createdAt!.toISOString(),
           totalHours: parseFloat(entry.totalHours),
           regularHours: parseFloat(entry.regularHours),
           overtimeHours: parseFloat(entry.overtimeHours || "0"),
-          hourlyRate: parseFloat(user.hourlyRate),
+          hourlyRate: parseFloat(employee!.hourlyRate),
           grossPay: parseFloat(entry.grossPay),
           deductions: parseFloat(entry.deductions || "0"),
           netPay: parseFloat(entry.netPay),
-        };
-      });
+        }));
 
       // Batch store on blockchain
       const results = await blockchainService.batchStorePayrollRecords(blockchainRecords);
@@ -4398,9 +4411,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
-  // Full database reset + reseed (no auth needed — session invalid after reset)
-  // In production, this endpoint allows reseeding from browser console after deploy.
-  app.post("/api/debug/reset-and-reseed", asyncHandler(async (req, res) => {
+  // Full database reset + reseed (admin only)
+  app.post("/api/debug/reset-and-reseed", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
     try {
       console.log('🔄 Full database reset + reseed triggered via API');
 

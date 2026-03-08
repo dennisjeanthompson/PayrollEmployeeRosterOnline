@@ -359,7 +359,7 @@ router.get('/audit-log', requireManagerOrAdmin, async (req: Request, res: Respon
  * POST /api/payslips/generate-pdf
  * Generate a PDF payslip from payslip data
  */
-router.post('/generate-pdf', async (req: Request, res: Response) => {
+router.post('/generate-pdf', requireAuth, async (req: Request, res: Response) => {
   console.log('[Payslips] POST /generate-pdf called');
   try {
     const { payslip_data, format = 'pdf', include_qr = true } = req.body;
@@ -500,7 +500,7 @@ router.get('/verify', async (req: Request, res: Response) => {
  * GET /api/payslips/sample
  * Get sample payslip data for testing
  */
-router.get('/sample', async (_req: Request, res: Response) => {
+router.get('/sample', requireAuth, async (_req: Request, res: Response) => {
   res.json({
     success: true,
     data: SAMPLE_PAYSLIP_DATA,
@@ -511,7 +511,7 @@ router.get('/sample', async (_req: Request, res: Response) => {
  * GET /api/payslips/sample-pdf
  * Generate sample PDF for testing
  */
-router.get('/sample-pdf', async (req: Request, res: Response) => {
+router.get('/sample-pdf', requireAuth, async (req: Request, res: Response) => {
   try {
     // Generate sample payslip
     const sampleData = { ...SAMPLE_PAYSLIP_DATA };

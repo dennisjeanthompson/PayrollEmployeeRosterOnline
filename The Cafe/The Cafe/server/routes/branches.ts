@@ -1,10 +1,26 @@
-import { Router, Request, Response } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { dbStorage } from "../db-storage";
 
+const requireAuth = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.session?.user) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  (req as any).user = req.session.user;
+  next();
+};
+
+const requireManagerOrAdmin = (req: Request, res: Response, next: NextFunction) => {
+  const role = (req as any).user?.role;
+  if (role !== "manager" && role !== "admin") {
+    return res.status(403).json({ message: "Insufficient permissions" });
+  }
+  next();
+};
+
 export function registerBranchesRoutes(router: Router) {
   // Get all branches with pagination and search
-  router.get("/api/branches", async (req: Request, res: Response) => {
+  router.get("/api/branches", requireAuth, async (req: Request, res: Response) => {
     try {
       const allBranches = await dbStorage.getAllBranches();
       res.json({ branches: allBranches });
@@ -15,7 +31,7 @@ export function registerBranchesRoutes(router: Router) {
   });
 
   // Get a single branch by ID
-  router.get("/api/branches/:id", async (req: Request, res: Response) => {
+  router.get("/api/branches/:id", requireAuth, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       const branch = await dbStorage.getBranch(id);
@@ -32,7 +48,7 @@ export function registerBranchesRoutes(router: Router) {
   });
 
   // Create a new branch
-  router.post("/api/branches", async (req: Request, res: Response) => {
+  router.post("/api/branches", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
     try {
       console.log('Received request body:', req.body);
       
@@ -103,11 +119,11 @@ export function registerBranchesRoutes(router: Router) {
     }
   };
 
-  router.put("/api/branches/:id", handleUpdate);
-  router.patch("/api/branches/:id", handleUpdate);
+  router.put("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
+  router.patch("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
 
   // Delete a branch (soft delete by setting isActive to false)
-  router.delete("/api/branches/:id", async (req: Request, res: Response) => {
+  router.delete("/api/branches/:id", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
       

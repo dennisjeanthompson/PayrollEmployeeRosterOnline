@@ -76,8 +76,8 @@ router.get("/api/audit-logs", requireAuth, requireManagerRole, async (req, res) 
   }
 });
 
-// POST /api/audit-logs - Create audit log entry (internal use)
-router.post("/api/audit-logs", requireAuth, async (req, res) => {
+// POST /api/audit-logs - Create audit log entry (manager/admin only)
+router.post("/api/audit-logs", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const { action, entityType, entityId, oldValues, newValues, reason } = req.body;
 
