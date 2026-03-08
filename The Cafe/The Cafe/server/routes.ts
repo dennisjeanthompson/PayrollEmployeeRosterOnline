@@ -35,6 +35,19 @@ neonConfig.webSocketConstructor = ws;
 // Use database storage instead of in-memory storage
 const storage = dbStorage;
 
+// Async route handler wrapper — catches unhandled rejections and returns 500
+type AsyncHandler = (req: Request, res: Response, next: NextFunction) => Promise<any>;
+function asyncHandler(fn: AsyncHandler) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    fn(req, res, next).catch((error: any) => {
+      console.error(`[${req.method} ${req.path}] Unhandled error:`, error.message || error);
+      if (!res.headersSent) {
+        res.status(500).json({ message: error.message || 'Internal server error' });
+      }
+    });
+  };
+}
+
 // Create PostgreSQL pool for session store with proper Neon configuration
 const pgPool = new Pool({ 
   connectionString: process.env.DATABASE_URL
@@ -616,7 +629,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Shifts routes
-  app.get("/api/shifts", requireAuth, async (req, res) => {
+  app.get("/api/shifts", requireAuth, asyncHandler(async (req, res) => {
     const { startDate, endDate, userId: queryUserId } = req.query;
     const currentUser = req.user!;
 
@@ -646,7 +659,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     console.log('Returning shifts with data:', enrichedShifts.slice(0, 2).map(s => ({ startTime: s.startTime, date: s.date })));
     
     res.json({ shifts: enrichedShifts });
-  });
+  }));
 
   app.get("/api/shifts/branch", requireAuth, requireRole(["manager", "employee", "admin"]), async (req, res) => {
     try {
@@ -912,6 +925,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Get employee details
       const employee = await storage.getUser(shift.userId);
+      if (!employee) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
 
       // Create notification for employee
       const notification = await storage.createNotification({
@@ -956,6 +972,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         status: 'completed'
       });
 
+      // Get employee details
+      const employee = await storage.getUser(shift.userId);
+      if (!employee) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+
       // Create notification for employee
       const notification = await storage.createNotification({
         userId: shift.userId,
@@ -983,7 +1005,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
   // Employee statistics route - accepts optional startDate and endDate for month selection
-  app.get("/api/employees/stats", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/employees/stats", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     const users = await storage.getUsersByBranch(branchId);
     const { startDate, endDate } = req.query;
@@ -999,6 +1021,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     if (startDate && endDate) {
       monthStart = new Date(startDate as string);
       monthEnd = new Date(endDate as string);
+      if (isNaN(monthStart.getTime()) || isNaN(monthEnd.getTime())) {
+        return res.status(400).json({ message: "Invalid date format" });
+      }
       monthEnd.setHours(23, 59, 59, 999);
     } else {
       const now = new Date();
@@ -1051,11 +1076,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       totalPayrollThisMonth: Number(totalPayrollThisMonth.toFixed(2)),
       averagePerformance,
     });
-  });
+  }));
 
 
   // Employee performance data
-  app.get("/api/employees/performance", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/employees/performance", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     const users = await storage.getUsersByBranch(branchId);
 
@@ -1100,10 +1125,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }));
 
     res.json(performanceData);
-  });
+  }));
 
   // Bulk activate employees
-  app.post("/api/employees/bulk-activate", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.post("/api/employees/bulk-activate", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { employeeIds } = req.body;
 
     if (!Array.isArray(employeeIds)) {
@@ -1122,10 +1147,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       message: `${updatedEmployees.length} employees activated successfully`,
       updatedCount: updatedEmployees.length
     });
-  });
+  }));
 
   // Bulk deactivate employees
-  app.post("/api/employees/bulk-deactivate", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.post("/api/employees/bulk-deactivate", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { employeeIds } = req.body;
 
     if (!Array.isArray(employeeIds)) {
@@ -1144,7 +1169,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       message: `${updatedEmployees.length} employees deactivated successfully`,
       updatedCount: updatedEmployees.length
     });
-  });
+  }));
 
   // Register employee uploads routes (BEFORE createEmployeeRouter to avoid /:id conflict)
   app.use("/api/employees", requireAuth, employeeUploadsRouter);
@@ -1339,43 +1364,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Payroll routes
   app.get("/api/payroll", requireAuth, async (req, res) => {
-    const userId = req.user!.id;
-    console.log(`[Payroll] Fetching entries for user ${userId}`);
-    const entries = await storage.getPayrollEntriesByUser(userId);
-    console.log(`[Payroll] Found ${entries.length} entries:`, entries.map(e => ({ id: e.id, userId: e.userId })));
+    try {
+      const userId = req.user!.id;
+      const entries = await storage.getPayrollEntriesByUser(userId);
 
-    // Enrich entries with pay-period dates so the UI can display them
-    const enriched = await Promise.all(
-      entries.map(async (entry) => {
-        try {
-          const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
-          return {
-            ...entry,
-            periodStartDate: period?.startDate ?? null,
-            periodEndDate: period?.endDate ?? null,
-            paidAt: entry.paidAt ?? null,
-          };
-        } catch {
-          return { ...entry, periodStartDate: null, periodEndDate: null };
-        }
-      }),
-    );
+      // Enrich entries with pay-period dates so the UI can display them
+      const enriched = await Promise.all(
+        entries.map(async (entry) => {
+          try {
+            const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
+            return {
+              ...entry,
+              periodStartDate: period?.startDate ?? null,
+              periodEndDate: period?.endDate ?? null,
+              paidAt: entry.paidAt ?? null,
+            };
+          } catch {
+            return { ...entry, periodStartDate: null, periodEndDate: null };
+          }
+        }),
+      );
 
-    res.json({ entries: enriched });
+      res.json({ entries: enriched });
+    } catch (error: any) {
+      console.error('Get payroll error:', error);
+      res.status(500).json({ message: error.message || "Failed to fetch payroll entries" });
+    }
   });
 
   // Get all payroll periods (Manager only)
   app.get("/api/payroll/periods", requireAuth, requireRole(["manager"]), async (req, res) => {
-    const branchId = req.user!.branchId;
-    const periods = await storage.getPayrollPeriodsByBranch(branchId);
-    res.json({ periods });
+    try {
+      const branchId = req.user!.branchId;
+      const periods = await storage.getPayrollPeriodsByBranch(branchId);
+      res.json({ periods });
+    } catch (error: any) {
+      console.error('Get payroll periods error:', error);
+      res.status(500).json({ message: error.message || "Failed to fetch payroll periods" });
+    }
   });
 
   // Get current payroll period
   app.get("/api/payroll/periods/current", requireAuth, async (req, res) => {
-    const branchId = req.user!.branchId;
-    const period = await storage.getCurrentPayrollPeriod(branchId);
-    res.json({ period });
+    try {
+      const branchId = req.user!.branchId;
+      const period = await storage.getCurrentPayrollPeriod(branchId);
+      res.json({ period });
+    } catch (error: any) {
+      console.error('Get current payroll period error:', error);
+      res.status(500).json({ message: error.message || "Failed to fetch current payroll period" });
+    }
   });
 
   // Create payroll period (Manager only)
@@ -1862,7 +1900,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Payslip generation route
-  app.get("/api/payroll/payslip/:entryId", requireAuth, async (req, res) => {
+  app.get("/api/payroll/payslip/:entryId", requireAuth, asyncHandler(async (req, res) => {
     const { entryId } = req.params;
     const userId = req.user!.id;
 
@@ -1950,7 +1988,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     };
 
     res.json({ payslip: payslipData });
-  });
+  }));
 
   // Manager send payslip to employee
   app.post("/api/payroll/entries/:entryId/send", requireAuth, requireRole(["manager"]), async (req, res) => {
@@ -2144,7 +2182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/shift-trades/available", requireAuth, async (req, res) => {
+  app.get("/api/shift-trades/available", requireAuth, asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     const userId = req.user!.id;
     const trades = await storage.getAvailableShiftTrades(branchId);
@@ -2187,10 +2225,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
     
     res.json({ trades: tradesWithDetails });
-  });
+  }));
 
   // Get pending trades for manager approval
-  app.get("/api/shift-trades/pending", requireAuth, requireRole(["manager", "admin"]), async (req, res) => {
+  app.get("/api/shift-trades/pending", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     const trades = await storage.getPendingShiftTrades(branchId);
     
@@ -2227,7 +2265,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
     
     res.json({ trades: tradesWithDetails });
-  });
+  }));
 
   app.post("/api/shift-trades", requireAuth, async (req, res) => {
     try {
@@ -2354,6 +2392,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Trade not found" });
       }
 
+      // Validate status value
+      const validStatuses = ['accepted', 'rejected'];
+      if (!validStatuses.includes(status)) {
+        return res.status(400).json({ message: "Invalid status. Must be 'accepted' or 'rejected'" });
+      }
+
+      // Only pending trades can be accepted/rejected by target user
+      if (trade.status !== 'pending') {
+        return res.status(400).json({ message: `Cannot ${status} a trade that is already ${trade.status}` });
+      }
+
       // If trade has a specific target user, only they can respond
       if (trade.toUserId && trade.toUserId !== userId) {
         return res.status(403).json({ message: "You cannot respond to this trade" });
@@ -2411,6 +2460,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trade = await storage.getShiftTrade(id);
       if (!trade) {
         return res.status(404).json({ message: "Trade not found" });
+      }
+
+      // Prevent processing already-finalized trades
+      if (trade.status === 'approved' || trade.status === 'rejected') {
+        return res.status(409).json({ message: `Trade has already been ${trade.status}` });
       }
 
       if (status === "approved" && !trade.toUserId) {
@@ -2542,9 +2596,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Trade not found" });
       }
 
-      // If trade is direct to someone else, I can't take it
+      // Only open trades (no toUserId yet) or trades directed at this user can be taken
       if (trade.toUserId && trade.toUserId !== userId) {
         return res.status(403).json({ message: "This trade is reserved for another employee" });
+      }
+
+      // Prevent taking a trade that's already been taken or processed
+      if (trade.status !== 'pending' && trade.status !== 'open') {
+        return res.status(409).json({ message: `Trade has already been ${trade.status}` });
+      }
+
+      // Can't take your own trade
+      if (trade.fromUserId === userId) {
+        return res.status(400).json({ message: "You cannot take your own trade" });
       }
 
       const updatedTrade = await storage.updateShiftTrade(id, {
@@ -2989,7 +3053,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Manager approval routes
-  app.get("/api/approvals", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/approvals", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     const approvals = await storage.getPendingApprovals(branchId);
 
@@ -3002,9 +3066,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
 
     res.json({ approvals: approvalsWithUsers });
-  });
+  }));
 
-  app.put("/api/approvals/:id", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.put("/api/approvals/:id", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { status, reason } = req.body;
     
@@ -3023,13 +3087,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     
     res.json({ approval });
-  });
+  }));
 
   // Register branches routes
   registerBranchesRoutes(app);
 
   // Reports API endpoints
-  app.get("/api/reports/payroll", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/reports/payroll", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -3050,9 +3114,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     res.json({ totalPayroll: Number(totalPayroll.toFixed(2)) });
-  });
+  }));
 
-  app.get("/api/reports/attendance", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/reports/attendance", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -3070,9 +3134,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
 
     res.json({ totalHours: Number(totalHours.toFixed(2)) });
-  });
+  }));
 
-  app.get("/api/reports/shifts", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/reports/shifts", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -3086,9 +3150,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       missedShifts: shifts.filter(s => s.status === 'missed').length,
       cancelledShifts: shifts.filter(s => s.status === 'cancelled').length,
     });
-  });
+  }));
 
-  app.get("/api/reports/employees", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/reports/employees", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     const users = await storage.getUsersByBranch(branchId);
 
@@ -3097,10 +3161,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       totalCount: users.length,
       inactiveCount: users.filter(u => !u.isActive).length,
     });
-  });
+  }));
 
   // Dashboard stats routes
-  app.get("/api/dashboard/stats", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/dashboard/stats", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -3172,10 +3236,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         revenue: Number(revenue.toFixed(2))
       }
     });
-  });
+  }));
 
   // Dashboard employee status route
-  app.get("/api/dashboard/employee-status", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.get("/api/dashboard/employee-status", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -3225,10 +3289,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
 
     res.json({ employeeStatus });
-  });
+  }));
 
   // Time off request routes
-  app.get("/api/time-off-requests", requireAuth, async (req, res) => {
+  app.get("/api/time-off-requests", requireAuth, asyncHandler(async (req, res) => {
     const userId = req.user!.id;
     const userRole = req.user!.role;
     const branchId = req.user!.branchId;
@@ -3261,10 +3325,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     );
 
     res.json({ requests: requestsWithUsers });
-  });
+  }));
 
   // Employee analytics endpoint
-  app.get("/api/employee/performance", requireAuth, async (req, res) => {
+  app.get("/api/employee/performance", requireAuth, asyncHandler(async (req, res) => {
     const userId = req.user!.id;
     const user = await storage.getUser(userId);
 
@@ -3326,10 +3390,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         completionRate: Number(completionRate.toFixed(1)),
       }
     });
-  });
+  }));
 
   // Time off balance endpoint
-  app.get("/api/time-off-balance", requireAuth, async (req, res) => {
+  app.get("/api/time-off-balance", requireAuth, asyncHandler(async (req, res) => {
     const userId = req.user!.id;
     const requests = await storage.getTimeOffRequestsByUser(userId);
 
@@ -3383,7 +3447,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         personal: personalAllowance,
       }
     });
-  });
+  }));
 
   // Time off policy routes (for configurable advance notice)
   app.get("/api/time-off-policy", requireAuth, async (req, res) => {
@@ -3555,7 +3619,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.put("/api/time-off-requests/:id/approve", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.put("/api/time-off-requests/:id/approve", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
     const request = await storage.updateTimeOffRequest(id, {
       status: "approved",
@@ -3611,9 +3675,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     res.json({ request });
-  });
+  }));
 
-  app.put("/api/time-off-requests/:id/reject", requireAuth, requireRole(["manager"]), async (req, res) => {
+  app.put("/api/time-off-requests/:id/reject", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
     const request = await storage.updateTimeOffRequest(id, {
       status: "rejected",
@@ -3669,11 +3733,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     res.json({ request });
-  });
+  }));
 
 
   // Update time off request (employee can edit pending requests)
-  app.put("/api/time-off-requests/:id", requireAuth, async (req, res) => {
+  app.put("/api/time-off-requests/:id", requireAuth, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { type, startDate, endDate, reason } = req.body;
     const userId = req.user!.id;
@@ -3702,67 +3766,87 @@ export async function registerRoutes(app: Express): Promise<Server> {
     });
 
     res.json({ request: updated });
-  });
+  }));
 
   // Delete time off request (employee can delete pending requests)
   app.delete("/api/time-off-requests/:id", requireAuth, async (req, res) => {
-    const { id } = req.params;
-    const userId = req.user!.id;
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
 
-    // Fetch the request to verify ownership
-    const existingRequest = await storage.getTimeOffRequest(id);
-    if (!existingRequest) {
-      return res.status(404).json({ message: "Time off request not found" });
+      // Fetch the request to verify ownership
+      const existingRequest = await storage.getTimeOffRequest(id);
+      if (!existingRequest) {
+        return res.status(404).json({ message: "Time off request not found" });
+      }
+
+      // Only allow deleting own requests or if manager
+      if (existingRequest.userId !== userId && req.user!.role !== 'manager') {
+        return res.status(403).json({ message: "Unauthorized" });
+      }
+
+      // Don't allow deleting approved/rejected requests
+      if (existingRequest.status !== 'pending') {
+        return res.status(400).json({ message: "Cannot delete approved or rejected requests" });
+      }
+
+      await storage.deleteTimeOffRequest(id);
+      res.json({ message: "Request deleted successfully" });
+    } catch (error: any) {
+      console.error('Delete time-off request error:', error);
+      res.status(500).json({ message: error.message || "Failed to delete request" });
     }
-
-    // Only allow deleting own requests or if manager
-    if (existingRequest.userId !== userId && req.user!.role !== 'manager') {
-      return res.status(403).json({ message: "Unauthorized" });
-    }
-
-    // Don't allow deleting approved/rejected requests
-    if (existingRequest.status !== 'pending') {
-      return res.status(400).json({ message: "Cannot delete approved or rejected requests" });
-    }
-
-    await storage.deleteTimeOffRequest(id);
-    res.json({ message: "Request deleted successfully" });
   });
   // Notification routes
   app.get("/api/notifications", requireAuth, async (req, res) => {
-    const userId = req.user!.id;
-    const notifications = await storage.getUserNotifications(userId);
-    res.json({ notifications });
+    try {
+      const userId = req.user!.id;
+      const notifications = await storage.getUserNotifications(userId);
+      res.json({ notifications });
+    } catch (error: any) {
+      console.error('Get notifications error:', error);
+      res.status(500).json({ message: error.message || "Failed to fetch notifications" });
+    }
   });
 
   app.patch("/api/notifications/:id/read", requireAuth, async (req, res) => {
-    const { id } = req.params;
-    const userId = req.user!.id; // Verify ownership if needed, but for now just mark read
-    
-    // In a real app we should verify the notification belongs to the user
-    // For now, assuming the ID is valid and belongs to user or ignoring ownership check for speed
-    const notification = await storage.markNotificationRead(id);
-    res.json(notification || { success: true });
+    try {
+      const { id } = req.params;
+      const notification = await storage.markNotificationRead(id);
+      res.json(notification || { success: true });
+    } catch (error: any) {
+      console.error('Mark notification read error:', error);
+      res.status(500).json({ message: "Failed to mark notification as read" });
+    }
   });
 
   app.patch("/api/notifications/read-all", requireAuth, async (req, res) => {
-    const userId = req.user!.id;
-    await storage.markAllNotificationsRead(userId);
-    res.json({ success: true, message: "All notifications marked as read" });
+    try {
+      const userId = req.user!.id;
+      await storage.markAllNotificationsRead(userId);
+      res.json({ success: true, message: "All notifications marked as read" });
+    } catch (error: any) {
+      console.error('Mark all notifications read error:', error);
+      res.status(500).json({ message: "Failed to mark all notifications as read" });
+    }
   });
 
-
   app.delete("/api/notifications/:id", requireAuth, async (req, res) => {
-    const { id } = req.params;
-    const userId = req.user!.id;
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
 
-    const deleted = await storage.deleteNotification(id, userId);
+      const deleted = await storage.deleteNotification(id, userId);
 
-    if (!deleted) {
-      return res.status(404).json({ message: "Notification not found" });
+      if (!deleted) {
+        return res.status(404).json({ message: "Notification not found" });
+      }
+
+      res.json({ message: "Notification deleted successfully" });
+    } catch (error: any) {
+      console.error('Delete notification error:', error);
+      res.status(500).json({ message: error.message || "Failed to delete notification" });
     }
-
-    res.json({ message: "Notification deleted successfully" });
   });
 
   // Blockchain payroll record storage
