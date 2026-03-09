@@ -70,7 +70,6 @@ import {
   AccessTime as ClockIcon,
   AttachMoney as DollarIcon,
   TrendingUp as TrendingUpIcon,
-  VerifiedUser as VerifiedIcon,
   FilterList as FilterIcon,
   MoreVert as MoreVertIcon,
   CheckCircle as CheckCircleIcon,
@@ -126,9 +125,6 @@ interface Employee {
   isActive: boolean;
   photoUrl?: string;
   photoPublicId?: string;
-  blockchainVerified?: boolean;
-  blockchainHash?: string;
-  verifiedAt?: string;
   createdAt: string;
   hoursThisMonth?: number;
   shiftsThisMonth?: number;
@@ -649,9 +645,6 @@ export default function MuiEmployees() {
               <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {params.row.firstName} {params.row.lastName}
               </Typography>
-              {params.row.blockchainVerified && (
-                <VerifiedIcon sx={{ fontSize: 14, color: "success.main", flexShrink: 0 }} />
-              )}
             </Box>
             <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", display: "block" }}>
               {params.row.email}

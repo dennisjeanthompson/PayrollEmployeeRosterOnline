@@ -56,8 +56,6 @@ const TYPE_STYLE: Record<string, { icon: React.ReactNode; color: string; gradien
   payment:           { icon: <PayIcon sx={{ fontSize: 16 }} />,      color: '#06B6D4', gradient: 'linear-gradient(135deg, #06B6D4, #0891B2)' },
   approval:          { icon: <ApprovedIcon sx={{ fontSize: 16 }} />, color: '#10B981', gradient: 'linear-gradient(135deg, #10B981, #059669)' },
   rejection:         { icon: <ErrorIcon sx={{ fontSize: 16 }} />,    color: '#EF4444', gradient: 'linear-gradient(135deg, #EF4444, #DC2626)' },
-  clock_in:          { icon: <ClockInIcon sx={{ fontSize: 16 }} />,  color: '#10B981', gradient: 'linear-gradient(135deg, #10B981, #059669)' },
-  clock_out:         { icon: <ClockOutIcon sx={{ fontSize: 16 }} />, color: '#F59E0B', gradient: 'linear-gradient(135deg, #F59E0B, #D97706)' },
   adjustment:        { icon: <AdjustmentIcon sx={{ fontSize: 16 }} />, color: '#06B6D4', gradient: 'linear-gradient(135deg, #06B6D4, #0891B2)' },
 };
 

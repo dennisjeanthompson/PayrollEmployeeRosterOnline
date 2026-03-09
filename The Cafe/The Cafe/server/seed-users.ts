@@ -1,6 +1,5 @@
 import { sql } from './db';
 import bcrypt from 'bcrypt';
-import crypto from 'crypto';
 
 async function seedUsers() {
   // Get the first branch
@@ -89,14 +88,11 @@ async function seedUsers() {
   ];
 
   const insertUser = sql.prepare(`
-    INSERT OR IGNORE INTO users (id, username, password, first_name, last_name, email, role, position, hourly_rate, branch_id, is_active, blockchain_verified, blockchain_hash, verified_at, created_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT OR IGNORE INTO users (id, username, password, first_name, last_name, email, role, position, hourly_rate, branch_id, is_active, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   for (const user of users) {
-    const userData = `${user.id}-${user.firstName}-${user.lastName}-${user.email}-${user.position}`;
-    const userHash = crypto.createHash('sha256').update(userData).digest('hex');
-
     try {
       const result = insertUser.run(
         user.id,
@@ -110,9 +106,6 @@ async function seedUsers() {
         user.hourlyRate,
         branch.id,
         1,
-        1,
-        userHash,
-        Math.floor(Date.now() / 1000),
         Math.floor(Date.now() / 1000)
       );
       if (result.changes > 0) {

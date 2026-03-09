@@ -125,7 +125,7 @@ export default function MuiDashboard() {
   const { data: teamHours, isLoading: teamHoursLoading } = useQuery<TeamHoursResponse>({
     queryKey: ["/api/hours/team-summary"],
     enabled: isManagerRole,
-    refetchInterval: 30000, // Keep slower polling for hours stats as they change frequently with clock-ins
+    refetchInterval: 30000, // Keep slower polling for hours stats as they change frequently
   });
 
   // Filter today's shifts using Philippine timezone

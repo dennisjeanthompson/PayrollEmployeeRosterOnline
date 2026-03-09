@@ -59,8 +59,6 @@ const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: st
   payment:           { icon: <PayIcon sx={{ fontSize: 20 }} />,      color: '#06B6D4', bg: '#ECFEFF', label: 'Payment' },
   approval:          { icon: <SuccessIcon sx={{ fontSize: 20 }} />,  color: '#10B981', bg: '#ECFDF5', label: 'Approved' },
   rejection:         { icon: <ErrorIcon sx={{ fontSize: 20 }} />,    color: '#EF4444', bg: '#FEF2F2', label: 'Rejected' },
-  clock_in:          { icon: <ClockIcon sx={{ fontSize: 20 }} />,    color: '#10B981', bg: '#ECFDF5', label: 'Clock In' },
-  clock_out:         { icon: <ClockIcon sx={{ fontSize: 20 }} />,    color: '#F59E0B', bg: '#FFFBEB', label: 'Clock Out' },
   adjustment:        { icon: <MoneyIcon sx={{ fontSize: 20 }} />,    color: '#06B6D4', bg: '#ECFEFF', label: 'Adjustment' },
   warning:           { icon: <WarningIcon sx={{ fontSize: 20 }} />,  color: '#F59E0B', bg: '#FFFBEB', label: 'Warning' },
   success:           { icon: <SuccessIcon sx={{ fontSize: 20 }} />,  color: '#10B981', bg: '#ECFDF5', label: 'Success' },

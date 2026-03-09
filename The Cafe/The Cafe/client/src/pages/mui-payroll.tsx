@@ -46,7 +46,6 @@ import {
   AccessTime as ClockIcon,
   Receipt as ReceiptIcon,
   Download as DownloadIcon,
-  Verified as VerifiedIcon,
   History as HistoryIcon,
   AccountBalance as BankIcon,
   TrendingUp as TrendingUpIcon,
@@ -74,10 +73,6 @@ interface PayrollEntry {
   periodStartDate?: string | null;
   periodEndDate?: string | null;
   paidAt?: string | null;
-  blockchainHash?: string;
-  blockNumber?: number;
-  transactionHash?: string;
-  verified?: boolean;
 }
 
 interface PayrollPeriod {
@@ -429,11 +424,6 @@ export default function MuiPayroll() {
                                 size="small"
                                 icon={<CheckCircleIcon />}
                               />
-                              {entry.blockchainHash && (
-                                <Tooltip title="Blockchain Verified">
-                                  <VerifiedIcon color="primary" fontSize="small" />
-                                </Tooltip>
-                              )}
                             </Stack>
                           </TableCell>
                           <TableCell align="center">
@@ -487,9 +477,6 @@ export default function MuiPayroll() {
                         <Avatar sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
                           <ReceiptIcon color="primary" />
                         </Avatar>
-                        {entry.blockchainHash && (
-                          <Chip label="Verified" size="small" color="success" icon={<VerifiedIcon />} />
-                        )}
                       </Stack>
                       <Typography variant="subtitle2" fontWeight={600}>
                         Pay Period

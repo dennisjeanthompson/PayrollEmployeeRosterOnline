@@ -8,7 +8,6 @@ import { insertShiftSchema, insertShiftTradeSchema, insertTimeOffRequestSchema }
 import type { PayrollEntry } from "@shared/schema";
 import type { PayrollEntryBreakdownPayload, ShiftPayBreakdown } from "@shared/payroll-types";
 import { z } from "zod";
-import { blockchainService } from "./services/blockchain";
 import { registerBranchesRoutes } from "./routes/branches";
 import { createEmployeeRouter } from "./routes/employees";
 import { router as hoursRoutes } from "./routes/hours";
@@ -237,10 +236,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isActive: true,
       });
 
-      // Create manager user with blockchain verification
-      const managerData = `${manager.username}-${manager.firstName}-${manager.lastName}-${manager.email}`;
-      const blockchainHash = crypto.createHash('sha256').update(managerData).digest('hex');
-
+      // Create manager user
       const createdManager = await storage.createUser({
         username: manager.username,
         password: manager.password,
@@ -252,9 +248,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         hourlyRate: manager.hourlyRate,
         branchId: createdBranch.id,
         isActive: true,
-        blockchainVerified: true,
-        blockchainHash: blockchainHash,
-        verifiedAt: new Date(),
       });
 
       // Mark setup as complete
@@ -923,131 +916,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
-  // Manager clock in for employee
-  app.post("/api/shifts/:id/clock-in", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
-    try {
-      const { id } = req.params;
-      const shift = await storage.getShift(id);
-
-      if (!shift) {
-        return res.status(404).json({ message: "Shift not found" });
-      }
-
-      // Verify branch ownership
-      if (shift.branchId !== req.user!.branchId) {
-        return res.status(403).json({ message: "You can only clock in shifts from your own branch" });
-      }
-
-      // Prevent double clock-in
-      if (shift.status === 'in-progress' || shift.status === 'completed') {
-        return res.status(409).json({ message: "Shift has already been clocked in" });
-      }
-
-      // Update shift with actual start time
-      const updatedShift = await storage.updateShift(id, {
-        actualStartTime: new Date(),
-        status: 'in-progress'
-      });
-
-      if (!updatedShift) {
-        return res.status(500).json({ message: "Failed to update shift" });
-      }
-
-      // Get employee details
-      const employee = await storage.getUser(shift.userId);
-      if (!employee) {
-        return res.status(404).json({ message: "Employee not found" });
-      }
-
-      // Create notification for employee
-      const notification = await storage.createNotification({
-        userId: shift.userId,
-        type: 'clock_in',
-        title: 'Clocked In',
-        message: `You have been clocked in for your shift at ${format(new Date(), "h:mm a")}`,
-        data: JSON.stringify({
-          shiftId: id,
-          action: 'clock-in',
-          time: format(new Date(), "h:mm a"),
-          date: format(new Date(), "MMM d, yyyy")
-        })
-      } as any);
-      realTimeManager.broadcastNotification(notification);
-
-      res.json({
-        message: "Employee clocked in successfully",
-        shift: updatedShift
-      });
-    } catch (error: any) {
-      console.error('Clock in error:', error);
-      res.status(500).json({
-        message: error.message || "Failed to clock in employee"
-      });
-    }
-  }));
-
-  // Manager clock out for employee
-  app.post("/api/shifts/:id/clock-out", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
-    try {
-      const { id } = req.params;
-      const shift = await storage.getShift(id);
-
-      if (!shift) {
-        return res.status(404).json({ message: "Shift not found" });
-      }
-
-      // Verify branch ownership
-      if (shift.branchId !== req.user!.branchId) {
-        return res.status(403).json({ message: "You can only clock out shifts from your own branch" });
-      }
-
-      // Verify shift is currently in progress
-      if (shift.status !== 'in-progress') {
-        return res.status(409).json({ message: "Shift is not currently in progress" });
-      }
-
-      // Update shift with actual end time and mark as completed
-      const updatedShift = await storage.updateShift(id, {
-        actualEndTime: new Date(),
-        status: 'completed'
-      });
-
-      if (!updatedShift) {
-        return res.status(500).json({ message: "Failed to update shift" });
-      }
-
-      // Get employee details
-      const employee = await storage.getUser(shift.userId);
-      if (!employee) {
-        return res.status(404).json({ message: "Employee not found" });
-      }
-
-      // Create notification for employee
-      const notification = await storage.createNotification({
-        userId: shift.userId,
-        type: 'clock_out',
-        title: 'Clocked Out',
-        message: `You have been clocked out from your shift at ${format(new Date(), "h:mm a")}`,
-        data: JSON.stringify({
-          shiftId: id,
-          action: 'clock-out',
-          time: format(new Date(), "h:mm a"),
-          date: format(new Date(), "MMM d, yyyy")
-        })
-      } as any);
-      realTimeManager.broadcastNotification(notification);
-
-      res.json({
-        message: "Employee clocked out successfully",
-        shift: updatedShift
-      });
-    } catch (error: any) {
-      console.error('Clock out error:', error);
-      res.status(500).json({
-        message: error.message || "Failed to clock out employee"
-      });
-    }
-  }));
+  // Employee stats
   // Employee statistics route - accepts optional startDate and endDate for month selection
   app.get("/api/employees/stats", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
@@ -3357,7 +3226,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Get today's shifts for the branch
     const todayShifts = await storage.getShiftsByBranch(branchId, today, tomorrow);
 
-    // Calculate clocked in employees - shifts with status 'in-progress'
+    // Calculate active employees - shifts with status 'in-progress'
     const clockedIn = todayShifts.filter(shift => shift.status === 'in-progress').length;
 
     // Calculate employees on break (for now, we'll use 0 as we don't have break tracking yet)
@@ -3451,7 +3320,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (todayShift) {
           if (todayShift.status === 'in-progress') {
-            status = 'Clocked In';
+            status = 'Active';
             statusInfo = todayShift.actualStartTime
               ? `Since ${format(new Date(todayShift.actualStartTime), "h:mm a")}`
               : `Scheduled ${format(new Date(todayShift.startTime), "h:mm a")}`;
@@ -4088,192 +3957,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
-  // Blockchain payroll record storage
-  app.post("/api/blockchain/payroll/store", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
-    try {
-      const { payrollEntryId } = req.body;
-
-      if (!payrollEntryId) {
-        return res.status(400).json({ message: "Payroll entry ID is required" });
-      }
-
-      // Get payroll entry by ID directly
-      const entry = await storage.getPayrollEntry(payrollEntryId);
-
-      if (!entry) {
-        return res.status(404).json({ message: "Payroll entry not found" });
-      }
-
-      // Get the employee who owns this entry
-      const employee = await storage.getUser(entry.userId);
-      if (!employee) {
-        return res.status(404).json({ message: "Employee not found" });
-      }
-
-      // Get payroll period for accurate dates
-      const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
-
-      // Prepare blockchain record
-      const blockchainRecord = {
-        id: entry.id,
-        employeeId: employee.id,
-        employeeName: `${employee.firstName} ${employee.lastName}`,
-        periodStart: period?.startDate ? new Date(period.startDate).toISOString() : entry.createdAt!.toISOString(),
-        periodEnd: period?.endDate ? new Date(period.endDate).toISOString() : entry.createdAt!.toISOString(),
-        totalHours: parseFloat(entry.totalHours),
-        regularHours: parseFloat(entry.regularHours),
-        overtimeHours: parseFloat(entry.overtimeHours || "0"),
-        hourlyRate: parseFloat(employee.hourlyRate),
-        grossPay: parseFloat(entry.grossPay),
-        deductions: parseFloat(entry.deductions || "0"),
-        netPay: parseFloat(entry.netPay),
-      };
-
-      // Store on blockchain
-      const result = await blockchainService.storePayrollRecord(blockchainRecord);
-
-      // Update database with blockchain details
-      await storage.updatePayrollEntry(payrollEntryId, {
-        blockchainHash: result.blockchainHash,
-        blockNumber: result.blockNumber,
-        transactionHash: result.transactionHash,
-        verified: true,
-      });
-
-      res.json({
-        message: "Payroll record stored on blockchain successfully",
-        blockchainRecord: result,
-      });
-    } catch (error: any) {
-      console.error('Blockchain storage error:', error);
-      res.status(500).json({
-        message: error.message || "Failed to store payroll record on blockchain"
-      });
-    }
-  }));
-
-  // Blockchain record verification
-  app.post("/api/blockchain/payroll/verify", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
-    try {
-      const { payrollEntryId } = req.body;
-
-      if (!payrollEntryId) {
-        return res.status(400).json({ message: "Payroll entry ID is required" });
-      }
-
-      // Get payroll entry by ID directly
-      const entry = await storage.getPayrollEntry(payrollEntryId);
-
-      if (!entry) {
-        return res.status(404).json({ message: "Payroll entry not found" });
-      }
-
-      if (!entry.blockchainHash) {
-        return res.status(400).json({ message: "Payroll entry not stored on blockchain" });
-      }
-
-      // Verify against blockchain
-      const verification = await blockchainService.verifyPayrollRecord(payrollEntryId, entry.blockchainHash);
-
-      res.json({
-        message: "Payroll record verification completed",
-        verification,
-      });
-    } catch (error: any) {
-      console.error('Blockchain verification error:', error);
-      res.status(500).json({
-        message: error.message || "Failed to verify payroll record"
-      });
-    }
-  }));
-
-  // Get blockchain record details
-  app.get("/api/blockchain/record/:transactionHash", requireAuth, asyncHandler(async (req, res) => {
-    try {
-      const { transactionHash } = req.params;
-
-      const record = await blockchainService.getBlockchainRecord(transactionHash);
-
-      res.json({ record });
-    } catch (error: any) {
-      console.error('Blockchain record lookup error:', error);
-      res.status(500).json({
-        message: error.message || "Failed to get blockchain record"
-      });
-    }
-  }));
-
-  // Batch blockchain storage for multiple payroll records
-  app.post("/api/blockchain/payroll/batch-store", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
-    try {
-      const { payrollEntryIds } = req.body;
-
-      if (!Array.isArray(payrollEntryIds)) {
-        return res.status(400).json({ message: "payrollEntryIds must be an array" });
-      }
-
-      // Fetch entries by ID directly
-      const selectedEntries = (await Promise.all(
-        payrollEntryIds.map((id: string) => storage.getPayrollEntry(id))
-      )).filter((e): e is NonNullable<typeof e> => e != null);
-
-      if (selectedEntries.length === 0) {
-        return res.status(404).json({ message: "No valid payroll entries found" });
-      }
-
-      // Get employee details and period dates for all entries
-      const enrichedData = await Promise.all(
-        selectedEntries.map(async (entry) => {
-          const employee = await storage.getUser(entry.userId);
-          const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
-          return { entry, employee, period };
-        })
-      );
-
-      // Prepare blockchain records
-      const blockchainRecords = enrichedData
-        .filter(({ employee }) => employee != null)
-        .map(({ entry, employee, period }) => ({
-          id: entry.id,
-          employeeId: employee!.id,
-          employeeName: `${employee!.firstName} ${employee!.lastName}`,
-          periodStart: period?.startDate ? new Date(period.startDate).toISOString() : entry.createdAt!.toISOString(),
-          periodEnd: period?.endDate ? new Date(period.endDate).toISOString() : entry.createdAt!.toISOString(),
-          totalHours: parseFloat(entry.totalHours),
-          regularHours: parseFloat(entry.regularHours),
-          overtimeHours: parseFloat(entry.overtimeHours || "0"),
-          hourlyRate: parseFloat(employee!.hourlyRate),
-          grossPay: parseFloat(entry.grossPay),
-          deductions: parseFloat(entry.deductions || "0"),
-          netPay: parseFloat(entry.netPay),
-        }));
-
-      // Batch store on blockchain
-      const results = await blockchainService.batchStorePayrollRecords(blockchainRecords);
-
-      // Update database with blockchain details
-      for (const result of results) {
-        await storage.updatePayrollEntry(result.id, {
-          blockchainHash: result.blockchainHash,
-          blockNumber: result.blockNumber,
-          transactionHash: result.transactionHash,
-          verified: true,
-        });
-      }
-
-      res.json({
-        message: `${results.length} payroll records stored on blockchain successfully`,
-        storedCount: results.length,
-        results,
-      });
-    } catch (error: any) {
-      console.error('Batch blockchain storage error:', error);
-      res.status(500).json({
-        message: error.message || "Failed to store payroll records on blockchain"
-      });
-    }
-  }));
-
   // ═══════════════════════════════════════════════════════════════
   // ADMIN: Force Seed Sample Data with Complete Shifts and Payroll
   // ═══════════════════════════════════════════════════════════════
@@ -4339,7 +4022,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
               status: status,
             });
 
-            // For past shifts, set actual clock in/out times
+            // For past shifts, set actual start/end times
             if (isPast && shift) {
               // Add slight variation to actual times (±15 mins)
               const actualStart = new Date(startTime);

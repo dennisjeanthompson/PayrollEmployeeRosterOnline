@@ -13,7 +13,7 @@ import {
 } from "@mui/x-data-grid";
 import { ThemeProvider, createTheme } from "@mui/material/styles";
 import { Box, Chip, Avatar, IconButton, Tooltip } from "@mui/material";
-import { Eye, Pencil, Receipt, Trash2, Shield, CheckCircle, XCircle } from "lucide-react";
+import { Eye, Pencil, Receipt, Trash2, CheckCircle, XCircle } from "lucide-react";
 
 interface Employee {
   id: string;
@@ -26,7 +26,6 @@ interface Employee {
   hourlyRate: string;
   branchId: string;
   isActive: boolean;
-  blockchainVerified?: boolean;
   hoursThisMonth?: number;
   shiftsThisMonth?: number;
   createdAt: string;
@@ -210,9 +209,6 @@ export function EmployeeDataGrid({
             <Box>
               <Box sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}>
                 {params.row.firstName} {params.row.lastName}
-                {params.row.blockchainVerified && (
-                  <Shield size={14} style={{ color: '#10b981' }} />
-                )}
               </Box>
               <Box sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
                 {params.row.email}

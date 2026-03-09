@@ -160,14 +160,6 @@ Headless primitives for custom, accessible components.
 
 ---
 
-## ⛓️ Blockchain (Optional)
-
-| Library | Purpose |
-|---------|---------|
-| **ethers** | Ethereum interaction |
-| **web3** | Web3 utilities |
-
----
 
 ## 📅 Date/Time Utilities
 

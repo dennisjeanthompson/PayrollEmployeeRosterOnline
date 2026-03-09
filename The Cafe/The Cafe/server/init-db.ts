@@ -106,9 +106,6 @@ export async function initializeDatabase() {
         hourly_rate TEXT NOT NULL,
         branch_id TEXT REFERENCES branches(id) NOT NULL,
         is_active BOOLEAN DEFAULT true,
-        blockchain_verified BOOLEAN DEFAULT false,
-        blockchain_hash TEXT,
-        verified_at TIMESTAMP,
         sss_loan_deduction TEXT DEFAULT '0',
         pagibig_loan_deduction TEXT DEFAULT '0',
         cash_advance_deduction TEXT DEFAULT '0',
@@ -194,10 +191,6 @@ export async function initializeDatabase() {
         net_pay TEXT NOT NULL,
         pay_breakdown TEXT,
         status TEXT DEFAULT 'pending',
-        blockchain_hash TEXT,
-        block_number INTEGER,
-        transaction_hash TEXT,
-        verified BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);

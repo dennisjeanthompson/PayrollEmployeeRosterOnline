@@ -610,7 +610,7 @@ export function calculateShiftPay(params: CalculateShiftPayParams): PayBreakdown
   }
 
   if (!shift.actualStartTime || !shift.actualEndTime) {
-    notes.push("Using scheduled shift times (no clock-in/clock-out captured)");
+    notes.push("Using scheduled shift times (no actual times captured)");
   }
 
   const normalizedOptions = options ?? {};

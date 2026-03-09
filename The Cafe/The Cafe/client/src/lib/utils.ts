@@ -60,7 +60,6 @@ export function getStatusColor(status: string): string {
     case "scheduled":
       return "bg-muted text-muted-foreground";
     case "off":
-    case "clocked out":
       return "bg-secondary text-secondary-foreground";
     default:
       return "bg-muted text-muted-foreground";

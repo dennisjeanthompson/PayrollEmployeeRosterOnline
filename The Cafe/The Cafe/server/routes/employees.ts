@@ -440,58 +440,6 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager']), async (r
 
 
 
-// Verify employee on blockchain
-router.post('/api/employees/:id/verify', requireAuth, requireRole(['manager']), async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    // Get the existing employee
-    const employee = await storage.getUser(id);
-    if (!employee) {
-      return res.status(404).json({ message: 'Employee not found' });
-    }
-
-    // Only managers from the same branch can verify the employee
-    if (req.session.user?.role === 'manager' &&
-        req.session.user?.branchId !== employee.branchId) {
-      return res.status(403).json({ message: 'Unauthorized to verify this employee' });
-    }
-
-    // Generate a blockchain hash for the employee
-    const employeeData = `${employee.id}-${employee.firstName}-${employee.lastName}-${employee.email}-${employee.position}`;
-    const blockchainHash = crypto.createHash('sha256').update(employeeData).digest('hex');
-
-    // Update employee with blockchain verification
-    const updatedEmployee = await storage.updateUser(id, {
-      blockchainVerified: true,
-      blockchainHash: blockchainHash,
-      verifiedAt: new Date(),
-    });
-
-    if (!updatedEmployee) {
-      return res.status(500).json({ message: 'Failed to verify employee' });
-    }
-
-    console.log(`✅ Employee verified: ${employee.firstName} ${employee.lastName}`);
-    console.log(`   Hash: ${blockchainHash}`);
-
-    res.json({
-      message: 'Employee verified successfully',
-      employee: {
-        id: updatedEmployee.id,
-        blockchainVerified: updatedEmployee.blockchainVerified,
-        blockchainHash: updatedEmployee.blockchainHash,
-        verifiedAt: updatedEmployee.verifiedAt,
-      }
-    });
-    
-    realTimeManager.broadcastEmployeeUpdated(updatedEmployee);
-  } catch (error) {
-    console.error('Error verifying employee:', error);
-    res.status(500).json({ message: 'Failed to verify employee' });
-  }
-});
-
 // Update employee deductions (Manager only)
 router.put('/api/employees/:id/deductions', requireAuth, requireRole(['manager']), async (req, res) => {
   try {
