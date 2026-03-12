@@ -6,6 +6,7 @@
 import { Router, Request, Response } from "express";
 import { dbStorage as storage } from "../db-storage";
 import { format } from "date-fns";
+import { createAuditLog } from "./audit";
 
 const router = Router();
 
@@ -105,15 +106,21 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
       { key: "totalHours", header: "Total Hours" },
       { key: "regularHours", header: "Regular Hours" },
       { key: "overtimeHours", header: "Overtime Hours" },
+      { key: "nightDiffHours", header: "Night Diff Hours" },
       { key: "basicPay", header: "Basic Pay (₱)" },
       { key: "overtimePay", header: "Overtime Pay (₱)" },
       { key: "nightDiffPay", header: "Night Diff Pay (₱)" },
       { key: "holidayPay", header: "Holiday Pay (₱)" },
+      { key: "restDayPay", header: "Rest Day Pay (₱)" },
       { key: "grossPay", header: "Gross Pay (₱)" },
       { key: "sssContribution", header: "SSS (₱)" },
+      { key: "sssLoan", header: "SSS Loan (₱)" },
       { key: "philHealthContribution", header: "PhilHealth (₱)" },
       { key: "pagibigContribution", header: "Pag-IBIG (₱)" },
+      { key: "pagibigLoan", header: "Pag-IBIG Loan (₱)" },
       { key: "withholdingTax", header: "Tax (₱)" },
+      { key: "advances", header: "Cash Advances (₱)" },
+      { key: "otherDeductions", header: "Other Deductions (₱)" },
       { key: "totalDeductions", header: "Total Deductions (₱)" },
       { key: "netPay", header: "Net Pay (₱)" },
       { key: "status", header: "Status" },
@@ -125,6 +132,17 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(csv);
+
+    // Audit trail for payroll export
+    await createAuditLog({
+      action: 'export_payroll',
+      entityType: 'payroll_report',
+      entityId: (periodId as string) || 'all',
+      userId: req.user!.id,
+      newValues: { entriesExported: enrichedEntries.length, filename },
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      userAgent: req.headers["user-agent"],
+    });
   } catch (error) {
     console.error("Error exporting payroll:", error);
     res.status(500).json({ message: "Failed to export payroll data" });
@@ -167,6 +185,17 @@ router.get("/api/reports/employees/export", requireAuth, requireManagerRole, asy
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(csv);
+
+    // Audit trail for employee export
+    await createAuditLog({
+      action: 'export_employees',
+      entityType: 'employee_report',
+      entityId: branchId,
+      userId: req.user!.id,
+      newValues: { employeesExported: formattedEmployees.length, filename },
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      userAgent: req.headers["user-agent"],
+    });
   } catch (error) {
     console.error("Error exporting employees:", error);
     res.status(500).json({ message: "Failed to export employee data" });
@@ -228,6 +257,17 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(csv);
+
+    // Audit trail for deduction export
+    await createAuditLog({
+      action: 'export_deductions',
+      entityType: 'deduction_report',
+      entityId: periodId as string,
+      userId: req.user!.id,
+      newValues: { entriesExported: enrichedEntries.length, filename },
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      userAgent: req.headers["user-agent"],
+    });
   } catch (error) {
     console.error("Error exporting deductions:", error);
     res.status(500).json({ message: "Failed to export deduction data" });

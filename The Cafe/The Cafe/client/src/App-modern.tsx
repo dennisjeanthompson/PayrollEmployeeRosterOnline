@@ -39,6 +39,7 @@ const MuiTimeOff = lazy(() => import("@/pages/mui-time-off"));
 const MuiDeductionSettings = lazy(() => import("@/pages/mui-deduction-settings"));
 const MuiPayrollManagement = lazy(() => import("@/pages/mui-payroll-management"));
 const MuiAdminDeductionRates = lazy(() => import("@/pages/mui-admin-deduction-rates"));
+const MuiCompanySettings = lazy(() => import("@/pages/mui-company-settings"));
 
 const Setup = lazy(() => import("@/pages/setup"));
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -184,6 +185,7 @@ function AppRoutes() {
                 <Route path="/reports" component={() => <MuiReports />} />
                 <Route path="/deduction-settings" component={() => <MuiDeductionSettings />} />
                 <Route path="/deduction-rates" component={() => <MuiAdminDeductionRates />} />
+                <Route path="/company-settings" component={() => <MuiCompanySettings />} />
                 <Route path="/" component={() => <Redirect to="/dashboard" />} />
 
                 {/* Employee routes: always register `/employee/*` but render mobile components on mobile devices, otherwise render desktop equivalents */}

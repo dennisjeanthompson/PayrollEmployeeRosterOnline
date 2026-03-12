@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Branch, type InsertBranch, type Shift, type InsertShift, type ShiftTrade, type InsertShiftTrade, type PayrollPeriod, type InsertPayrollPeriod, type PayrollEntry, type InsertPayrollEntry, type Approval, type InsertApproval, type TimeOffRequest, type InsertTimeOffRequest, type Notification, type InsertNotification, type DeductionSettings, type InsertDeductionSettings, type DeductionRate, type InsertDeductionRate, type AuditLog, type InsertAuditLog, type Holiday, type InsertHoliday, type AdjustmentLog, type InsertAdjustmentLog } from "@shared/schema";
+import { type User, type InsertUser, type Branch, type InsertBranch, type Shift, type InsertShift, type ShiftTrade, type InsertShiftTrade, type PayrollPeriod, type InsertPayrollPeriod, type PayrollEntry, type InsertPayrollEntry, type Approval, type InsertApproval, type TimeOffRequest, type InsertTimeOffRequest, type Notification, type InsertNotification, type DeductionSettings, type InsertDeductionSettings, type DeductionRate, type InsertDeductionRate, type AuditLog, type InsertAuditLog, type Holiday, type InsertHoliday, type AdjustmentLog, type InsertAdjustmentLog, type CompanySettings, type InsertCompanySettings, type ArchivedPayrollPeriod, type TimeOffPolicy } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 
@@ -119,6 +119,41 @@ export interface IStorage {
   getPendingAdjustmentLogs(branchId: string): Promise<AdjustmentLog[]>;
   updateAdjustmentLog(id: string, log: Partial<InsertAdjustmentLog>): Promise<AdjustmentLog | undefined>;
   deleteAdjustmentLog(id: string): Promise<boolean>;
+
+  // Company Settings
+  getCompanySettings(): Promise<CompanySettings | undefined>;
+  createCompanySettings(settings: InsertCompanySettings): Promise<CompanySettings>;
+  updateCompanySettings(id: string, settings: Partial<InsertCompanySettings>): Promise<CompanySettings | undefined>;
+
+  // Setup Management
+  isSetupComplete(): Promise<boolean>;
+  markSetupComplete(): Promise<void>;
+
+  // Shift Validation
+  checkShiftOverlap(userId: string, startTime: Date, endTime: Date, excludeShiftId?: string): Promise<Shift | null>;
+  checkShiftOnDate(userId: string, date: Date, excludeShiftId?: string): Promise<Shift[]>;
+
+  // Notifications (extended)
+  getUserNotifications(userId: string): Promise<Notification[]>;
+  markNotificationRead(id: string, userId: string): Promise<Notification | undefined>;
+  markAllNotificationsRead(userId: string): Promise<void>;
+
+  // Archived Payroll
+  getArchivedPayrollPeriods(branchId: string): Promise<ArchivedPayrollPeriod[]>;
+  archivePayrollPeriod(periodId: string, archivedBy: string, entriesSnapshot: string): Promise<ArchivedPayrollPeriod>;
+  getArchivedPayrollPeriod(id: string): Promise<ArchivedPayrollPeriod | undefined>;
+
+  // User management (extended)
+  getAllUsers(): Promise<User[]>;
+  forceDeleteUser(id: string, performedBy: string, reason?: string): Promise<void>;
+  employeeHasRelatedData(id: string): Promise<{ hasShifts: boolean; hasPayroll: boolean; hasTotal: number }>;
+  getEmployeeDataForExport(id: string): Promise<{ employee: User; shifts: Shift[]; payrollEntries: PayrollEntry[]; timeOffRequests: TimeOffRequest[]; shiftTrades: ShiftTrade[] } | null>;
+
+  // Time Off Policy
+  getTimeOffPolicyByBranch(branchId: string): Promise<TimeOffPolicy[]>;
+  getTimeOffPolicyByType(branchId: string, leaveType: string): Promise<TimeOffPolicy | undefined>;
+  upsertTimeOffPolicy(branchId: string, leaveType: string, minimumAdvanceDays: number): Promise<TimeOffPolicy>;
+  initializeDefaultTimeOffPolicies(branchId: string): Promise<void>;
 }
 
 export class MemStorage implements IStorage {
@@ -136,6 +171,7 @@ export class MemStorage implements IStorage {
   private deductionRates: Map<string, DeductionRate> = new Map();
   private auditLogs: Map<string, AuditLog> = new Map();
   private adjustmentLogs: Map<string, AdjustmentLog> = new Map();
+  private companySettingsStore: Map<string, CompanySettings> = new Map();
 
 
 
@@ -949,6 +985,250 @@ export class MemStorage implements IStorage {
 
   async deleteAdjustmentLog(id: string): Promise<boolean> {
     return this.adjustmentLogs.delete(id);
+  }
+
+  // Company Settings
+  async getCompanySettings(): Promise<CompanySettings | undefined> {
+    const all = Array.from(this.companySettingsStore.values());
+    return all.find(s => s.isActive) || all[0];
+  }
+
+  async createCompanySettings(settings: InsertCompanySettings): Promise<CompanySettings> {
+    const id = randomUUID();
+    const record: CompanySettings = {
+      id,
+      ...settings,
+      country: settings.country ?? 'Philippines',
+      industry: settings.industry ?? 'Food & Beverage',
+      payrollFrequency: settings.payrollFrequency ?? 'semi-monthly',
+      paymentMethod: settings.paymentMethod ?? 'Bank Transfer',
+      isActive: settings.isActive ?? true,
+      tradeName: settings.tradeName ?? null,
+      city: settings.city ?? null,
+      province: settings.province ?? null,
+      zipCode: settings.zipCode ?? null,
+      sssEmployerNo: settings.sssEmployerNo ?? null,
+      philhealthNo: settings.philhealthNo ?? null,
+      pagibigNo: settings.pagibigNo ?? null,
+      birRdo: settings.birRdo ?? null,
+      secRegistration: settings.secRegistration ?? null,
+      phone: settings.phone ?? null,
+      email: settings.email ?? null,
+      website: settings.website ?? null,
+      logoUrl: settings.logoUrl ?? null,
+      logoPublicId: settings.logoPublicId ?? null,
+      bankName: settings.bankName ?? null,
+      bankAccountName: settings.bankAccountName ?? null,
+      bankAccountNo: settings.bankAccountNo ?? null,
+      updatedBy: settings.updatedBy ?? null,
+      updatedAt: new Date(),
+      createdAt: new Date(),
+    };
+    this.companySettingsStore.set(id, record);
+    return record;
+  }
+
+  async updateCompanySettings(id: string, settings: Partial<InsertCompanySettings>): Promise<CompanySettings | undefined> {
+    const existing = this.companySettingsStore.get(id);
+    if (!existing) return undefined;
+    const updated = { ...existing, ...settings, updatedAt: new Date() } as CompanySettings;
+    this.companySettingsStore.set(id, updated);
+    return updated;
+  }
+
+  // Setup Management
+  private setupComplete: boolean = false;
+
+  async isSetupComplete(): Promise<boolean> {
+    return this.setupComplete;
+  }
+
+  async markSetupComplete(): Promise<void> {
+    this.setupComplete = true;
+  }
+
+  // Shift Validation
+  async checkShiftOverlap(userId: string, startTime: Date, endTime: Date, excludeShiftId?: string): Promise<Shift | null> {
+    for (const shift of this.shifts.values()) {
+      if (shift.userId !== userId) continue;
+      if (excludeShiftId && shift.id === excludeShiftId) continue;
+      if (shift.startTime && shift.endTime) {
+        const existingStart = new Date(shift.startTime);
+        const existingEnd = new Date(shift.endTime);
+        if (startTime < existingEnd && endTime > existingStart) {
+          return shift;
+        }
+      }
+    }
+    return null;
+  }
+
+  async checkShiftOnDate(userId: string, date: Date, excludeShiftId?: string): Promise<Shift[]> {
+    const dayStart = new Date(date);
+    dayStart.setHours(0, 0, 0, 0);
+    const dayEnd = new Date(date);
+    dayEnd.setHours(23, 59, 59, 999);
+
+    const result: Shift[] = [];
+    for (const shift of this.shifts.values()) {
+      if (shift.userId !== userId) continue;
+      if (excludeShiftId && shift.id === excludeShiftId) continue;
+      if (shift.startTime) {
+        const st = new Date(shift.startTime);
+        if (st >= dayStart && st <= dayEnd) {
+          result.push(shift);
+        }
+      }
+    }
+    return result;
+  }
+
+  // Notifications (extended)
+  async getUserNotifications(userId: string): Promise<Notification[]> {
+    return Array.from(this.notifications.values())
+      .filter(n => n.userId === userId)
+      .sort((a, b) => {
+        const da = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const db = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return db - da;
+      })
+      .slice(0, 50);
+  }
+
+  async markNotificationRead(id: string, userId: string): Promise<Notification | undefined> {
+    const notification = this.notifications.get(id);
+    if (!notification || notification.userId !== userId) return undefined;
+    const updated = { ...notification, isRead: true };
+    this.notifications.set(id, updated);
+    return updated;
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    for (const [id, notification] of this.notifications.entries()) {
+      if (notification.userId === userId) {
+        this.notifications.set(id, { ...notification, isRead: true });
+      }
+    }
+  }
+
+  // Archived Payroll
+  private archivedPayrollPeriods: Map<string, ArchivedPayrollPeriod> = new Map();
+
+  async getArchivedPayrollPeriods(branchId: string): Promise<ArchivedPayrollPeriod[]> {
+    return Array.from(this.archivedPayrollPeriods.values())
+      .filter(a => a.branchId === branchId);
+  }
+
+  async archivePayrollPeriod(periodId: string, archivedBy: string, entriesSnapshot: string): Promise<ArchivedPayrollPeriod> {
+    const period = this.payrollPeriods.get(periodId);
+    if (!period) throw new Error('Payroll period not found');
+    const id = randomUUID();
+    const archived: ArchivedPayrollPeriod = {
+      id,
+      originalPeriodId: periodId,
+      branchId: period.branchId,
+      startDate: period.startDate,
+      endDate: period.endDate,
+      status: period.status || 'closed',
+      totalHours: period.totalHours,
+      totalPay: period.totalPay,
+      archivedAt: new Date(),
+      archivedBy,
+      entriesSnapshot,
+    };
+    this.archivedPayrollPeriods.set(id, archived);
+    return archived;
+  }
+
+  async getArchivedPayrollPeriod(id: string): Promise<ArchivedPayrollPeriod | undefined> {
+    return this.archivedPayrollPeriods.get(id);
+  }
+
+  // User management (extended)
+  async getAllUsers(): Promise<User[]> {
+    return Array.from(this.users.values());
+  }
+
+  async forceDeleteUser(id: string, _performedBy: string, _reason?: string): Promise<void> {
+    this.users.delete(id);
+    for (const [sid, shift] of this.shifts.entries()) {
+      if (shift.userId === id) this.shifts.delete(sid);
+    }
+    for (const [pid, entry] of this.payrollEntries.entries()) {
+      if (entry.userId === id) this.payrollEntries.delete(pid);
+    }
+    for (const [nid, notif] of this.notifications.entries()) {
+      if (notif.userId === id) this.notifications.delete(nid);
+    }
+  }
+
+  async employeeHasRelatedData(id: string): Promise<{ hasShifts: boolean; hasPayroll: boolean; hasTotal: number }> {
+    const userShifts = Array.from(this.shifts.values()).filter(s => s.userId === id);
+    const payroll = Array.from(this.payrollEntries.values()).filter(p => p.userId === id);
+    const timeOff = Array.from(this.timeOffRequests.values()).filter(t => t.userId === id);
+    const trades = Array.from(this.shiftTrades.values()).filter(t => t.fromUserId === id || t.toUserId === id);
+    const total = userShifts.length + payroll.length + timeOff.length + trades.length;
+    return { hasShifts: userShifts.length > 0, hasPayroll: payroll.length > 0, hasTotal: total };
+  }
+
+  async getEmployeeDataForExport(id: string): Promise<{ employee: User; shifts: Shift[]; payrollEntries: PayrollEntry[]; timeOffRequests: TimeOffRequest[]; shiftTrades: ShiftTrade[] } | null> {
+    const employee = this.users.get(id);
+    if (!employee) return null;
+    return {
+      employee,
+      shifts: Array.from(this.shifts.values()).filter(s => s.userId === id),
+      payrollEntries: Array.from(this.payrollEntries.values()).filter(p => p.userId === id),
+      timeOffRequests: Array.from(this.timeOffRequests.values()).filter(t => t.userId === id),
+      shiftTrades: Array.from(this.shiftTrades.values()).filter(t => t.fromUserId === id || t.toUserId === id),
+    };
+  }
+
+  // Time Off Policy
+  private timeOffPolicies: Map<string, TimeOffPolicy> = new Map();
+
+  async getTimeOffPolicyByBranch(branchId: string): Promise<TimeOffPolicy[]> {
+    return Array.from(this.timeOffPolicies.values()).filter(p => p.branchId === branchId);
+  }
+
+  async getTimeOffPolicyByType(branchId: string, leaveType: string): Promise<TimeOffPolicy | undefined> {
+    return Array.from(this.timeOffPolicies.values()).find(p => p.branchId === branchId && p.leaveType === leaveType);
+  }
+
+  async upsertTimeOffPolicy(branchId: string, leaveType: string, minimumAdvanceDays: number): Promise<TimeOffPolicy> {
+    const existing = await this.getTimeOffPolicyByType(branchId, leaveType);
+    if (existing) {
+      const updated = { ...existing, minimumAdvanceDays, updatedAt: new Date() };
+      this.timeOffPolicies.set(existing.id, updated);
+      return updated;
+    }
+    const id = randomUUID();
+    const policy: TimeOffPolicy = {
+      id,
+      branchId,
+      leaveType,
+      minimumAdvanceDays,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.timeOffPolicies.set(id, policy);
+    return policy;
+  }
+
+  async initializeDefaultTimeOffPolicies(branchId: string): Promise<void> {
+    const defaults = [
+      { leaveType: 'vacation', minimumAdvanceDays: 7 },
+      { leaveType: 'sick', minimumAdvanceDays: 0 },
+      { leaveType: 'emergency', minimumAdvanceDays: 0 },
+      { leaveType: 'personal', minimumAdvanceDays: 3 },
+      { leaveType: 'other', minimumAdvanceDays: 3 },
+    ];
+    for (const d of defaults) {
+      const existing = await this.getTimeOffPolicyByType(branchId, d.leaveType);
+      if (!existing) {
+        await this.upsertTimeOffPolicy(branchId, d.leaveType, d.minimumAdvanceDays);
+      }
+    }
   }
 }
 

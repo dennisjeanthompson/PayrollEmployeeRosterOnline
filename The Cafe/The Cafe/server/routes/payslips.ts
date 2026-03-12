@@ -13,20 +13,40 @@ import { generatePayslipPDF, generatePayslipHash } from '../services/payslip-pdf
 import { PayslipData, validatePayslipData, SAMPLE_PAYSLIP_DATA } from '../../shared/payslip-types';
 import { dbStorage } from '../db-storage';
 import { getPaymentDateString } from '../../shared/payroll-dates';
+import { createAuditLog } from './audit';
 import crypto from 'crypto';
 
 const router = Router();
 const storage = dbStorage;
 
-// Company information for Don Macchiatos
-const COMPANY_INFO = {
-  name: "Don Macchiatos",
-  address: "La Union, Philippines",
+// Default fallback company info (used only when no DB settings exist yet)
+const DEFAULT_COMPANY_INFO = {
+  name: "Your Company Name",
+  address: "Philippines",
   tin: "XXX-XXX-XXX-XXX",
-  logo_url: "/images/don-macchiatos-logo.png",
+  logo_url: "",
   phone: "",
-  email: "payroll@donmacchiatos.ph"
+  email: "",
 };
+
+/**
+ * Fetches company info from the database.
+ * Falls back to DEFAULT_COMPANY_INFO if no settings have been configured yet.
+ */
+async function getCompanyInfo() {
+  const settings = await storage.getCompanySettings();
+  if (!settings) return DEFAULT_COMPANY_INFO;
+  const fullAddress = [settings.address, settings.city, settings.province, settings.zipCode]
+    .filter(Boolean).join(', ');
+  return {
+    name: settings.tradeName || settings.name,
+    address: fullAddress || settings.address,
+    tin: settings.tin,
+    logo_url: settings.logoUrl || '',
+    phone: settings.phone || '',
+    email: settings.email || '',
+  };
+}
 
 // Auth middleware for payslip routes
 const requireAuth = (req: Request, res: Response, next: NextFunction) => {
@@ -48,17 +68,8 @@ const requireManagerOrAdmin = (req: Request, res: Response, next: NextFunction) 
   next();
 };
 
-// Audit log storage (in production, use database)
-const auditLogs: Array<{
-  id: string;
-  user_id: string;
-  action: string;
-  employee_id: string;
-  payslip_id: string;
-  payroll_entry_id: string;
-  timestamp: string;
-  ip_address: string;
-}> = [];
+// Audit log storage (persistent via DB audit system)
+// Uses createAuditLog() for database-backed audit trail
 
 // Store verification records (in production, use database)
 const verificationRecords: Map<string, {
@@ -106,7 +117,7 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
     }
     
     // Get deduction rates for effective date display
-    const deductionRates = await storage.getActiveDeductionRates();
+    const deductionRates = await storage.getAllDeductionRates();
     const ratesEffectiveFrom = deductionRates.length > 0 
       ? deductionRates[0].createdAt?.toISOString().split('T')[0] 
       : '2025-01-01';
@@ -219,16 +230,22 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
     }
     
     // Employer contributions (for information only)
+    // SSS 2026: 15% total = 5% Employee + 10% Employer (ER = 2× EE share)
+    // PhilHealth 2026: 5% total = 2.5% Employee + 2.5% Employer (equal split)
+    // Pag-IBIG 2026: Employee max ₱200, Employer matches employee share
     const employerContributions: any[] = [
-      { code: 'SSS_ER', label: 'SSS (Employer Share)', amount: sssContrib * 2 },
+      { code: 'SSS_ER', label: 'SSS (Employer Share)', amount: Math.round(sssContrib * 2 * 100) / 100 },
       { code: 'PH_ER', label: 'PhilHealth (Employer Share)', amount: philHealth },
       { code: 'PB_ER', label: 'Pag-IBIG (Employer Share)', amount: pagibig },
     ].filter(c => c.amount > 0);
     
     // Build payslip data
+    const companyInfo = await getCompanyInfo();
+    const companyDbSettings = await storage.getCompanySettings();
+
     const payslipData: PayslipData = {
       payslip_id: payslipId,
-      company: COMPANY_INFO,
+      company: companyInfo,
       employee: {
         id: `DM-EMP-${employee.id.substring(0, 6).toUpperCase()}`,
         name: `${employee.firstName} ${employee.lastName}`,
@@ -259,9 +276,11 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
       },
       employer_contributions: employerContributions,
       payment_method: {
-        type: 'Bank Transfer',
-        bank: 'BPI',
-        account_last4: '****',
+        type: (companyDbSettings?.paymentMethod as any) || 'Bank Transfer',
+        bank: companyDbSettings?.bankName || '',
+        account_last4: companyDbSettings?.bankAccountNo
+          ? '****' + companyDbSettings.bankAccountNo.slice(-4)
+          : '****',
       },
       verification_code: tamperHash,
       generated_at: new Date().toISOString(),
@@ -311,19 +330,20 @@ router.post('/audit-log', requireAuth, async (req: Request, res: Response) => {
     const currentUser = req.session.user!;
     
     const auditEntry = {
-      id: crypto.randomUUID(),
-      user_id: currentUser.id,
-      action: action || 'view',
-      employee_id: employee_id || '',
-      payslip_id: payslip_id || '',
-      payroll_entry_id: payroll_entry_id || '',
-      timestamp: new Date().toISOString(),
-      ip_address: req.ip || req.socket.remoteAddress || 'unknown',
+      action: action || 'payslip_view',
+      entityType: 'payslip',
+      entityId: payslip_id || '',
+      userId: currentUser.id,
+      newValues: {
+        employee_id: employee_id || '',
+        payroll_entry_id: payroll_entry_id || '',
+        action: action || 'view',
+      },
+      ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+      userAgent: req.headers['user-agent'],
     };
     
-    auditLogs.push(auditEntry);
-    // Cap audit logs to prevent unbounded memory growth
-    if (auditLogs.length > 10000) auditLogs.splice(0, auditLogs.length - 5000);
+    await createAuditLog(auditEntry);
     console.log('[Payslip Audit]', auditEntry);
     
     res.json({ success: true, logged: true });
@@ -339,23 +359,34 @@ router.post('/audit-log', requireAuth, async (req: Request, res: Response) => {
  */
 router.get('/audit-log', requireManagerOrAdmin, async (req: Request, res: Response) => {
   try {
-    const { employee_id, payslip_id, limit = 100 } = req.query;
+    const { employee_id, limit = 100 } = req.query;
     
-    let logs = [...auditLogs];
+    // Use the DB audit log system
+    const logs = await storage.getAuditLogs({
+      entityType: 'payslip',
+      limit: Number(limit),
+      offset: 0,
+    });
     
+    let filteredLogs = logs;
     if (employee_id) {
-      logs = logs.filter(l => l.employee_id === employee_id);
-    }
-    if (payslip_id) {
-      logs = logs.filter(l => l.payslip_id === payslip_id);
+      filteredLogs = logs.filter(l => {
+        try {
+          const vals = l.newValues ? JSON.parse(l.newValues) : {};
+          return vals.employee_id === employee_id;
+        } catch { return false; }
+      });
     }
     
-    // Sort by timestamp descending and limit
-    logs = logs
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
-      .slice(0, Number(limit));
+    // Sort by timestamp descending
+    const sortedLogs = filteredLogs
+      .sort((a, b) => {
+        const ta = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+        const tb = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+        return tb - ta;
+      });
     
-    res.json({ success: true, logs });
+    res.json({ success: true, logs: sortedLogs });
   } catch (error) {
     console.error('Error fetching audit logs:', error);
     res.status(500).json({ success: false, error: 'Failed to fetch audit logs' });

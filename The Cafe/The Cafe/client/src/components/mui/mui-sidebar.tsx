@@ -49,8 +49,7 @@ import {
   Verified as VerifiedIcon,
   Download as DownloadIcon,
   TrendingUp as TrendingUpIcon,
-  ManageAccounts as ProfileIcon,
-} from "@mui/icons-material";
+  ManageAccounts as ProfileIcon,  Business as BusinessIcon,} from "@mui/icons-material";
 
 const DRAWER_WIDTH = 280;
 const COLLAPSED_WIDTH = 80;
@@ -79,6 +78,7 @@ const managementNavigation: NavItem[] = [
 ];
 
 const settingsNavigation: NavItem[] = [
+  { name: "Company Settings", href: "/company-settings", icon: BusinessIcon, roles: ["manager", "admin"] },
   { name: "Profile Settings", href: "/profile", icon: ProfileIcon, roles: ["employee", "manager", "admin"] },
   { name: "Compliance", href: "/compliance", icon: VerifiedIcon, roles: ["admin"] },
   { name: "Deductions", href: "/deduction-settings", icon: SettingsIcon, roles: ["manager", "admin"] },

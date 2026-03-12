@@ -12,6 +12,7 @@ import { registerBranchesRoutes } from "./routes/branches";
 import { createEmployeeRouter } from "./routes/employees";
 import { router as hoursRoutes } from "./routes/hours";
 import payslipsRouter from "./routes/payslips";
+import companySettingsRouter from "./routes/company-settings";
 import { auditRouter, setAuditRealTimeManager, createAuditLog } from "./routes/audit";
 import { reportsRouter } from "./routes/reports";
 import { forecastRouter } from "./routes/forecast";
@@ -1103,6 +1104,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Register payslips routes for PDF generation and verification
   app.use('/api/payslips', payslipsRouter);
+
+  // Register company settings routes
+  app.use('/api/company-settings', companySettingsRouter);
 
   // Register audit and reports routes
   app.use(auditRouter);

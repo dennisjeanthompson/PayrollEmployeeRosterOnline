@@ -201,6 +201,39 @@ export const archivedPayrollPeriods = pgTable("archived_payroll_periods", {
   entriesSnapshot: text("entries_snapshot"),
 });
 
+// Company Settings - dynamic company profile for payslips, receipts, and branding
+export const companySettings = pgTable("company_settings", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  tradeName: text("trade_name"), // DBA / trade name
+  address: text("address").notNull(),
+  city: text("city"),
+  province: text("province"),
+  zipCode: text("zip_code"),
+  country: text("country").default("Philippines"),
+  tin: text("tin").notNull(), // BIR Tax Identification Number
+  sssEmployerNo: text("sss_employer_no"), // SSS Employer Number
+  philhealthNo: text("philhealth_no"), // PhilHealth Employer Number
+  pagibigNo: text("pagibig_no"), // Pag-IBIG Employer Number
+  birRdo: text("bir_rdo"), // BIR Revenue District Office code
+  secRegistration: text("sec_registration"), // SEC/DTI Registration Number
+  phone: text("phone"),
+  email: text("email"),
+  website: text("website"),
+  logoUrl: text("logo_url"), // Cloudinary or local URL
+  logoPublicId: text("logo_public_id"), // Cloudinary public ID
+  industry: text("industry").default("Food & Beverage"),
+  payrollFrequency: text("payroll_frequency").default("semi-monthly"), // weekly, bi-weekly, semi-monthly, monthly
+  paymentMethod: text("payment_method").default("Bank Transfer"), // Bank Transfer, Cash, Check, GCash, PayMaya
+  bankName: text("bank_name"),
+  bankAccountName: text("bank_account_name"),
+  bankAccountNo: text("bank_account_no"), // stored masked in responses
+  isActive: boolean("is_active").default(true),
+  updatedBy: text("updated_by").references(() => users.id),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Audit logs for tracking deduction and rate changes (compliance requirement)
 export const auditLogs = pgTable("audit_logs", {
   id: text("id").primaryKey(),
@@ -373,6 +406,12 @@ export const insertAdjustmentLogSchema = createInsertSchema(adjustmentLogs).omit
   date: z.union([z.date(), z.string().pipe(z.coerce.date())]),
 });
 
+export const insertCompanySettingsSchema = createInsertSchema(companySettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export interface DashboardStats {
   stats: {
     totalEmployees: number;
@@ -404,6 +443,7 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type TimeOffPolicy = typeof timeOffPolicy.$inferSelect;
 export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
 export type AdjustmentLog = typeof adjustmentLogs.$inferSelect;
+export type CompanySettings = typeof companySettings.$inferSelect;
 
 
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
@@ -422,3 +462,4 @@ export type InsertArchivedPayrollPeriod = z.infer<typeof insertArchivedPayrollPe
 export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type InsertTimeOffPolicy = z.infer<typeof insertTimeOffPolicySchema>;
 export type InsertAdjustmentLog = z.infer<typeof insertAdjustmentLogSchema>;
+export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;

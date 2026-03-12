@@ -1,7 +1,7 @@
 import { db } from './db';
-import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, auditLogs, timeOffPolicy, adjustmentLogs, employeeDocuments } from '@shared/schema';
+import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, auditLogs, timeOffPolicy, adjustmentLogs, employeeDocuments, companySettings } from '@shared/schema';
 import type { IStorage } from './storage';
-import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftTrade, InsertShiftTrade, PayrollPeriod, InsertPayrollPeriod, PayrollEntry, InsertPayrollEntry, Approval, InsertApproval, TimeOffRequest, InsertTimeOffRequest, Notification, InsertNotification, DeductionSettings, InsertDeductionSettings, DeductionRate, InsertDeductionRate, Holiday, InsertHoliday, ArchivedPayrollPeriod, InsertArchivedPayrollPeriod, TimeOffPolicy, InsertTimeOffPolicy, AuditLog, InsertAuditLog, AdjustmentLog, InsertAdjustmentLog } from '@shared/schema';
+import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftTrade, InsertShiftTrade, PayrollPeriod, InsertPayrollPeriod, PayrollEntry, InsertPayrollEntry, Approval, InsertApproval, TimeOffRequest, InsertTimeOffRequest, Notification, InsertNotification, DeductionSettings, InsertDeductionSettings, DeductionRate, InsertDeductionRate, Holiday, InsertHoliday, ArchivedPayrollPeriod, InsertArchivedPayrollPeriod, TimeOffPolicy, InsertTimeOffPolicy, AuditLog, InsertAuditLog, AdjustmentLog, InsertAdjustmentLog, CompanySettings, InsertCompanySettings } from '@shared/schema';
 import { eq, and, gte, lte, gt, lt, ne, desc, or, sql, isNull } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcrypt';
@@ -1293,6 +1293,30 @@ export class DatabaseStorage implements IStorage {
   async deleteAdjustmentLog(id: string): Promise<boolean> {
     await db.delete(adjustmentLogs).where(eq(adjustmentLogs.id, id));
     return true;
+  }
+
+  // Company Settings
+  async getCompanySettings(): Promise<CompanySettings | undefined> {
+    const results = await db.select().from(companySettings)
+      .where(eq(companySettings.isActive, true))
+      .limit(1);
+    if (results.length > 0) return results[0];
+    // Fallback: return any record
+    const all = await db.select().from(companySettings).limit(1);
+    return all[0];
+  }
+
+  async createCompanySettings(settings: InsertCompanySettings): Promise<CompanySettings> {
+    const id = randomUUID();
+    await db.insert(companySettings).values({ id, ...settings });
+    const result = await db.select().from(companySettings).where(eq(companySettings.id, id)).limit(1);
+    return result[0];
+  }
+
+  async updateCompanySettings(id: string, settings: Partial<InsertCompanySettings>): Promise<CompanySettings | undefined> {
+    await db.update(companySettings).set({ ...settings, updatedAt: new Date() }).where(eq(companySettings.id, id));
+    const result = await db.select().from(companySettings).where(eq(companySettings.id, id)).limit(1);
+    return result[0];
   }
 }
 

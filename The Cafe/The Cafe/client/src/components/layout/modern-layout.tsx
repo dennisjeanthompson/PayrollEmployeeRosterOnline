@@ -27,6 +27,7 @@ import {
   PaymentsRounded as PaymentsRoundedIcon,
   AssignmentRounded as AssignmentRoundedIcon,
   NotificationsRounded as NotificationsRoundedIcon,
+  BusinessRounded as BusinessIcon,
 } from "@mui/icons-material";
 import { useLocation } from "wouter";
 import { logout, getCurrentUser } from "@/lib/auth";
@@ -44,6 +45,7 @@ const navItems = [
   { icon: PeopleRoundedIcon, label: "Employees", path: "/employees" },
   { icon: PaymentsRoundedIcon, label: "Payroll", path: "/payroll" },
   { icon: NotificationsRoundedIcon, label: "Notifications", path: "/notifications" },
+  { icon: BusinessIcon, label: "Company Settings", path: "/company-settings" },
 ];
 
 const SIDEBAR_WIDTH = 280;
