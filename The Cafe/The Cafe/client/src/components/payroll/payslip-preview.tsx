@@ -71,6 +71,8 @@ interface PayslipData {
   companyName?: string;
   companyAddress?: string;
   companyTin?: string;
+  companyLogoUrl?: string;
+  companyEmail?: string;
 }
 
 interface PayslipPreviewProps {
@@ -359,6 +361,8 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     },
     enabled: open && !!entryId,
     refetchOnWindowFocus: true,
+    refetchOnMount: 'always',
+    staleTime: 0,
   });
 
   const payslip: PayslipData | null = data?.payslip || null;
@@ -374,6 +378,10 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     const mediumGray = [153, 153, 153] as [number, number, number];
 
     let y = 20;
+    const companyName = payslipData.companyName || "The Café";
+    const companyAddress = payslipData.companyAddress || "Philippines";
+    const companyTin = payslipData.companyTin || "N/A";
+    const companyEmail = payslipData.companyEmail || "hr@thecafe.com.ph";
 
     // Header
     doc.setTextColor(...black);
@@ -382,15 +390,15 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     doc.text("PAYSLIP", pageWidth - 20, y, { align: "right" });
     
     doc.setFontSize(16);
-    doc.text("THE CAFÉ INC.", 20, y);
+    doc.text(companyName.toUpperCase(), 20, y);
     
     y += 8;
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text("2F Ayala Triangle Gardens, Makati City", 20, y);
+    doc.text(companyAddress, 20, y);
     
     y += 5;
-    doc.text("TIN: 009-456-789-000", 20, y);
+    doc.text(`TIN: ${companyTin}`, 20, y);
     
     y += 10;
     doc.setDrawColor(...mediumGray);
@@ -575,7 +583,7 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     doc.setFont("helvetica", "normal");
     doc.text("This is a computer-generated document. No signature required.", pageWidth / 2, y, { align: "center" });
     y += 5;
-    doc.text("For payroll inquiries: hr@thecafe.com.ph", pageWidth / 2, y, { align: "center" });
+    doc.text(`For payroll inquiries: ${companyEmail}`, pageWidth / 2, y, { align: "center" });
 
     return doc;
   };
@@ -643,12 +651,20 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
             {/* Header Section */}
             <div className="payslip-header">
               <div className="payslip-logo-box">
-                Company Logo
+                {payslip.companyLogoUrl ? (
+                  <img
+                    src={payslip.companyLogoUrl}
+                    alt="Company Logo"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                  />
+                ) : (
+                  "Company Logo"
+                )}
               </div>
               <div className="payslip-company-info">
-                <h1>{payslip.companyName || "THE CAFÉ INC."}</h1>
-                <p>{payslip.companyAddress || "2F Ayala Triangle Gardens, Makati City"}</p>
-                <p>TIN: {payslip.companyTin || "009-456-789-000"}</p>
+                <h1>{payslip.companyName || "The Café"}</h1>
+                <p>{payslip.companyAddress || "Philippines"}</p>
+                <p>TIN: {payslip.companyTin || "N/A"}</p>
               </div>
               <div className="payslip-title">
                 PAYSLIP
@@ -734,7 +750,7 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
             {/* Footer */}
             <div className="payslip-footer">
               <p>This is a computer-generated document. No signature required.</p>
-              <p>For payroll inquiries: hr@thecafe.com.ph</p>
+              <p>For payroll inquiries: {payslip.companyEmail || "hr@thecafe.com.ph"}</p>
             </div>
 
             {/* Action Buttons */}

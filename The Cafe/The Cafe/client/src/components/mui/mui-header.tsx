@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUser, isManager, isAdmin, useAuth } from "@/lib/auth";
-import { invalidateQueries } from "@/lib/queryClient";
+import { invalidateQueries, getQueryFn } from "@/lib/queryClient";
 import { useLocation, Link } from "wouter";
 import { useTheme as useAppTheme } from "@/components/theme-provider";
 import CommandPalette from "../search/CommandPalette";
@@ -96,7 +96,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 
 export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void }) {
   const currentUser = getCurrentUser();
-  const { switchBranch } = useAuth();
+  const { switchBranch, isAuthenticated } = useAuth();
   const canSwitchBranch = isAdmin() || isManager();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [location, setLocation] = useLocation();
@@ -112,8 +112,11 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
 
-  const { data: branchesData } = useQuery<{ branches?: Array<{ id: string; name: string; isActive?: boolean }> }>({
+  const shouldLoadBranches = canSwitchBranch && isAuthenticated;
+  const { data: branchesData } = useQuery<{ branches?: Array<{ id: string; name: string; isActive?: boolean }> } | null>({
     queryKey: ["/api/branches"],
+    queryFn: getQueryFn({ on401: "returnNull" }),
+    enabled: shouldLoadBranches,
   });
 
   useEffect(() => {
@@ -139,6 +142,7 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
   const currentBranch = branchesData?.branches?.find(
     (branch) => branch.id === currentUser?.branchId
   );
+  const branchNameFromProfile = (currentUser ? (currentUser as typeof currentUser & { branchName?: string })?.branchName : undefined) ?? undefined;
 
   const handleBranchSwitch = useCallback(async (branchId: string) => {
     if (branchId === currentUser?.branchId || isSwitching) return;
@@ -312,10 +316,10 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
               </Select>
             </FormControl>
           </Tooltip>
-        ) : currentBranch ? (
+        ) : currentBranch || branchNameFromProfile ? (
           <Chip
             icon={<LocationIcon sx={{ fontSize: 16 }} />}
-            label={currentBranch.name}
+            label={currentBranch?.name || branchNameFromProfile || 'Assigned Branch'}
             size="small"
             variant="outlined"
             sx={{

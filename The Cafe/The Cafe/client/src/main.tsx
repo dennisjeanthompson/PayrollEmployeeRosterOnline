@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import React from "react";
+import "focus-visible";
 import App from "./App";
 import "./index.css";
 

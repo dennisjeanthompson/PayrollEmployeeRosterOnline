@@ -43,19 +43,10 @@ const MuiAuditLogs = lazy(() => import("@/pages/mui-audit-logs"));
 const MuiHolidayCalendar = lazy(() => import("@/pages/mui-holiday-calendar"));
 const MuiComplianceDashboard = lazy(() => import("@/pages/mui-compliance-dashboard"));
 const MuiProfileSettings = lazy(() => import("@/pages/mui-profile-settings"));
+const MuiCompanySettings = lazy(() => import("@/pages/mui-company-settings"));
 
 const Setup = lazy(() => import("@/pages/setup"));
 const NotFound = lazy(() => import("@/pages/not-found"));
-
-// Mobile Pages - Lazy loaded for code splitting
-const MobileDashboard = lazy(() => import("@/pages/mobile-dashboard"));
-const MobileSchedule = lazy(() => import("@/pages/mobile-schedule"));
-const MobilePayroll = lazy(() => import("@/pages/mobile-payroll"));
-const MobileNotifications = lazy(() => import("@/pages/mobile-notifications"));
-const MobileTimeOff = lazy(() => import("@/pages/mobile-time-off"));
-const MobileShiftTrading = lazy(() => import("@/pages/mobile-shift-trading"));
-const MobileProfile = lazy(() => import("@/pages/mobile-profile"));
-const MobileMore = lazy(() => import("@/pages/mobile-more"));
 
 // Loading Screen Component (MUI)
 function LoadingScreen() {
@@ -378,6 +369,18 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
         </RequireManagerOrAdmin>
       </Route>
 
+      <Route path="/company-settings">
+        <RequireManagerOrAdmin>
+          <DesktopLayout>
+            <RouteLoader>
+              <ErrorBoundary>
+                <MuiCompanySettings />
+              </ErrorBoundary>
+            </RouteLoader>
+          </DesktopLayout>
+        </RequireManagerOrAdmin>
+      </Route>
+
       <Route path="/admin/deduction-rates">
         <RequireAdmin>
           <DesktopLayout>
@@ -442,8 +445,6 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
 // Mobile Router (Employee namespace)
 function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; user: any } }) {
   const { isAuthenticated, user } = authState;
-  const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-  const [, setLocation] = useLocation();
 
   // Defensive redirect: if not authenticated, send user to login immediately
   // If not authenticated, show the login route (avoid premature null return)
@@ -456,107 +457,51 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
   }
 
   if (user?.role === "manager" || user?.role === "admin") {
-    const handleLogout = async () => {
-      try {
-        await apiRequest("POST", "/api/auth/logout");
-      } catch (e) {
-        // ignore
-      }
-      setAuthState({ user: null, isAuthenticated: false });
-    };
-
-    return (
-      <Box sx={{ minHeight: "100vh", display: "flex", alignItems: "center", justifyContent: "center", bgcolor: "background.default", p: 3 }}>
-        <Box sx={{ textAlign: "center", maxWidth: 400 }}>
-          <Box sx={{ width: 64, height: 64, borderRadius: 3, bgcolor: (theme) => alpha(theme.palette.primary.main, 0.1), display: "flex", alignItems: "center", justifyContent: "center", mx: "auto", mb: 2 }}>
-            <CoffeeIcon sx={{ fontSize: 32, color: "primary.main" }} />
-          </Box>
-          <Typography variant="h5" fontWeight={700} gutterBottom>
-            Manager Portal
-          </Typography>
-          <Typography color="text.secondary" sx={{ mb: 3 }}>
-            You're logged in as a {user.role}. This mobile app is designed for employees. Please use the desktop portal for full management features.
-          </Typography>
-          <Button variant="outlined" onClick={handleLogout} sx={{ borderRadius: 2 }}>
-            Logout & Switch Account
-          </Button>
-        </Box>
-      </Box>
-    );
+    return <Redirect to="/" />;
   }
 
   return (
     <Switch>
       <Route path="/employee">
-        {isMobile ? (
+        <DesktopLayout>
           <RouteLoader>
-            <ErrorBoundary>
-              <MobileDashboard />
-            </ErrorBoundary>
+            <MuiDashboard />
           </RouteLoader>
-        ) : (
-          <DesktopLayout>
-            <RouteLoader>
-              <MuiDashboard />
-            </RouteLoader>
-          </DesktopLayout>
-        )}
+        </DesktopLayout>
       </Route>
 
       <Route path="/employee/dashboard">
-        {isMobile ? (
+        <DesktopLayout>
           <RouteLoader>
-            <ErrorBoundary>
-              <MobileDashboard />
-            </ErrorBoundary>
+            <MuiDashboard />
           </RouteLoader>
-        ) : (
-          <DesktopLayout>
-            <RouteLoader>
-              <MuiDashboard />
-            </RouteLoader>
-          </DesktopLayout>
-        )}
+        </DesktopLayout>
       </Route>
 
       <Route path="/employee/schedule">
-        <RouteLoader>
-          <ErrorBoundary>
-            <ScheduleV2 />
-          </ErrorBoundary>
-        </RouteLoader>
+        <DesktopLayout>
+          <RouteLoader>
+            <ErrorBoundary>
+              <ScheduleV2 />
+            </ErrorBoundary>
+          </RouteLoader>
+        </DesktopLayout>
       </Route>
 
       <Route path="/employee/payroll">
-        {isMobile ? (
+        <DesktopLayout>
           <RouteLoader>
-            <ErrorBoundary>
-              <MobilePayroll />
-            </ErrorBoundary>
+            <MuiPayroll />
           </RouteLoader>
-        ) : (
-          <DesktopLayout>
-            <RouteLoader>
-              <MuiPayroll />
-            </RouteLoader>
-          </DesktopLayout>
-        )}
+        </DesktopLayout>
       </Route>
 
       <Route path="/employee/notifications">
-        {isMobile ? (
+        <DesktopLayout>
           <RouteLoader>
-            <ErrorBoundary>
-              <MobileNotifications />
-            </ErrorBoundary>
+            <MuiNotifications />
           </RouteLoader>
-        ) : (
-          <DesktopLayout>
-            <RouteLoader>
-              <MuiNotifications />
-            </RouteLoader>
-          </DesktopLayout>
-        )}
+        </DesktopLayout>
       </Route>
 
       {/* UNIFIED SCHEDULE: Redirect old employee pages to unified schedule */}
@@ -569,35 +514,19 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
       </Route>
 
       <Route path="/employee/profile">
-        {isMobile ? (
+        <DesktopLayout>
           <RouteLoader>
-            <ErrorBoundary>
-              <MobileProfile />
-            </ErrorBoundary>
+            <MuiProfileSettings />
           </RouteLoader>
-        ) : (
-          <DesktopLayout>
-            <RouteLoader>
-              <MuiEmployees />
-            </RouteLoader>
-          </DesktopLayout>
-        )}
+        </DesktopLayout>
       </Route>
 
       <Route path="/employee/more">
-        {isMobile ? (
+        <DesktopLayout>
           <RouteLoader>
-            <ErrorBoundary>
-              <MobileMore />
-            </ErrorBoundary>
+            <MuiProfileSettings />
           </RouteLoader>
-        ) : (
-          <DesktopLayout>
-            <RouteLoader>
-              <MuiDashboard />
-            </RouteLoader>
-          </DesktopLayout>
-        )}
+        </DesktopLayout>
       </Route>
 
       <Route>

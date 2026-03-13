@@ -512,7 +512,7 @@ const EnhancedScheduler = () => {
   });
 
   // Fetch Employees with reasonable real-time updates
-  const { data: employeesData, isLoading: employeesLoading } = useQuery<{ employees: Employee[] }>({
+  const { data: employeesData, isLoading: employeesLoading, refetch: refetchEmployees } = useQuery<{ employees: Employee[] }>({
     queryKey: ['employees'],
     queryFn: async () => {
       const res = await apiRequest('GET', '/api/employees');
@@ -562,6 +562,12 @@ const EnhancedScheduler = () => {
   const rawEmployees = Array.isArray(employeesData) ? employeesData : (employeesData?.employees || []);
   // Show ALL employees (active and inactive) - inactive ones will be visually distinguished
   const employees = rawEmployees;
+
+  useEffect(() => {
+    if (shiftTradeModalOpen) {
+      refetchEmployees();
+    }
+  }, [shiftTradeModalOpen, refetchEmployees]);
 
   // NEW: Filter employees by role
   const filteredEmployees = useMemo(() => {
@@ -4440,8 +4446,11 @@ const EnhancedScheduler = () => {
                   if (!selectedShift) return null;
                   
                   // Smart employee suggestions: Sort by compatibility
-                  const sortedEmployees = employees
-                    .filter(emp => emp.id !== currentUser?.id && emp.isActive)
+                  const coworkers = employees.filter(emp => emp.id !== currentUser?.id);
+                  const activeCoworkers = coworkers.filter(emp => emp.isActive !== false);
+                  const tradeCandidates = activeCoworkers.length > 0 ? activeCoworkers : coworkers;
+
+                  const sortedEmployees = tradeCandidates
                     .map(emp => {
                       let score = 0;
                       const indicators: string[] = [];

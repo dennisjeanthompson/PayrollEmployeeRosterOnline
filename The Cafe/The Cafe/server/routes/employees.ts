@@ -58,11 +58,8 @@ export function createEmployeeRouter(realTimeManager: RealTimeManager) {
           isActive: emp.isActive ?? true, // Include isActive for client-side filtering
         }));
       
-      // PRIVACY: If user is an employee, ONLY show themselves in the list
-      // This prevents them from seeing the full roster of other employees in the schedule view
-      if (req.session.user?.role === 'employee') {
-          sanitizedEmployees = sanitizedEmployees.filter(emp => emp.id === req.session.user!.id);
-      }
+        // Shift trading and schedule assignment require visibility of same-branch coworkers
+        // for all authenticated roles, including employee accounts.
 
       res.json({ employees: sanitizedEmployees });
     } catch (error) {

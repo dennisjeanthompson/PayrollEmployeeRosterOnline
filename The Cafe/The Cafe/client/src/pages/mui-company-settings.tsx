@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -34,6 +34,7 @@ import {
 } from "@mui/icons-material";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { uploadToCloudinary, validateImageFile, FOLDERS, UPLOAD_PRESETS } from "@/lib/cloudinary";
 
 interface CompanySettings {
   id: string;
@@ -116,6 +117,31 @@ const BANKS_PH = [
   "Asia United Bank", "Robinsons Bank", "UCPB", "Other",
 ];
 
+const BANK_NAME_ALIASES: Record<string, string> = {
+  BPI: "BPI (Bank of the Philippine Islands)",
+  BDO: "BDO Unibank",
+  PNB: "PNB (Philippine National Bank)",
+  LBP: "Land Bank of the Philippines",
+  LAND_BANK: "Land Bank of the Philippines",
+  DBP: "DBP (Development Bank of the Philippines)",
+  PSBANK: "Philippine Savings Bank",
+};
+
+const normalizeBankName = (bankName: string | null | undefined): string => {
+  if (!bankName) return "";
+  if (BANKS_PH.includes(bankName)) return bankName;
+
+  const compact = bankName.trim();
+  const aliasFromRaw = BANK_NAME_ALIASES[compact];
+  if (aliasFromRaw) return aliasFromRaw;
+
+  const upperUnderscored = compact.toUpperCase().replace(/[\s-]+/g, "_");
+  const aliasFromUpper = BANK_NAME_ALIASES[upperUnderscored];
+  if (aliasFromUpper) return aliasFromUpper;
+
+  return "Other";
+};
+
 const emptyForm = {
   name: "",
   tradeName: "",
@@ -134,6 +160,7 @@ const emptyForm = {
   email: "",
   website: "",
   logoUrl: "",
+  logoPublicId: "",
   industry: "Food & Beverage",
   payrollFrequency: "semi-monthly",
   paymentMethod: "Bank Transfer",
@@ -148,6 +175,8 @@ export default function MuiCompanySettings() {
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch company settings (full/unmasked for managers)
   const { data, isLoading, error } = useQuery({
@@ -179,10 +208,11 @@ export default function MuiCompanySettings() {
         email: data.email || "",
         website: data.website || "",
         logoUrl: data.logoUrl || "",
+        logoPublicId: data.logoPublicId || "",
         industry: data.industry || "Food & Beverage",
         payrollFrequency: data.payrollFrequency || "semi-monthly",
         paymentMethod: data.paymentMethod || "Bank Transfer",
-        bankName: data.bankName || "",
+        bankName: normalizeBankName(data.bankName),
         bankAccountName: data.bankAccountName || "",
         bankAccountNo: data.bankAccountNo || "",
       });
@@ -228,14 +258,74 @@ export default function MuiCompanySettings() {
       toast({ title: "Required fields", description: "Company name, address, and TIN are required.", variant: "destructive" });
       return;
     }
+    const normalizedForm = {
+      ...form,
+      bankName: normalizeBankName(form.bankName),
+    };
+
     if (data) {
-      updateMutation.mutate(form);
+      updateMutation.mutate(normalizedForm);
     } else {
-      createMutation.mutate(form);
+      createMutation.mutate(normalizedForm);
     }
   };
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const validation = validateImageFile(file, 5);
+    if (!validation.valid) {
+      toast({
+        title: "Invalid image",
+        description: validation.error || "Please select a valid logo image.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    try {
+      const publicId = `company_logo_${Date.now()}`;
+      const folder = FOLDERS.COMPANY_LOGOS;
+
+      const sigRes = await apiRequest(
+        "GET",
+        `/api/employees/upload-signature?public_id=${encodeURIComponent(publicId)}&folder=${encodeURIComponent(folder)}`
+      );
+      const sigData = await sigRes.json();
+
+      const result = await uploadToCloudinary({
+        file,
+        folder,
+        publicId,
+        uploadPreset: UPLOAD_PRESETS.COMPANY_LOGOS,
+        signature: sigData.signature,
+        timestamp: sigData.timestamp,
+        apiKey: sigData.apiKey,
+        cloudName: sigData.cloudName,
+      });
+
+      setForm((prev) => ({
+        ...prev,
+        logoUrl: result.secureUrl,
+        logoPublicId: result.publicId,
+      }));
+
+      toast({ title: "Logo uploaded", description: "Click Save Changes to apply this logo." });
+    } catch (error: any) {
+      toast({
+        title: "Upload failed",
+        description: error?.message || "Failed to upload company logo.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUploadingLogo(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+    }
+  };
 
   const handleChange = (field: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm(prev => ({ ...prev, [field]: e.target.value }));
@@ -340,6 +430,36 @@ export default function MuiCompanySettings() {
                 onChange={handleChange("logoUrl")} disabled={!isEditing}
                 helperText="Upload to Cloudinary or enter image URL"
                 slotProps={{ input: { startAdornment: <ImageIcon sx={{ mr: 1, color: 'text.secondary' }} /> } }}
+              />
+              {isEditing && (
+                <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={() => logoInputRef.current?.click()}
+                    disabled={isUploadingLogo}
+                  >
+                    {isUploadingLogo ? "Uploading..." : "Upload Logo"}
+                  </Button>
+                  {form.logoUrl && (
+                    <Button
+                      size="small"
+                      variant="text"
+                      color="inherit"
+                      onClick={() => setForm((prev) => ({ ...prev, logoUrl: "", logoPublicId: "" }))}
+                    >
+                      Clear Logo
+                    </Button>
+                  )}
+                </Stack>
+              )}
+              <input
+                ref={logoInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                onChange={handleLogoUpload}
+                style={{ display: "none" }}
+                disabled={!isEditing || isUploadingLogo}
               />
             </Grid>
             {form.logoUrl && (
@@ -571,10 +691,11 @@ export default function MuiCompanySettings() {
                     email: data.email || "",
                     website: data.website || "",
                     logoUrl: data.logoUrl || "",
+                    logoPublicId: data.logoPublicId || "",
                     industry: data.industry || "Food & Beverage",
                     payrollFrequency: data.payrollFrequency || "semi-monthly",
                     paymentMethod: data.paymentMethod || "Bank Transfer",
-                    bankName: data.bankName || "",
+                    bankName: normalizeBankName(data.bankName),
                     bankAccountName: data.bankAccountName || "",
                     bankAccountNo: data.bankAccountNo || "",
                   });

@@ -6,11 +6,128 @@
 
 import { Router } from 'express';
 import { db } from '../db';
-import { users } from '../../shared/schema';
+import { users, employeeDocuments } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
 
 const router = Router();
 import crypto from 'crypto';
+
+const canManageEmployeeData = (sessionUser: any, targetUserId: string) => {
+  if (!sessionUser) return false;
+  if (sessionUser.id === targetUserId) return true;
+  return sessionUser.role === 'manager' || sessionUser.role === 'admin';
+};
+
+/**
+ * GET /api/employees/:id/documents
+ * Returns uploaded documents for an employee
+ */
+router.get('/:id/documents', async (req, res) => {
+  const { id } = req.params;
+  const sessionUser = req.session.user;
+
+  if (!canManageEmployeeData(sessionUser, id)) {
+    return res.status(403).json({ error: 'Not authorized to view these documents' });
+  }
+
+  try {
+    const docs = await db
+      .select()
+      .from(employeeDocuments)
+      .where(eq(employeeDocuments.userId, id));
+
+    res.json(
+      docs.map((doc) => ({
+        id: doc.id,
+        type: doc.type,
+        name: doc.name,
+        publicId: doc.publicId,
+        url: doc.url,
+        format: doc.format,
+        size: doc.size,
+        uploadedBy: doc.uploadedBy,
+        uploadedAt: doc.createdAt,
+      }))
+    );
+  } catch (error) {
+    console.error('Error fetching employee documents:', error);
+    res.status(500).json({ error: 'Failed to fetch employee documents' });
+  }
+});
+
+/**
+ * POST /api/employees/:id/documents
+ * Save uploaded document metadata for an employee
+ */
+router.post('/:id/documents', async (req, res) => {
+  const { id } = req.params;
+  const sessionUser = req.session.user;
+
+  if (!canManageEmployeeData(sessionUser, id)) {
+    return res.status(403).json({ error: 'Not authorized to upload documents for this user' });
+  }
+
+  const { type, name, publicId, url, format, size } = req.body || {};
+
+  if (!type || !name || !publicId || !url) {
+    return res.status(400).json({ error: 'type, name, publicId, and url are required' });
+  }
+
+  try {
+    const docId = crypto.randomUUID();
+
+    await db.insert(employeeDocuments).values({
+      id: docId,
+      userId: id,
+      type,
+      name,
+      publicId,
+      url,
+      format: format || null,
+      size: typeof size === 'number' ? size : null,
+      uploadedBy: sessionUser?.id || null,
+      createdAt: new Date(),
+    });
+
+    res.status(201).json({
+      id: docId,
+      type,
+      name,
+      publicId,
+      url,
+      format: format || null,
+      size: typeof size === 'number' ? size : null,
+      uploadedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('Error creating employee document:', error);
+    res.status(500).json({ error: 'Failed to save employee document' });
+  }
+});
+
+/**
+ * DELETE /api/employees/:id/documents/:docId
+ * Delete document metadata record
+ */
+router.delete('/:id/documents/:docId', async (req, res) => {
+  const { id, docId } = req.params;
+  const sessionUser = req.session.user;
+
+  if (!canManageEmployeeData(sessionUser, id)) {
+    return res.status(403).json({ error: 'Not authorized to delete documents for this user' });
+  }
+
+  try {
+    await db
+      .delete(employeeDocuments)
+      .where(eq(employeeDocuments.id, docId));
+
+    res.json({ success: true, id: docId });
+  } catch (error) {
+    console.error('Error deleting employee document:', error);
+    res.status(500).json({ error: 'Failed to delete employee document' });
+  }
+});
 
 /**
  * GET /api/employees/upload-signature

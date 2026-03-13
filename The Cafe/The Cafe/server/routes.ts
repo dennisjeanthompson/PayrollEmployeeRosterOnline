@@ -1935,10 +1935,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     } catch {}
 
+    // Company settings for dynamic payslip branding/details
+    const company = await storage.getCompanySettings();
+    const companyAddress = [
+      company?.address,
+      company?.city,
+      company?.province,
+      company?.zipCode,
+    ]
+      .filter(Boolean)
+      .join(", ");
+
     const payslipData = {
       employeeName: `${user.firstName} ${user.lastName}`,
       employeeId: user.id,
       position: user.position,
+      department: "Operations",
       period: entry.createdAt!,
       periodStart,
       periodEnd,
@@ -1951,6 +1963,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       basicPay: entry.basicPay || entry.grossPay,
       holidayPay: entry.holidayPay || 0,
       overtimePay: entry.overtimePay || 0,
+      nightDifferential: (entry as any).nightDiffPay || 0,
       nightDiffPay: (entry as any).nightDiffPay || 0,
       restDayPay: (entry as any).restDayPay || 0,
       grossPay: entry.grossPay,
@@ -1968,6 +1981,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       netPay: entry.netPay,
       status: entry.status,
       breakdown: breakdown,
+      companyName: company?.name || company?.tradeName || "The Café",
+      companyAddress: companyAddress || "Philippines",
+      companyTin: company?.tin || "",
+      companyLogoUrl: company?.logoUrl || "",
+      companyEmail: company?.email || "",
     };
 
     res.json({ payslip: payslipData });
@@ -3913,7 +3931,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.user!.id;
       const notifications = await storage.getUserNotifications(userId);
-      res.json({ notifications });
+
+      // Employees should not see internal manager/admin exception logs.
+      const filteredNotifications = req.user!.role === 'employee'
+        ? notifications.filter((notification: any) => notification.type !== 'adjustment')
+        : notifications;
+
+      res.json({ notifications: filteredNotifications });
     } catch (error: any) {
       console.error('Get notifications error:', error);
       res.status(500).json({ message: error.message || "Failed to fetch notifications" });

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
+import { useAuth } from '@/lib/auth';
 import { Link } from 'wouter';
 import { formatDistanceToNow } from 'date-fns';
 import { useRealtime } from '@/hooks/use-realtime';
@@ -69,6 +70,7 @@ export default function NotificationBell() {
   const queryClient = useQueryClient();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
+  const { isAuthenticated } = useAuth();
 
   const { data: notificationsData, isLoading } = useQuery<{ notifications: Notification[] }>({
     queryKey: ['/api/notifications'],
@@ -76,12 +78,13 @@ export default function NotificationBell() {
       const res = await apiRequest('GET', '/api/notifications');
       return res.json();
     },
-    refetchInterval: 15000,
-    refetchOnWindowFocus: true,
+    enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? 15000 : false,
+    refetchOnWindowFocus: isAuthenticated,
   });
 
   useRealtime({
-    enabled: true,
+    enabled: isAuthenticated,
     queryKeys: ['/api/notifications'],
     onEvent: (event) => {
       if (event === 'notification:created' || event === 'notification' ||

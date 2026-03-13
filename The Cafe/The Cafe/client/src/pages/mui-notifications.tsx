@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { isManager } from "@/lib/auth";
+import { isManager, useAuth } from "@/lib/auth";
 import { format, parseISO, formatDistanceToNow, isToday, isYesterday, isThisWeek } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -101,6 +101,7 @@ export default function MuiNotifications() {
   const isDark = theme.palette.mode === 'dark';
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isManagerRole = isManager();
+  const { isAuthenticated } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
@@ -108,7 +109,7 @@ export default function MuiNotifications() {
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   useRealtime({
-    enabled: true,
+    enabled: isAuthenticated,
     queryKeys: ['/api/notifications'],
     onEvent: (event: string) => {
       if (event === 'notification:created' || event === 'notification' ||
@@ -119,12 +120,14 @@ export default function MuiNotifications() {
     },
   });
 
-  const { data: resp, isLoading } = useQuery({
+  const { data: resp, isLoading: isNotificationsLoading } = useQuery({
     queryKey: ["/api/notifications"],
     queryFn: async () => { const r = await apiRequest("GET", "/api/notifications"); return r.json(); },
-    refetchInterval: 15000,
-    refetchOnWindowFocus: true,
+    enabled: isAuthenticated,
+    refetchInterval: isAuthenticated ? 15000 : false,
+    refetchOnWindowFocus: isAuthenticated,
   });
+  const isLoading = isAuthenticated && isNotificationsLoading;
 
   const all: Notification[] = resp?.notifications || [];
   const unread = useMemo(() => all.filter(n => !n.isRead), [all]);
@@ -518,6 +521,7 @@ function NotificationRow({
               'tradeId','shiftId','requestId','userId','fromUserId','toUserId',
               'branchId','approvedBy','id','periodId','shortNotice','minimumAdvanceDays',
               'employeeId','managerId','notificationId','createdAt','updatedAt',
+              'entryId','entry_id','adjustmentLogId','adjustment_log_id','logId','log_id',
             ]);
             const LABELS: Record<string, string> = {
               shiftDate:'Shift Date', requesterName:'From', takerName:'Accepted By',
