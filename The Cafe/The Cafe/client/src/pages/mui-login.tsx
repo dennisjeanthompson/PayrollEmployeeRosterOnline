@@ -91,7 +91,7 @@ export default function MuiLogin() {
   const features = [
     {
       title: "Easy Scheduling",
-      description: "Create and manage shifts with drag-and-drop simplicity",
+      description: "Visual calendar-based shift scheduling for your whole team",
       color: theme.palette.success.main,
     },
     {
@@ -380,7 +380,7 @@ export default function MuiLogin() {
             color="text.secondary"
             sx={{ display: "block", textAlign: "center", mt: 3 }}
           >
-            © 2025 The Café. All rights reserved.
+            © 2026 The Café. All rights reserved.
           </Typography>
             </Box>
           </Grid>
