@@ -22,6 +22,7 @@ import CoffeeIcon from "@mui/icons-material/LocalCafe";
 // MUI Layout Components
 import MuiSidebar from "@/components/mui/mui-sidebar";
 import MuiHeader from "@/components/mui/mui-header";
+import MobileLayout from "@/components/layout/mobile-layout";
 
 // MUI-based Pages - Lazy loaded for code splitting
 const MuiDashboard = lazy(() => import("@/pages/mui-dashboard"));
@@ -451,45 +452,45 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
   return (
     <Switch>
       <Route path="/employee">
-        <DesktopLayout>
+        <MobileLayout>
           <RouteLoader>
             <MuiDashboard />
           </RouteLoader>
-        </DesktopLayout>
+        </MobileLayout>
       </Route>
 
       <Route path="/employee/dashboard">
-        <DesktopLayout>
+        <MobileLayout>
           <RouteLoader>
             <MuiDashboard />
           </RouteLoader>
-        </DesktopLayout>
+        </MobileLayout>
       </Route>
 
       <Route path="/employee/schedule">
-        <DesktopLayout>
+        <MobileLayout>
           <RouteLoader>
             <ErrorBoundary>
               <ScheduleV2 />
             </ErrorBoundary>
           </RouteLoader>
-        </DesktopLayout>
+        </MobileLayout>
       </Route>
 
       <Route path="/employee/payroll">
-        <DesktopLayout>
+        <MobileLayout>
           <RouteLoader>
             <MuiPayroll />
           </RouteLoader>
-        </DesktopLayout>
+        </MobileLayout>
       </Route>
 
       <Route path="/employee/notifications">
-        <DesktopLayout>
+        <MobileLayout>
           <RouteLoader>
             <MuiNotifications />
           </RouteLoader>
-        </DesktopLayout>
+        </MobileLayout>
       </Route>
 
       {/* UNIFIED SCHEDULE: Redirect old employee pages to unified schedule */}
@@ -502,19 +503,19 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
       </Route>
 
       <Route path="/employee/profile">
-        <DesktopLayout>
+        <MobileLayout>
           <RouteLoader>
             <MuiProfileSettings />
           </RouteLoader>
-        </DesktopLayout>
+        </MobileLayout>
       </Route>
 
       <Route path="/employee/more">
-        <DesktopLayout>
+        <MobileLayout>
           <RouteLoader>
             <MuiProfileSettings />
           </RouteLoader>
-        </DesktopLayout>
+        </MobileLayout>
       </Route>
 
       <Route>
