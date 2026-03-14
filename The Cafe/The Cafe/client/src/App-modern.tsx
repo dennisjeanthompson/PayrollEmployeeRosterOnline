@@ -29,7 +29,7 @@ import MuiHeader from "@/components/mui/mui-header";
 // MUI-based Pages - Lazy loaded for code splitting
 const MuiDashboard = lazy(() => import("@/pages/mui-dashboard"));
 const MuiEmployees = lazy(() => import("@/pages/mui-employees"));
-const MuiSchedule = lazy(() => import("@/pages/mui-schedule"));
+const ScheduleV2 = lazy(() => import("@/pages/schedule-v2"));
 const MuiPayroll = lazy(() => import("@/pages/mui-payroll"));
 const MuiNotifications = lazy(() => import("@/pages/mui-notifications"));
 const MuiBranches = lazy(() => import("@/pages/mui-branches"));
@@ -175,7 +175,7 @@ function AppRoutes() {
               <>
                 <Route path="/dashboard" component={() => <MuiDashboard />} />
                 <Route path="/shift-trading" component={() => <ShiftTradingPanel />} />
-                <Route path="/schedule" component={() => <MuiSchedule />} />
+                <Route path="/schedule" component={() => <ScheduleV2 />} />
                 <Route path="/time-off" component={() => <MuiTimeOff />} />
                 <Route path="/employees" component={() => <MuiEmployees />} />
                 <Route path="/payroll" component={() => <MuiPayroll />} />
@@ -199,7 +199,7 @@ function AppRoutes() {
                 />
                 <Route
                   path="/employee/schedule"
-                  component={() => (isMobile ? <MobileSchedule /> : <MuiSchedule />)}
+                  component={() => (isMobile ? <MobileSchedule /> : <ScheduleV2 />)}
                 />
                 <Route
                   path="/employee/time-off"

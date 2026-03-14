@@ -26,7 +26,6 @@ import MuiHeader from "@/components/mui/mui-header";
 // MUI-based Pages - Lazy loaded for code splitting
 const MuiDashboard = lazy(() => import("@/pages/mui-dashboard"));
 const MuiEmployees = lazy(() => import("@/pages/mui-employees"));
-const MuiSchedule = lazy(() => import("@/pages/mui-schedule"));
 const ScheduleV2 = lazy(() => import("@/pages/schedule-v2"));
 const MuiPayroll = lazy(() => import("@/pages/mui-payroll"));
 const MuiNotifications = lazy(() => import("@/pages/mui-notifications"));
@@ -234,17 +233,6 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
           <RouteLoader>
             <ErrorBoundary>
               <ScheduleV2 />
-            </ErrorBoundary>
-          </RouteLoader>
-        </DesktopLayout>
-      </Route>
-
-      {/* Old schedule for reference — remove when v2 is stable */}
-      <Route path="/schedule-old">
-        <DesktopLayout>
-          <RouteLoader>
-            <ErrorBoundary>
-              <MuiSchedule />
             </ErrorBoundary>
           </RouteLoader>
         </DesktopLayout>

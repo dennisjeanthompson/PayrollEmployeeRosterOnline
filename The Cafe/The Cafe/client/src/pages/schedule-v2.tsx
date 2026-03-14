@@ -557,14 +557,16 @@ export default function ScheduleV2() {
       </Box>
 
       {/* ─── ROLE COLOR LEGEND ───────────────────────────────────── */}
-      <Box sx={{ px: { xs: 2, sm: 3 }, py: 0.75, display: 'flex', gap: 0.5, flexWrap: 'wrap', borderBottom: '1px solid', borderColor: isDark ? '#3D3228' : '#E8E0D4' }}>
-        {getUniqueRoleColors(employees).map(rc => (
-          <Chip
-            key={rc.label} size="small" label={rc.label}
-            sx={{ height: 22, fontSize: '0.62rem', fontWeight: 700, bgcolor: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
-          />
-        ))}
-      </Box>
+      {isManager && (
+        <Box sx={{ px: { xs: 2, sm: 3 }, py: 0.75, display: 'flex', gap: 0.5, flexWrap: 'wrap', borderBottom: '1px solid', borderColor: isDark ? '#3D3228' : '#E8E0D4' }}>
+          {getUniqueRoleColors(employees).map(rc => (
+            <Chip
+              key={rc.label} size="small" label={rc.label}
+              sx={{ height: 22, fontSize: '0.62rem', fontWeight: 700, bgcolor: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
+            />
+          ))}
+        </Box>
+      )}
 
       {/* ─── MAIN CONTENT ────────────────────────────────────────── */}
       <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1.5, sm: 3 } }}>
