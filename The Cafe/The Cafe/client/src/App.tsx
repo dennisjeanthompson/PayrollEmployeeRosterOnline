@@ -217,6 +217,11 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
     return <LoadingScreen />;
   }
 
+  // Redirect employees to their dedicated mobile-first namespace
+  if (user.role === "employee") {
+    return <Redirect to="/employee/dashboard" />;
+  }
+
   return (
     <Switch>
       <Route path="/">
