@@ -135,9 +135,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
     next();
   };
 
-  // Enable CORS
+  // Enable CORS — allow requests from the frontend origin (Vercel or localhost)
+  const allowedOrigins = [
+    process.env.FRONTEND_URL,           // e.g. https://your-app.vercel.app
+    'http://localhost:5000',            // local dev (same origin)
+    'http://localhost:5173',            // Vite dev server
+    'http://localhost:3000',            // alternative local
+  ].filter(Boolean) as string[];
 
-  // CORS is configured in index.ts
+  app.use(cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (mobile apps, curl, server-to-server)
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`[CORS] Blocked request from origin: ${origin}`);
+        callback(new Error(`CORS: Origin ${origin} not allowed`));
+      }
+    },
+    credentials: true,  // Required for cross-origin cookies
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  }));
+
 
 
   // Session configuration using PostgreSQL for production reliability
@@ -171,7 +192,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? String(process.env.SESSION_COOKIE_SECURE).toLowerCase() === 'true'
         : (process.env.NODE_ENV === 'production'), // HTTPS only in production by default
       httpOnly: true, // Prevent JavaScript access for security
-      sameSite: 'lax', // CSRF protection
+      // Use 'none' when frontend is on a different domain (Vercel vs Render)
+      // Use 'lax' for same-origin (local dev). 'none' requires secure:true.
+      sameSite: process.env.FRONTEND_URL ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
       path: '/', // Cookie available to entire app
       domain: undefined, // Let browser handle domain

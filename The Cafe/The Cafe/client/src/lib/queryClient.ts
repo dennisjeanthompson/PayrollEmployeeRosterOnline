@@ -1,4 +1,5 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { apiUrl } from "./api";
 
 async function throwIfResNotOk(res: Response, skipBodyCheck: boolean = false) {
   if (!res.ok) {
@@ -41,7 +42,7 @@ export async function apiRequest(
   }
 
   try {
-    const res = await fetch(url, {
+    const res = await fetch(apiUrl(url), {
       method,
       headers,
       body: data ? JSON.stringify(data) : undefined,
@@ -83,7 +84,7 @@ export async function apiBlobRequest(
   console.log('[apiBlobRequest] Making request:', { method, url, hasData: !!data });
 
   try {
-    const res = await fetch(url, {
+    const res = await fetch(apiUrl(url), {
       method,
       headers,
       body: data ? JSON.stringify(data) : undefined,
@@ -131,7 +132,7 @@ export const getQueryFn: <T>(options: {
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const res = await fetch(apiUrl(queryKey.join("/") as string), {
       credentials: "include",
     });
 
