@@ -31,47 +31,7 @@ interface PayrollEntry {
   paidAt?: string | null;
 }
 
-interface PayslipResponse {
-  payslip: {
-    id: string;
-    employeeName: string;
-    period: string;
-    basicPay?: number | string;
-    grossPay?: number | string;
-    holidayPay?: number | string;
-    overtimePay?: number | string;
-    nightDiffPay?: number | string;
-    allowances?: number | string;
-    sssContribution?: number | string;
-    sssLoan?: number | string;
-    philHealthContribution?: number | string;
-    pagibigContribution?: number | string;
-    pagibigLoan?: number | string;
-    withholdingTax?: number | string;
-    advances?: number | string;
-    otherDeductions?: number | string;
-    totalDeductions?: number | string;
-    netPay?: number | string;
-    breakdown?: {
-      aggregated?: {
-        perDate?: Array<{
-          date: string;
-          hoursWorked: number;
-          overtimeHours: number;
-          nightHours: number;
-          basePay: number;
-          holidayPremium: number;
-          overtimePay: number;
-          nightDiffPremium: number;
-          totalForDate: number;
-          holidayType: string;
-          holidayName?: string;
-          isRestDay: boolean;
-        }>;
-      };
-    };
-  };
-}
+// interface PayslipResponse was removed in favor of using PayslipData directly
 
 export default function MobilePayroll() {
   const currentUser = getCurrentUser();
@@ -132,167 +92,7 @@ export default function MobilePayroll() {
 
   const payrollEntries: PayrollEntry[] = payrollData?.entries || [];
 
-  // Transform payroll response to PayslipData format
-  const transformToPayslipData = (response: PayslipResponse, entry: PayrollEntry): PayslipData => {
-    const payslip = response.payslip;
-    const periodDate = parseISO(payslip.period);
-    const startDate = subDays(periodDate, 14); // Assume bi-weekly period
-    
-    const basicPay = parseFloat(String(payslip.basicPay || payslip.grossPay || 0));
-    const holidayPay = parseFloat(String(payslip.holidayPay || 0));
-    const overtimePay = parseFloat(String(payslip.overtimePay || 0));
-    const nightDiffPay = parseFloat(String(payslip.nightDiffPay || 0));
-    const allowances = parseFloat(String(payslip.allowances || 0));
-    const grossPay = parseFloat(String(payslip.grossPay || 0));
-    
-    const sssContribution = parseFloat(String(payslip.sssContribution || 0));
-    const sssLoan = parseFloat(String(payslip.sssLoan || 0));
-    const philHealthContribution = parseFloat(String(payslip.philHealthContribution || 0));
-    const pagibigContribution = parseFloat(String(payslip.pagibigContribution || 0));
-    const pagibigLoan = parseFloat(String(payslip.pagibigLoan || 0));
-    const withholdingTax = parseFloat(String(payslip.withholdingTax || 0));
-    const advances = parseFloat(String(payslip.advances || 0));
-    const otherDeductions = parseFloat(String(payslip.otherDeductions || 0));
-    const totalDeductions = parseFloat(String(payslip.totalDeductions || entry.deductions || 0));
-    const netPay = parseFloat(String(payslip.netPay || entry.netPay || 0));
-    
-    // Build earnings array
-    const earnings: PayslipEarning[] = [];
-    
-    if (basicPay > 0) {
-      earnings.push({
-        code: "BASIC",
-        label: "Basic Salary",
-        amount: basicPay,
-        hours: parseFloat(String(entry.totalHours)) || undefined,
-      });
-    }
-    
-    if (overtimePay > 0) {
-      earnings.push({
-        code: "OT",
-        label: "Overtime Pay (125%)",
-        amount: overtimePay,
-        is_overtime: true,
-        multiplier: 125,
-      });
-    }
-    
-    if (holidayPay > 0) {
-      earnings.push({
-        code: "HOL",
-        label: "Holiday Pay",
-        amount: holidayPay,
-        holiday_type: "regular",
-        multiplier: 200,
-      });
-    }
-    
-    if (nightDiffPay > 0) {
-      earnings.push({
-        code: "ND",
-        label: "Night Differential (10%)",
-        amount: nightDiffPay,
-      });
-    }
-    
-    if (allowances > 0) {
-      earnings.push({
-        code: "ALLOW",
-        label: "Allowances",
-        amount: allowances,
-      });
-    }
-    
-    // Build deductions array
-    const deductions: PayslipDeduction[] = [];
-    
-    if (withholdingTax > 0) {
-      deductions.push({ code: "TAX", label: "Withholding Tax", amount: withholdingTax });
-    }
-    
-    if (sssContribution > 0) {
-      deductions.push({ code: "SSS", label: "SSS Contribution", amount: sssContribution });
-    }
-    
-    if (sssLoan > 0) {
-      deductions.push({ code: "SSS_LOAN", label: "SSS Loan", amount: sssLoan, is_loan: true });
-    }
-    
-    if (philHealthContribution > 0) {
-      deductions.push({ code: "PH", label: "PhilHealth Contribution", amount: philHealthContribution });
-    }
-    
-    if (pagibigContribution > 0) {
-      deductions.push({ code: "PAGIBIG", label: "Pag-IBIG Contribution", amount: pagibigContribution });
-    }
-    
-    if (pagibigLoan > 0) {
-      deductions.push({ code: "PAGIBIG_LOAN", label: "Pag-IBIG Loan", amount: pagibigLoan, is_loan: true });
-    }
-    
-    if (advances > 0) {
-      deductions.push({ code: "ADV", label: "Advances", amount: advances });
-    }
-    
-    if (otherDeductions > 0) {
-      deductions.push({ code: "OTHER", label: "Other Deductions", amount: otherDeductions });
-    }
-    
-    // Calculate actual totals from items
-    const earningsTotal = earnings.reduce((sum, e) => sum + e.amount, 0);
-    const deductionsTotal = deductions.reduce((sum, d) => sum + d.amount, 0);
-    
-    return {
-      payslip_id: `PS-${payslip.id || entry.id}`,
-      company: {
-        name: "Don Macchiatos",
-        address: "La Union, Philippines",
-        tin: "XXX-XXX-XXX-XXX",
-        phone: "",
-        email: "payroll@donmacchiatos.ph"
-      },
-      employee: {
-        id: currentUser?.id?.toString() || "EMP-000",
-        name: payslip.employeeName || (currentUser ? `${currentUser.firstName} ${currentUser.lastName}` : "Employee"),
-        position: currentUser?.position || "Team Member",
-        department: "Operations",
-        tin: "XXX-XXX-XXX",
-        sss: "XX-XXXXXXX-X",
-        philhealth: "XX-XXXXXXXXX-X",
-        pagibig: "XXXX-XXXX-XXXX"
-      },
-      pay_period: {
-        start: format(startDate, "yyyy-MM-dd"),
-        end: format(periodDate, "yyyy-MM-dd"),
-        payment_date: format(getPaymentDate(periodDate), "yyyy-MM-dd"),
-        frequency: "semi-monthly"
-      },
-      earnings,
-      deductions,
-      // Use actual totals from earnings/deductions arrays for validation consistency
-      gross: earningsTotal > 0 ? earningsTotal : grossPay,
-      total_deductions: deductionsTotal > 0 ? deductionsTotal : totalDeductions,
-      // Recalculate net_pay to ensure it matches: gross - total_deductions
-      net_pay: (earningsTotal > 0 ? earningsTotal : grossPay) - (deductionsTotal > 0 ? deductionsTotal : totalDeductions),
-      ytd: {
-        gross: 0,
-        deductions: 0,
-        net: 0,
-      },
-      employer_contributions: [
-        { code: "SSS_ER", label: "SSS (Employer Share)", amount: sssContribution * 2 },
-        { code: "PH_ER", label: "PhilHealth (Employer Share)", amount: philHealthContribution },
-        { code: "PAGIBIG_ER", label: "Pag-IBIG (Employer Share)", amount: 100 },
-      ],
-      payment_method: {
-        type: "Bank Transfer",
-        bank: "BPI",
-        account_last4: "XXXX"
-      },
-      verification_code: "",
-    };
-  };
+  // transformToPayslipData was removed because the API now returns perfectly formatted PayslipData natively
 
   const handleViewPayslip = async (entry: PayrollEntry) => {
     setSelectedPayslipId(entry.id);
@@ -301,21 +101,20 @@ export default function MobilePayroll() {
     setPayslipData(null);
     
     try {
-      const response = await apiRequest('GET', `/api/payroll/payslip/${entry.id}`);
+      const response = await apiRequest('GET', `/api/payslips/entry/${entry.id}`);
       
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ message: 'Failed to load payslip' }));
         throw new Error(errorData.message || 'Failed to load payslip');
       }
       
-      const data: PayslipResponse = await response.json();
+      const data = await response.json();
       
       if (!data.payslip) {
         throw new Error('Invalid payslip data received');
       }
       
-      const transformedData = transformToPayslipData(data, entry);
-      setPayslipData(transformedData);
+      setPayslipData(data.payslip);
     } catch (error: any) {
       console.error('Error loading payslip:', error);
       toast({
@@ -368,20 +167,13 @@ export default function MobilePayroll() {
   const handleQuickDownload = async (entry: PayrollEntry) => {
     setIsDownloadingPDF(true);
     try {
-
-      
       // First fetch the payslip data
-      const response = await apiRequest('GET', `/api/payroll/payslip/${entry.id}`);
-      const data: PayslipResponse = await response.json();
+      const response = await apiRequest('GET', `/api/payslips/entry/${entry.id}`);
+      const data = await response.json();
 
-      
-      const transformedData = transformToPayslipData(data, entry);
-
-      
       // Then generate PDF using apiBlobRequest
-
       const blob = await apiBlobRequest('POST', '/api/payslips/generate-pdf', {
-        payslip_data: transformedData,
+        payslip_data: data.payslip,
         format: 'pdf',
         include_qr: true
       });
@@ -390,7 +182,7 @@ export default function MobilePayroll() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${transformedData.payslip_id}.pdf`;
+      link.download = `${data.payslip.payslip_id}.pdf`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);

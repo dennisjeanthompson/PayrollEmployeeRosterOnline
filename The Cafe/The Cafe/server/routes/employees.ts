@@ -269,6 +269,10 @@ router.post('/api/employees', requireAuth, requireRole(['manager']), async (req,
       hourlyRate,
       branchId,
       isActive = true,
+      tin,
+      sssNumber,
+      philhealthNumber,
+      pagibigNumber,
     } = req.body;
 
     // Basic validation
@@ -309,6 +313,10 @@ router.post('/api/employees', requireAuth, requireRole(['manager']), async (req,
       hourlyRate: String(hourlyRate), // Convert to string
       branchId,
       isActive,
+      tin: tin || null,
+      sssNumber: sssNumber || null,
+      philhealthNumber: philhealthNumber || null,
+      pagibigNumber: pagibigNumber || null,
     });
 
     if (!newEmployee) {
@@ -378,10 +386,15 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager']), async (r
 
     // Whitelist allowed fields to prevent mass assignment
     const updates: Record<string, any> = {};
-    const allowedFields = ['firstName', 'lastName', 'email', 'position', 'hourlyRate', 'role', 'isActive'];
+    const allowedFields = ['firstName', 'lastName', 'email', 'position', 'hourlyRate', 'role', 'isActive', 'tin', 'sssNumber', 'philhealthNumber', 'pagibigNumber'];
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
-        updates[field] = body[field];
+        // Treat empty strings as null for government IDs
+        if (['tin', 'sssNumber', 'philhealthNumber', 'pagibigNumber'].includes(field) && body[field] === '') {
+          updates[field] = null;
+        } else {
+          updates[field] = body[field];
+        }
       }
     }
 

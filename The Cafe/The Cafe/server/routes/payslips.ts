@@ -251,10 +251,10 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
         name: `${employee.firstName} ${employee.lastName}`,
         position: employee.position,
         department: 'Operations',
-        tin: 'XXX-XXX-XXX', // Would be stored in employee record
-        sss: 'XX-XXXXXXX-X',
-        philhealth: 'XXXXXXXXXX',
-        pagibig: 'XXXXXXXX',
+        tin: employee.tin ? `XXX-XXX-${employee.tin.slice(-4)}` : 'N/A',
+        sss: employee.sssNumber ? `XX-XXXX${employee.sssNumber.slice(-4)}` : 'N/A',
+        philhealth: employee.philhealthNumber ? `XX-XXXXXX${employee.philhealthNumber.slice(-4)}` : 'N/A',
+        pagibig: employee.pagibigNumber ? `XXXX-XXXX-${employee.pagibigNumber.slice(-4)}` : 'N/A',
       },
       pay_period: {
         start: period.startDate.toISOString().split('T')[0],

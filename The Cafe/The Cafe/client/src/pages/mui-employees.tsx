@@ -132,6 +132,10 @@ interface Employee {
   pagibigLoanDeduction?: string;
   cashAdvanceDeduction?: string;
   otherDeductions?: string;
+  tin?: string;
+  sssNumber?: string;
+  philhealthNumber?: string;
+  pagibigNumber?: string;
 }
 
 interface Branch {
@@ -150,6 +154,10 @@ interface EmployeeFormData {
   hourlyRate: string;
   branchId: string;
   isActive: boolean;
+  tin: string;
+  sssNumber: string;
+  philhealthNumber: string;
+  pagibigNumber: string;
 }
 
 const initialFormData: EmployeeFormData = {
@@ -163,6 +171,10 @@ const initialFormData: EmployeeFormData = {
   hourlyRate: "",
   branchId: "",
   isActive: true,
+  tin: "",
+  sssNumber: "",
+  philhealthNumber: "",
+  pagibigNumber: "",
 };
 
 export default function MuiEmployees() {
@@ -539,6 +551,10 @@ export default function MuiEmployees() {
       hourlyRate: employee.hourlyRate,
       branchId: employee.branchId,
       isActive: employee.isActive,
+      tin: employee.tin || "",
+      sssNumber: employee.sssNumber || "",
+      philhealthNumber: employee.philhealthNumber || "",
+      pagibigNumber: employee.pagibigNumber || "",
     });
     setFormDialogOpen(true);
   };
@@ -1235,6 +1251,50 @@ export default function MuiEmployees() {
                   }
                   label="Active Employee"
                 />
+
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="subtitle2" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Government & Statutory IDs
+                </Typography>
+                
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="TIN"
+                      value={formData.tin}
+                      onChange={(e) => setFormData({ ...formData, tin: e.target.value })}
+                      placeholder="XXX-XXX-XXX-000"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="SSS Number"
+                      value={formData.sssNumber}
+                      onChange={(e) => setFormData({ ...formData, sssNumber: e.target.value })}
+                      placeholder="XX-XXXXXXX-X"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="PhilHealth"
+                      value={formData.philhealthNumber}
+                      onChange={(e) => setFormData({ ...formData, philhealthNumber: e.target.value })}
+                      placeholder="XX-XXXXXXXXX-X"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <TextField
+                      fullWidth
+                      label="Pag-IBIG/HDMF"
+                      value={formData.pagibigNumber}
+                      onChange={(e) => setFormData({ ...formData, pagibigNumber: e.target.value })}
+                      placeholder="XXXX-XXXX-XXXX"
+                    />
+                  </Grid>
+                </Grid>
               </Stack>
             </DialogContent>
             <DialogActions sx={{ p: 2.5 }}>
@@ -1353,6 +1413,41 @@ export default function MuiEmployees() {
                               <Typography variant="body2" sx={{ fontWeight: 500 }}>
                                 {format(new Date(currentEmployee.createdAt), "MMMM d, yyyy")}
                               </Typography>
+                            </Stack>
+                          </Grid>
+                        </Grid>
+                      </Box>
+
+                      <Divider />
+
+                      {/* Government IDs Section */}
+                      <Box>
+                        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 2, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                          Government & Statutory IDs
+                        </Typography>
+                        <Grid container spacing={3}>
+                          <Grid size={{ xs: 6 }}>
+                            <Stack spacing={0.5}>
+                              <Typography variant="caption" color="text.secondary">TIN (Tax Identification Number)</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>{currentEmployee.tin || <span style={{ color: '#999' }}>Not provided</span>}</Typography>
+                            </Stack>
+                          </Grid>
+                          <Grid size={{ xs: 6 }}>
+                            <Stack spacing={0.5}>
+                              <Typography variant="caption" color="text.secondary">SSS Number</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>{currentEmployee.sssNumber || <span style={{ color: '#999' }}>Not provided</span>}</Typography>
+                            </Stack>
+                          </Grid>
+                          <Grid size={{ xs: 6 }}>
+                            <Stack spacing={0.5}>
+                              <Typography variant="caption" color="text.secondary">PhilHealth Number</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>{currentEmployee.philhealthNumber || <span style={{ color: '#999' }}>Not provided</span>}</Typography>
+                            </Stack>
+                          </Grid>
+                          <Grid size={{ xs: 6 }}>
+                            <Stack spacing={0.5}>
+                              <Typography variant="caption" color="text.secondary">Pag-IBIG / HDMF Number</Typography>
+                              <Typography variant="body2" sx={{ fontWeight: 500 }}>{currentEmployee.pagibigNumber || <span style={{ color: '#999' }}>Not provided</span>}</Typography>
                             </Stack>
                           </Grid>
                         </Grid>

@@ -44,13 +44,18 @@ interface PayslipData {
   regularHours: number;
   overtimeHours: number;
   nightHours: number;
+  nightDiffHours?: number;
   totalHours: number;
   
+  // Rate
+  hourlyRate?: number;
+
   // Earnings
   basicPay: number;
   holidayPay: number;
   overtimePay: number;
   nightDifferential: number;
+  restDayPay?: number;
   grossPay: number;
   
   // Deductions
@@ -73,6 +78,11 @@ interface PayslipData {
   companyTin?: string;
   companyLogoUrl?: string;
   companyEmail?: string;
+  // Employee government IDs
+  employeeTin?: string | null;
+  employeeSss?: string | null;
+  employeePhilhealth?: string | null;
+  employeePagibig?: string | null;
 }
 
 interface PayslipPreviewProps {
@@ -456,6 +466,8 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     y = drawInfoRow(y, "EMPLOYEE:", payslipData.employeeName, "PERIOD:", `${dateStart} - ${dateEnd}`);
     y = drawInfoRow(y, "POSITION:", payslipData.position, "PAY DATE:", payDate);
     y = drawInfoRow(y, "EMP ID:", payslipData.employeeId || "N/A", "DEPT:", payslipData.department || "Operations");
+    y = drawInfoRow(y, "TIN:", payslipData.employeeTin || "—", "SSS No.:", payslipData.employeeSss || "—");
+    y = drawInfoRow(y, "PhilHealth:", payslipData.employeePhilhealth || "—", "Pag-IBIG:", payslipData.employeePagibig || "—");
     
     y += 10;
 
@@ -523,22 +535,27 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
 
     y = drawGridHeader(y);
 
-    // Build earnings and deductions lists
+    // Build BIR-compliant earnings list — always show all standard rows
+    const rateStr = payslipData.hourlyRate ? ` @ PHP ${safeNumber(payslipData.hourlyRate).toFixed(2)}/hr` : "";
+    const ndHrs = safeNumber(payslipData.nightDiffHours);
     const earnings: Array<{ label: string; value: string }> = [];
-    if (payslipData.regularHours > 0) earnings.push({ label: "Regular Hours:", value: `${safeNumber(payslipData.regularHours).toFixed(1)}h` });
-    if (payslipData.overtimeHours > 0) earnings.push({ label: "OT Hours:", value: `${safeNumber(payslipData.overtimeHours).toFixed(1)}h` });
-    if (payslipData.basicPay > 0) earnings.push({ label: "Basic Pay:", value: formatCurrency(payslipData.basicPay) });
-    if (payslipData.holidayPay > 0) earnings.push({ label: "Holiday Pay:", value: formatCurrency(payslipData.holidayPay) });
-    if (payslipData.overtimePay > 0) earnings.push({ label: "OT Pay:", value: formatCurrency(payslipData.overtimePay) });
-    if (payslipData.nightDifferential > 0) earnings.push({ label: "ND Pay:", value: formatCurrency(payslipData.nightDifferential) });
+    earnings.push({ label: `Regular Hours (${safeNumber(payslipData.regularHours).toFixed(1)}h${rateStr}):`, value: formatCurrency(payslipData.basicPay) });
+    earnings.push({ label: `OT Pay (${safeNumber(payslipData.overtimeHours).toFixed(1)}h × 130%):`, value: formatCurrency(payslipData.overtimePay) });
+    earnings.push({ label: `Night Diff (${ndHrs.toFixed(1)}h × +10%):`, value: formatCurrency(payslipData.nightDifferential) });
+    earnings.push({ label: "Holiday Pay:", value: formatCurrency(payslipData.holidayPay) });
+    const restDay = safeNumber(payslipData.restDayPay);
+    earnings.push({ label: "Rest Day Premium:", value: formatCurrency(restDay) });
 
+    // BIR-compliant deductions — always show statutory deductions even at ₱0
     const deductions: Array<{ label: string; value: string }> = [];
-    if (payslipData.sssContribution > 0) deductions.push({ label: "SSS:", value: formatCurrency(payslipData.sssContribution) });
-    if (payslipData.philHealthContribution > 0) deductions.push({ label: "PhilHealth:", value: formatCurrency(payslipData.philHealthContribution) });
-    if (payslipData.pagibigContribution > 0) deductions.push({ label: "HDMF:", value: formatCurrency(payslipData.pagibigContribution) });
-    if (payslipData.withholdingTax > 0) deductions.push({ label: "W/holding Tax:", value: formatCurrency(payslipData.withholdingTax) });
-    const otherDed = payslipData.otherDeductions + payslipData.advances + payslipData.sssLoan + payslipData.pagibigLoan;
-    if (otherDed > 0) deductions.push({ label: "Other:", value: formatCurrency(otherDed) });
+    deductions.push({ label: "SSS (Employee):", value: formatCurrency(payslipData.sssContribution) });
+    deductions.push({ label: "PhilHealth (Employee):", value: formatCurrency(payslipData.philHealthContribution) });
+    deductions.push({ label: "Pag-IBIG / HDMF:", value: formatCurrency(payslipData.pagibigContribution) });
+    deductions.push({ label: "W/holding Tax (BIR):", value: formatCurrency(payslipData.withholdingTax) });
+    if (payslipData.sssLoan > 0) deductions.push({ label: "SSS Loan:", value: formatCurrency(payslipData.sssLoan) });
+    if (payslipData.pagibigLoan > 0) deductions.push({ label: "Pag-IBIG Loan:", value: formatCurrency(payslipData.pagibigLoan) });
+    if (payslipData.advances > 0) deductions.push({ label: "Cash Advances:", value: formatCurrency(payslipData.advances) });
+    if (payslipData.otherDeductions > 0) deductions.push({ label: "Other Deductions:", value: formatCurrency(payslipData.otherDeductions) });
 
     const maxRows = Math.max(earnings.length, deductions.length);
     for (let i = 0; i < maxRows; i++) {
@@ -619,24 +636,27 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
 
   if (error || !payslip) return null;
 
-  // Prepare grid data
-  const earningsList = [
-    { label: "Regular Hours", value: `${safeNumber(payslip.regularHours).toFixed(1)}h`, isMoney: false },
-    ...(payslip.overtimeHours > 0 ? [{ label: "OT Hours", value: `${safeNumber(payslip.overtimeHours).toFixed(1)}h`, isMoney: false }] : []),
-    ...(payslip.basicPay > 0 ? [{ label: "Basic Pay", value: payslip.basicPay, isMoney: true }] : []),
-    ...(payslip.holidayPay > 0 ? [{ label: "Holiday Pay", value: payslip.holidayPay, isMoney: true }] : []),
-    ...(payslip.overtimePay > 0 ? [{ label: "OT Pay", value: payslip.overtimePay, isMoney: true }] : []),
-    ...(payslip.nightDifferential > 0 ? [{ label: "ND Pay", value: payslip.nightDifferential, isMoney: true }] : []),
+  // Prepare BIR-compliant earnings — always show all line items
+  const ndHrsDisplay = safeNumber(payslip.nightDiffHours);
+  const rateDisplay = payslip.hourlyRate ? `@ PHP ${safeNumber(payslip.hourlyRate).toFixed(2)}/hr` : "";
+  const earningsList: Array<{ label: string; value: number | string; isMoney: boolean }> = [
+    { label: `Basic Pay (${safeNumber(payslip.regularHours).toFixed(1)}h ${rateDisplay})`, value: payslip.basicPay, isMoney: true },
+    { label: `Overtime Pay (${safeNumber(payslip.overtimeHours).toFixed(1)}h × 130%)`, value: payslip.overtimePay, isMoney: true },
+    { label: `Night Differential (${ndHrsDisplay.toFixed(1)}h × +10%)`, value: payslip.nightDifferential, isMoney: true },
+    { label: "Holiday Pay", value: payslip.holidayPay, isMoney: true },
+    { label: "Rest Day Premium", value: safeNumber(payslip.restDayPay), isMoney: true },
   ];
 
-  const deductionsList = [
-    ...(payslip.sssContribution > 0 ? [{ label: "SSS", value: payslip.sssContribution }] : []),
-    ...(payslip.philHealthContribution > 0 ? [{ label: "PhilHealth", value: payslip.philHealthContribution }] : []),
-    ...(payslip.pagibigContribution > 0 ? [{ label: "HDMF", value: payslip.pagibigContribution }] : []),
-    ...(payslip.withholdingTax > 0 ? [{ label: "W/holding Tax", value: payslip.withholdingTax }] : []),
-    ...((payslip.otherDeductions + payslip.advances + payslip.sssLoan + payslip.pagibigLoan) > 0 
-      ? [{ label: "Other", value: payslip.otherDeductions + payslip.advances + payslip.sssLoan + payslip.pagibigLoan }] 
-      : []),
+  // Always show all statutory deductions (BIR / TRAIN Law compliance)
+  const deductionsList: Array<{ label: string; value: number }> = [
+    { label: "SSS (Employee)", value: payslip.sssContribution },
+    { label: "PhilHealth (Employee)", value: payslip.philHealthContribution },
+    { label: "Pag-IBIG / HDMF", value: payslip.pagibigContribution },
+    { label: "Withholding Tax (BIR)", value: payslip.withholdingTax },
+    ...(payslip.sssLoan > 0 ? [{ label: "SSS Loan", value: payslip.sssLoan }] : []),
+    ...(payslip.pagibigLoan > 0 ? [{ label: "Pag-IBIG Loan", value: payslip.pagibigLoan }] : []),
+    ...(payslip.advances > 0 ? [{ label: "Cash Advances", value: payslip.advances }] : []),
+    ...(payslip.otherDeductions > 0 ? [{ label: "Other Deductions", value: payslip.otherDeductions }] : []),
   ];
 
   const maxRows = Math.max(earningsList.length, deductionsList.length);
@@ -695,6 +715,18 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
                   <td className="value">{payslip.employeeId || "N/A"}</td>
                   <td className="label">DEPARTMENT:</td>
                   <td className="value">{payslip.department || "Operations"}</td>
+                </tr>
+                <tr>
+                  <td className="label">TIN:</td>
+                  <td className="value">{payslip.employeeTin || "—"}</td>
+                  <td className="label">SSS No.:</td>
+                  <td className="value">{payslip.employeeSss || "—"}</td>
+                </tr>
+                <tr>
+                  <td className="label">PhilHealth:</td>
+                  <td className="value">{payslip.employeePhilhealth || "—"}</td>
+                  <td className="label">Pag-IBIG:</td>
+                  <td className="value">{payslip.employeePagibig || "—"}</td>
                 </tr>
               </tbody>
             </table>

@@ -84,11 +84,21 @@ export default function MuiProfileSettings() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
+  // Government IDs
+  const [tin, setTin] = useState(user?.tin ?? "");
+  const [sssNumber, setSssNumber] = useState(user?.sssNumber ?? "");
+  const [philhealthNumber, setPhilhealthNumber] = useState(user?.philhealthNumber ?? "");
+  const [pagibigNumber, setPagibigNumber] = useState(user?.pagibigNumber ?? "");
+
   React.useEffect(() => {
     if (user) {
       setEmail(user.email ?? "");
       setFirstName(user.firstName ?? "");
       setLastName(user.lastName ?? "");
+      setTin(user.tin ?? "");
+      setSssNumber(user.sssNumber ?? "");
+      setPhilhealthNumber(user.philhealthNumber ?? "");
+      setPagibigNumber(user.pagibigNumber ?? "");
     }
   }, [user]);
 
@@ -110,6 +120,14 @@ export default function MuiProfileSettings() {
       setCurrentPassword("");
       setNewPassword("");
       setConfirmPassword("");
+      // Immediately sync local form state from the saved user so
+      // change-detection stays correct without needing a full re-fetch
+      if (data.user) {
+        setTin(data.user.tin ?? "");
+        setSssNumber(data.user.sssNumber ?? "");
+        setPhilhealthNumber(data.user.philhealthNumber ?? "");
+        setPagibigNumber(data.user.pagibigNumber ?? "");
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
       if (refreshUser && typeof refreshUser === 'function') refreshUser();
     },
@@ -122,14 +140,26 @@ export default function MuiProfileSettings() {
   const norm = (v: string | null | undefined) => v || "";
   const hasGeneralChanges = norm(email) !== norm(user?.email) || 
     norm(firstName) !== norm(user?.firstName) || 
-    norm(lastName) !== norm(user?.lastName);
+    norm(lastName) !== norm(user?.lastName) ||
+    norm(tin) !== norm(user?.tin) ||
+    norm(sssNumber) !== norm(user?.sssNumber) ||
+    norm(philhealthNumber) !== norm(user?.philhealthNumber) ||
+    norm(pagibigNumber) !== norm(user?.pagibigNumber);
 
   const handleUpdateGeneral = () => {
     if (!email.trim()) {
       toast({ title: "Error", description: "Email address is required", variant: "destructive" });
       return;
     }
-    updateProfileMutation.mutate({ firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim() });
+    updateProfileMutation.mutate({ 
+      firstName: firstName.trim(), 
+      lastName: lastName.trim(), 
+      email: email.trim(),
+      tin: tin.trim(),
+      sssNumber: sssNumber.trim(),
+      philhealthNumber: philhealthNumber.trim(),
+      pagibigNumber: pagibigNumber.trim(),
+    });
   };
 
   const handleUpdatePassword = () => {
@@ -344,6 +374,66 @@ export default function MuiProfileSettings() {
                           sx: { borderRadius: 2 } 
                         }}
                         helperText="Used for notifications and login"
+                        sx={textFieldSx}
+                      />
+                    </Grid>
+                    
+                    <Grid size={12} sx={{ mt: 2 }}>
+                      <Divider />
+                    </Grid>
+
+                    <Grid size={12}>
+                      <Typography variant="h6" fontWeight={700} sx={{ color: '#0f172a', mt: 1 }}>Government & Statutory IDs</Typography>
+                      <Typography variant="body2" sx={{ color: '#64748b', mb: 2 }}>
+                        These IDs are required for official payslips and compliance.
+                      </Typography>
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        fullWidth
+                        label="TIN (Tax Identification Number)"
+                        value={tin}
+                        onChange={(e) => setTin(e.target.value)}
+                        variant="outlined"
+                        InputProps={{ sx: { borderRadius: 2 } }}
+                        placeholder="XXX-XXX-XXX-000"
+                        sx={textFieldSx}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        fullWidth
+                        label="SSS Number"
+                        value={sssNumber}
+                        onChange={(e) => setSssNumber(e.target.value)}
+                        variant="outlined"
+                        InputProps={{ sx: { borderRadius: 2 } }}
+                        placeholder="XX-XXXXXXX-X"
+                        sx={textFieldSx}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        fullWidth
+                        label="PhilHealth Number"
+                        value={philhealthNumber}
+                        onChange={(e) => setPhilhealthNumber(e.target.value)}
+                        variant="outlined"
+                        InputProps={{ sx: { borderRadius: 2 } }}
+                        placeholder="XX-XXXXXXXXX-X"
+                        sx={textFieldSx}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        fullWidth
+                        label="Pag-IBIG/HDMF Number"
+                        value={pagibigNumber}
+                        onChange={(e) => setPagibigNumber(e.target.value)}
+                        variant="outlined"
+                        InputProps={{ sx: { borderRadius: 2 } }}
+                        placeholder="XXXX-XXXX-XXXX"
                         sx={textFieldSx}
                       />
                     </Grid>

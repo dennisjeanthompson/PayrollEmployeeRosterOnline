@@ -532,15 +532,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Check session status (no auth required - used on page load)
-  // This endpoint checks if a session exists and returns the user data
+  // Fetches fresh data from the DB so profile updates (TIN, email, etc.) are always current after refresh
   app.get("/api/auth/status", asyncHandler(async (req: Request, res: Response) => {
     try {
-      if (req.session?.user) {
+      if (req.session?.user?.id) {
         console.log(`✅ [AUTH STATUS] Session found for user: ${req.session.user.username}`);
-        res.json({ 
-          authenticated: true, 
-          user: req.session.user 
-        });
+        // Fetch fresh data from DB to avoid returning stale session snapshot
+        try {
+          const freshUser = await storage.getUser(req.session.user.id);
+          if (freshUser) {
+            const { password: _, ...userWithoutPassword } = freshUser;
+            res.json({ 
+              authenticated: true, 
+              user: { ...userWithoutPassword, branchId: req.session.user.branchId || userWithoutPassword.branchId }
+            });
+          } else {
+            // User no longer exists in DB — session is stale
+            res.json({ authenticated: false, user: null });
+          }
+        } catch (dbErr) {
+          // DB error: fall back to session data rather than logging user out
+          console.warn('[AUTH STATUS] DB fetch failed, falling back to session:', dbErr);
+          res.json({ authenticated: true, user: req.session.user });
+        }
       } else {
         console.log(`⚠️  [AUTH STATUS] No session found`);
         res.json({ 
@@ -1986,6 +2000,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       companyTin: company?.tin || "",
       companyLogoUrl: company?.logoUrl || "",
       companyEmail: company?.email || "",
+      // Employee government IDs
+      employeeTin: user.tin || null,
+      employeeSss: user.sssNumber || null,
+      employeePhilhealth: user.philhealthNumber || null,
+      employeePagibig: user.pagibigNumber || null,
     };
 
     res.json({ payslip: payslipData });
@@ -4243,7 +4262,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Update own profile (Self-service)
   app.put("/api/auth/profile", requireAuth, asyncHandler(async (req, res) => {
     try {
-      const { email, password, newPassword, firstName, lastName } = req.body;
+      const { email, password, newPassword, firstName, lastName, tin, sssNumber, philhealthNumber, pagibigNumber } = req.body;
       const userId = req.user!.id;
 
       const user = await storage.getUser(userId);
@@ -4267,6 +4286,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (email !== undefined && norm(email) !== norm(user.email)) {
         updateData.email = email;
+      }
+
+      // Government IDs: always write if key appears in the body (even empty clears the field)
+      if (tin !== undefined) {
+        updateData.tin = tin || null;
+      }
+      if (sssNumber !== undefined) {
+        updateData.sssNumber = sssNumber || null;
+      }
+      if (philhealthNumber !== undefined) {
+        updateData.philhealthNumber = philhealthNumber || null;
+      }
+      if (pagibigNumber !== undefined) {
+        updateData.pagibigNumber = pagibigNumber || null;
       }
 
       // Update password if provided

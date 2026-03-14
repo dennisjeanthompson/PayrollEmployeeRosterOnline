@@ -32,6 +32,11 @@ export const users = pgTable("users", {
   // Cloudinary photo fields
   photoUrl: text("photo_url"),
   photoPublicId: text("photo_public_id"),
+  // Philippine government ID numbers (per-employee)
+  tin: text("tin"),               // BIR Tax Identification Number
+  sssNumber: text("sss_number"),  // SSS Member ID
+  philhealthNumber: text("philhealth_number"), // PhilHealth Member Number
+  pagibigNumber: text("pagibig_number"),       // Pag-IBIG / HDMF Member Number
   createdAt: timestamp("created_at").defaultNow(),
 });
 

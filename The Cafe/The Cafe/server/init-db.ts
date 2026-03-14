@@ -117,6 +117,17 @@ export async function initializeDatabase() {
       )
     `);
 
+    // Migrations to add new columns to existing tables
+    try {
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS tin TEXT`);
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS sss_number TEXT`);
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS philhealth_number TEXT`);
+      await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS pagibig_number TEXT`);
+      console.log('✅ User table migrations (government IDs) checked/applied');
+    } catch (err) {
+      console.log('⚠️ Could not apply some users table migrations:', err);
+    }
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS shifts (
         id TEXT PRIMARY KEY,
