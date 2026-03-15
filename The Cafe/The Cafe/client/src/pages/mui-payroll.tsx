@@ -371,84 +371,152 @@ export default function MuiPayroll() {
                   </Typography>
                 </Box>
               ) : (
-                <TableContainer>
-                  <Table>
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Pay Period</TableCell>
-                        <TableCell align="right">Hours</TableCell>
-                        <TableCell align="right">Gross Pay</TableCell>
-                        <TableCell align="right">Deductions</TableCell>
-                        <TableCell align="right">Net Pay</TableCell>
-                        <TableCell align="center">Status</TableCell>
-                        <TableCell align="center">Actions</TableCell>
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {paidEntries.map((entry) => (
-                        <TableRow key={entry.id} hover>
-                          <TableCell>
-                            <Stack direction="row" alignItems="center" spacing={1}>
-                              <CalendarIcon fontSize="small" color="action" />
-                              <Box>
-                                {entry.periodStartDate && entry.periodEndDate ? (
-                                  <>
-                                    <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                      {format(new Date(entry.periodStartDate), "MMM d")} – {format(new Date(entry.periodEndDate), "MMM d, yyyy")}
-                                    </Typography>
-                                    <Typography variant="caption" color="text.secondary">
-                                      Paid {entry.paidAt
-                                        ? format(new Date(entry.paidAt), "MMM d, yyyy")
-                                        : format(getPaymentDate(entry.periodEndDate!), "MMM d, yyyy")}
-                                    </Typography>
-                                  </>
-                                ) : (
-                                  <span>{format(parseISO(entry.createdAt), "MMM d, yyyy")}</span>
-                                )}
-                              </Box>
-                            </Stack>
-                          </TableCell>
-                          <TableCell align="right">{parseFloat(String(entry.totalHours)).toFixed(1)}h</TableCell>
-                          <TableCell align="right">{formatCurrency(entry.grossPay)}</TableCell>
-                          <TableCell align="right" sx={{ color: "error.main" }}>
-                            -{formatCurrency(entry.deductions)}
-                          </TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 600 }}>
-                            {formatCurrency(entry.netPay)}
-                          </TableCell>
-                          <TableCell align="center">
-                            <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
-                              <Chip
-                                label="Paid"
-                                color="success"
-                                size="small"
-                                icon={<CheckCircleIcon />}
-                              />
-                            </Stack>
-                          </TableCell>
-                          <TableCell align="center">
-                            <Stack direction="row" spacing={0.5} justifyContent="center">
-                              <Tooltip title="View digital payslip (PH — Compliant 2025)">
-                                <IconButton 
-                                  size="small" 
-                                  color="info"
-                                  onClick={() => handleViewPayslip(entry)}
-                                >
-                                  <DescriptionIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                              <Tooltip title="Download PDF">
-                                <IconButton size="small" onClick={() => handleViewPayslip(entry)}>
-                                  <DownloadIcon fontSize="small" />
-                                </IconButton>
-                              </Tooltip>
-                            </Stack>
-                          </TableCell>
+                <Box>
+                  {/* Desktop Table View */}
+                  <TableContainer sx={{ display: { xs: 'none', md: 'block' }, overflowX: 'auto' }}>
+                    <Table sx={{ minWidth: 650 }}>
+                      <TableHead>
+                        <TableRow>
+                          <TableCell>Pay Period</TableCell>
+                          <TableCell align="right">Hours</TableCell>
+                          <TableCell align="right">Gross Pay</TableCell>
+                          <TableCell align="right">Deductions</TableCell>
+                          <TableCell align="right">Net Pay</TableCell>
+                          <TableCell align="center">Status</TableCell>
+                          <TableCell align="center">Actions</TableCell>
                         </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
+                      </TableHead>
+                      <TableBody>
+                        {paidEntries.map((entry) => (
+                          <TableRow key={entry.id} hover>
+                            <TableCell>
+                              <Stack direction="row" alignItems="center" spacing={1}>
+                                <CalendarIcon fontSize="small" color="action" />
+                                <Box>
+                                  {entry.periodStartDate && entry.periodEndDate ? (
+                                    <>
+                                      <Typography variant="body2" sx={{ fontWeight: 500 }}>
+                                        {format(new Date(entry.periodStartDate), "MMM d")} – {format(new Date(entry.periodEndDate), "MMM d, yyyy")}
+                                      </Typography>
+                                      <Typography variant="caption" color="text.secondary">
+                                        Paid {entry.paidAt
+                                          ? format(new Date(entry.paidAt), "MMM d, yyyy")
+                                          : format(getPaymentDate(entry.periodEndDate!), "MMM d, yyyy")}
+                                      </Typography>
+                                    </>
+                                  ) : (
+                                    <span>{format(parseISO(entry.createdAt), "MMM d, yyyy")}</span>
+                                  )}
+                                </Box>
+                              </Stack>
+                            </TableCell>
+                            <TableCell align="right">{parseFloat(String(entry.totalHours)).toFixed(1)}h</TableCell>
+                            <TableCell align="right">{formatCurrency(entry.grossPay)}</TableCell>
+                            <TableCell align="right" sx={{ color: "error.main" }}>
+                              -{formatCurrency(entry.deductions)}
+                            </TableCell>
+                            <TableCell align="right" sx={{ fontWeight: 600 }}>
+                              {formatCurrency(entry.netPay)}
+                            </TableCell>
+                            <TableCell align="center">
+                              <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
+                                <Chip
+                                  label="Paid"
+                                  color="success"
+                                  size="small"
+                                  icon={<CheckCircleIcon />}
+                                />
+                              </Stack>
+                            </TableCell>
+                            <TableCell align="center">
+                              <Stack direction="row" spacing={0.5} justifyContent="center">
+                                <Tooltip title="View digital payslip (PH — Compliant 2025)">
+                                  <IconButton 
+                                    size="small" 
+                                    color="info"
+                                    onClick={() => handleViewPayslip(entry)}
+                                  >
+                                    <DescriptionIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Download PDF">
+                                  <IconButton size="small" onClick={() => handleViewPayslip(entry)}>
+                                    <DownloadIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </Stack>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </TableContainer>
+
+                  {/* Mobile Card View */}
+                  <Stack spacing={2} sx={{ display: { xs: 'flex', md: 'none' } }}>
+                    {paidEntries.map((entry) => (
+                      <Paper 
+                        key={entry.id}
+                        variant="outlined" 
+                        sx={{ p: 2, borderRadius: 3, display: 'flex', flexDirection: 'column', gap: 1.5 }}
+                      >
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                          <Box>
+                            {entry.periodStartDate && entry.periodEndDate ? (
+                              <>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                  {format(new Date(entry.periodStartDate), "MMM d")} – {format(new Date(entry.periodEndDate), "MMM d, yyyy")}
+                                </Typography>
+                                <Typography variant="caption" color="text.secondary">
+                                  Paid {entry.paidAt
+                                    ? format(new Date(entry.paidAt), "MMM d, yyyy")
+                                    : format(getPaymentDate(entry.periodEndDate!), "MMM d, yyyy")}
+                                </Typography>
+                              </>
+                            ) : (
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{format(parseISO(entry.createdAt), "MMM d, yyyy")}</Typography>
+                            )}
+                          </Box>
+                          <Chip label="Paid" color="success" size="small" icon={<CheckCircleIcon />} sx={{ height: 24 }} />
+                        </Box>
+                        
+                        <Divider />
+                        
+                        <Grid container spacing={1}>
+                          <Grid size={4}>
+                            <Typography variant="caption" color="text.secondary" display="block">Hours</Typography>
+                            <Typography variant="body2" fontWeight={600}>{parseFloat(String(entry.totalHours)).toFixed(1)}h</Typography>
+                          </Grid>
+                          <Grid size={4}>
+                            <Typography variant="caption" color="text.secondary" display="block">Gross</Typography>
+                            <Typography variant="body2" fontWeight={600}>{formatCurrency(entry.grossPay)}</Typography>
+                          </Grid>
+                          <Grid size={4}>
+                            <Typography variant="caption" color="text.secondary" display="block">Deductions</Typography>
+                            <Typography variant="body2" fontWeight={600} color="error.main">-{formatCurrency(entry.deductions)}</Typography>
+                          </Grid>
+                        </Grid>
+
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, p: 1.5, bgcolor: alpha(theme.palette.success.main, 0.05), borderRadius: 2 }}>
+                          <Typography variant="body2" fontWeight={700}>Net Pay</Typography>
+                          <Typography variant="h6" fontWeight={800} color="success.main">{formatCurrency(entry.netPay)}</Typography>
+                        </Box>
+                        
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 0.5 }}>
+                          <Button 
+                            variant="outlined" 
+                            size="small" 
+                            startIcon={<DescriptionIcon />}
+                            onClick={() => handleViewPayslip(entry)}
+                            sx={{ borderRadius: 2, textTransform: 'none' }}
+                          >
+                            View Payslip
+                          </Button>
+                        </Box>
+                      </Paper>
+                    ))}
+                  </Stack>
+                </Box>
               )}
             </Box>
           </TabPanel>

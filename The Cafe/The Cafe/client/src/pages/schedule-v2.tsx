@@ -475,85 +475,88 @@ export default function ScheduleV2() {
 
       {/* ─── NAVIGATION BAR ──────────────────────────────────────── */}
       <Box sx={{
-        px: { xs: 2, sm: 3 }, py: 1,
-        display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap',
+        px: { xs: 1, sm: 3 }, py: 1,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1,
         borderBottom: '1px solid',
         borderColor: isDark ? '#3D3228' : '#E8E0D4',
         bgcolor: isDark ? '#2A2018' : '#FFFFFF',
       }}>
-        {/* Week navigation */}
-        <IconButton size="small" onClick={() => handleWeekNav('prev')}><PrevIcon /></IconButton>
-        <Button size="small" onClick={() => handleWeekNav('today')} variant="text" sx={{ textTransform: 'none', fontWeight: 600, minWidth: 0 }}>
-          Today
-        </Button>
-        <IconButton size="small" onClick={() => handleWeekNav('next')}><NextIcon /></IconButton>
+        {/* Left side: Navigation and Info */}
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+            <IconButton size="small" onClick={() => handleWeekNav('prev')} sx={{ p: { xs: 0.5, sm: 1 } }}><PrevIcon /></IconButton>
+            <Button size="small" onClick={() => handleWeekNav('today')} variant="text" sx={{ textTransform: 'none', fontWeight: 600, minWidth: 0, px: 1 }}>
+              Today
+            </Button>
+            <IconButton size="small" onClick={() => handleWeekNav('next')} sx={{ p: { xs: 0.5, sm: 1 } }}><NextIcon /></IconButton>
+          </Box>
 
-        <Typography variant="body2" fontWeight={700} sx={{ mx: 1, color: isDark ? '#F5EDE4' : '#3C2415' }}>
-          {format(weekStart, 'MMM d')} – {format(weekEndDate, 'MMM d, yyyy')}
-        </Typography>
+          <Typography variant="body2" fontWeight={700} sx={{ color: isDark ? '#F5EDE4' : '#3C2415', whiteSpace: 'nowrap' }}>
+            {format(weekStart, 'MMM d')} – {format(weekEndDate, 'MMM d, yyyy')}
+          </Typography>
 
-        <Chip label={`${weeklyTotalHours}h total`} size="small" variant="outlined" sx={{ height: 22, fontSize: '0.68rem', fontWeight: 600 }} />
+          <Chip label={`${weeklyTotalHours}h total`} size="small" variant="outlined" sx={{ height: 22, fontSize: '0.68rem', fontWeight: 600 }} />
+        </Box>
 
-        <Box sx={{ flex: 1 }} />
-
-        {/* View toggle */}
-        <ButtonGroup size="small" variant="outlined">
-          <Button
-            variant={viewMode === 'week' ? 'contained' : 'outlined'}
-            onClick={() => setViewMode('week')}
-            startIcon={<WeekIcon />}
-            sx={{ textTransform: 'none', fontWeight: 600 }}
-          >
-            {isMobile ? '' : 'Week'}
-          </Button>
-          <Button
-            variant={viewMode === 'day' ? 'contained' : 'outlined'}
-            onClick={() => setViewMode('day')}
-            startIcon={<DayIcon />}
-            sx={{ textTransform: 'none', fontWeight: 600 }}
-          >
-            {isMobile ? '' : 'Day'}
-          </Button>
-        </ButtonGroup>
-
-        {/* Quick actions */}
-        <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
-
-        <Tooltip title="Request Time Off">
-          <Button
-            size="small" variant="outlined" startIcon={<TimeOffIcon />}
-            onClick={() => setTimeOffModalOpen(true)}
-            sx={{ textTransform: 'none', fontWeight: 600, display: { xs: 'none', sm: 'flex' } }}
-          >
-            Time Off
-          </Button>
-        </Tooltip>
-
-        <Tooltip title="Trade a Shift">
-          <Button
-            size="small" variant="outlined" startIcon={<SwapIcon />}
-            onClick={() => {
-              const myFutureShifts = shifts.filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date());
-              if (myFutureShifts.length === 0) { toast.info('No future shifts to trade'); return; }
-              setTradeModalOpen(true);
-            }}
-            sx={{ textTransform: 'none', fontWeight: 600, display: { xs: 'none', sm: 'flex' } }}
-          >
-            Trade
-          </Button>
-        </Tooltip>
-
-        {isManager && (
-          <Tooltip title="Create Shift">
+        {/* Right side: View Toggles & Actions */}
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+          <ButtonGroup size="small" variant="outlined" sx={{ height: 30 }}>
             <Button
-              size="small" variant="contained" startIcon={<AddIcon />}
-              onClick={() => { setNewShift({ employeeId: '', startTime: null, endTime: null, notes: '' }); setCreateModalOpen(true); }}
-              sx={{ textTransform: 'none', fontWeight: 700 }}
+              variant={viewMode === 'week' ? 'contained' : 'outlined'}
+              onClick={() => setViewMode('week')}
+              startIcon={isMobile ? undefined : <WeekIcon />}
+              sx={{ textTransform: 'none', fontWeight: 600, minWidth: isMobile ? 40 : auto, px: isMobile ? 1 : 2 }}
             >
-              {isMobile ? '' : 'Shift'}
+              {isMobile ? <WeekIcon fontSize="small" /> : 'Week'}
+            </Button>
+            <Button
+              variant={viewMode === 'day' ? 'contained' : 'outlined'}
+              onClick={() => setViewMode('day')}
+              startIcon={isMobile ? undefined : <DayIcon />}
+              sx={{ textTransform: 'none', fontWeight: 600, minWidth: isMobile ? 40 : auto, px: isMobile ? 1 : 2 }}
+            >
+              {isMobile ? <DayIcon fontSize="small" /> : 'Day'}
+            </Button>
+          </ButtonGroup>
+
+          <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
+
+          <Tooltip title="Request Time Off">
+            <Button
+              size="small" variant="outlined" startIcon={<TimeOffIcon />}
+              onClick={() => setTimeOffModalOpen(true)}
+              sx={{ textTransform: 'none', fontWeight: 600, display: { xs: 'none', sm: 'flex' } }}
+            >
+              Time Off
             </Button>
           </Tooltip>
-        )}
+
+          <Tooltip title="Trade a Shift">
+            <Button
+              size="small" variant="outlined" startIcon={<SwapIcon />}
+              onClick={() => {
+                const myFutureShifts = shifts.filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date());
+                if (myFutureShifts.length === 0) { toast.info('No future shifts to trade'); return; }
+                setTradeModalOpen(true);
+              }}
+              sx={{ textTransform: 'none', fontWeight: 600, display: { xs: 'none', sm: 'flex' } }}
+            >
+              Trade
+            </Button>
+          </Tooltip>
+
+          {isManager && (
+            <Tooltip title="Create Shift">
+              <Button
+                size="small" variant="contained" startIcon={<AddIcon />}
+                onClick={() => { setNewShift({ employeeId: '', startTime: null, endTime: null, notes: '' }); setCreateModalOpen(true); }}
+                sx={{ textTransform: 'none', fontWeight: 700 }}
+              >
+                {isMobile ? '' : 'Shift'}
+              </Button>
+            </Tooltip>
+          )}
+        </Box>
       </Box>
 
       {/* ─── ROLE COLOR LEGEND ───────────────────────────────────── */}

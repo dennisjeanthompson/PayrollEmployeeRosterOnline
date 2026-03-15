@@ -20,6 +20,8 @@ import {
   Alert,
   Chip,
   Container,
+  useTheme,
+  alpha,
 } from "@mui/material";
 import { 
   Visibility, 
@@ -32,20 +34,7 @@ import {
   CakeOutlined as DateIcon,
 } from "@mui/icons-material";
 
-// Header Background Element (Soft Gradient)
-const ProfileBackground = () => (
-  <Box 
-    sx={{ 
-      background: 'linear-gradient(135deg, #0f172a 0%, #334155 100%)', 
-      height: { xs: 120, md: 160 },
-      width: '100%',
-      position: 'absolute',
-      top: 0,
-      left: 0,
-      zIndex: 0,
-    }}
-  />
-);
+// No more static ProfileBackground to prevent overflow and clashes with the layout theme.
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -183,30 +172,16 @@ export default function MuiProfileSettings() {
     day: 'numeric'
   }) : 'N/A';
 
-  // Shared sx for TextFields to ensure text is visible on white backgrounds in dark themes
-  const textFieldSx = {
-    '& .MuiInputBase-input': { color: '#1e293b' },
-    '& .MuiInputLabel-root': { color: '#64748b' },
-    '& .MuiInputLabel-root.Mui-focused': { color: '#3b82f6' },
-    '& .MuiOutlinedInput-root': {
-      bgcolor: '#fff',
-      '& fieldset': { borderColor: '#cbd5e1' },
-      '&:hover fieldset': { borderColor: '#94a3b8' },
-      '&.Mui-focused fieldset': { borderColor: '#3b82f6' },
-    },
-    '& .MuiFormHelperText-root': { color: '#64748b' },
-  };
+  const theme = useTheme();
 
   return (
-    <Box sx={{ minHeight: '100vh', bgcolor: '#f1f5f9', position: 'relative' }}>
-      <ProfileBackground />
-      
-      <Container maxWidth="lg" sx={{ pt: { xs: 4, md: 6 }, pb: 8, px: { xs: 2, md: 3 }, position: 'relative', zIndex: 10 }}>
+    <Box sx={{ minHeight: '100%', position: 'relative' }}>
+      <Container maxWidth="lg" sx={{ pt: { xs: 2, md: 4 }, pb: 8, px: { xs: 2, md: 3 }, position: 'relative', zIndex: 10 }}>
         <Box sx={{ mb: 4 }}>
-          <Typography variant="h4" sx={{ color: 'white', fontWeight: 800, mb: 1, letterSpacing: '-0.02em' }}>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, letterSpacing: '-0.02em', color: "text.primary" }}>
             Account Settings
           </Typography>
-          <Typography variant="body1" sx={{ color: 'rgba(255,255,255,0.7)', fontWeight: 400 }}>
+          <Typography variant="body1" sx={{ fontWeight: 400, color: "text.secondary" }}>
             Manage your profile, security, and preferences.
           </Typography>
         </Box>
@@ -222,9 +197,10 @@ export default function MuiProfileSettings() {
                 borderRadius: 4, 
                 height: 'auto',
                 textAlign: 'center',
-                boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06)',
-                border: '1px solid #e2e8f0',
-                bgcolor: 'white'
+                boxShadow: `0 4px 6px -1px ${alpha(theme.palette.common.black, 0.1)}, 0 2px 4px -1px ${alpha(theme.palette.common.black, 0.06)}`,
+                border: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'background.paper'
               }}
             >
               <Box sx={{ position: 'relative' }}>
@@ -242,13 +218,14 @@ export default function MuiProfileSettings() {
                   />
                 </Box>
                 
-                <Typography variant="h5" fontWeight={800} sx={{ color: '#0f172a', mb: 0.5 }}>
+                <Typography variant="h5" fontWeight={800} sx={{ color: 'text.primary', mb: 0.5 }}>
                   {fullName}
                 </Typography>
                 
                 <Chip 
                   label={user.role || 'Employee'} 
                   size="small" 
+                  color="primary"
                   sx={{ 
                     mt: 1, 
                     mb: 3, 
@@ -259,8 +236,6 @@ export default function MuiProfileSettings() {
                     fontSize: '0.7rem',
                     letterSpacing: '0.05em',
                     borderRadius: 2,
-                    bgcolor: user.role === 'admin' ? '#eef2ff' : '#eff6ff',
-                    color: user.role === 'admin' ? '#4f46e5' : '#0ea5e9'
                   }} 
                 />
 
@@ -272,19 +247,19 @@ export default function MuiProfileSettings() {
                 
                 <Box sx={{ px: 1, textAlign: 'left' }}>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, color: 'text.secondary' }}>
-                    <BadgeIcon sx={{ fontSize: 20, mr: 2, opacity: 0.7, color: '#64748b' }} />
+                    <BadgeIcon sx={{ fontSize: 20, mr: 2, opacity: 0.7 }} />
                     <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography variant="caption" display="block" sx={{ fontWeight: 700, color: '#94a3b8', lineHeight: 1.2 }}>USER ID</Typography>
-                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, color: '#475569', mt: 0.5 }} noWrap>
+                        <Typography variant="caption" display="block" sx={{ fontWeight: 700, lineHeight: 1.2 }}>USER ID</Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontWeight: 600, color: 'text.primary', mt: 0.5 }} noWrap>
                             {user.username || `#${user.id}`}
                         </Typography>
                     </Box>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', color: 'text.secondary' }}>
-                    <DateIcon sx={{ fontSize: 20, mr: 2, opacity: 0.7, color: '#64748b' }} />
+                    <DateIcon sx={{ fontSize: 20, mr: 2, opacity: 0.7 }} />
                     <Box sx={{ minWidth: 0, flex: 1 }}>
-                        <Typography variant="caption" display="block" sx={{ fontWeight: 700, color: '#94a3b8', lineHeight: 1.2 }}>JOINED DATE</Typography>
-                        <Typography variant="body2" sx={{ fontWeight: 600, color: '#475569', mt: 0.5 }}>
+                        <Typography variant="caption" display="block" sx={{ fontWeight: 700, lineHeight: 1.2 }}>JOINED DATE</Typography>
+                        <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary', mt: 0.5 }}>
                             {joinedDate}
                         </Typography>
                     </Box>
@@ -301,9 +276,10 @@ export default function MuiProfileSettings() {
               sx={{ 
                 borderRadius: 4, 
                 overflow: 'hidden',
-                boxShadow: '0 10px 30px -10px rgba(0,0,0,0.1)',
-                border: '1px solid rgba(255,255,255,0.5)',
-                bgcolor: 'white',
+                boxShadow: `0 10px 30px -10px ${alpha(theme.palette.common.black, 0.1)}`,
+                border: '1px solid',
+                borderColor: 'divider',
+                bgcolor: 'background.paper',
                 minHeight: 'auto'
               }}
             >
@@ -311,17 +287,19 @@ export default function MuiProfileSettings() {
                 value={tabValue} 
                 onChange={handleTabChange} 
                 aria-label="profile settings tabs"
+                variant="scrollable"
+                scrollButtons="auto"
                 sx={{
                   borderBottom: 1,
                   borderColor: 'divider',
-                  px: 3,
-                  bgcolor: 'white',
+                  px: { xs: 1, sm: 3 },
+                  bgcolor: 'background.paper',
                   '& .MuiTab-root': {
                     textTransform: 'none',
                     fontWeight: 600,
                     fontSize: '0.95rem',
                     minHeight: 64,
-                    mr: 2
+                    mr: { xs: 0, sm: 2 }
                   }
                 }}
               >
@@ -331,10 +309,10 @@ export default function MuiProfileSettings() {
 
               {/* General Tab */}
               <CustomTabPanel value={tabValue} index={0}>
-                <Box sx={{ p: 4 }}>
+                <Box sx={{ p: { xs: 2, sm: 4 } }}>
                   <Box sx={{ mb: 4 }}>
-                    <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: '#0f172a' }}>Personal Information</Typography>
-                    <Typography variant="body2" sx={{ color: '#64748b' }}>
+                    <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: 'text.primary' }}>Personal Information</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       Update your basic profile details here.
                     </Typography>
                   </Box>
@@ -348,7 +326,6 @@ export default function MuiProfileSettings() {
                         onChange={(e) => setFirstName(e.target.value)}
                         variant="outlined"
                         InputProps={{ sx: { borderRadius: 2 } }}
-                        sx={textFieldSx}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
@@ -359,7 +336,6 @@ export default function MuiProfileSettings() {
                         onChange={(e) => setLastName(e.target.value)}
                         variant="outlined"
                         InputProps={{ sx: { borderRadius: 2 } }}
-                        sx={textFieldSx}
                       />
                     </Grid>
                     <Grid size={12}>
@@ -370,11 +346,10 @@ export default function MuiProfileSettings() {
                         onChange={(e) => setEmail(e.target.value)}
                         variant="outlined"
                         InputProps={{ 
-                          startAdornment: <InputAdornment position="start"><EmailIcon sx={{ color: '#64748b' }} /></InputAdornment>,
+                          startAdornment: <InputAdornment position="start"><EmailIcon color="action" /></InputAdornment>,
                           sx: { borderRadius: 2 } 
                         }}
                         helperText="Used for notifications and login"
-                        sx={textFieldSx}
                       />
                     </Grid>
                     
@@ -383,8 +358,8 @@ export default function MuiProfileSettings() {
                     </Grid>
 
                     <Grid size={12}>
-                      <Typography variant="h6" fontWeight={700} sx={{ color: '#0f172a', mt: 1 }}>Government & Statutory IDs</Typography>
-                      <Typography variant="body2" sx={{ color: '#64748b', mb: 2 }}>
+                      <Typography variant="h6" fontWeight={700} sx={{ color: 'text.primary', mt: 1 }}>Government & Statutory IDs</Typography>
+                      <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
                         These IDs are required for official payslips and compliance.
                       </Typography>
                     </Grid>
@@ -398,7 +373,6 @@ export default function MuiProfileSettings() {
                         variant="outlined"
                         InputProps={{ sx: { borderRadius: 2 } }}
                         placeholder="XXX-XXX-XXX-000"
-                        sx={textFieldSx}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
@@ -410,7 +384,6 @@ export default function MuiProfileSettings() {
                         variant="outlined"
                         InputProps={{ sx: { borderRadius: 2 } }}
                         placeholder="XX-XXXXXXX-X"
-                        sx={textFieldSx}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
@@ -422,7 +395,6 @@ export default function MuiProfileSettings() {
                         variant="outlined"
                         InputProps={{ sx: { borderRadius: 2 } }}
                         placeholder="XX-XXXXXXXXX-X"
-                        sx={textFieldSx}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
@@ -434,7 +406,6 @@ export default function MuiProfileSettings() {
                         variant="outlined"
                         InputProps={{ sx: { borderRadius: 2 } }}
                         placeholder="XXXX-XXXX-XXXX"
-                        sx={textFieldSx}
                       />
                     </Grid>
                     
@@ -467,10 +438,10 @@ export default function MuiProfileSettings() {
 
               {/* Security Tab */}
               <CustomTabPanel value={tabValue} index={1}>
-                <Box sx={{ p: 4 }}>
+                <Box sx={{ p: { xs: 2, sm: 4 } }}>
                   <Box sx={{ mb: 4 }}>
-                    <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: '#0f172a' }}>Password & Security</Typography>
-                    <Typography variant="body2" sx={{ color: '#64748b' }}>
+                    <Typography variant="h6" fontWeight={700} gutterBottom sx={{ color: 'text.primary' }}>Password & Security</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>
                       Manage your password to keep your account safe.
                     </Typography>
                   </Box>
@@ -491,13 +462,12 @@ export default function MuiProfileSettings() {
                             sx: { borderRadius: 2 },
                             endAdornment: (
                                 <InputAdornment position="end">
-                                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: '#64748b' }}>
+                                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" color="action">
                                         {showPassword ? <VisibilityOff /> : <Visibility />}
                                     </IconButton>
                                 </InputAdornment>
                             )
                         }}
-                        sx={textFieldSx}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
@@ -508,7 +478,6 @@ export default function MuiProfileSettings() {
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
                         InputProps={{ sx: { borderRadius: 2 } }}
-                        sx={textFieldSx}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
@@ -519,7 +488,6 @@ export default function MuiProfileSettings() {
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         InputProps={{ sx: { borderRadius: 2 } }}
-                        sx={textFieldSx}
                       />
                     </Grid>
                     
