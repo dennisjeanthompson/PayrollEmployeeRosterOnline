@@ -176,7 +176,7 @@ export default function MuiDashboard() {
   });
 
   return (
-    <Box sx={{ p: 3, minHeight: "100vh", bgcolor: "background.default" }}>
+    <Box sx={{ minHeight: "100vh", bgcolor: "background.default", p: isManagerRole ? 3 : 0 }}>
       {isManagerRole ? (
         <ManagerDashboard
           currentUser={currentUser}
@@ -699,6 +699,20 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   const theme = useTheme();
   const [, setLocation] = useLocation();
 
+  // Fetch current payroll period data
+  const { data: payrollData } = useQuery<any>({
+    queryKey: ["/api/payroll/periods/current"],
+    enabled: true,
+    refetchInterval: 60000,
+  });
+
+  // Fetch recent payroll history
+  const { data: payrollHistory } = useQuery<any>({
+    queryKey: ["/api/payroll"],
+    enabled: true,
+    refetchInterval: 60000,
+  });
+
   // Calculate this week's total scheduled hours
   const thisWeekShifts = (employeeShifts?.shifts || []).filter((s: any) => {
     const d = new Date(s.startTime);
@@ -724,173 +738,229 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   const isDark = theme.palette.mode === 'dark';
   const primaryColor = theme.palette.primary.main;
 
+  // Get latest payslip
+  const records = payrollHistory?.records || payrollHistory?.payroll || [];
+  const latestPay = records?.[0];
+  const netPay = latestPay?.netPay ?? null;
+  const currentPeriod = payrollData?.period;
+  const hoursWorked = payrollData?.totalHours ?? latestPay?.totalHours ?? totalHoursThisWeek;
+
   const quickActions = [
     {
       label: 'Schedule',
-      sub: 'View your shifts',
-      icon: <ScheduleIcon sx={{ fontSize: 26 }} />,
+      sub: 'View shifts',
+      icon: <ScheduleIcon sx={{ fontSize: 24 }} />,
       color: primaryColor,
       bgColor: alpha(primaryColor, 0.12),
       route: '/employee/schedule',
     },
     {
-      label: 'Trade Shifts',
-      sub: 'Swap with team',
-      icon: <SwapIcon sx={{ fontSize: 26 }} />,
+      label: 'Trade',
+      sub: 'Swap shifts',
+      icon: <SwapIcon sx={{ fontSize: 24 }} />,
       color: theme.palette.info.main,
       bgColor: alpha(theme.palette.info.main, 0.12),
       route: '/employee/schedule',
     },
     {
       label: 'Payslips',
-      sub: 'View earnings',
-      icon: <DollarIcon sx={{ fontSize: 26 }} />,
+      sub: 'Earnings',
+      icon: <DollarIcon sx={{ fontSize: 24 }} />,
       color: theme.palette.success.main,
       bgColor: alpha(theme.palette.success.main, 0.12),
       route: '/employee/payroll',
     },
     {
-      label: 'Notifications',
-      sub: 'Stay informed',
-      icon: <BellIcon sx={{ fontSize: 26 }} />,
+      label: 'Profile',
+      sub: 'My account',
+      icon: <SparklesIcon sx={{ fontSize: 24 }} />,
       color: theme.palette.warning.main,
       bgColor: alpha(theme.palette.warning.main, 0.12),
-      route: '/employee/notifications',
+      route: '/employee/profile',
     },
   ];
 
   return (
-    <Box sx={{ pb: 2 }}>
-      {/* ── HERO HEADER CARD ─────────────────────────────── */}
+    <Box sx={{ pb: 10, bgcolor: 'background.default', minHeight: '100vh' }}>
+
+      {/* ── HERO HEADER ───────────────────────────────────── */}
       <Box
         sx={{
           background: isDark
-            ? `linear-gradient(135deg, #2D1B0E 0%, #1C1410 100%)`
-            : `linear-gradient(135deg, ${primaryColor} 0%, ${theme.palette.primary.dark} 100%)`,
+            ? `linear-gradient(160deg, #3B1F0A 0%, #1A110A 100%)`
+            : `linear-gradient(160deg, ${primaryColor} 0%, ${theme.palette.primary.dark} 100%)`,
           px: 3,
           pt: 3,
-          pb: 5,
+          pb: 8,
           position: 'relative',
           overflow: 'hidden',
         }}
       >
-        {/* Decorative circles */}
-        <Box sx={{ position: 'absolute', top: -40, right: -40, width: 140, height: 140, borderRadius: '50%', bgcolor: alpha('#fff', 0.05) }} />
-        <Box sx={{ position: 'absolute', bottom: -20, left: -20, width: 100, height: 100, borderRadius: '50%', bgcolor: alpha('#fff', 0.04) }} />
+        <Box sx={{ position: 'absolute', top: -50, right: -50, width: 160, height: 160, borderRadius: '50%', bgcolor: alpha('#fff', 0.05) }} />
+        <Box sx={{ position: 'absolute', bottom: 10, left: -30, width: 120, height: 120, borderRadius: '50%', bgcolor: alpha('#fff', 0.03) }} />
 
-        <Typography variant="h6" sx={{ fontWeight: 700, color: isDark ? theme.palette.primary.light : '#fff', mb: 0.5 }}>
-          Welcome back, {currentUser?.firstName || 'Employee'}!
-        </Typography>
-        <Typography variant="body2" sx={{ color: isDark ? alpha(theme.palette.primary.light, 0.7) : alpha('#fff', 0.8) }}>
-          {format(new Date(), 'EEEE, MMMM d, yyyy')}
-        </Typography>
-
-        {/* Stats pills */}
-        <Stack direction="row" spacing={1.5} sx={{ mt: 2.5 }}>
-          <Box sx={{ bgcolor: alpha('#fff', isDark ? 0.08 : 0.18), borderRadius: 2, px: 2, py: 1 }}>
-            <Typography variant="caption" sx={{ color: isDark ? alpha(theme.palette.primary.light, 0.7) : alpha('#fff', 0.8), display: 'block', lineHeight: 1.2 }}>Today's Shifts</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 800, color: isDark ? theme.palette.primary.light : '#fff', lineHeight: 1.4 }}>
-              {todayShifts.length}
+        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
+          <Box>
+            <Typography variant="caption" sx={{ color: alpha('#fff', isDark ? 0.5 : 0.75), textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
+              {format(new Date(), 'EEEE, MMM d')}
+            </Typography>
+            <Typography variant="h5" sx={{ fontWeight: 800, color: isDark ? theme.palette.primary.light : '#fff', mt: 0.25 }}>
+              Hi, {currentUser?.firstName || 'Employee'} 👋
+            </Typography>
+            <Typography variant="body2" sx={{ color: alpha('#fff', isDark ? 0.5 : 0.75), mt: 0.25 }}>
+              {currentUser?.position || currentUser?.role || 'Team Member'}
             </Typography>
           </Box>
-          <Box sx={{ bgcolor: alpha('#fff', isDark ? 0.08 : 0.18), borderRadius: 2, px: 2, py: 1 }}>
-            <Typography variant="caption" sx={{ color: isDark ? alpha(theme.palette.primary.light, 0.7) : alpha('#fff', 0.8), display: 'block', lineHeight: 1.2 }}>This Week</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 800, color: isDark ? theme.palette.primary.light : '#fff', lineHeight: 1.4 }}>
-              {totalHoursThisWeek.toFixed(0)}h
-            </Typography>
-          </Box>
-          <Box sx={{ bgcolor: alpha('#fff', isDark ? 0.08 : 0.18), borderRadius: 2, px: 2, py: 1 }}>
-            <Typography variant="caption" sx={{ color: isDark ? alpha(theme.palette.primary.light, 0.7) : alpha('#fff', 0.8), display: 'block', lineHeight: 1.2 }}>Scheduled</Typography>
-            <Typography variant="h6" sx={{ fontWeight: 800, color: isDark ? theme.palette.primary.light : '#fff', lineHeight: 1.4 }}>
-              {employeeShifts?.shifts?.length || 0}
-            </Typography>
-          </Box>
+          <Chip
+            size="small"
+            label="● Online"
+            sx={{
+              bgcolor: alpha('#4ade80', 0.2),
+              color: '#4ade80',
+              fontWeight: 700,
+              fontSize: '0.65rem',
+              border: '1px solid rgba(74,222,128,0.3)',
+            }}
+          />
         </Stack>
       </Box>
 
-      {/* ── QUICK ACTIONS FLOATING CARD ──────────────────── */}
-      <Box sx={{ px: 2, mt: -2.5 }}>
+      {/* ── PAYROLL SUMMARY CARD (overlapping hero) ─────── */}
+      <Box sx={{ px: 2, mt: -5 }}>
         <Paper
-          elevation={4}
+          elevation={6}
           sx={{
             borderRadius: 3,
             overflow: 'hidden',
-            p: 2,
+            background: isDark
+              ? `linear-gradient(135deg, ${alpha(primaryColor, 0.15)} 0%, ${theme.palette.background.paper} 100%)`
+              : theme.palette.background.paper,
+            border: `1px solid ${alpha(primaryColor, 0.15)}`,
           }}
         >
-          <Grid container spacing={0}>
-            {quickActions.map((action, idx) => (
-              <Grid size={3} key={action.label}>
-                <Box
-                  onClick={() => setLocation(action.route)}
-                  sx={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    textAlign: 'center',
-                    cursor: 'pointer',
-                    py: 1.5,
-                    px: 0.5,
-                    borderRadius: 2,
-                    transition: 'all 0.15s',
-                    '&:active': { transform: 'scale(0.93)', bgcolor: alpha(action.color, 0.06) },
-                    borderRight: idx < 3 ? `1px solid ${theme.palette.divider}` : 'none',
-                  }}
-                >
-                  <Box
-                    sx={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 2.5,
-                      bgcolor: action.bgColor,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: action.color,
-                      mb: 0.75,
-                    }}
-                  >
-                    {action.icon}
-                  </Box>
-                  <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', lineHeight: 1.2, display: 'block' }}>
-                    {action.label}
-                  </Typography>
-                  <Typography variant="caption" sx={{ fontSize: '0.6rem', color: 'text.secondary', lineHeight: 1.2, display: { xs: 'none', sm: 'block' } }}>
-                    {action.sub}
-                  </Typography>
-                </Box>
-              </Grid>
-            ))}
-          </Grid>
+          {/* Pay period info header */}
+          <Box sx={{ px: 2.5, pt: 2, pb: 1.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Box>
+                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Current Pay Period
+                </Typography>
+                <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.25 }}>
+                  {currentPeriod
+                    ? `${format(new Date(currentPeriod.startDate), 'MMM d')} – ${format(new Date(currentPeriod.endDate), 'MMM d, yyyy')}`
+                    : 'This Pay Period'}
+                </Typography>
+              </Box>
+              <Chip
+                size="small"
+                label="In Progress"
+                color="primary"
+                variant="outlined"
+                sx={{ fontWeight: 700, fontSize: '0.65rem', height: 22 }}
+              />
+            </Stack>
+          </Box>
+
+          {/* Stats row */}
+          <Stack direction="row" divider={<Divider orientation="vertical" flexItem />} sx={{ px: 0 }}>
+            <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Hours Worked</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                {hoursWorked ? `${Number(hoursWorked).toFixed(0)}h` : '--'}
+              </Typography>
+            </Box>
+            <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Est. Net Pay</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: 'success.main' }}>
+                {netPay != null ? `₱${Number(netPay).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '--'}
+              </Typography>
+            </Box>
+            <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Shifts</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: 'info.main' }}>
+                {todayShifts.length > 0 ? todayShifts.length : employeeShifts?.shifts?.length || 0}
+              </Typography>
+            </Box>
+          </Stack>
+
+          {/* View payslip button */}
+          <Box sx={{ px: 2.5, pb: 2 }}>
+            <Button
+              fullWidth
+              variant="contained"
+              onClick={() => setLocation('/employee/payroll')}
+              size="small"
+              startIcon={<DollarIcon />}
+              sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+            >
+              View Payslips & History
+            </Button>
+          </Box>
         </Paper>
       </Box>
 
-      {/* ── UPCOMING SHIFTS ──────────────────────────────── */}
-      <Box sx={{ px: 2, mt: 2.5 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-          <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-            Upcoming Shifts
-          </Typography>
-          <Button
-            size="small"
-            endIcon={<ArrowRightIcon />}
-            onClick={() => setLocation('/employee/schedule')}
-            sx={{ textTransform: 'none', fontWeight: 600, fontSize: '0.8rem', color: 'primary.main', p: 0 }}
-          >
-            View All
-          </Button>
-        </Box>
-
-        {shiftsLoading ? (
-          <Stack spacing={1.5}>
-            {[1, 2].map((i) => <Skeleton key={i} variant="rounded" height={72} sx={{ borderRadius: 2 }} />)}
+      {/* ── QUICK ACTIONS ────────────────────────────────── */}
+      <Box sx={{ px: 2, mt: 2 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1.5 }}>
+          Quick Access
+        </Typography>
+        <Paper elevation={2} sx={{ borderRadius: 3, overflow: 'hidden' }}>
+          <Stack direction="row" divider={<Divider orientation="vertical" flexItem />}>
+            {quickActions.map((action) => (
+              <Box
+                key={action.label}
+                onClick={() => setLocation(action.route)}
+                sx={{
+                  flex: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  py: 2,
+                  cursor: 'pointer',
+                  userSelect: 'none',
+                  WebkitTapHighlightColor: 'transparent',
+                  transition: 'background 0.15s',
+                  '&:active': { bgcolor: alpha(action.color, 0.08) },
+                }}
+              >
+                <Box
+                  sx={{
+                    width: 44,
+                    height: 44,
+                    borderRadius: 2.5,
+                    bgcolor: action.bgColor,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: action.color,
+                    mb: 0.75,
+                  }}
+                >
+                  {action.icon}
+                </Box>
+                <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', lineHeight: 1.2 }}>
+                  {action.label}
+                </Typography>
+              </Box>
+            ))}
           </Stack>
-        ) : upcomingShifts.length > 0 ? (
+        </Paper>
+      </Box>
+
+      {/* ── TODAY'S SHIFT ────────────────────────────────── */}
+      <Box sx={{ px: 2, mt: 2.5 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1.5 }}>
+          Today's Schedule
+        </Typography>
+        {shiftsLoading ? (
+          <Skeleton variant="rounded" height={80} sx={{ borderRadius: 2.5 }} />
+        ) : todayShifts.length > 0 ? (
           <Stack spacing={1.5}>
-            {upcomingShifts.map((shift: any) => (
+            {todayShifts.map((shift: any) => (
               <Paper
                 key={shift.id}
                 variant="outlined"
+                onClick={() => setLocation('/employee/schedule')}
                 sx={{
                   p: 2,
                   borderRadius: 2.5,
@@ -898,69 +968,72 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                   alignItems: 'center',
                   gap: 1.5,
                   cursor: 'pointer',
-                  transition: 'all 0.15s',
-                  '&:active': { bgcolor: alpha(primaryColor, 0.05) },
+                  borderColor: alpha(primaryColor, 0.3),
+                  bgcolor: alpha(primaryColor, 0.03),
                 }}
-                onClick={() => setLocation('/employee/schedule')}
               >
-                <Box
-                  sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 2,
-                    bgcolor: alpha(primaryColor, 0.1),
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <Typography variant="caption" sx={{ fontSize: '0.6rem', fontWeight: 700, color: 'primary.main', lineHeight: 1 }}>
-                    {format(new Date(shift.startTime), 'MMM').toUpperCase()}
-                  </Typography>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 800, color: 'primary.main', lineHeight: 1.2 }}>
-                    {format(new Date(shift.startTime), 'd')}
+                <Box sx={{ width: 44, height: 44, borderRadius: 2, bgcolor: alpha(primaryColor, 0.1), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.55rem', fontWeight: 700, color: 'primary.main', lineHeight: 1 }}>
+                    TODAY
                   </Typography>
                 </Box>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700, noWrap: true }}>
-                    {shift.position || 'Shift'}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" noWrap>
-                    {format(new Date(shift.startTime), 'EEEE')} &bull;{' '}
+                <Box sx={{ flex: 1 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{shift.position || 'Shift'}</Typography>
+                  <Typography variant="caption" color="text.secondary">
                     {format(new Date(shift.startTime), 'h:mm a')} – {format(new Date(shift.endTime), 'h:mm a')}
                   </Typography>
                 </Box>
-                <Chip
-                  size="small"
-                  label={shift.status === 'completed' ? 'Done' : 'Upcoming'}
-                  color={shift.status === 'completed' ? 'success' : 'default'}
-                  sx={{ fontSize: '0.6rem', height: 22, fontWeight: 600 }}
-                />
+                <Chip size="small" label={shift.status === 'completed' ? 'Done' : 'Today'} color={shift.status === 'completed' ? 'success' : 'primary'} sx={{ fontSize: '0.6rem', height: 22, fontWeight: 700 }} />
               </Paper>
             ))}
           </Stack>
         ) : (
-          <Paper
-            variant="outlined"
-            sx={{
-              borderRadius: 2.5,
-              py: 5,
-              textAlign: 'center',
-            }}
-          >
-            <CalendarIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
-            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>
-              No shifts scheduled today
-            </Typography>
-            <Typography variant="caption" color="text.disabled">
-              Enjoy your day off!
-            </Typography>
+          <Paper variant="outlined" sx={{ borderRadius: 2.5, py: 3, textAlign: 'center' }}>
+            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>No shifts today</Typography>
+            <Typography variant="caption" color="text.disabled">Enjoy your day off! 🎉</Typography>
           </Paper>
         )}
       </Box>
+
+      {/* ── UPCOMING SHIFTS ──────────────────────────────── */}
+      {upcomingShifts.length > 0 && (
+        <Box sx={{ px: 2, mt: 2.5 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
+            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Upcoming Shifts
+            </Typography>
+            <Button size="small" endIcon={<ArrowRightIcon />} onClick={() => setLocation('/employee/schedule')} sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.75rem', color: 'primary.main', p: 0, minWidth: 0 }}>
+              View All
+            </Button>
+          </Stack>
+          <Stack spacing={1.5}>
+            {upcomingShifts.map((shift: any) => (
+              <Paper
+                key={shift.id}
+                variant="outlined"
+                onClick={() => setLocation('/employee/schedule')}
+                sx={{ p: 2, borderRadius: 2.5, display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'pointer', '&:active': { bgcolor: alpha(primaryColor, 0.04) } }}
+              >
+                <Box sx={{ width: 44, height: 44, borderRadius: 2, bgcolor: alpha(primaryColor, 0.08), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.55rem', fontWeight: 800, color: 'primary.main', lineHeight: 1 }}>
+                    {format(new Date(shift.startTime), 'MMM').toUpperCase()}
+                  </Typography>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 900, color: 'primary.main', lineHeight: 1.2 }}>
+                    {format(new Date(shift.startTime), 'd')}
+                  </Typography>
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{shift.position || 'Shift'}</Typography>
+                  <Typography variant="caption" color="text.secondary" noWrap>
+                    {format(new Date(shift.startTime), 'EEE')} · {format(new Date(shift.startTime), 'h:mm a')} – {format(new Date(shift.endTime), 'h:mm a')}
+                  </Typography>
+                </Box>
+                <ArrowRightIcon sx={{ color: 'text.disabled', fontSize: 18 }} />
+              </Paper>
+            ))}
+          </Stack>
+        </Box>
+      )}
     </Box>
   );
 }
-
