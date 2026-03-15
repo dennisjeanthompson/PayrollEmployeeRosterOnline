@@ -32,6 +32,7 @@ import {
   BadgeOutlined as BadgeIcon,
   EmailOutlined as EmailIcon,
   CakeOutlined as DateIcon,
+  LogoutOutlined as LogoutIcon,
 } from "@mui/icons-material";
 
 // No more static ProfileBackground to prevent overflow and clashes with the layout theme.
@@ -266,6 +267,50 @@ export default function MuiProfileSettings() {
                   </Box>
                 </Box>
               </Box>
+            </Paper>
+
+            {/* Logout Button Card */}
+            <Paper 
+              elevation={0}
+              sx={{ 
+                mt: 3,
+                p: { xs: 2, md: 3 }, 
+                borderRadius: 4, 
+                textAlign: 'center',
+                boxShadow: `0 4px 6px -1px ${alpha(theme.palette.common.black, 0.1)}, 0 2px 4px -1px ${alpha(theme.palette.common.black, 0.06)}`,
+                border: '1px solid',
+                borderColor: 'error.light',
+                bgcolor: alpha(theme.palette.error.main, 0.02)
+              }}
+            >
+              <Button
+                fullWidth
+                variant="outlined"
+                color="error"
+                size="large"
+                startIcon={<LogoutIcon />}
+                onClick={async () => {
+                  try {
+                    const { logout } = await import("@/lib/auth");
+                    const { useLocation } = await import("wouter");
+                    // Using wouter hook conditionally isn't allowed so we need to trigger it nicely
+                    // Actually, let's just use window.location for a clean full state reset on logout
+                    await logout();
+                    window.location.href = "/login";
+                  } catch (err) {
+                    console.error("Logout failed", err);
+                  }
+                }}
+                sx={{ 
+                  borderRadius: 2, 
+                  textTransform: 'none', 
+                  fontWeight: 700,
+                  borderWidth: 2,
+                  '&:hover': { borderWidth: 2 }
+                }}
+              >
+                Log Out
+              </Button>
             </Paper>
           </Grid>
 
