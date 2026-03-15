@@ -884,8 +884,8 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
 
 
       {/* ── QUICK ACTIONS ────────────────────────────────── */}
-      <Box sx={{ px: 2, mt: 2 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1.5 }}>
+      <Box sx={{ px: 2, mt: 3, mb: 1 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1 }}>
           Quick Access
         </Typography>
         <Paper elevation={2} sx={{ borderRadius: 3, overflow: 'hidden' }}>
@@ -899,7 +899,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
-                  py: 2,
+                  py: 1.5,
                   cursor: 'pointer',
                   userSelect: 'none',
                   WebkitTapHighlightColor: 'transparent',
@@ -909,20 +909,20 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
               >
                 <Box
                   sx={{
-                    width: 44,
-                    height: 44,
-                    borderRadius: 2.5,
+                    width: 38,
+                    height: 38,
+                    borderRadius: 2,
                     bgcolor: action.bgColor,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
                     color: action.color,
-                    mb: 0.75,
+                    mb: 0.5,
                   }}
                 >
                   {action.icon}
                 </Box>
-                <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.65rem', lineHeight: 1.2 }}>
+                <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.6rem', lineHeight: 1.2, textAlign: 'center' }}>
                   {action.label}
                 </Typography>
               </Box>

@@ -475,37 +475,37 @@ export default function ScheduleV2() {
 
       {/* ─── NAVIGATION BAR ──────────────────────────────────────── */}
       <Box sx={{
-        px: { xs: 1, sm: 3 }, py: 1,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1,
+        px: { xs: 2, sm: 3 }, py: 1.5,
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5,
         borderBottom: '1px solid',
         borderColor: isDark ? '#3D3228' : '#E8E0D4',
         bgcolor: isDark ? '#2A2018' : '#FFFFFF',
       }}>
         {/* Left side: Navigation and Info */}
-        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', bgcolor: alpha(theme.palette.primary.main, 0.05), borderRadius: 2, p: 0.5 }}>
             <IconButton size="small" onClick={() => handleWeekNav('prev')} sx={{ p: { xs: 0.5, sm: 1 } }}><PrevIcon /></IconButton>
-            <Button size="small" onClick={() => handleWeekNav('today')} variant="text" sx={{ textTransform: 'none', fontWeight: 600, minWidth: 0, px: 1 }}>
+            <Button size="small" onClick={() => handleWeekNav('today')} variant="text" sx={{ textTransform: 'none', fontWeight: 700, minWidth: 0, px: 1.5 }}>
               Today
             </Button>
             <IconButton size="small" onClick={() => handleWeekNav('next')} sx={{ p: { xs: 0.5, sm: 1 } }}><NextIcon /></IconButton>
           </Box>
 
-          <Typography variant="body2" fontWeight={700} sx={{ color: isDark ? '#F5EDE4' : '#3C2415', whiteSpace: 'nowrap' }}>
+          <Typography variant="body2" fontWeight={800} sx={{ color: isDark ? '#F5EDE4' : '#3C2415', whiteSpace: 'nowrap', fontSize: { xs: '0.85rem', sm: '1rem' } }}>
             {format(weekStart, 'MMM d')} – {format(weekEndDate, 'MMM d, yyyy')}
           </Typography>
 
-          <Chip label={`${weeklyTotalHours}h total`} size="small" variant="outlined" sx={{ height: 22, fontSize: '0.68rem', fontWeight: 600 }} />
+          <Chip label={`${weeklyTotalHours}h total`} size="small" variant="filled" color="default" sx={{ height: 24, fontSize: '0.7rem', fontWeight: 700, borderRadius: 2 }} />
         </Box>
 
         {/* Right side: View Toggles & Actions */}
         <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-          <ButtonGroup size="small" variant="outlined" sx={{ height: 30 }}>
+          <ButtonGroup size="small" variant="outlined" sx={{ height: 32 }}>
             <Button
               variant={viewMode === 'week' ? 'contained' : 'outlined'}
               onClick={() => setViewMode('week')}
               startIcon={isMobile ? undefined : <WeekIcon />}
-              sx={{ textTransform: 'none', fontWeight: 600, minWidth: isMobile ? 40 : 'auto', px: isMobile ? 1 : 2 }}
+              sx={{ textTransform: 'none', fontWeight: 700, minWidth: isMobile ? 44 : 'auto', px: isMobile ? 1 : 2 }}
             >
               {isMobile ? <WeekIcon fontSize="small" /> : 'Week'}
             </Button>
@@ -513,19 +513,19 @@ export default function ScheduleV2() {
               variant={viewMode === 'day' ? 'contained' : 'outlined'}
               onClick={() => setViewMode('day')}
               startIcon={isMobile ? undefined : <DayIcon />}
-              sx={{ textTransform: 'none', fontWeight: 600, minWidth: isMobile ? 40 : 'auto', px: isMobile ? 1 : 2 }}
+              sx={{ textTransform: 'none', fontWeight: 700, minWidth: isMobile ? 44 : 'auto', px: isMobile ? 1 : 2 }}
             >
               {isMobile ? <DayIcon fontSize="small" /> : 'Day'}
             </Button>
           </ButtonGroup>
 
-          <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' } }} />
+          <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' }, mx: 0.5 }} />
 
           <Tooltip title="Request Time Off">
             <Button
               size="small" variant="outlined" startIcon={<TimeOffIcon />}
               onClick={() => setTimeOffModalOpen(true)}
-              sx={{ textTransform: 'none', fontWeight: 600, display: { xs: 'none', sm: 'flex' } }}
+              sx={{ textTransform: 'none', fontWeight: 700, display: { xs: 'none', sm: 'flex' }, height: 32 }}
             >
               Time Off
             </Button>
@@ -539,7 +539,7 @@ export default function ScheduleV2() {
                 if (myFutureShifts.length === 0) { toast.info('No future shifts to trade'); return; }
                 setTradeModalOpen(true);
               }}
-              sx={{ textTransform: 'none', fontWeight: 600, display: { xs: 'none', sm: 'flex' } }}
+              sx={{ textTransform: 'none', fontWeight: 700, display: { xs: 'none', sm: 'flex' }, height: 32 }}
             >
               Trade
             </Button>
@@ -550,7 +550,7 @@ export default function ScheduleV2() {
               <Button
                 size="small" variant="contained" startIcon={<AddIcon />}
                 onClick={() => { setNewShift({ employeeId: '', startTime: null, endTime: null, notes: '' }); setCreateModalOpen(true); }}
-                sx={{ textTransform: 'none', fontWeight: 700 }}
+                sx={{ textTransform: 'none', fontWeight: 800, height: 32 }}
               >
                 {isMobile ? '' : 'Shift'}
               </Button>

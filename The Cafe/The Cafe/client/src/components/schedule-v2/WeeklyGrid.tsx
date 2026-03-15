@@ -413,9 +413,7 @@ export default function WeeklyGrid({
   // Desktop: Employee × Day table grid
   return (
     <Box sx={{
-      border: '1px solid',
-      borderColor: isDark ? '#3D3228' : '#E8E0D4',
-      borderRadius: 3,
+      width: '100%',
       overflow: 'auto',
       bgcolor: isDark ? '#2A2018' : '#FFFFFF',
     }}>
@@ -432,7 +430,7 @@ export default function WeeklyGrid({
                 textAlign: 'left',
                 borderBottom: '2px solid',
                 borderColor: isDark ? '#3D3228' : '#E8E0D4',
-                bgcolor: isDark ? '#342A1E' : '#F5F0E8',
+                bgcolor: isDark ? '#342A1E' : '#FFFFFF',
                 position: 'sticky', left: 0, zIndex: 2,
               }}
             >

@@ -453,53 +453,53 @@ export default function MuiPayroll() {
                   </TableContainer>
 
                   {/* Mobile Card View */}
-                  <Stack spacing={2} sx={{ display: { xs: 'flex', md: 'none' } }}>
+                  <Stack spacing={2} sx={{ display: { xs: 'flex', md: 'none' }, overflowX: 'hidden' }}>
                     {paidEntries.map((entry) => (
                       <Paper 
                         key={entry.id}
                         variant="outlined" 
-                        sx={{ p: 2, borderRadius: 3, display: 'flex', flexDirection: 'column', gap: 1.5 }}
+                        sx={{ p: 2, borderRadius: 3, display: 'flex', flexDirection: 'column', gap: 1.5, overflow: 'hidden' }}
                       >
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                          <Box>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 1 }}>
+                          <Box sx={{ minWidth: 0, flex: 1 }}>
                             {entry.periodStartDate && entry.periodEndDate ? (
                               <>
-                                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                                <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                                   {format(new Date(entry.periodStartDate), "MMM d")} – {format(new Date(entry.periodEndDate), "MMM d, yyyy")}
                                 </Typography>
-                                <Typography variant="caption" color="text.secondary">
+                                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                                   Paid {entry.paidAt
                                     ? format(new Date(entry.paidAt), "MMM d, yyyy")
                                     : format(getPaymentDate(entry.periodEndDate!), "MMM d, yyyy")}
                                 </Typography>
                               </>
                             ) : (
-                              <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>{format(parseISO(entry.createdAt), "MMM d, yyyy")}</Typography>
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{format(parseISO(entry.createdAt), "MMM d, yyyy")}</Typography>
                             )}
                           </Box>
-                          <Chip label="Paid" color="success" size="small" icon={<CheckCircleIcon />} sx={{ height: 24 }} />
+                          <Chip label="Paid" color="success" size="small" icon={<CheckCircleIcon />} sx={{ height: 24, flexShrink: 0 }} />
                         </Box>
                         
                         <Divider />
                         
                         <Grid container spacing={1}>
-                          <Grid size={4}>
-                            <Typography variant="caption" color="text.secondary" display="block">Hours</Typography>
-                            <Typography variant="body2" fontWeight={600}>{parseFloat(String(entry.totalHours)).toFixed(1)}h</Typography>
+                          <Grid size={{xs: 4}}>
+                            <Typography variant="caption" color="text.secondary" display="block" noWrap>Hours</Typography>
+                            <Typography variant="body2" fontWeight={600} noWrap>{parseFloat(String(entry.totalHours)).toFixed(1)}h</Typography>
                           </Grid>
-                          <Grid size={4}>
-                            <Typography variant="caption" color="text.secondary" display="block">Gross</Typography>
-                            <Typography variant="body2" fontWeight={600}>{formatCurrency(entry.grossPay)}</Typography>
+                          <Grid size={{xs: 4}}>
+                            <Typography variant="caption" color="text.secondary" display="block" noWrap>Gross</Typography>
+                            <Typography variant="body2" fontWeight={600} noWrap>{formatCurrency(entry.grossPay)}</Typography>
                           </Grid>
-                          <Grid size={4}>
-                            <Typography variant="caption" color="text.secondary" display="block">Deductions</Typography>
-                            <Typography variant="body2" fontWeight={600} color="error.main">-{formatCurrency(entry.deductions)}</Typography>
+                          <Grid size={{xs: 4}}>
+                            <Typography variant="caption" color="text.secondary" display="block" noWrap>Deductions</Typography>
+                            <Typography variant="body2" fontWeight={600} color="error.main" noWrap>-{formatCurrency(entry.deductions)}</Typography>
                           </Grid>
                         </Grid>
 
                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 1, p: 1.5, bgcolor: alpha(theme.palette.success.main, 0.05), borderRadius: 2 }}>
                           <Typography variant="body2" fontWeight={700}>Net Pay</Typography>
-                          <Typography variant="h6" fontWeight={800} color="success.main">{formatCurrency(entry.netPay)}</Typography>
+                          <Typography variant="h6" fontWeight={800} color="success.main" noWrap>{formatCurrency(entry.netPay)}</Typography>
                         </Box>
                         
                         <Box sx={{ display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 0.5 }}>

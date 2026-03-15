@@ -663,9 +663,9 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-[850px] max-h-[90vh] p-0 overflow-hidden bg-white text-black">
+      <DialogContent className="sm:max-w-[850px] max-h-[90vh] p-0 overflow-hidden bg-white text-black border-0 rounded-xl">
         <style>{payslipStyles}</style>
-        <ScrollArea className="max-h-[85vh]">
+        <ScrollArea className="max-h-[85vh] w-full" style={{ background: '#f8f8f8' }}>
           <div className="payslip-preview-container">
             
             {/* Header Section */}
