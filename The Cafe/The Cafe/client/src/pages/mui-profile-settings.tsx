@@ -177,7 +177,7 @@ export default function MuiProfileSettings() {
 
   return (
     <Box sx={{ minHeight: '100%', position: 'relative' }}>
-      <Container maxWidth="lg" sx={{ pt: { xs: 2, md: 4 }, pb: 8, px: { xs: 2, md: 3 }, position: 'relative', zIndex: 10 }}>
+      <Container maxWidth={false} sx={{ pt: { xs: 2, md: 4 }, pb: 8, px: { xs: 2, md: 4, xl: 6 }, position: 'relative', zIndex: 10 }}>
         <Box sx={{ mb: 4 }}>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 1, letterSpacing: '-0.02em', color: "text.primary" }}>
             Account Settings
@@ -190,7 +190,7 @@ export default function MuiProfileSettings() {
         <Grid container spacing={4}>
           
           {/* Left Column: User Profile Card */}
-          <Grid size={{ xs: 12, md: 4, lg: 3.5 }}>
+          <Grid size={{ xs: 12, md: 4, lg: 3 }}>
             <Paper 
               elevation={0}
               sx={{ 
