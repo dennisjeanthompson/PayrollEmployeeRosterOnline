@@ -505,7 +505,7 @@ export default function ScheduleV2() {
               variant={viewMode === 'week' ? 'contained' : 'outlined'}
               onClick={() => setViewMode('week')}
               startIcon={isMobile ? undefined : <WeekIcon />}
-              sx={{ textTransform: 'none', fontWeight: 600, minWidth: isMobile ? 40 : auto, px: isMobile ? 1 : 2 }}
+              sx={{ textTransform: 'none', fontWeight: 600, minWidth: isMobile ? 40 : 'auto', px: isMobile ? 1 : 2 }}
             >
               {isMobile ? <WeekIcon fontSize="small" /> : 'Week'}
             </Button>
@@ -513,7 +513,7 @@ export default function ScheduleV2() {
               variant={viewMode === 'day' ? 'contained' : 'outlined'}
               onClick={() => setViewMode('day')}
               startIcon={isMobile ? undefined : <DayIcon />}
-              sx={{ textTransform: 'none', fontWeight: 600, minWidth: isMobile ? 40 : auto, px: isMobile ? 1 : 2 }}
+              sx={{ textTransform: 'none', fontWeight: 600, minWidth: isMobile ? 40 : 'auto', px: isMobile ? 1 : 2 }}
             >
               {isMobile ? <DayIcon fontSize="small" /> : 'Day'}
             </Button>
