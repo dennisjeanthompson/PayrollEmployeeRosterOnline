@@ -783,121 +783,105 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   return (
     <Box sx={{ pb: 10, bgcolor: 'background.default', minHeight: '100vh' }}>
 
-      {/* ── HERO HEADER ───────────────────────────────────── */}
-      <Box
-        sx={{
-          background: isDark
-            ? `linear-gradient(160deg, #3B1F0A 0%, #1A110A 100%)`
-            : `linear-gradient(160deg, ${primaryColor} 0%, ${theme.palette.primary.dark} 100%)`,
-          px: 3,
-          pt: 3,
-          pb: 8,
-          position: 'relative',
-          overflow: 'hidden',
-        }}
-      >
-        <Box sx={{ position: 'absolute', top: -50, right: -50, width: 160, height: 160, borderRadius: '50%', bgcolor: alpha('#fff', 0.05) }} />
-        <Box sx={{ position: 'absolute', bottom: 10, left: -30, width: 120, height: 120, borderRadius: '50%', bgcolor: alpha('#fff', 0.03) }} />
-
-        <Stack direction="row" justifyContent="space-between" alignItems="flex-start">
-          <Box>
-            <Typography variant="caption" sx={{ color: alpha('#fff', isDark ? 0.5 : 0.75), textTransform: 'uppercase', letterSpacing: 1, fontWeight: 600 }}>
-              {format(new Date(), 'EEEE, MMM d')}
-            </Typography>
-            <Typography variant="h5" sx={{ fontWeight: 800, color: isDark ? theme.palette.primary.light : '#fff', mt: 0.25 }}>
-              Hi, {currentUser?.firstName || 'Employee'} 👋
-            </Typography>
-            <Typography variant="body2" sx={{ color: alpha('#fff', isDark ? 0.5 : 0.75), mt: 0.25 }}>
-              {currentUser?.position || currentUser?.role || 'Team Member'}
-            </Typography>
-          </Box>
-          <Chip
-            size="small"
-            label="● Online"
-            sx={{
-              bgcolor: alpha('#4ade80', 0.2),
-              color: '#4ade80',
-              fontWeight: 700,
-              fontSize: '0.65rem',
-              border: '1px solid rgba(74,222,128,0.3)',
-            }}
-          />
-        </Stack>
-      </Box>
-
-      {/* ── PAYROLL SUMMARY CARD (overlapping hero) ─────── */}
-      <Box sx={{ px: 2, mt: -5 }}>
+      {/* ── GREETING + PAYROLL CARD (top of page, no overlap) ─── */}
+      <Box sx={{ px: 2, pt: 2 }}>
         <Paper
-          elevation={6}
+          elevation={3}
           sx={{
             borderRadius: 3,
             overflow: 'hidden',
-            background: isDark
-              ? `linear-gradient(135deg, ${alpha(primaryColor, 0.15)} 0%, ${theme.palette.background.paper} 100%)`
-              : theme.palette.background.paper,
-            border: `1px solid ${alpha(primaryColor, 0.15)}`,
+            border: `1px solid ${alpha(primaryColor, 0.2)}`,
           }}
         >
-          {/* Pay period info header */}
-          <Box sx={{ px: 2.5, pt: 2, pb: 1.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
+          {/* Greeting header with gradient */}
+          <Box
+            sx={{
+              background: isDark
+                ? `linear-gradient(135deg, #3B1F0A 0%, #2A1608 100%)`
+                : `linear-gradient(135deg, ${primaryColor} 0%, ${theme.palette.primary.dark} 100%)`,
+              px: 2.5,
+              pt: 2,
+              pb: 2,
+              position: 'relative',
+              overflow: 'hidden',
+            }}
+          >
+            <Box sx={{ position: 'absolute', top: -30, right: -30, width: 100, height: 100, borderRadius: '50%', bgcolor: alpha('#fff', 0.05) }} />
+            <Stack direction="row" justifyContent="space-between" alignItems="center">
+              <Box>
+                <Typography variant="caption" sx={{ color: alpha('#fff', 0.7), fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                  {format(new Date(), 'EEEE, MMM d')}
+                </Typography>
+                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>
+                  Hi, {currentUser?.firstName || 'Employee'} 👋
+                </Typography>
+                <Typography variant="caption" sx={{ color: alpha('#fff', 0.7) }}>
+                  {currentUser?.position || currentUser?.role || 'Team Member'}
+                </Typography>
+              </Box>
+              <Chip
+                size="small"
+                label="● Online"
+                sx={{ bgcolor: alpha('#4ade80', 0.2), color: '#4ade80', fontWeight: 700, fontSize: '0.6rem', border: '1px solid rgba(74,222,128,0.3)' }}
+              />
+            </Stack>
+          </Box>
+
+          {/* Pay period label */}
+          <Box sx={{ px: 2.5, pt: 1.5, pb: 1, borderBottom: `1px solid ${theme.palette.divider}` }}>
             <Stack direction="row" justifyContent="space-between" alignItems="center">
               <Box>
                 <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
                   Current Pay Period
                 </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700, mt: 0.25 }}>
+                <Typography variant="body2" sx={{ fontWeight: 700 }}>
                   {currentPeriod
                     ? `${format(new Date(currentPeriod.startDate), 'MMM d')} – ${format(new Date(currentPeriod.endDate), 'MMM d, yyyy')}`
                     : 'This Pay Period'}
                 </Typography>
               </Box>
-              <Chip
-                size="small"
-                label="In Progress"
-                color="primary"
-                variant="outlined"
-                sx={{ fontWeight: 700, fontSize: '0.65rem', height: 22 }}
-              />
+              <Chip size="small" label="Active" color="primary" variant="outlined" sx={{ fontWeight: 700, fontSize: '0.6rem', height: 20 }} />
             </Stack>
           </Box>
 
           {/* Stats row */}
-          <Stack direction="row" divider={<Divider orientation="vertical" flexItem />} sx={{ px: 0 }}>
-            <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Hours Worked</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main' }}>
-                {hoursWorked ? `${Number(hoursWorked).toFixed(0)}h` : '--'}
+          <Stack direction="row" divider={<Divider orientation="vertical" flexItem />}>
+            <Box sx={{ flex: 1, textAlign: 'center', py: 1.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Hours</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main', lineHeight: 1.3 }}>
+                {hoursWorked ? `${Number(hoursWorked).toFixed(0)}h` : `${totalHoursThisWeek.toFixed(0)}h`}
               </Typography>
             </Box>
-            <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Est. Net Pay</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: 'success.main' }}>
-                {netPay != null ? `₱${Number(netPay).toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}` : '--'}
+            <Box sx={{ flex: 1, textAlign: 'center', py: 1.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Est. Net Pay</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: 'success.main', lineHeight: 1.3 }}>
+                {netPay != null ? `₱${Number(netPay).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : '--'}
               </Typography>
             </Box>
-            <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Shifts</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: 'info.main' }}>
-                {todayShifts.length > 0 ? todayShifts.length : employeeShifts?.shifts?.length || 0}
+            <Box sx={{ flex: 1, textAlign: 'center', py: 1.5 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Shifts</Typography>
+              <Typography variant="h6" sx={{ fontWeight: 800, color: 'info.main', lineHeight: 1.3 }}>
+                {employeeShifts?.shifts?.length || 0}
               </Typography>
             </Box>
           </Stack>
 
           {/* View payslip button */}
-          <Box sx={{ px: 2.5, pb: 2 }}>
+          <Box sx={{ px: 2, pb: 2, pt: 0.5 }}>
             <Button
               fullWidth
               variant="contained"
               onClick={() => setLocation('/employee/payroll')}
               size="small"
               startIcon={<DollarIcon />}
-              sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+              sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2, py: 1 }}
             >
               View Payslips & History
             </Button>
           </Box>
         </Paper>
       </Box>
+
 
       {/* ── QUICK ACTIONS ────────────────────────────────── */}
       <Box sx={{ px: 2, mt: 2 }}>
