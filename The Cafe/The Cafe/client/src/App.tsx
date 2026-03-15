@@ -206,11 +206,7 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
   const { isAuthenticated, user } = authState;
 
   if (!isAuthenticated) {
-    return (
-      <RouteLoader>
-        <MuiLogin />
-      </RouteLoader>
-    );
+    return <Redirect to="/login" />;
   }
 
   if (!user) {
@@ -441,13 +437,8 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
   const { isAuthenticated, user } = authState;
 
   // Defensive redirect: if not authenticated, send user to login immediately
-  // If not authenticated, show the login route (avoid premature null return)
   if (!isAuthenticated) {
-    return (
-      <RouteLoader>
-        <MuiLogin />
-      </RouteLoader>
-    );
+    return <Redirect to="/login" />;
   }
 
   if (user?.role === "manager" || user?.role === "admin") {
@@ -628,6 +619,17 @@ function App() {
           <TooltipProvider>
             <Toaster />
             <Switch>
+              {/* Login page - always accessible, redirects to home if already logged in */}
+              <Route path="/login">
+                <RouteLoader>
+                  {authState.isAuthenticated
+                    ? (authState.user?.role === 'employee'
+                        ? <Redirect to="/employee/dashboard" />
+                        : <Redirect to="/" />)
+                    : <MuiLogin />}
+                </RouteLoader>
+              </Route>
+
               {/* Convenience redirect: legacy route */}
               <Route path="/employee/mobile">
                 <Redirect to="/employee/dashboard" />

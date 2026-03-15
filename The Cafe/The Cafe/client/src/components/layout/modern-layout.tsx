@@ -61,7 +61,7 @@ export default function ModernLayout({ children }: ModernLayoutProps) {
 
   const handleLogout = async () => {
     await logout();
-    navigate("/login");
+    window.location.replace("/login");
   };
 
   const handleNavigation = (path: string) => {

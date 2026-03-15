@@ -108,15 +108,11 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
   const handleLogout = async () => {
     try {
       await apiRequest("POST", "/api/auth/logout");
-      toast({
-        title: "Logged out",
-        description: "You have been successfully logged out",
-      });
     } catch (error) {
       console.error("Logout error:", error);
     } finally {
       setAuthState({ user: null, isAuthenticated: false });
-      setLocation("/");
+      window.location.replace("/login");
     }
   };
 

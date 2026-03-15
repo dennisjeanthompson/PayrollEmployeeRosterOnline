@@ -292,13 +292,12 @@ export default function MuiProfileSettings() {
                 onClick={async () => {
                   try {
                     const { logout } = await import("@/lib/auth");
-                    const { useLocation } = await import("wouter");
-                    // Using wouter hook conditionally isn't allowed so we need to trigger it nicely
-                    // Actually, let's just use window.location for a clean full state reset on logout
                     await logout();
-                    window.location.href = "/login";
+                    // Replace so the user can't press back to a protected page
+                    window.location.replace("/login");
                   } catch (err) {
                     console.error("Logout failed", err);
+                    window.location.replace("/login");
                   }
                 }}
                 sx={{ 
