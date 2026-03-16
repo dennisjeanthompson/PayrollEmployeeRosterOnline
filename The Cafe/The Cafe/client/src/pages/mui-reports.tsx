@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { apiUrl } from "@/lib/api";
 import {
   Box,
   Card,
@@ -62,7 +63,7 @@ export default function MuiReports() {
           ? `/api/reports/deductions/export?periodId=${periods[0].id}`
           : "/api/reports/payroll/export";
       
-      window.open(url, "_blank");
+      window.open(apiUrl(url), "_blank");
     } finally {
       setTimeout(() => setExporting(null), 1000);
     }

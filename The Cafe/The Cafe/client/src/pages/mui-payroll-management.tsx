@@ -65,6 +65,7 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { format, subDays, addDays, startOfMonth, endOfMonth, differenceInDays } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
+import { apiUrl } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { PayslipPreview as DigitalPayslip } from "@/components/payroll/payslip-preview";
@@ -152,6 +153,19 @@ export default function MuiPayrollManagement() {
   const handleViewPayslip = (entry: PayrollEntry) => {
     setSelectedEntryForPayslip(entry);
     setPayslipViewerOpen(true);
+  };
+
+  const [exporting, setExporting] = useState(false);
+  const handleExport = async () => {
+    if (!selectedPeriod) return;
+    setExporting(true);
+    try {
+      const url = `/api/reports/payroll/export?periodId=${selectedPeriod.id}`;
+      // Use apiUrl to ensure we hit the backend on Render instead of Vercel
+      window.open(apiUrl(url), "_blank");
+    } finally {
+      setTimeout(() => setExporting(false), 1000);
+    }
   };
 
   // Get the current semi-monthly period dates (Philippine standard: 1-15, 16-end)
@@ -961,8 +975,14 @@ export default function MuiPayrollManagement() {
                     {entries.length} employees
                   </Typography>
                 </Box>
-                <Button startIcon={<Download />} size="small" sx={{ textTransform: "none" }}>
-                  Export
+                <Button 
+                  startIcon={exporting ? <CircularProgress size={16} color="inherit" /> : <Download />} 
+                  size="small" 
+                  onClick={handleExport}
+                  disabled={exporting || entries.length === 0}
+                  sx={{ textTransform: "none" }}
+                >
+                  {exporting ? "Exporting..." : "Export"}
                 </Button>
               </Box>
 
