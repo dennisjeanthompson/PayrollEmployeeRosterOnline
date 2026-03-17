@@ -1,6 +1,15 @@
 /**
  * Reports Export Routes
- * CSV/Excel export for payroll and employee data
+ * CSV export for payroll and employee data — Philippine DOLE/BIR compliant
+ *
+ * Key design decisions:
+ * - UTF-8 BOM prepended so ₱ renders correctly in MS Excel and WPS Office
+ * - Monetary values are rounded to 2dp using Math.round to avoid floating-point
+ *   artifacts (e.g. 1407.6259999…)
+ * - Peso symbol NOT placed in column headers (encoding issues in some readers);
+ *   instead a note is added in the title rows
+ * - Period metadata block prepended to payroll/deductions CSVs so the file is
+ *   self-describing when opened standalone
  */
 
 import { Router, Request, Response } from "express";
@@ -10,16 +19,14 @@ import { createAuditLog } from "./audit";
 
 const router = Router();
 
-// Middleware to check if user is authenticated
+// ─── Auth helpers ──────────────────────────────────────────────────────────
+
 const requireAuth = (req: Request, res: Response, next: Function) => {
-  if (!req.session?.user) {
-    return res.status(401).json({ message: "Not authenticated" });
-  }
+  if (!req.session?.user) return res.status(401).json({ message: "Not authenticated" });
   req.user = req.session.user;
   next();
 };
 
-// Middleware to check manager/admin role
 const requireManagerRole = (req: Request, res: Response, next: Function) => {
   if (req.user?.role !== "manager" && req.user?.role !== "admin") {
     return res.status(403).json({ message: "Insufficient permissions" });
@@ -27,66 +34,74 @@ const requireManagerRole = (req: Request, res: Response, next: Function) => {
   next();
 };
 
-// Helper to escape CSV values
+// ─── CSV helpers ────────────────────────────────────────────────────────────
+
+/** Escape a single CSV field value */
 const escapeCSV = (value: any): string => {
   if (value === null || value === undefined) return "";
   let str = String(value);
-  // Neutralize formula injection for Excel/Sheets
-  if (/^[=+\-@\t\r]/.test(str)) {
-    str = "'" + str;
-  }
-  if (str.includes(",") || str.includes('"') || str.includes("\n") || str.includes("'")) {
+  // Neutralize formula injection
+  if (/^[=+\-@\t\r]/.test(str)) str = "'" + str;
+  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
     return `"${str.replace(/"/g, '""')}"`;
   }
   return str;
 };
 
-// Helper to generate CSV from array of objects
-interface ColumnDef { key: string; header: string; isCurrency?: boolean }
-
-const generateCSV = (data: any[], columns: ColumnDef[]): string => {
-  const headers = columns.map(c => c.header).join(",");
-  const rows = data.map(row => 
-    columns.map(c => {
-      let val = row[c.key];
-      if (c.isCurrency && val !== null && val !== undefined && val !== "" && !isNaN(Number(val))) {
-        val = `₱ ${Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      }
-      return escapeCSV(val);
-    }).join(",")
-  );
-  return [headers, ...rows].join("\n");
+/**
+ * Format a monetary value as Philippine Peso.
+ * Uses Math.round to eliminate floating-point artifacts.
+ * Returns a plain string like "₱1,407.63" — suitable for CSV cells.
+ */
+const peso = (value: any): string => {
+  if (value === null || value === undefined || value === "") return "₱0.00";
+  const n = typeof value === "string" ? parseFloat(value) : Number(value);
+  if (isNaN(n)) return "₱0.00";
+  const rounded = Math.round(n * 100) / 100;
+  return "₱" + rounded.toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 };
 
-// GET /api/reports/payroll/export - Export payroll data as CSV
+/** Build a CSV row from an array of values */
+const row = (...cells: any[]) => cells.map(escapeCSV).join(",");
+
+/** Build a CSV from header row + data rows (all pre-built strings) */
+const buildCSV = (sections: string[]): string => {
+  // Prepend UTF-8 BOM so Excel/WPS recognises ₱ correctly
+  return "\uFEFF" + sections.join("\n");
+};
+
+// ─── Payroll Summary Export ─────────────────────────────────────────────────
+
 router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const { periodId, startDate, endDate } = req.query;
     const branchId = req.user!.branchId;
 
     let entries: any[] = [];
+    let periodLabel = "All Periods";
+    let periodRange = "";
 
     if (periodId) {
-      // Verify the period belongs to the manager's branch
       const period = await storage.getPayrollPeriod(periodId as string);
       if (!period || period.branchId !== branchId) {
         return res.status(403).json({ message: "Payroll period not found or access denied" });
       }
       entries = await storage.getPayrollEntriesByPeriod(periodId as string);
+      periodLabel = `${format(new Date(period.startDate), "MMM d yyyy")} – ${format(new Date(period.endDate), "MMM d yyyy")}`;
+      periodRange = `${format(new Date(period.startDate), "yyyy-MM-dd")} to ${format(new Date(period.endDate), "yyyy-MM-dd")}`;
     } else if (startDate && endDate) {
-      // Get entries for date range
       const start = new Date(startDate as string);
       const end = new Date(endDate as string);
       if (isNaN(start.getTime()) || isNaN(end.getTime())) {
         return res.status(400).json({ message: "Invalid date format" });
       }
-      entries = await storage.getPayrollEntriesForDateRange(
-        branchId,
-        start,
-        end
-      );
+      entries = await storage.getPayrollEntriesForDateRange(branchId, start, end);
+      periodRange = `${format(start, "yyyy-MM-dd")} to ${format(end, "yyyy-MM-dd")}`;
+      periodLabel = `${format(start, "MMM d yyyy")} – ${format(end, "MMM d yyyy")}`;
     } else {
-      // Get all entries for branch
       const periods = await storage.getPayrollPeriodsByBranch(branchId);
       for (const period of periods) {
         const periodEntries = await storage.getPayrollEntriesByPeriod(period.id);
@@ -94,60 +109,108 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
       }
     }
 
-    // Enrich with employee names
-    const enrichedEntries = await Promise.all(
-      entries.map(async (entry) => {
-        const user = await storage.getUser(entry.userId);
-        return {
-          ...entry,
-          employeeName: user ? `${user.firstName} ${user.lastName}` : "Unknown",
-          employeeId: user?.id || entry.userId,
-          position: user?.position || "N/A",
-        };
+    // Enrich with employee data
+    const enriched = await Promise.all(
+      entries.map(async (e) => {
+        const user = await storage.getUser(e.userId);
+        return { e, user };
       })
     );
 
-    const columns: ColumnDef[] = [
-      { key: "employeeName", header: "Employee Name" },
-      { key: "employeeId", header: "Employee ID" },
-      { key: "position", header: "Position" },
-      { key: "totalHours", header: "Total Hours" },
-      { key: "regularHours", header: "Regular Hours" },
-      { key: "overtimeHours", header: "Overtime Hours" },
-      { key: "nightDiffHours", header: "Night Diff Hours" },
-      { key: "basicPay", header: "Basic Pay", isCurrency: true },
-      { key: "overtimePay", header: "Overtime Pay", isCurrency: true },
-      { key: "nightDiffPay", header: "Night Diff Pay", isCurrency: true },
-      { key: "holidayPay", header: "Holiday Pay", isCurrency: true },
-      { key: "restDayPay", header: "Rest Day Pay", isCurrency: true },
-      { key: "grossPay", header: "Gross Pay", isCurrency: true },
-      { key: "sssContribution", header: "SSS Contribution", isCurrency: true },
-      { key: "sssLoan", header: "SSS Loan", isCurrency: true },
-      { key: "philHealthContribution", header: "PhilHealth Contribution", isCurrency: true },
-      { key: "pagibigContribution", header: "Pag-IBIG Contribution", isCurrency: true },
-      { key: "pagibigLoan", header: "Pag-IBIG Loan", isCurrency: true },
-      { key: "withholdingTax", header: "Withholding Tax", isCurrency: true },
-      { key: "advances", header: "Cash Advances", isCurrency: true },
-      { key: "otherDeductions", header: "Other Deductions", isCurrency: true },
-      { key: "totalDeductions", header: "Total Deductions", isCurrency: true },
-      { key: "netPay", header: "Net Pay", isCurrency: true },
-      { key: "status", header: "Status" },
+    const exportedAt = format(new Date(), "MMMM d yyyy HH:mm");
+
+    // ── Title / metadata block ──
+    const meta = [
+      row("THE CAFE PAYROLL SYSTEM — PAYROLL SUMMARY EXPORT"),
+      row("All monetary values are in Philippine Peso (PHP)"),
+      row(`Period:`, periodLabel),
+      row(`Generated:`, exportedAt),
+      row(`Total Records:`, String(enriched.length)),
+      "",
     ];
 
-    const csv = generateCSV(enrichedEntries, columns);
+    // ── Column header ──
+    const headers = row(
+      "Employee Name",
+      "Employee ID",
+      "Position",
+      "Regular Hours",
+      "Overtime Hours",
+      "Night Diff Hours",
+      "Total Hours",
+      "Basic Pay (PHP)",
+      "Overtime Pay (PHP)",
+      "Night Diff Pay (PHP)",
+      "Holiday Pay (PHP)",
+      "Rest Day Pay (PHP)",
+      "Gross Pay (PHP)",
+      "SSS Contribution (PHP)",
+      "SSS Loan (PHP)",
+      "PhilHealth Contribution (PHP)",
+      "Pag-IBIG Contribution (PHP)",
+      "Pag-IBIG Loan (PHP)",
+      "Withholding Tax (PHP)",
+      "Cash Advances (PHP)",
+      "Other Deductions (PHP)",
+      "Total Deductions (PHP)",
+      "Net Pay (PHP)",
+      "Status",
+    );
+
+    // ── Data rows ──
+    const dataRows = enriched.map(({ e, user }) =>
+      row(
+        user ? `${user.firstName} ${user.lastName}` : "Unknown",
+        user?.id || e.userId,
+        user?.position || "N/A",
+        e.regularHours ?? 0,
+        e.overtimeHours ?? 0,
+        e.nightDiffHours ?? 0,
+        e.totalHours ?? 0,
+        peso(e.basicPay),
+        peso(e.overtimePay),
+        peso(e.nightDiffPay),
+        peso(e.holidayPay),
+        peso(e.restDayPay),
+        peso(e.grossPay),
+        peso(e.sssContribution),
+        peso(e.sssLoan),
+        peso(e.philHealthContribution),
+        peso(e.pagibigContribution),
+        peso(e.pagibigLoan),
+        peso(e.withholdingTax),
+        peso(e.advances),
+        peso(e.otherDeductions),
+        peso(e.totalDeductions),
+        peso(e.netPay),
+        (e.status || "").toUpperCase(),
+      )
+    );
+
+    // ── Summary totals ──
+    const totalGross = enriched.reduce((s, { e }) => s + (parseFloat(String(e.grossPay)) || 0), 0);
+    const totalNet = enriched.reduce((s, { e }) => s + (parseFloat(String(e.netPay)) || 0), 0);
+    const totalDeductions = enriched.reduce((s, { e }) => s + (parseFloat(String(e.totalDeductions)) || 0), 0);
+    const totalHours = enriched.reduce((s, { e }) => s + (parseFloat(String(e.totalHours)) || 0), 0);
+
+    const summaryRows = [
+      "",
+      row("TOTALS", "", "", "", "", "", totalHours.toFixed(2), "", "", "", "", "", peso(totalGross), "", "", "", "", "", "", "", "", peso(totalDeductions), peso(totalNet), ""),
+    ];
+
+    const csv = buildCSV([...meta, headers, ...dataRows, ...summaryRows]);
     const filename = `payroll_export_${format(new Date(), "yyyy-MM-dd_HHmmss")}.csv`;
 
-    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(csv);
 
-    // Audit trail for payroll export
     await createAuditLog({
-      action: 'export_payroll',
-      entityType: 'payroll_report',
-      entityId: (periodId as string) || 'all',
+      action: "export_payroll",
+      entityType: "payroll_report",
+      entityId: (periodId as string) || "all",
       userId: req.user!.id,
-      newValues: { entriesExported: enrichedEntries.length, filename },
+      newValues: { entriesExported: enriched.length, filename, periodRange },
       ipAddress: req.ip || req.socket?.remoteAddress,
       userAgent: req.headers["user-agent"],
     });
@@ -157,50 +220,77 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
   }
 });
 
-// GET /api/reports/employees/export - Export employee data as CSV
+// ─── Employee List Export ────────────────────────────────────────────────────
+
 router.get("/api/reports/employees/export", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const branchId = req.user!.branchId;
     const { includeInactive } = req.query;
 
     let employees = await storage.getUsersByBranch(branchId);
-
     if (!includeInactive || includeInactive === "false") {
-      employees = employees.filter(e => e.isActive);
+      employees = employees.filter((e) => e.isActive);
     }
 
-    const columns: ColumnDef[] = [
-      { key: "id", header: "Employee ID" },
-      { key: "firstName", header: "First Name" },
-      { key: "lastName", header: "Last Name" },
-      { key: "email", header: "Email" },
-      { key: "position", header: "Position" },
-      { key: "hourlyRate", header: "Hourly Rate", isCurrency: true },
-      { key: "role", header: "Role" },
-      { key: "isActive", header: "Active" },
-      { key: "createdAt", header: "Hire Date" },
+    // Exclude the admin / system accounts from the export
+    const exportEmployees = employees.filter((e) => e.role !== "admin");
+
+    const exportedAt = format(new Date(), "MMMM d yyyy HH:mm");
+
+    const meta = [
+      row("THE CAFE PAYROLL SYSTEM — EMPLOYEE LIST EXPORT"),
+      row(`Generated:`, exportedAt),
+      row(`Total Employees:`, String(exportEmployees.length)),
+      "",
     ];
 
-    const formattedEmployees = employees.map(e => ({
-      ...e,
-      isActive: e.isActive ? "Yes" : "No",
-      createdAt: e.createdAt ? format(new Date(e.createdAt), "yyyy-MM-dd") : "N/A",
-    }));
+    const headers = row(
+      "Employee Name",
+      "First Name",
+      "Last Name",
+      "Email",
+      "Position",
+      "Role",
+      "Hourly Rate (PHP)",
+      "Employment Status",
+      "Hire Date",
+      "TIN",
+      "SSS Number",
+      "PhilHealth Number",
+      "Pag-IBIG Number",
+    );
 
-    const csv = generateCSV(formattedEmployees, columns);
+    const dataRows = exportEmployees.map((e) =>
+      row(
+        `${e.firstName} ${e.lastName}`,
+        e.firstName,
+        e.lastName,
+        e.email || "",
+        e.position || "",
+        e.role || "employee",
+        peso(e.hourlyRate),
+        e.isActive ? "Active" : "Inactive",
+        e.createdAt ? format(new Date(e.createdAt), "MMM d yyyy") : "N/A",
+        (e as any).tinNumber || "",
+        (e as any).sssNumber || "",
+        (e as any).philHealthNumber || "",
+        (e as any).pagIbigNumber || "",
+      )
+    );
+
+    const csv = buildCSV([...meta, headers, ...dataRows]);
     const filename = `employees_export_${format(new Date(), "yyyy-MM-dd_HHmmss")}.csv`;
 
-    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(csv);
 
-    // Audit trail for employee export
     await createAuditLog({
-      action: 'export_employees',
-      entityType: 'employee_report',
+      action: "export_employees",
+      entityType: "employee_report",
       entityId: branchId,
       userId: req.user!.id,
-      newValues: { employeesExported: formattedEmployees.length, filename },
+      newValues: { employeesExported: exportEmployees.length, filename },
       ipAddress: req.ip || req.socket?.remoteAddress,
       userAgent: req.headers["user-agent"],
     });
@@ -210,16 +300,13 @@ router.get("/api/reports/employees/export", requireAuth, requireManagerRole, asy
   }
 });
 
-// GET /api/reports/deductions/export - Export deduction summary as CSV
+// ─── Deductions Summary Export ───────────────────────────────────────────────
+
 router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const { periodId } = req.query;
-    
-    if (!periodId) {
-      return res.status(400).json({ message: "Period ID is required" });
-    }
+    if (!periodId) return res.status(400).json({ message: "Period ID is required" });
 
-    // Verify the period belongs to the manager's branch
     const branchId = req.user!.branchId;
     const period = await storage.getPayrollPeriod(periodId as string);
     if (!period || period.branchId !== branchId) {
@@ -228,51 +315,87 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
 
     const entries = await storage.getPayrollEntriesByPeriod(periodId as string);
 
-    const enrichedEntries = await Promise.all(
-      entries.map(async (entry) => {
-        const user = await storage.getUser(entry.userId);
-        return {
-          employeeName: user ? `${user.firstName} ${user.lastName}` : "Unknown",
-          sssContribution: entry.sssContribution,
-          sssLoan: entry.sssLoan,
-          philHealthContribution: entry.philHealthContribution,
-          pagibigContribution: entry.pagibigContribution,
-          pagibigLoan: entry.pagibigLoan,
-          withholdingTax: entry.withholdingTax,
-          advances: entry.advances,
-          otherDeductions: entry.otherDeductions,
-          totalDeductions: entry.totalDeductions,
-        };
+    const enriched = await Promise.all(
+      entries.map(async (e) => {
+        const user = await storage.getUser(e.userId);
+        return { e, user };
       })
     );
 
-    const columns: ColumnDef[] = [
-      { key: "employeeName", header: "Employee Name" },
-      { key: "sssContribution", header: "SSS Contribution", isCurrency: true },
-      { key: "sssLoan", header: "SSS Loan", isCurrency: true },
-      { key: "philHealthContribution", header: "PhilHealth Contribution", isCurrency: true },
-      { key: "pagibigContribution", header: "Pag-IBIG Contribution", isCurrency: true },
-      { key: "pagibigLoan", header: "Pag-IBIG Loan", isCurrency: true },
-      { key: "withholdingTax", header: "Withholding Tax", isCurrency: true },
-      { key: "advances", header: "Cash Advances", isCurrency: true },
-      { key: "otherDeductions", header: "Other Deductions", isCurrency: true },
-      { key: "totalDeductions", header: "Total Deductions", isCurrency: true },
+    const periodLabel = `${format(new Date(period.startDate), "MMM d yyyy")} – ${format(new Date(period.endDate), "MMM d yyyy")}`;
+    const exportedAt = format(new Date(), "MMMM d yyyy HH:mm");
+
+    const meta = [
+      row("THE CAFE PAYROLL SYSTEM — DEDUCTIONS SUMMARY EXPORT"),
+      row("All amounts are in Philippine Peso (PHP). DOLE Order 174 Compliant."),
+      row(`Period:`, periodLabel),
+      row(`Generated:`, exportedAt),
+      row(`Total Employees:`, String(enriched.length)),
+      "",
     ];
 
-    const csv = generateCSV(enrichedEntries, columns);
+    const headers = row(
+      "Employee Name",
+      "Position",
+      "SSS Contribution (PHP)",
+      "SSS Loan (PHP)",
+      "PhilHealth (PHP)",
+      "Pag-IBIG Contribution (PHP)",
+      "Pag-IBIG Loan (PHP)",
+      "Withholding Tax (PHP)",
+      "Cash Advances (PHP)",
+      "Other Deductions (PHP)",
+      "Total Deductions (PHP)",
+    );
+
+    const dataRows = enriched.map(({ e, user }) =>
+      row(
+        user ? `${user.firstName} ${user.lastName}` : "Unknown",
+        user?.position || "N/A",
+        peso(e.sssContribution),
+        peso(e.sssLoan),
+        peso(e.philHealthContribution),
+        peso(e.pagibigContribution),
+        peso(e.pagibigLoan),
+        peso(e.withholdingTax),
+        peso(e.advances),
+        peso(e.otherDeductions),
+        peso(e.totalDeductions),
+      )
+    );
+
+    // Totals row
+    const totalSSS = enriched.reduce((s, { e }) => s + (parseFloat(String(e.sssContribution)) || 0), 0);
+    const totalPhilHealth = enriched.reduce((s, { e }) => s + (parseFloat(String(e.philHealthContribution)) || 0), 0);
+    const totalPagibig = enriched.reduce((s, { e }) => s + (parseFloat(String(e.pagibigContribution)) || 0), 0);
+    const totalTax = enriched.reduce((s, { e }) => s + (parseFloat(String(e.withholdingTax)) || 0), 0);
+    const totalAdvances = enriched.reduce((s, { e }) => s + (parseFloat(String(e.advances)) || 0), 0);
+    const totalOther = enriched.reduce((s, { e }) => s + (parseFloat(String(e.otherDeductions)) || 0), 0);
+    const totalDeductions = enriched.reduce((s, { e }) => s + (parseFloat(String(e.totalDeductions)) || 0), 0);
+    const totalSSSLoan = enriched.reduce((s, { e }) => s + (parseFloat(String(e.sssLoan)) || 0), 0);
+    const totalPagibigLoan = enriched.reduce((s, { e }) => s + (parseFloat(String(e.pagibigLoan)) || 0), 0);
+
+    const summaryRows = [
+      "",
+      row("TOTALS", "",
+        peso(totalSSS), peso(totalSSSLoan), peso(totalPhilHealth),
+        peso(totalPagibig), peso(totalPagibigLoan),
+        peso(totalTax), peso(totalAdvances), peso(totalOther), peso(totalDeductions)),
+    ];
+
+    const csv = buildCSV([...meta, headers, ...dataRows, ...summaryRows]);
     const filename = `deductions_export_${format(new Date(), "yyyy-MM-dd_HHmmss")}.csv`;
 
-    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.send(csv);
 
-    // Audit trail for deduction export
     await createAuditLog({
-      action: 'export_deductions',
-      entityType: 'deduction_report',
+      action: "export_deductions",
+      entityType: "deduction_report",
       entityId: periodId as string,
       userId: req.user!.id,
-      newValues: { entriesExported: enrichedEntries.length, filename },
+      newValues: { entriesExported: enriched.length, filename, periodLabel },
       ipAddress: req.ip || req.socket?.remoteAddress,
       userAgent: req.headers["user-agent"],
     });
@@ -282,7 +405,8 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
   }
 });
 
-// GET /api/reports/summary - Get summary statistics for dashboard
+// ─── Summary stats (for dashboard) ──────────────────────────────────────────
+
 router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const branchId = req.user!.branchId;
@@ -300,16 +424,12 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
     const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
 
     const employees = await storage.getUsersByBranch(branchId);
-    const activeEmployees = employees.filter(e => e.isActive);
+    const activeEmployees = employees.filter((e) => e.isActive);
 
-    // Pre-fetch all periods for the branch to filter by period dates (not createdAt)
     const allPeriods = await storage.getPayrollPeriodsByBranch(branchId);
-    const periodMap = new Map(allPeriods.map(p => [p.id, p]));
+    const periodMap = new Map(allPeriods.map((p) => [p.id, p]));
 
-    let totalGross = 0;
-    let totalDeductions = 0;
-    let totalNet = 0;
-    let totalHours = 0;
+    let totalGross = 0, totalDeductions = 0, totalNet = 0, totalHours = 0;
 
     for (const employee of activeEmployees) {
       const entries = await storage.getPayrollEntriesByUser(employee.id);
@@ -331,9 +451,9 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
       summary: {
         totalEmployees: employees.length,
         activeEmployees: activeEmployees.length,
-        totalGross: totalGross.toFixed(2),
-        totalDeductions: totalDeductions.toFixed(2),
-        totalNet: totalNet.toFixed(2),
+        totalGross: (Math.round(totalGross * 100) / 100).toFixed(2),
+        totalDeductions: (Math.round(totalDeductions * 100) / 100).toFixed(2),
+        totalNet: (Math.round(totalNet * 100) / 100).toFixed(2),
         totalHours: totalHours.toFixed(2),
         month: targetMonth + 1,
         year: targetYear,
