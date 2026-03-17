@@ -72,6 +72,7 @@ interface TimeOffRequest {
   requestedAt: string;
   approvedBy?: string;
   approvalDate?: string;
+  rejectionReason?: string;
 }
 
 const timeOffTypes = [
@@ -129,6 +130,10 @@ export default function MuiTimeOff() {
   const [editingRequest, setEditingRequest] = useState<TimeOffRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState<string>("");
   const [typeFilter, setTypeFilter] = useState<string>("");
+  // Manager reject-reason dialog state
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectingRequest, setRejectingRequest] = useState<TimeOffRequest | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
 
   const [formData, setFormData] = useState({
     type: "vacation",
@@ -222,12 +227,14 @@ export default function MuiTimeOff() {
     },
   });
 
-  // Approve/Reject (manager only)
+  // Approve (manager only)
   const approveMutation = useMutation({
-    mutationFn: async ({ requestId, status }: { requestId: string; status: string }) => {
-      const response = await apiRequest("PUT", `/api/time-off-requests/${requestId}/approve`, {
-        status,
-      });
+    mutationFn: async ({ requestId, status, rejectionReason }: { requestId: string; status: string; rejectionReason?: string }) => {
+      const endpoint = status === 'approved'
+        ? `/api/time-off-requests/${requestId}/approve`
+        : `/api/time-off-requests/${requestId}/reject`;
+      const body = status === 'rejected' ? { status, rejectionReason } : { status };
+      const response = await apiRequest("PUT", endpoint, body);
       return response.json();
     },
     onSuccess: () => {
@@ -658,8 +665,10 @@ export default function MuiTimeOff() {
                  <Button
                    color="error"
                    onClick={() => {
-                     approveMutation.mutate({ requestId: editingRequest.id, status: 'rejected' });
+                     setRejectingRequest(editingRequest);
+                     setRejectionReason('');
                      handleCloseDialog();
+                     setRejectDialogOpen(true);
                    }}
                  >
                    Reject
@@ -677,6 +686,59 @@ export default function MuiTimeOff() {
               {submitMutation.isPending ? "Submitting..." : (editingRequest ? "Update" : "Submit")}
             </Button>
           </Box>
+        </DialogActions>
+      </Dialog>
+      {/* Rejection Reason Dialog (Manager) */}
+      <Dialog
+        open={rejectDialogOpen}
+        onClose={() => setRejectDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: 'error.main', pb: 1 }}>
+          Reject Time-Off Request
+        </DialogTitle>
+        <DialogContent>
+          {rejectingRequest && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Rejecting <strong>{rejectingRequest.userName || 'employee'}</strong>'s {rejectingRequest.type} request
+              ({format(parseISO(rejectingRequest.startDate), 'MMM d')} – {format(parseISO(rejectingRequest.endDate), 'MMM d, yyyy')}).
+              Optionally state why.
+            </Typography>
+          )}
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            rows={3}
+            label="Reason for rejection (optional)"
+            placeholder="e.g. Insufficient staffing on that date. Please try another date."
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            inputProps={{ maxLength: 300 }}
+            helperText={`${rejectionReason.length}/300`}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={() => setRejectDialogOpen(false)} variant="outlined" sx={{ borderRadius: 2, textTransform: 'none' }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              if (rejectingRequest) {
+                approveMutation.mutate({ requestId: rejectingRequest.id, status: 'rejected', rejectionReason: rejectionReason.trim() || undefined });
+              }
+              setRejectDialogOpen(false);
+              setRejectingRequest(null);
+              setRejectionReason('');
+            }}
+            variant="contained"
+            color="error"
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+          >
+            Confirm Rejection
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>

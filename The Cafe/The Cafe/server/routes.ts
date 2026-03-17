@@ -3835,6 +3835,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/time-off-requests/:id/reject", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
+    const { rejectionReason } = req.body;
 
     const existing = await storage.getTimeOffRequest(id);
     if (!existing) {
@@ -3853,6 +3854,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const request = await storage.updateTimeOffRequest(id, {
       status: "rejected",
       approvedBy: req.user!.id,
+      rejectionReason: rejectionReason || null,
     });
 
     if (!request) {
@@ -3867,7 +3869,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.updateApproval(relatedApproval.id, {
           status: "rejected",
           approvedBy: req.user!.id,
-          reason: "Automatically rejected via time-off request rejection"
+          reason: rejectionReason || "Rejected via time-off request"
         });
       }
     } catch (syncError) {
@@ -3875,18 +3877,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Don't fail the main request if sync fails
     }
 
-    // Create notification for employee
+    // Create notification for employee with the reason included
+    const reasonNote = rejectionReason ? ` Reason: ${rejectionReason}` : '';
     const notification = await storage.createNotification({
       userId: request.userId,
       type: 'time_off_rejected',
       title: 'Time Off Request Rejected',
-      message: `Your time off request from ${format(new Date(request.startDate), "MMM d")} to ${format(new Date(request.endDate), "MMM d, yyyy")} has been rejected`,
+      message: `Your time off request from ${format(new Date(request.startDate), "MMM d")} to ${format(new Date(request.endDate), "MMM d, yyyy")} has been rejected.${reasonNote}`,
       isRead: false,
       data: JSON.stringify({
         status: 'rejected',
         startDate: format(new Date(request.startDate), "MMM d, yyyy"),
         endDate: format(new Date(request.endDate), "MMM d, yyyy"),
-        type: request.type
+        type: request.type,
+        rejectionReason: rejectionReason || null,
       })
     } as any);
     realTimeManager.broadcastNotification(notification);
@@ -3898,7 +3902,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       entityType: 'time_off_request',
       entityId: id,
       userId: req.user!.id,
-      newValues: { status: 'rejected', employeeId: request.userId, startDate: request.startDate, endDate: request.endDate, type: request.type },
+      newValues: { status: 'rejected', employeeId: request.userId, startDate: request.startDate, endDate: request.endDate, type: request.type, rejectionReason: rejectionReason || null },
       ipAddress: req.ip || req.socket?.remoteAddress,
       userAgent: req.headers["user-agent"],
     });

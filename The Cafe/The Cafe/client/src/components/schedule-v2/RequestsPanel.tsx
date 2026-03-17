@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   Box, Typography, Avatar, Chip, Button, Card, CardContent,
-  Divider, useTheme, Stack, IconButton,
+  Divider, useTheme, Stack, IconButton, Dialog, DialogTitle,
+  DialogContent, DialogActions, TextField,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -11,6 +12,7 @@ import {
   BeachAccess as TimeOffIcon,
   Schedule as ClockIcon,
   Delete as DeleteIcon,
+  Block as BlockIcon,
 } from '@mui/icons-material';
 import { format } from 'date-fns';
 import type { TimeOffRequest, ShiftTrade, Employee } from './types';
@@ -22,7 +24,7 @@ interface RequestsPanelProps {
   isManager: boolean;
   currentUserId: string;
   onApproveTimeOff: (id: string) => void;
-  onRejectTimeOff: (id: string) => void;
+  onRejectTimeOff: (id: string, reason: string) => void;
   onApproveTrade: (id: string) => void;
   onRejectTrade: (id: string) => void;
   onAcceptTrade: (id: string) => void;
@@ -76,6 +78,32 @@ export default function RequestsPanel({
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
 
+  // Rejection reason dialog state
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [rejectionReason, setRejectionReason] = useState('');
+
+  const handleOpenRejectDialog = (id: string) => {
+    setRejectingId(id);
+    setRejectionReason('');
+    setRejectDialogOpen(true);
+  };
+
+  const handleConfirmReject = () => {
+    if (rejectingId) {
+      onRejectTimeOff(rejectingId, rejectionReason.trim());
+    }
+    setRejectDialogOpen(false);
+    setRejectingId(null);
+    setRejectionReason('');
+  };
+
+  const handleCloseRejectDialog = () => {
+    setRejectDialogOpen(false);
+    setRejectingId(null);
+    setRejectionReason('');
+  };
+
   const pendingTimeOff = timeOffRequests.filter(r => r.status === 'pending');
   const pendingTrades = shiftTrades.filter(t => t.status === 'pending' || t.status === 'accepted');
   const recentResolved = [
@@ -87,237 +115,301 @@ export default function RequestsPanel({
     .slice(0, 5);
 
   return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-      {/* Pending Time-Off Requests */}
-      <Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-          <TimeOffIcon sx={{ fontSize: 20, color: '#F59E0B' }} />
-          <Typography variant="subtitle1" fontWeight={700}>
-            Time-Off Requests
-          </Typography>
-          {pendingTimeOff.length > 0 && (
-            <Chip label={pendingTimeOff.length} size="small" color="warning" sx={{ height: 22, fontWeight: 700 }} />
-          )}
-        </Box>
+    <>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+        {/* Pending Time-Off Requests */}
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+            <TimeOffIcon sx={{ fontSize: 20, color: '#F59E0B' }} />
+            <Typography variant="subtitle1" fontWeight={700}>
+              Time-Off Requests
+            </Typography>
+            {pendingTimeOff.length > 0 && (
+              <Chip label={pendingTimeOff.length} size="small" color="warning" sx={{ height: 22, fontWeight: 700 }} />
+            )}
+          </Box>
 
-        {pendingTimeOff.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', py: 2, textAlign: 'center' }}>
-            No pending time-off requests
-          </Typography>
-        ) : (
-          <Stack spacing={1.5}>
-            {pendingTimeOff.map(req => (
-              <Card
-                key={req.id}
-                variant="outlined"
-                sx={{
-                  borderColor: isDark ? '#3D3228' : '#FDE68A',
-                  borderLeft: '4px solid #F59E0B',
-                  bgcolor: isDark ? '#342A1E' : '#FFFBEB',
-                }}
-              >
-                <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body2" fontWeight={700}>
-                      {req.userName || getEmployeeName(employees, req.userId)}
-                    </Typography>
-                    <StatusChip status={req.status} />
-                  </Box>
-                  <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                    <strong>{req.type}</strong> · {format(new Date(req.startDate), 'MMM d')} – {format(new Date(req.endDate), 'MMM d, yyyy')}
-                  </Typography>
-                  {req.reason && (
-                    <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                      "{req.reason}"
-                    </Typography>
-                  )}
-                  {isManager && (
-                    <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
-                      <Button
-                        size="small"
-                        variant="contained"
-                        color="success"
-                        startIcon={<CheckIcon />}
-                        onClick={() => onApproveTimeOff(req.id)}
-                        sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
-                      >
-                        Approve
-                      </Button>
-                      <Button
-                        size="small"
-                        variant="outlined"
-                        color="error"
-                        startIcon={<CloseIcon />}
-                        onClick={() => onRejectTimeOff(req.id)}
-                        sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
-                      >
-                        Reject
-                      </Button>
-                    </Box>
-                  )}
-                </CardContent>
-              </Card>
-            ))}
-          </Stack>
-        )}
-      </Box>
-
-      <Divider sx={{ borderColor: isDark ? '#3D3228' : '#E8E0D4' }} />
-
-      {/* Pending Shift Trades */}
-      <Box>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-          <SwapIcon sx={{ fontSize: 20, color: '#8B5CF6' }} />
-          <Typography variant="subtitle1" fontWeight={700}>
-            Shift Trades
-          </Typography>
-          {pendingTrades.length > 0 && (
-            <Chip label={pendingTrades.length} size="small" color="secondary" sx={{ height: 22, fontWeight: 700 }} />
-          )}
-        </Box>
-
-        {pendingTrades.length === 0 ? (
-          <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', py: 2, textAlign: 'center' }}>
-            No pending shift trades
-          </Typography>
-        ) : (
-          <Stack spacing={1.5}>
-            {pendingTrades.map(trade => {
-              const isRequester = trade.requesterId === currentUserId || trade.fromUserId === currentUserId;
-              const isTarget = trade.targetUserId === currentUserId || trade.toUserId === currentUserId;
-              const hasTarget = !!(trade.targetUserId || trade.toUserId);
-              const isOpenTrade = !hasTarget;
-              const isPending = trade.status === 'pending';
-              const isAccepted = trade.status === 'accepted';
-
-              const requesterName = trade.requester?.firstName || trade.fromUser?.firstName || 'Unknown';
-              const requesterLast = trade.requester?.lastName || trade.fromUser?.lastName || '';
-              const targetName = trade.targetUser?.firstName || trade.toUser?.firstName || '';
-              const targetLast = trade.targetUser?.lastName || trade.toUser?.lastName || '';
-
-              return (
+          {pendingTimeOff.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', py: 2, textAlign: 'center' }}>
+              No pending time-off requests
+            </Typography>
+          ) : (
+            <Stack spacing={1.5}>
+              {pendingTimeOff.map(req => (
                 <Card
-                  key={trade.id}
+                  key={req.id}
                   variant="outlined"
                   sx={{
-                    borderColor: isDark ? '#3D3228' : (isAccepted ? '#93C5FD' : '#C4B5FD'),
-                    borderLeft: `4px solid ${isAccepted ? '#3B82F6' : '#8B5CF6'}`,
-                    bgcolor: isDark ? '#342A1E' : (isAccepted ? '#EFF6FF' : '#F5F3FF'),
+                    borderColor: isDark ? '#3D3228' : '#FDE68A',
+                    borderLeft: '4px solid #F59E0B',
+                    bgcolor: isDark ? '#342A1E' : '#FFFBEB',
                   }}
                 >
                   <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
                       <Typography variant="body2" fontWeight={700}>
-                        {isOpenTrade ? `${requesterName} ${requesterLast}` : `${requesterName} → ${targetName}`}
+                        {req.userName || getEmployeeName(employees, req.userId)}
                       </Typography>
-                      <Box sx={{ display: 'flex', gap: 0.5 }}>
-                        <Chip label={isOpenTrade ? 'Open' : 'Direct'} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.6rem' }} />
-                        <StatusChip status={trade.status} />
+                      <StatusChip status={req.status} />
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                      <strong>{req.type}</strong> · {format(new Date(req.startDate), 'MMM d')} – {format(new Date(req.endDate), 'MMM d, yyyy')}
+                    </Typography>
+                    {req.reason && (
+                      <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', display: 'block', mb: 0.5 }}>
+                        "{req.reason}"
+                      </Typography>
+                    )}
+                    {isManager && (
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
+                        <Button
+                          size="small"
+                          variant="contained"
+                          color="success"
+                          startIcon={<CheckIcon />}
+                          onClick={() => onApproveTimeOff(req.id)}
+                          sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                        >
+                          Approve
+                        </Button>
+                        <Button
+                          size="small"
+                          variant="outlined"
+                          color="error"
+                          startIcon={<BlockIcon />}
+                          onClick={() => handleOpenRejectDialog(req.id)}
+                          sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                        >
+                          Reject
+                        </Button>
                       </Box>
-                    </Box>
-
-                    {trade.shift && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                        <ClockIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.5 }} />
-                        {trade.shift.date && format(new Date(trade.shift.date), 'MMM d')}
-                        {trade.shift.startTime && ` · ${format(new Date(trade.shift.startTime), 'h:mm a')}`}
-                        {trade.shift.endTime && ` – ${format(new Date(trade.shift.endTime), 'h:mm a')}`}
-                      </Typography>
                     )}
-
-                    {trade.reason && (
-                      <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                        "{trade.reason}"
-                      </Typography>
-                    )}
-
-                    {/* Action buttons based on role */}
-                    <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
-                      {/* Manager: approve/reject accepted trades */}
-                      {isManager && hasTarget && (isPending || isAccepted) && !isRequester && (
-                        <>
-                          <Button size="small" variant="contained" color="success" startIcon={<CheckIcon />}
-                            onClick={() => onApproveTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
-                            Approve
-                          </Button>
-                          <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
-                            onClick={() => onRejectTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
-                            Reject
-                          </Button>
-                        </>
-                      )}
-
-                      {/* Target: accept/decline pending direct trade */}
-                      {isTarget && isPending && !isManager && (
-                        <>
-                          <Button size="small" variant="contained" color="primary" startIcon={<CheckIcon />}
-                            onClick={() => onAcceptTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
-                            Accept
-                          </Button>
-                          <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
-                            onClick={() => onDeclineTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
-                            Decline
-                          </Button>
-                        </>
-                      )}
-
-                      {/* Anyone can take an open trade */}
-                      {isOpenTrade && isPending && !isRequester && (
-                        <Button size="small" variant="contained" color="primary"
-                          onClick={() => onTakeOpenTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
-                          Take This Shift
-                        </Button>
-                      )}
-
-                      {/* Requester: cancel own trade */}
-                      {isRequester && (isPending || isAccepted) && (
-                        <Button size="small" variant="outlined" color="error" startIcon={<DeleteIcon />}
-                          onClick={() => onCancelTrade(trade.id)} sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}>
-                          Cancel
-                        </Button>
-                      )}
-                    </Box>
                   </CardContent>
                 </Card>
-              );
-            })}
-          </Stack>
-        )}
-      </Box>
+              ))}
+            </Stack>
+          )}
+        </Box>
 
-      {/* Recently resolved (collapsed) */}
-      {recentResolved.length > 0 && (
-        <>
-          <Divider sx={{ borderColor: isDark ? '#3D3228' : '#E8E0D4' }} />
-          <Box>
-            <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              Recent Activity
+        <Divider sx={{ borderColor: isDark ? '#3D3228' : '#E8E0D4' }} />
+
+        {/* Pending Shift Trades */}
+        <Box>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
+            <SwapIcon sx={{ fontSize: 20, color: '#8B5CF6' }} />
+            <Typography variant="subtitle1" fontWeight={700}>
+              Shift Trades
             </Typography>
-            <Stack spacing={0.5} sx={{ mt: 1 }}>
-              {recentResolved.map((item: any, i) => {
-                const name = item.userName
-                  || (item.requester ? `${item.requester.firstName} ${item.requester.lastName || ''}`.trim() : null)
-                  || (item.fromUser ? `${item.fromUser.firstName} ${item.fromUser.lastName || ''}`.trim() : null)
-                  || getEmployeeName(employees, item.userId || item.requesterId || item.fromUserId || '');
-                const isTimeOff = 'startDate' in item || (item.type && !['pending','accepted','approved','rejected'].includes(item.type) && item.type !== 'open' && item.type !== 'direct');
+            {pendingTrades.length > 0 && (
+              <Chip label={pendingTrades.length} size="small" color="secondary" sx={{ height: 22, fontWeight: 700 }} />
+            )}
+          </Box>
+
+          {pendingTrades.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', py: 2, textAlign: 'center' }}>
+              No pending shift trades
+            </Typography>
+          ) : (
+            <Stack spacing={1.5}>
+              {pendingTrades.map(trade => {
+                const isRequester = trade.requesterId === currentUserId || trade.fromUserId === currentUserId;
+                const isTarget = trade.targetUserId === currentUserId || trade.toUserId === currentUserId;
+                const hasTarget = !!(trade.targetUserId || trade.toUserId);
+                const isOpenTrade = !hasTarget;
+                const isPending = trade.status === 'pending';
+                const isAccepted = trade.status === 'accepted';
+
+                const requesterName = trade.requester?.firstName || trade.fromUser?.firstName || 'Unknown';
+                const requesterLast = trade.requester?.lastName || trade.fromUser?.lastName || '';
+                const targetName = trade.targetUser?.firstName || trade.toUser?.firstName || '';
+
                 return (
-                  <Box key={item.id || i} sx={{ display: 'flex', alignItems: 'center', gap: 1, py: 0.5 }}>
-                    {isTimeOff ? (
-                      <TimeOffIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                    ) : (
-                      <SwapIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                    )}
-                    <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
-                      {name} — {item.type || 'trade'}
-                    </Typography>
-                    <StatusChip status={item.status} />
-                  </Box>
+                  <Card
+                    key={trade.id}
+                    variant="outlined"
+                    sx={{
+                      borderColor: isDark ? '#3D3228' : (isAccepted ? '#93C5FD' : '#C4B5FD'),
+                      borderLeft: `4px solid ${isAccepted ? '#3B82F6' : '#8B5CF6'}`,
+                      bgcolor: isDark ? '#342A1E' : (isAccepted ? '#EFF6FF' : '#F5F3FF'),
+                    }}
+                  >
+                    <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1 }}>
+                        <Typography variant="body2" fontWeight={700}>
+                          {isOpenTrade ? `${requesterName} ${requesterLast}` : `${requesterName} → ${targetName}`}
+                        </Typography>
+                        <Box sx={{ display: 'flex', gap: 0.5 }}>
+                          <Chip label={isOpenTrade ? 'Open' : 'Direct'} size="small" variant="outlined" sx={{ height: 20, fontSize: '0.6rem' }} />
+                          <StatusChip status={trade.status} />
+                        </Box>
+                      </Box>
+
+                      {trade.shift && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                          <ClockIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.5 }} />
+                          {trade.shift.date && format(new Date(trade.shift.date), 'MMM d')}
+                          {trade.shift.startTime && ` · ${format(new Date(trade.shift.startTime), 'h:mm a')}`}
+                          {trade.shift.endTime && ` – ${format(new Date(trade.shift.endTime), 'h:mm a')}`}
+                        </Typography>
+                      )}
+
+                      {trade.reason && (
+                        <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic' }}>
+                          "{trade.reason}"
+                        </Typography>
+                      )}
+
+                      {/* Action buttons based on role */}
+                      <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+                        {/* Manager: approve/reject accepted trades */}
+                        {isManager && hasTarget && (isPending || isAccepted) && !isRequester && (
+                          <>
+                            <Button size="small" variant="contained" color="success" startIcon={<CheckIcon />}
+                              onClick={() => onApproveTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                              Approve
+                            </Button>
+                            <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
+                              onClick={() => onRejectTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                              Reject
+                            </Button>
+                          </>
+                        )}
+
+                        {/* Target: accept/decline pending direct trade */}
+                        {isTarget && isPending && !isManager && (
+                          <>
+                            <Button size="small" variant="contained" color="primary" startIcon={<CheckIcon />}
+                              onClick={() => onAcceptTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                              Accept
+                            </Button>
+                            <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
+                              onClick={() => onDeclineTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                              Decline
+                            </Button>
+                          </>
+                        )}
+
+                        {/* Anyone can take an open trade */}
+                        {isOpenTrade && isPending && !isRequester && (
+                          <Button size="small" variant="contained" color="primary"
+                            onClick={() => onTakeOpenTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                            Take This Shift
+                          </Button>
+                        )}
+
+                        {/* Requester: cancel own trade */}
+                        {isRequester && (isPending || isAccepted) && (
+                          <Button size="small" variant="outlined" color="error" startIcon={<DeleteIcon />}
+                            onClick={() => onCancelTrade(trade.id)} sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}>
+                            Cancel
+                          </Button>
+                        )}
+                      </Box>
+                    </CardContent>
+                  </Card>
                 );
               })}
             </Stack>
-          </Box>
-        </>
-      )}
-    </Box>
+          )}
+        </Box>
+
+        {/* Recently resolved (collapsed) */}
+        {recentResolved.length > 0 && (
+          <>
+            <Divider sx={{ borderColor: isDark ? '#3D3228' : '#E8E0D4' }} />
+            <Box>
+              <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                Recent Activity
+              </Typography>
+              <Stack spacing={0.5} sx={{ mt: 1 }}>
+                {recentResolved.map((item: any, i) => {
+                  const name = item.userName
+                    || (item.requester ? `${item.requester.firstName} ${item.requester.lastName || ''}`.trim() : null)
+                    || (item.fromUser ? `${item.fromUser.firstName} ${item.fromUser.lastName || ''}`.trim() : null)
+                    || getEmployeeName(employees, item.userId || item.requesterId || item.fromUserId || '');
+                  const isTimeOff = 'startDate' in item || (item.type && !['pending','accepted','approved','rejected'].includes(item.type) && item.type !== 'open' && item.type !== 'direct');
+                  return (
+                    <Box key={item.id || i} sx={{ py: 0.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        {isTimeOff ? (
+                          <TimeOffIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                        ) : (
+                          <SwapIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                        )}
+                        <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                          {name} — {item.type || 'trade'}
+                        </Typography>
+                        <StatusChip status={item.status} />
+                      </Box>
+                      {/* Show rejection reason to employees for their own rejected requests */}
+                      {item.status === 'rejected' && item.rejectionReason && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            display: 'block',
+                            ml: 2.5,
+                            mt: 0.3,
+                            color: 'error.main',
+                            fontStyle: 'italic',
+                            fontSize: '0.65rem',
+                          }}
+                        >
+                          Reason: {item.rejectionReason}
+                        </Typography>
+                      )}
+                    </Box>
+                  );
+                })}
+              </Stack>
+            </Box>
+          </>
+        )}
+      </Box>
+
+      {/* Rejection Reason Dialog */}
+      <Dialog
+        open={rejectDialogOpen}
+        onClose={handleCloseRejectDialog}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: 'error.main', pb: 1 }}>
+          Reject Time-Off Request
+        </DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            Optionally provide a reason for the rejection. This will be sent to the employee.
+          </Typography>
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            rows={3}
+            label="Reason for rejection"
+            placeholder="e.g. Insufficient coverage on that date, please try another date."
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            InputProps={{ sx: { borderRadius: 2 } }}
+            inputProps={{ maxLength: 300 }}
+            helperText={`${rejectionReason.length}/300`}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={handleCloseRejectDialog} variant="outlined" sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={handleConfirmReject}
+            variant="contained"
+            color="error"
+            startIcon={<BlockIcon />}
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+          >
+            Confirm Rejection
+          </Button>
+        </DialogActions>
+      </Dialog>
+    </>
   );
 }

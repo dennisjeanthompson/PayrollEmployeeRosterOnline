@@ -136,6 +136,7 @@ export const timeOffRequests = pgTable("time_off_requests", {
   requestedAt: timestamp("requested_at").defaultNow(),
   approvedAt: timestamp("approved_at"),
   approvedBy: text("approved_by").references(() => users.id),
+  rejectionReason: text("rejection_reason"),
 });
 
 export const notifications = pgTable("notifications", {

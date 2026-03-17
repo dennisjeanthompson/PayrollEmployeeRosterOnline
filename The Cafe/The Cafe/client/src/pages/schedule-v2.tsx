@@ -266,12 +266,13 @@ export default function ScheduleV2() {
   });
 
   const approveTimeOffMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+    mutationFn: async ({ id, status, rejectionReason }: { id: string; status: string; rejectionReason?: string }) => {
       // Server has separate /approve and /reject endpoints
       const endpoint = status === 'approved'
         ? `/api/time-off-requests/${id}/approve`
         : `/api/time-off-requests/${id}/reject`;
-      const res = await apiRequest('PUT', endpoint, { status });
+      const body = status === 'rejected' ? { status, rejectionReason } : { status };
+      const res = await apiRequest('PUT', endpoint, body);
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
       return res.json();
     },
@@ -696,7 +697,7 @@ export default function ScheduleV2() {
           isManager={isManager}
           currentUserId={currentUser?.id || ''}
           onApproveTimeOff={(id) => approveTimeOffMutation.mutate({ id, status: 'approved' })}
-          onRejectTimeOff={(id) => approveTimeOffMutation.mutate({ id, status: 'rejected' })}
+          onRejectTimeOff={(id, reason) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason })}
           onApproveTrade={(id) => approveTradeMutation.mutate({ id, status: 'approved' })}
           onRejectTrade={(id) => approveTradeMutation.mutate({ id, status: 'rejected' })}
           onAcceptTrade={(id) => respondTradeMutation.mutate({ id, status: 'accepted' })}
