@@ -16,9 +16,10 @@ export default function MobileProfile() {
     try {
       await apiRequest("POST", "/api/auth/logout");
       setAuthState({ user: null, isAuthenticated: false });
-      setLocation("/auth");
+      window.location.replace("/login");
     } catch (error) {
       console.error("Logout failed:", error);
+      window.location.replace("/login");
     }
   };
 
