@@ -323,6 +323,7 @@ export default function MuiAnalytics() {
                     stroke={alpha(theme.palette.primary.main, 0.2)}
                     strokeWidth={0}
                     name="Range"
+                    isAnimationActive={false}
                   />
                   <Line
                     type="monotone"
@@ -332,6 +333,7 @@ export default function MuiAnalytics() {
                     dot={{ r: 3, fill: theme.palette.primary.main }}
                     activeDot={{ r: 5 }}
                     name="Predicted Hours"
+                    isAnimationActive={false}
                   />
                 </ComposedChart>
               </ResponsiveContainer>
@@ -388,6 +390,7 @@ export default function MuiAnalytics() {
                         fillOpacity={1}
                         fill="url(#payrollGradient)"
                         strokeWidth={2}
+                        isAnimationActive={false}
                       />
                     </AreaChart>
                   </ResponsiveContainer>
@@ -426,7 +429,7 @@ export default function MuiAnalytics() {
                           fontSize: 13,
                         }}
                       />
-                      <Bar dataKey="hours" fill={theme.palette.info.main} radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="hours" fill={theme.palette.info.main} radius={[4, 4, 0, 0]} isAnimationActive={false} />
                     </BarChart>
                   </ResponsiveContainer>
                 </Box>

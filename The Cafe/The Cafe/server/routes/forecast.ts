@@ -262,8 +262,8 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
       const values = dowStats[i].hours;
       if (values.length > 0) {
         const avg = values.reduce((a, b) => a + b, 0) / values.length;
-        const variance = values.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / values.length;
-        dowAverages[i] = { avg, std: Math.sqrt(variance) };
+        const variance = values.length > 1 ? values.reduce((sum, val) => sum + Math.pow(val - avg, 2), 0) / (values.length - 1) : 0;
+        dowAverages[i] = { avg: isNaN(avg) ? 8 : avg, std: Math.sqrt(variance) };
       } else {
         dowAverages[i] = { avg: 8, std: 2 }; // Default 8 hours with ±2 std
       }
@@ -288,13 +288,14 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
       }
 
       // ±10% confidence band around predicted value
-      const lower = predicted * 0.9;
-      const upper = predicted * 1.1;
+      const validPredicted = isNaN(predicted) ? 8 : predicted;
+      const lower = validPredicted * 0.9;
+      const upper = validPredicted * 1.1;
 
       forecasts.push({
         date: format(forecastDate, "yyyy-MM-dd"),
         dayOfWeek: format(forecastDate, "EEE"),
-        predicted: Math.round(predicted * 10) / 10,
+        predicted: Math.round(validPredicted * 10) / 10,
         lower: Math.round(lower * 10) / 10,
         upper: Math.round(upper * 10) / 10,
         isHoliday: holiday,
@@ -363,9 +364,10 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
     const dowAverages: Record<number, number> = {};
     for (let i = 0; i < 7; i++) {
       const values = dowCosts[i];
-      dowAverages[i] = values.length > 0 
+      let avg = values.length > 0 
         ? values.reduce((a, b) => a + b, 0) / values.length 
         : 800; // Default daily cost
+      dowAverages[i] = isNaN(avg) ? 800 : avg;
     }
 
     // Generate payroll forecasts
@@ -389,14 +391,15 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
         }
       }
 
-      totalPredicted += predicted;
+      const validPredicted = isNaN(predicted) ? 800 : predicted;
+      totalPredicted += validPredicted;
       
       forecasts.push({
         date: format(forecastDate, "yyyy-MM-dd"),
         dayOfWeek: format(forecastDate, "EEE"),
-        predicted: Math.round(predicted),
-        lower: Math.round(predicted * 0.9),
-        upper: Math.round(predicted * 1.1),
+        predicted: Math.round(validPredicted),
+        lower: Math.round(validPredicted * 0.9),
+        upper: Math.round(validPredicted * 1.1),
         isHoliday: holiday,
       });
     }
