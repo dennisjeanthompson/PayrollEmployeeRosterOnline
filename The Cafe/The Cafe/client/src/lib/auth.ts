@@ -60,7 +60,9 @@ export function getActiveBranchId(): string | undefined {
 
 export async function logout() {
   try {
-    await fetch("/api/auth/logout", { method: "POST", credentials: "include" });
+    // Import apiUrl dynamically to avoid circular dependency
+    const { apiUrl } = await import("./api");
+    await fetch(apiUrl("/api/auth/logout"), { method: "POST", credentials: "include" });
   } catch (e) {
     // Best-effort: clear client state even if API fails
   }
