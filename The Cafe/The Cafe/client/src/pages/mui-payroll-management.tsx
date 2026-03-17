@@ -37,6 +37,9 @@ import {
   MenuItem,
   FormControl,
   InputLabel,
+  Menu,
+  ListItemIcon,
+  ListItemText,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -59,6 +62,8 @@ import {
   Schedule,
   Warning,
   Cancel,
+  Delete as DeleteIcon,
+  FileDownload as ExportIcon,
 } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -135,6 +140,19 @@ export default function MuiPayrollManagement() {
   // Digital payslip viewer state
   const [payslipViewerOpen, setPayslipViewerOpen] = useState(false);
   const [selectedEntryForPayslip, setSelectedEntryForPayslip] = useState<PayrollEntry | null>(null);
+
+  // Period context menu state (3-dot menu)
+  const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [menuPeriod, setMenuPeriod] = useState<PayrollPeriod | null>(null);
+  const openPeriodMenu = (e: React.MouseEvent<HTMLElement>, period: PayrollPeriod) => {
+    e.stopPropagation();
+    setMenuAnchorEl(e.currentTarget);
+    setMenuPeriod(period);
+  };
+  const closePeriodMenu = () => {
+    setMenuAnchorEl(null);
+    setMenuPeriod(null);
+  };
 
   // Adjustment log (Exception Log) state
   const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
@@ -309,6 +327,27 @@ export default function MuiPayrollManagement() {
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deletePeriodMutation = useMutation({
+    mutationFn: async (periodId: string) => {
+      const response = await apiRequest("DELETE", `/api/payroll/periods/${periodId}`);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: "Failed to delete period" }));
+        throw new Error(err.message || "Failed to delete period");
+      }
+      return response.json().catch(() => ({}));
+    },
+    onSuccess: () => {
+      toast({ title: "Period Deleted", description: "Payroll period has been removed" });
+      queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
+      if (selectedPeriod?.id === menuPeriod?.id) setSelectedPeriod(null);
+      closePeriodMenu();
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      closePeriodMenu();
     },
   });
 
@@ -842,9 +881,14 @@ export default function MuiPayrollManagement() {
                         >
                           View
                         </Button>
-                        <IconButton size="small">
-                          <MoreVert fontSize="small" />
-                        </IconButton>
+                        <Tooltip title="More actions">
+                          <IconButton
+                            size="small"
+                            onClick={(e) => openPeriodMenu(e, period)}
+                          >
+                            <MoreVert fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
                       </Stack>
                     </CardContent>
                   </Card>
@@ -1679,6 +1723,74 @@ export default function MuiPayrollManagement() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Period Context Menu (3-dot menu) */}
+      <Menu
+        anchorEl={menuAnchorEl}
+        open={Boolean(menuAnchorEl)}
+        onClose={closePeriodMenu}
+        PaperProps={{
+          elevation: 4,
+          sx: {
+            borderRadius: 3,
+            minWidth: 220,
+            overflow: 'visible',
+            mt: 1,
+          },
+        }}
+        transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+        anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+      >
+        {menuPeriod?.status === 'open' && (
+          <MenuItem
+            onClick={() => {
+              if (menuPeriod) processPayrollMutation.mutate(menuPeriod.id);
+              closePeriodMenu();
+            }}
+          >
+            <ListItemIcon><PlayArrow fontSize="small" color="success" /></ListItemIcon>
+            <ListItemText primary="Process Payroll" secondary="Calculate & generate entries" />
+          </MenuItem>
+        )}
+        <MenuItem
+          onClick={() => {
+            if (menuPeriod) {
+              setSelectedPeriod(menuPeriod);
+              setActiveTab(1);
+            }
+            closePeriodMenu();
+          }}
+        >
+          <ListItemIcon><Visibility fontSize="small" color="primary" /></ListItemIcon>
+          <ListItemText primary="View Entries" secondary="See employee pay details" />
+        </MenuItem>
+        <MenuItem
+          onClick={() => {
+            if (menuPeriod) {
+              const url = `/api/reports/payroll/export?periodId=${menuPeriod.id}`;
+              window.open(apiUrl(url), '_blank');
+            }
+            closePeriodMenu();
+          }}
+        >
+          <ListItemIcon><ExportIcon fontSize="small" color="info" /></ListItemIcon>
+          <ListItemText primary="Export CSV" secondary="Download payroll report" />
+        </MenuItem>
+        <Divider />
+        <MenuItem
+          onClick={() => {
+            if (menuPeriod && window.confirm(`Delete payroll period? This action cannot be undone.`)) {
+              deletePeriodMutation.mutate(menuPeriod.id);
+            } else {
+              closePeriodMenu();
+            }
+          }}
+          sx={{ color: 'error.main' }}
+        >
+          <ListItemIcon><DeleteIcon fontSize="small" color="error" /></ListItemIcon>
+          <ListItemText primary="Delete Period" secondary="Remove this payroll period" />
+        </MenuItem>
+      </Menu>
     </Box>
   );
 }

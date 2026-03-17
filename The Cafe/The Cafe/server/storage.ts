@@ -50,6 +50,7 @@ export interface IStorage {
   getPayrollEntriesByPeriod(periodId: string): Promise<PayrollEntry[]>;
   updatePayrollEntry(id: string, entry: Partial<InsertPayrollEntry>): Promise<PayrollEntry | undefined>;
   deletePayrollEntry(id: string): Promise<void>;
+  deletePayrollPeriod(id: string): Promise<void>;
 
   // Approvals
   createApproval(approval: InsertApproval): Promise<Approval>;
@@ -578,6 +579,10 @@ export class MemStorage implements IStorage {
 
   async deletePayrollEntry(id: string): Promise<void> {
     this.payrollEntries.delete(id);
+  }
+
+  async deletePayrollPeriod(id: string): Promise<void> {
+    this.payrollPeriods.delete(id);
   }
 
   async createApproval(insertApproval: InsertApproval): Promise<Approval> {

@@ -566,6 +566,10 @@ export class DatabaseStorage implements IStorage {
     return this.getPayrollPeriod(id);
   }
 
+  async deletePayrollPeriod(id: string): Promise<void> {
+    await db.delete(payrollPeriods).where(eq(payrollPeriods.id, id));
+  }
+
   async getCurrentPayrollPeriod(branchId: string): Promise<PayrollPeriod | undefined> {
     const result = await db.select().from(payrollPeriods)
       .where(

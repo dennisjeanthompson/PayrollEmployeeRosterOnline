@@ -1443,9 +1443,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       realTimeManager.broadcastPayrollPeriodCreated(period);
     } catch (error: any) {
       console.error('Create payroll period error:', error);
-      res.status(500).json({ 
-        message: error.message || "Failed to create payroll period" 
+      res.status(500).json({
+        message: error.message || "Failed to create payroll period"
       });
+    }
+  }));
+
+  // Delete a payroll period (Manager only — open periods only)
+  app.delete("/api/payroll/periods/:id", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+    try {
+      const { id } = req.params;
+      const branchId = req.user!.branchId;
+
+      const period = await storage.getPayrollPeriod(id);
+      if (!period) {
+        return res.status(404).json({ message: "Payroll period not found" });
+      }
+      if (period.branchId !== branchId) {
+        return res.status(403).json({ message: "Access denied to this payroll period" });
+      }
+      if (period.status !== "open") {
+        return res.status(400).json({ message: "Only open payroll periods can be deleted" });
+      }
+
+      // Delete associated payroll entries first
+      const entries = await storage.getPayrollEntriesByPeriod(id);
+      for (const entry of entries) {
+        await storage.deletePayrollEntry(entry.id);
+      }
+
+      await storage.deletePayrollPeriod(id);
+      console.log(`✅ Deleted payroll period ${id} by ${req.user!.username}`);
+      res.json({ message: "Payroll period deleted successfully" });
+    } catch (error: any) {
+      console.error("Delete payroll period error:", error);
+      res.status(500).json({ message: error.message || "Failed to delete payroll period" });
     }
   }));
 
