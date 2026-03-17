@@ -1,3 +1,4 @@
+import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager, getCurrentUser } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
@@ -155,7 +156,6 @@ export default function MuiDashboard() {
     },
     onSuccess: () => {
       toast({ title: "Approved", description: "Time off request approved" });
-      // Invalidation handled by real-time events, but kept for immediate feedback
       queryClient.invalidateQueries({ queryKey: ["/api/time-off-requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
     },
@@ -167,8 +167,8 @@ export default function MuiDashboard() {
   const rejectTimeOffMutation = useMutation({
     mutationFn: async ({ requestId, rejectionReason }: { requestId: string; rejectionReason?: string }) => {
       const response = await apiRequest("PUT", `/api/time-off-requests/${requestId}/reject`, {
-        status: 'rejected',
-        rejectionReason
+        status: "rejected",
+        rejectionReason,
       });
       return response.json();
     },
@@ -229,8 +229,12 @@ function ManagerDashboard({
   const [rejectingRequest, setRejectingRequest] = React.useState<any>(null);
   const [rejectionReason, setRejectionReason] = React.useState('');
 
+  // Extract recently rejected time-off requests from approvals history 
+  // to display rejection reasons if applicable.
+  const recentlyHandledApprovals = approvals?.approvals?.filter((a: any) => a.status === 'rejected' || a.status === 'approved')?.slice(0, 5) || [];
+
   return (
-    <Stack spacing={4}>
+    <Stack spacing={4} sx={{ maxWidth: 1400, mx: "auto" }}>
       {/* Hero Header */}
       <Paper
         elevation={0}
@@ -238,314 +242,243 @@ function ManagerDashboard({
           position: "relative",
           overflow: "hidden",
           borderRadius: 4,
-          background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.primary.main, 0.02)} 100%)`,
-          border: `1px solid ${alpha(theme.palette.primary.main, 0.1)}`,
+          background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.background.paper, 0.4)} 100%)`,
+          backdropFilter: "blur(10px)",
+          border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
           p: { xs: 3, lg: 4 },
         }}
       >
-        {/* Background decorations */}
-        <Box
-          sx={{
-            position: "absolute",
-            top: -80,
-            right: -80,
-            width: 200,
-            height: 200,
-            borderRadius: "50%",
-            background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.15)} 0%, transparent 70%)`,
-          }}
-        />
-        <Box
-          sx={{
-            position: "absolute",
-            bottom: -60,
-            left: -60,
-            width: 150,
-            height: 150,
-            borderRadius: "50%",
-            background: `radial-gradient(circle, ${alpha(theme.palette.secondary.main, 0.1)} 0%, transparent 70%)`,
-          }}
-        />
-
-        <Box sx={{ position: "relative", display: "flex", flexDirection: { xs: "column", lg: "row" }, gap: 3, justifyContent: "space-between", alignItems: { xs: "flex-start", lg: "center" } }}>
-          {/* Welcome Text */}
+        <Box sx={{ position: "relative", zIndex: 1, display: "flex", flexDirection: { xs: "column", lg: "row" }, gap: 3, justifyContent: "space-between", alignItems: { xs: "flex-start", lg: "center" } }}>
           <Box>
-            <Chip
-              size="small"
-              icon={<Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "success.main", animation: "pulse 2s infinite" }} />}
-              label="Online"
-              sx={{
-                bgcolor: alpha(theme.palette.primary.main, 0.1),
-                color: "primary.main",
-                mb: 2,
-                "& .MuiChip-icon": { ml: 1 },
-              }}
-            />
-            <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-              Welcome back, {currentUser?.firstName || "Manager"}!
-            </Typography>
-            <Typography color="text.secondary">
-              Here's what's happening with your team today.
-            </Typography>
-
-            {/* Date & Time */}
-            <Stack direction="row" spacing={2} sx={{ mt: 3 }}>
+            <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
               <Chip
-                icon={<CalendarIcon fontSize="small" />}
-                label={
-                  <Box>
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", lineHeight: 1 }}>
-                      {format(new Date(), "EEEE")}
-                    </Typography>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {format(new Date(), "MMMM d, yyyy")}
-                    </Typography>
-                  </Box>
-                }
+                size="small"
+                icon={<Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: "success.main", animation: "pulse 2s infinite" }} />}
+                label="Active Session"
                 sx={{
-                  height: "auto",
-                  py: 1,
-                  bgcolor: "background.paper",
-                  border: `1px solid ${theme.palette.divider}`,
-                  "& .MuiChip-label": { px: 1.5 },
-                }}
-              />
-              <Chip
-                icon={<ClockIcon fontSize="small" sx={{ color: "secondary.main" }} />}
-                label={format(new Date(), "h:mm a")}
-                sx={{
-                  height: 48,
-                  bgcolor: "background.paper",
-                  border: `1px solid ${theme.palette.divider}`,
+                  bgcolor: alpha(theme.palette.success.main, 0.1),
+                  color: "success.main",
                   fontWeight: 600,
+                  "& .MuiChip-icon": { ml: 1 },
                 }}
               />
+              <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }}>
+                {format(new Date(), "EEEE, MMMM d, yyyy")}
+              </Typography>
             </Stack>
+            <Typography variant="h3" sx={{ fontWeight: 800, mb: 1, letterSpacing: "-0.02em" }}>
+              Welcome, {currentUser?.firstName || "Manager"}
+            </Typography>
+            <Typography color="text.secondary" sx={{ fontSize: "1.1rem" }}>
+              Here's a quick overview of your team's schedule and tasks today.
+            </Typography>
           </Box>
 
-          {/* Quick Actions */}
-          <Box>
-            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1, textTransform: "uppercase", letterSpacing: 1 }}>
-              Quick Actions
-            </Typography>
-            <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-              <Link href="/schedule">
-                <Button
-                  variant="contained"
-                  startIcon={<PlusIcon />}
-                  sx={{
-                    bgcolor: "primary.main",
-                    "&:hover": { bgcolor: "primary.dark" },
-                    boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.3)}`,
-                  }}
-                >
-                  Add Shift
-                </Button>
-              </Link>
-              <Link href="/employees">
-                <Button variant="outlined" startIcon={<UserPlusIcon />}>
-                  New Employee
-                </Button>
-              </Link>
-              <Link href="/payroll-management">
-                <Button
-                  variant="outlined"
-                  startIcon={<FileTextIcon />}
-                  sx={{
-                    borderColor: alpha(theme.palette.success.main, 0.5),
-                    color: "success.main",
-                    "&:hover": {
-                      borderColor: "success.main",
-                      bgcolor: alpha(theme.palette.success.main, 0.05),
-                    },
-                  }}
-                >
-                  Run Payroll
-                </Button>
-              </Link>
-            </Stack>
-          </Box>
+          {/* Quick Actions Array - More prominent and integrated */}
+          <Stack direction="row" spacing={2} sx={{ mt: { xs: 2, lg: 0 } }}>
+            <Link href="/schedule">
+              <Button
+                variant="contained"
+                startIcon={<PlusIcon />}
+                sx={{
+                  bgcolor: "primary.main",
+                  px: 3,
+                  py: 1.5,
+                  borderRadius: 2,
+                  fontWeight: 600,
+                  boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, 0.25)}`,
+                  "&:hover": { transform: "translateY(-1px)", boxShadow: `0 12px 28px ${alpha(theme.palette.primary.main, 0.35)}` },
+                }}
+              >
+                Add Shift
+              </Button>
+            </Link>
+            <Link href="/payroll-management">
+              <Button
+                variant="outlined"
+                startIcon={<FileTextIcon />}
+                sx={{
+                  px: 3,
+                  py: 1.5,
+                  borderRadius: 2,
+                  fontWeight: 600,
+                  borderWidth: 2,
+                  "&:hover": { borderWidth: 2 },
+                  bgcolor: alpha(theme.palette.background.paper, 0.5),
+                }}
+              >
+                Payroll
+              </Button>
+            </Link>
+          </Stack>
         </Box>
+        
+        {/* Decorative Gradients */}
+        <Box sx={{ position: "absolute", top: -100, right: -100, width: 300, height: 300, borderRadius: "50%", background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.1)} 0%, transparent 60%)`, zIndex: 0 }} />
       </Paper>
 
-      {/* Stats Grid */}
+      {/* Stats Grid - Unified Look */}
       <Grid container spacing={3}>
-        <Grid size={{ xs: 6, lg: 3 }}>
-          {teamHoursLoading ? (
-            <Skeleton variant="rounded" height={140} />
-          ) : (
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          {teamHoursLoading ? <Skeleton variant="rounded" height={130} sx={{ borderRadius: 3 }} /> : (
+            <StatCard
+              title="Today's Shifts"
+              value={todayShifts.length}
+              subtitle={format(new Date(), "PP")}
+              icon={<CalendarIcon />}
+              color="success"
+              sx={{ height: '100%' }}
+            />
+          )}
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          {teamHoursLoading ? <Skeleton variant="rounded" height={130} sx={{ borderRadius: 3 }} /> : (
             <StatCard
               title="Weekly Hours"
               value={teamHours?.thisWeek?.toFixed(1) || "0.0"}
               subtitle={`${teamHours?.weekShifts || 0} shifts completed`}
               icon={<ClockIcon />}
-              color="secondary"
+              color="primary"
+              sx={{ height: '100%' }}
             />
           )}
         </Grid>
-        <Grid size={{ xs: 6, lg: 3 }}>
-          {teamHoursLoading ? (
-            <Skeleton variant="rounded" height={140} />
-          ) : (
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          {teamHoursLoading ? <Skeleton variant="rounded" height={130} sx={{ borderRadius: 3 }} /> : (
             <StatCard
               title="Monthly Hours"
               value={teamHours?.thisMonth?.toFixed(1) || "0.0"}
               subtitle={`${teamHours?.monthShifts || 0} total shifts`}
               icon={<TrendingUpIcon />}
-              color="warning"
+              color="secondary"
+              sx={{ height: '100%' }}
             />
           )}
         </Grid>
-        <Grid size={{ xs: 6, lg: 3 }}>
-          {teamHoursLoading ? (
-            <Skeleton variant="rounded" height={140} />
-          ) : (
+        <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          {teamHoursLoading ? <Skeleton variant="rounded" height={130} sx={{ borderRadius: 3 }} /> : (
             <StatCard
-              title="Team Size"
+              title="Team Members"
               value={teamHours?.employeeCount || 0}
-              subtitle="Active employees"
+              subtitle="Active staff"
               icon={<UsersIcon />}
               color="info"
-            />
-          )}
-        </Grid>
-        <Grid size={{ xs: 6, lg: 3 }}>
-          {shiftsLoading ? (
-            <Skeleton variant="rounded" height={140} />
-          ) : (
-            <StatCard
-              title="Today's Shifts"
-              value={todayShifts.length}
-              subtitle={format(new Date(), "MMMM d")}
-              icon={<CalendarIcon />}
-              color="success"
+              sx={{ height: '100%' }}
             />
           )}
         </Grid>
       </Grid>
 
-      {/* Main Content Grid */}
+      {/* Main Content Grid - Reduced whitespace, higher contrast cards */}
       <Grid container spacing={3}>
         {/* Today's Schedule */}
         <Grid size={{ xs: 12, lg: 6 }}>
-          <InfoCard
-            title="Today's Schedule"
-            subtitle={`${todayShifts.length} shifts scheduled`}
-            icon={<CalendarIcon />}
-            color="info"
-            headerAction={
-              <Link href="/schedule">
-                <Button
-                  size="small"
-                  endIcon={<ArrowRightIcon />}
-                  sx={{ color: "primary.main" }}
-                >
-                  View All
-                </Button>
-              </Link>
-            }
-          >
-            {shiftsLoading ? (
-              <Stack spacing={2}>
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} variant="rounded" height={72} />
-                ))}
-              </Stack>
-            ) : todayShifts.length > 0 ? (
-              <Stack spacing={2}>
-                {todayShifts.slice(0, 5).map((shift: any) => (
-                  <UserCard
-                    key={shift.id}
-                    name={`${shift.user?.firstName || ""} ${shift.user?.lastName || ""}`}
-                    subtitle={shift.position}
-                    initials={getInitials(shift.user?.firstName, shift.user?.lastName)}
-                    action={
-                      <Box sx={{ textAlign: "right" }}>
-                        <Typography variant="body2" sx={{ fontWeight: 600, fontFamily: "monospace" }}>
-                          {new Date(shift.startTime).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          Start time
-                        </Typography>
+          <Card sx={{ height: '100%', borderRadius: 4, bgcolor: 'background.paper', boxShadow: (theme) => `0 4px 20px ${alpha(theme.palette.common.black, 0.05)}` }}>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <CalendarIcon color="primary" /> Today's Roster
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {todayShifts.length} employees scheduled
+                  </Typography>
+                </Box>
+                <Link href="/schedule">
+                  <Button size="small" endIcon={<ArrowRightIcon />} sx={{ fontWeight: 600 }}>Manage</Button>
+                </Link>
+              </Box>
+
+              {shiftsLoading ? (
+                <Stack spacing={2}>{[1, 2, 3].map(i => <Skeleton key={i} variant="rounded" height={70} sx={{ borderRadius: 2 }} />)}</Stack>
+              ) : todayShifts.length > 0 ? (
+                <Stack spacing={1.5}>
+                  {todayShifts.slice(0, 5).map((shift: any) => (
+                    <Box
+                      key={shift.id}
+                      sx={{
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                        p: 2, borderRadius: 2,
+                        bgcolor: alpha(theme.palette.primary.main, 0.03),
+                        border: `1px solid ${alpha(theme.palette.primary.main, 0.08)}`,
+                        transition: 'all 0.2s',
+                        '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.06) }
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40, fontSize: '0.9rem', fontWeight: 600 }}>
+                          {getInitials(shift.user?.firstName, shift.user?.lastName)}
+                        </Avatar>
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
+                            {shift.user?.firstName} {shift.user?.lastName}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            <ScheduleIcon sx={{ fontSize: 12 }} /> {shift.position}
+                          </Typography>
+                        </Box>
                       </Box>
-                    }
-                  />
-                ))}
-              </Stack>
-            ) : (
-              <EmptyState
-                icon={<CalendarIcon />}
-                title="No shifts today"
-                description="Enjoy your day off!"
-              />
-            )}
-          </InfoCard>
+                      <Box sx={{ textAlign: 'right' }}>
+                        <Typography variant="body2" sx={{ fontWeight: 700, fontFamily: 'monospace', color: 'text.primary' }}>
+                          {new Date(shift.startTime).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}
+                        </Typography>
+                        <Typography variant="caption" color="text.secondary">Start Time</Typography>
+                      </Box>
+                    </Box>
+                  ))}
+                </Stack>
+              ) : (
+                <EmptyState icon={<CalendarIcon sx={{ fontSize: 48, opacity: 0.5 }} />} title="No shifts scheduled" description="Your team has the day off." />
+              )}
+            </CardContent>
+          </Card>
         </Grid>
 
-        {/* Pending Approvals */}
+        {/* Pending Approvals & Recent Activity */}
         <Grid size={{ xs: 12, lg: 6 }}>
-          <InfoCard
-            title="Pending Approvals"
-            subtitle={`${pendingTimeOffRequests.length} requests waiting`}
-            icon={<BellIcon />}
-            color="warning"
-          >
-            {timeOffLoading ? (
-              <Stack spacing={2}>
-                {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} variant="rounded" height={80} />
-                ))}
-              </Stack>
-            ) : pendingTimeOffRequests.length > 0 ? (
-              <Stack spacing={2}>
-                {pendingTimeOffRequests.slice(0, 4).map((request: any) => (
-                  <Paper
-                    key={request.id}
-                    elevation={0}
-                    sx={{
-                      p: 2,
-                      borderRadius: 4,
-                      background: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.05)} 0%, ${alpha(theme.palette.background.paper, 0.6)} 100%)`,
-                      border: (theme) => `1px solid ${alpha(theme.palette.warning.main, 0.15)}`,
-                      transition: 'all 0.2s ease',
-                      '&:hover': {
-                        transform: 'translateY(-2px)',
-                        boxShadow: (theme) => `0 4px 20px ${alpha(theme.palette.warning.main, 0.1)}`,
-                        borderColor: alpha(theme.palette.warning.main, 0.3),
-                      }
-                    }}
-                  >
-                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 2.5, flex: 1, minWidth: 0 }}>
-                        <Avatar
-                          sx={{
-                            width: 42,
-                            height: 42,
-                            bgcolor: alpha(theme.palette.warning.main, 0.15),
-                            color: "warning.main",
-                            fontWeight: 700,
-                            border: `2px solid ${alpha(theme.palette.warning.main, 0.2)}`
-                          }}
-                        >
+          <Card sx={{ height: '100%', borderRadius: 4, bgcolor: 'background.paper', boxShadow: (theme) => `0 4px 20px ${alpha(theme.palette.common.black, 0.05)}` }}>
+            <CardContent sx={{ p: { xs: 2, sm: 3 } }}>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+                <Box>
+                  <Typography variant="h6" sx={{ fontWeight: 700, display: 'flex', alignItems: 'center', gap: 1 }}>
+                    <BellIcon color="warning" /> Approvals & Requests
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {pendingTimeOffRequests.length} pending requests
+                  </Typography>
+                </Box>
+                <Link href="/time-off">
+                  <Button size="small" color="warning" endIcon={<ArrowRightIcon />} sx={{ fontWeight: 600 }}>View All</Button>
+                </Link>
+              </Box>
+
+              {timeOffLoading ? (
+                <Stack spacing={2}>{[1, 2, 3].map(i => <Skeleton key={i} variant="rounded" height={80} sx={{ borderRadius: 2 }} />)}</Stack>
+              ) : pendingTimeOffRequests.length > 0 || recentlyHandledApprovals.length > 0 ? (
+                <Stack spacing={2}>
+                  
+                  {/* PENDING REQUESTS */}
+                  {pendingTimeOffRequests.slice(0, 3).map((request: any) => (
+                    <Box
+                      key={request.id}
+                      sx={{
+                        p: 2, borderRadius: 3,
+                        background: `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.05)} 0%, ${alpha(theme.palette.background.paper, 0.5)} 100%)`,
+                        border: `1px solid ${alpha(theme.palette.warning.main, 0.2)}`,
+                        display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2
+                      }}
+                    >
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                        <Avatar sx={{ bgcolor: alpha(theme.palette.warning.main, 0.2), color: 'warning.main', fontWeight: 700 }}>
                           {getInitials(request.user?.firstName, request.user?.lastName)}
                         </Avatar>
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }} noWrap>
+                        <Box>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
                             {request.user?.firstName} {request.user?.lastName}
                           </Typography>
-                          <Stack direction="row" spacing={1} alignItems="center">
-                            <Chip 
-                              label={request.type.replace('_', ' ')} 
-                              size="small" 
-                              sx={{ 
-                                height: 20, 
-                                fontSize: '0.65rem', 
-                                fontWeight: 600, 
-                                textTransform: 'capitalize',
-                                bgcolor: alpha(theme.palette.text.primary, 0.05)
-                              }} 
-                            />
-                            <Typography variant="caption" color="text.secondary" noWrap>
+                          <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
+                            <Chip size="small" label={request.type?.replace('_', ' ')} sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, textTransform: 'capitalize' }} />
+                            <Typography variant="caption" color="text.secondary">
                               {format(new Date(request.startDate), "MMM d")} - {format(new Date(request.endDate), "MMM d")}
                             </Typography>
                           </Stack>
@@ -553,213 +486,73 @@ function ManagerDashboard({
                       </Box>
                       <Stack direction="row" spacing={1}>
                         <Tooltip title="Approve">
-                          <IconButton
-                            size="small"
-                            onClick={() => approveTimeOffMutation.mutate(request.id)}
-                            disabled={approveTimeOffMutation.isPending}
-                            sx={{
-                              bgcolor: alpha(theme.palette.success.main, 0.1),
-                              color: "success.main",
-                              "&:hover": { 
-                                bgcolor: "success.main",
-                                color: "white"
-                              },
-                              transition: 'all 0.2s',
-                            }}
-                          >
+                          <IconButton size="small" onClick={() => approveTimeOffMutation.mutate(request.id)} disabled={approveTimeOffMutation.isPending} sx={{ bgcolor: alpha(theme.palette.success.main, 0.1), color: "success.main", "&:hover": { bgcolor: "success.main", color: "white" } }}>
                             <CheckIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                         <Tooltip title="Reject">
-                          <IconButton
-                            size="small"
-                            onClick={() => {
-                              setRejectingRequest(request);
-                              setRejectionReason('');
-                              setRejectDialogOpen(true);
-                            }}
-                            disabled={rejectTimeOffMutation.isPending}
-                            sx={{
-                              bgcolor: alpha(theme.palette.error.main, 0.1),
-                              color: "error.main",
-                              "&:hover": { 
-                                bgcolor: "error.main",
-                                color: "white"
-                              },
-                              transition: 'all 0.2s',
-                            }}
-                          >
+                          <IconButton size="small" onClick={() => { setRejectingRequest(request); setRejectionReason(''); setRejectDialogOpen(true); }} disabled={rejectTimeOffMutation.isPending} sx={{ bgcolor: alpha(theme.palette.error.main, 0.1), color: "error.main", "&:hover": { bgcolor: "error.main", color: "white" } }}>
                             <CloseIcon fontSize="small" />
                           </IconButton>
                         </Tooltip>
                       </Stack>
                     </Box>
-                  </Paper>
-                ))}
-              </Stack>
-            ) : (
-              <EmptyState
-                icon={<VerifiedIcon color="success" sx={{ fontSize: 40, opacity: 0.8 }} />}
-                title="All caught up!"
-                description=""
-              />
-            )}
-          </InfoCard>
+                  ))}
+
+                  {/* RECENTLY HANDLED REQUESTS (to show Rejection Reasons) */}
+                  {pendingTimeOffRequests.length < 3 && recentlyHandledApprovals.map((approval: any) => {
+                    const isRejected = approval.status === 'rejected';
+                    const color = isRejected ? theme.palette.error : theme.palette.success;
+                    return (
+                      <Box
+                        key={approval.id}
+                        sx={{
+                          p: 1.5, borderRadius: 2,
+                          bgcolor: alpha(color.main, 0.03),
+                          border: `1px solid ${alpha(color.main, 0.1)}`,
+                        }}
+                      >
+                         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
+                              {approval.requestedBy?.firstName} {approval.requestedBy?.lastName}
+                            </Typography>
+                            <Chip size="small" label={approval.status} color={isRejected ? "error" : "success"} variant="outlined" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 600, textTransform: 'capitalize' }} />
+                         </Box>
+                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                            {approval.type?.replace('_', ' ')} request {isRejected ? 'rejected' : 'approved'}.
+                         </Typography>
+                         {/* Display Rejection Reason if available */}
+                         {isRejected && approval.reason && (
+                           <Typography variant="caption" sx={{ display: 'block', mt: 1, p: 1, bgcolor: alpha(theme.palette.error.main, 0.08), borderRadius: 1, color: theme.palette.error.main, fontStyle: 'italic' }}>
+                             Reason: {approval.reason}
+                           </Typography>
+                         )}
+                      </Box>
+                    );
+                  })}
+                  
+                </Stack>
+              ) : (
+                <EmptyState icon={<VerifiedIcon color="success" sx={{ fontSize: 48, opacity: 0.5 }} />} title="All caught up!" description="No pending requests." />
+              )}
+            </CardContent>
+          </Card>
         </Grid>
       </Grid>
 
-      {/* Analytics Quick Access */}
-      <InfoCard
-        title="Analytics & Forecasting"
-        subtitle="Predictive insights and labor forecasting"
-        icon={<AnalyticsIcon />}
-        color="secondary"
-        headerAction={
-          <Link href="/analytics">
-            <Button size="small" endIcon={<ArrowRightIcon />} sx={{ color: "primary.main" }}>
-              View Forecasts
-            </Button>
-          </Link>
-        }
-      >
-        <Grid container spacing={2}>
-          <Grid size={{ xs: 6, md: 3 }}>
-            <Link href="/reports">
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2.5,
-                  borderRadius: 3,
-                  cursor: "pointer",
-                  background: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.1)} 0%, ${alpha(theme.palette.info.main, 0.02)} 100%)`,
-                  border: (theme) => `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
-                  transition: "all 0.2s",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    boxShadow: 4,
-                  },
-                }}
-              >
-                <ClockIcon sx={{ color: "info.main", mb: 1 }} />
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  Attendance
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Daily reports
-                </Typography>
-              </Paper>
-            </Link>
-          </Grid>
-          <Grid size={{ xs: 6, md: 3 }}>
-            <Link href="/reports">
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2.5,
-                  borderRadius: 3,
-                  cursor: "pointer",
-                  background: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.success.main, 0.1)} 0%, ${alpha(theme.palette.success.main, 0.02)} 100%)`,
-                  border: (theme) => `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
-                  transition: "all 0.2s",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    boxShadow: 4,
-                  },
-                }}
-              >
-                <DollarIcon sx={{ color: "success.main", mb: 1 }} />
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  Payroll
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Weekly breakdown
-                </Typography>
-              </Paper>
-            </Link>
-          </Grid>
-          <Grid size={{ xs: 6, md: 3 }}>
-            <Link href="/reports">
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2.5,
-                  borderRadius: 3,
-                  cursor: "pointer",
-                  background: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.1)} 0%, ${alpha(theme.palette.warning.main, 0.02)} 100%)`,
-                  border: (theme) => `1px solid ${alpha(theme.palette.warning.main, 0.2)}`,
-                  transition: "all 0.2s",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    boxShadow: 4,
-                  },
-                }}
-              >
-                <UsersIcon sx={{ color: "warning.main", mb: 1 }} />
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  Performance
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Employee metrics
-                </Typography>
-              </Paper>
-            </Link>
-          </Grid>
-          <Grid size={{ xs: 6, md: 3 }}>
-            <Link href="/analytics">
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 2.5,
-                  borderRadius: 3,
-                  cursor: "pointer",
-                  background: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.secondary.main, 0.1)} 0%, ${alpha(theme.palette.secondary.main, 0.02)} 100%)`,
-                  border: (theme) => `1px solid ${alpha(theme.palette.secondary.main, 0.2)}`,
-                  transition: "all 0.2s",
-                  "&:hover": {
-                    transform: "translateY(-2px)",
-                    boxShadow: 4,
-                  },
-                }}
-              >
-                <TrendingUpIcon sx={{ color: "secondary.main", mb: 1 }} />
-                <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                  Forecasting
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Labor predictions
-                </Typography>
-              </Paper>
-            </Link>
-          </Grid>
-        </Grid>
-      </InfoCard>
-
-      {/* Rejection Reason Dialog (Manager) */}
-      <Dialog
-        open={rejectDialogOpen}
-        onClose={() => setRejectDialogOpen(false)}
-        maxWidth="xs"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
-      >
-        <DialogTitle sx={{ fontWeight: 800, color: 'error.main', pb: 1 }}>
-          Reject Time-Off Request
-        </DialogTitle>
+      {/* Reject Dialog */}
+      <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+        <DialogTitle sx={{ fontWeight: 800, color: 'error.main', pb: 1 }}>Reject Time-Off Request</DialogTitle>
         <DialogContent>
           {rejectingRequest && (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Rejecting <strong>{rejectingRequest.user?.firstName || 'employee'}</strong>'s request
-              ({format(new Date(rejectingRequest.startDate), 'MMM d')} – {format(new Date(rejectingRequest.endDate), 'MMM d, yyyy')}).
-              Optionally state why.
+              Rejecting <strong>{rejectingRequest.user?.firstName}</strong>'s request. Optionally provide a reason so they know why.
             </Typography>
           )}
           <TextField
-            autoFocus
-            fullWidth
-            multiline
-            rows={3}
-            label="Reason for rejection (optional)"
-            placeholder="e.g. Insufficient staffing on that date."
+            autoFocus fullWidth multiline rows={3}
+            label="Rejection Reason"
+            placeholder="e.g. Insufficient staffing coverage on this date."
             value={rejectionReason}
             onChange={(e) => setRejectionReason(e.target.value)}
             inputProps={{ maxLength: 300 }}
@@ -767,25 +560,12 @@ function ManagerDashboard({
           />
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button onClick={() => setRejectDialogOpen(false)} variant="outlined" sx={{ borderRadius: 2, textTransform: 'none' }}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => {
-              if (rejectingRequest) {
-                rejectTimeOffMutation.mutate({ 
-                  requestId: rejectingRequest.id, 
-                  rejectionReason: rejectionReason.trim() || undefined 
-                });
-              }
-              setRejectDialogOpen(false);
-              setRejectingRequest(null);
-              setRejectionReason('');
+          <Button onClick={() => setRejectDialogOpen(false)} variant="outlined" sx={{ borderRadius: 2, textTransform: 'none' }}>Cancel</Button>
+          <Button onClick={() => {
+              if (rejectingRequest) rejectTimeOffMutation.mutate({ requestId: rejectingRequest.id, rejectionReason: rejectionReason.trim() || undefined });
+              setRejectDialogOpen(false); setRejectingRequest(null); setRejectionReason('');
             }}
-            variant="contained"
-            color="error"
-            disabled={rejectTimeOffMutation.isPending}
-            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+            variant="contained" color="error" disabled={rejectTimeOffMutation.isPending} sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
           >
             Confirm Rejection
           </Button>
@@ -794,6 +574,7 @@ function ManagerDashboard({
     </Stack>
   );
 }
+
 
 // Employee Dashboard Component
 function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoading }: any) {

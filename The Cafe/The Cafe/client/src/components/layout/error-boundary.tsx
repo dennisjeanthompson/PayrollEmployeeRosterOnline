@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 
 type Props = { children: React.ReactNode };
 type State = { hasError: boolean; error?: Error };
@@ -15,7 +15,7 @@ export default class ErrorBoundary extends React.Component<Props, State> {
 
   componentDidCatch(error: Error, errorInfo: unknown) {
     // eslint-disable-next-line no-console
-    console.error("Shift Trading crashed:", error, errorInfo);
+    console.error("Component crashed:", error, errorInfo);
   }
 
   render() {

@@ -3,7 +3,7 @@ import { useAuth, isManager, isAdmin, setAuthState } from "@/lib/auth";
 import { getInitials, capitalizeFirstLetter } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import React, { useState } from "react";
 
 // MUI Components
 import {
