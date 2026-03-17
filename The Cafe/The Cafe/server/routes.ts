@@ -548,8 +548,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ message: 'Failed to log out' });
       }
       
-      // Clear the session cookie - use the same name as configured in sessionConfig
-      res.clearCookie('cafe-session', { path: '/' });
+      // Clear the session cookie - use the same name and attributes as configured in sessionConfig
+      // The browser requires secure and sameSite attributes to match in cross-origin setups to delete the cookie
+      res.clearCookie('cafe-session', { 
+        path: '/',
+        secure: process.env.SESSION_COOKIE_SECURE
+          ? String(process.env.SESSION_COOKIE_SECURE).toLowerCase() === 'true'
+          : (process.env.NODE_ENV === 'production'),
+        sameSite: process.env.FRONTEND_URL ? 'none' : 'lax'
+      });
       res.json({ message: "Logged out successfully" });
     });
   });

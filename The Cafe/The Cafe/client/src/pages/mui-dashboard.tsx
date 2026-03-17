@@ -8,7 +8,6 @@ import { Link, useLocation } from "wouter";
 import { getInitials } from "@/lib/utils";
 import { StatCard, InfoCard, UserCard, EmptyState, ActionButtons } from "@/components/mui/cards";
 
-// MUI Components
 import {
   Box,
   Typography,
@@ -27,6 +26,11 @@ import {
   Skeleton,
   Badge,
   LinearProgress,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 
@@ -161,8 +165,11 @@ export default function MuiDashboard() {
   });
 
   const rejectTimeOffMutation = useMutation({
-    mutationFn: async (requestId: string) => {
-      const response = await apiRequest("PUT", `/api/time-off-requests/${requestId}/reject`, {});
+    mutationFn: async ({ requestId, rejectionReason }: { requestId: string; rejectionReason?: string }) => {
+      const response = await apiRequest("PUT", `/api/time-off-requests/${requestId}/reject`, {
+        status: 'rejected',
+        rejectionReason
+      });
       return response.json();
     },
     onSuccess: () => {
@@ -218,6 +225,9 @@ function ManagerDashboard({
   rejectTimeOffMutation,
 }: any) {
   const theme = useTheme();
+  const [rejectDialogOpen, setRejectDialogOpen] = React.useState(false);
+  const [rejectingRequest, setRejectingRequest] = React.useState<any>(null);
+  const [rejectionReason, setRejectionReason] = React.useState('');
 
   return (
     <Stack spacing={4}>
@@ -494,30 +504,51 @@ function ManagerDashboard({
                     elevation={0}
                     sx={{
                       p: 2,
-                      borderRadius: 3,
-                      background: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.08)} 0%, ${alpha(theme.palette.warning.main, 0.02)} 100%)`,
-                      border: (theme) => `1px solid ${alpha(theme.palette.warning.main, 0.2)}`,
+                      borderRadius: 4,
+                      background: (theme) => `linear-gradient(135deg, ${alpha(theme.palette.warning.main, 0.05)} 0%, ${alpha(theme.palette.background.paper, 0.6)} 100%)`,
+                      border: (theme) => `1px solid ${alpha(theme.palette.warning.main, 0.15)}`,
+                      transition: 'all 0.2s ease',
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        boxShadow: (theme) => `0 4px 20px ${alpha(theme.palette.warning.main, 0.1)}`,
+                        borderColor: alpha(theme.palette.warning.main, 0.3),
+                      }
                     }}
                   >
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 2 }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 2, flex: 1, minWidth: 0 }}>
+                      <Box sx={{ display: "flex", alignItems: "center", gap: 2.5, flex: 1, minWidth: 0 }}>
                         <Avatar
                           sx={{
-                            width: 36,
-                            height: 36,
-                            bgcolor: "primary.main",
-                            fontSize: "0.8rem",
+                            width: 42,
+                            height: 42,
+                            bgcolor: alpha(theme.palette.warning.main, 0.15),
+                            color: "warning.main",
+                            fontWeight: 700,
+                            border: `2px solid ${alpha(theme.palette.warning.main, 0.2)}`
                           }}
                         >
                           {getInitials(request.user?.firstName, request.user?.lastName)}
                         </Avatar>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }} noWrap>
+                          <Typography variant="body2" sx={{ fontWeight: 600, mb: 0.5 }} noWrap>
                             {request.user?.firstName} {request.user?.lastName}
                           </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            {request.type} • {format(new Date(request.startDate), "MMM d")} - {format(new Date(request.endDate), "MMM d")}
-                          </Typography>
+                          <Stack direction="row" spacing={1} alignItems="center">
+                            <Chip 
+                              label={request.type.replace('_', ' ')} 
+                              size="small" 
+                              sx={{ 
+                                height: 20, 
+                                fontSize: '0.65rem', 
+                                fontWeight: 600, 
+                                textTransform: 'capitalize',
+                                bgcolor: alpha(theme.palette.text.primary, 0.05)
+                              }} 
+                            />
+                            <Typography variant="caption" color="text.secondary" noWrap>
+                              {format(new Date(request.startDate), "MMM d")} - {format(new Date(request.endDate), "MMM d")}
+                            </Typography>
+                          </Stack>
                         </Box>
                       </Box>
                       <Stack direction="row" spacing={1}>
@@ -527,9 +558,13 @@ function ManagerDashboard({
                             onClick={() => approveTimeOffMutation.mutate(request.id)}
                             disabled={approveTimeOffMutation.isPending}
                             sx={{
-                              bgcolor: "success.main",
-                              color: "white",
-                              "&:hover": { bgcolor: "success.dark" },
+                              bgcolor: alpha(theme.palette.success.main, 0.1),
+                              color: "success.main",
+                              "&:hover": { 
+                                bgcolor: "success.main",
+                                color: "white"
+                              },
+                              transition: 'all 0.2s',
                             }}
                           >
                             <CheckIcon fontSize="small" />
@@ -538,12 +573,20 @@ function ManagerDashboard({
                         <Tooltip title="Reject">
                           <IconButton
                             size="small"
-                            onClick={() => rejectTimeOffMutation.mutate(request.id)}
+                            onClick={() => {
+                              setRejectingRequest(request);
+                              setRejectionReason('');
+                              setRejectDialogOpen(true);
+                            }}
                             disabled={rejectTimeOffMutation.isPending}
                             sx={{
-                              border: (theme) => `1px solid ${alpha(theme.palette.error.main, 0.3)}`,
+                              bgcolor: alpha(theme.palette.error.main, 0.1),
                               color: "error.main",
-                              "&:hover": { bgcolor: alpha("#ef4444", 0.1) },
+                              "&:hover": { 
+                                bgcolor: "error.main",
+                                color: "white"
+                              },
+                              transition: 'all 0.2s',
                             }}
                           >
                             <CloseIcon fontSize="small" />
@@ -556,9 +599,9 @@ function ManagerDashboard({
               </Stack>
             ) : (
               <EmptyState
-                icon={<VerifiedIcon />}
+                icon={<VerifiedIcon color="success" sx={{ fontSize: 40, opacity: 0.8 }} />}
                 title="All caught up!"
-                description="No pending requests to review"
+                description=""
               />
             )}
           </InfoCard>
@@ -690,6 +733,64 @@ function ManagerDashboard({
           </Grid>
         </Grid>
       </InfoCard>
+
+      {/* Rejection Reason Dialog (Manager) */}
+      <Dialog
+        open={rejectDialogOpen}
+        onClose={() => setRejectDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, color: 'error.main', pb: 1 }}>
+          Reject Time-Off Request
+        </DialogTitle>
+        <DialogContent>
+          {rejectingRequest && (
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Rejecting <strong>{rejectingRequest.user?.firstName || 'employee'}</strong>'s request
+              ({format(new Date(rejectingRequest.startDate), 'MMM d')} – {format(new Date(rejectingRequest.endDate), 'MMM d, yyyy')}).
+              Optionally state why.
+            </Typography>
+          )}
+          <TextField
+            autoFocus
+            fullWidth
+            multiline
+            rows={3}
+            label="Reason for rejection (optional)"
+            placeholder="e.g. Insufficient staffing on that date."
+            value={rejectionReason}
+            onChange={(e) => setRejectionReason(e.target.value)}
+            inputProps={{ maxLength: 300 }}
+            helperText={`${rejectionReason.length}/300`}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={() => setRejectDialogOpen(false)} variant="outlined" sx={{ borderRadius: 2, textTransform: 'none' }}>
+            Cancel
+          </Button>
+          <Button
+            onClick={() => {
+              if (rejectingRequest) {
+                rejectTimeOffMutation.mutate({ 
+                  requestId: rejectingRequest.id, 
+                  rejectionReason: rejectionReason.trim() || undefined 
+                });
+              }
+              setRejectDialogOpen(false);
+              setRejectingRequest(null);
+              setRejectionReason('');
+            }}
+            variant="contained"
+            color="error"
+            disabled={rejectTimeOffMutation.isPending}
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+          >
+            Confirm Rejection
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Stack>
   );
 }
