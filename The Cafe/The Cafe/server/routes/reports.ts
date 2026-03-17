@@ -42,10 +42,18 @@ const escapeCSV = (value: any): string => {
 };
 
 // Helper to generate CSV from array of objects
-const generateCSV = (data: any[], columns: { key: string; header: string }[]): string => {
+interface ColumnDef { key: string; header: string; isCurrency?: boolean }
+
+const generateCSV = (data: any[], columns: ColumnDef[]): string => {
   const headers = columns.map(c => c.header).join(",");
   const rows = data.map(row => 
-    columns.map(c => escapeCSV(row[c.key])).join(",")
+    columns.map(c => {
+      let val = row[c.key];
+      if (c.isCurrency && val !== null && val !== undefined && val !== "" && !isNaN(Number(val))) {
+        val = `₱ ${Number(val).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      }
+      return escapeCSV(val);
+    }).join(",")
   );
   return [headers, ...rows].join("\n");
 };
@@ -99,7 +107,7 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
       })
     );
 
-    const columns = [
+    const columns: ColumnDef[] = [
       { key: "employeeName", header: "Employee Name" },
       { key: "employeeId", header: "Employee ID" },
       { key: "position", header: "Position" },
@@ -107,22 +115,22 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
       { key: "regularHours", header: "Regular Hours" },
       { key: "overtimeHours", header: "Overtime Hours" },
       { key: "nightDiffHours", header: "Night Diff Hours" },
-      { key: "basicPay", header: "Basic Pay (₱)" },
-      { key: "overtimePay", header: "Overtime Pay (₱)" },
-      { key: "nightDiffPay", header: "Night Diff Pay (₱)" },
-      { key: "holidayPay", header: "Holiday Pay (₱)" },
-      { key: "restDayPay", header: "Rest Day Pay (₱)" },
-      { key: "grossPay", header: "Gross Pay (₱)" },
-      { key: "sssContribution", header: "SSS (₱)" },
-      { key: "sssLoan", header: "SSS Loan (₱)" },
-      { key: "philHealthContribution", header: "PhilHealth (₱)" },
-      { key: "pagibigContribution", header: "Pag-IBIG (₱)" },
-      { key: "pagibigLoan", header: "Pag-IBIG Loan (₱)" },
-      { key: "withholdingTax", header: "Tax (₱)" },
-      { key: "advances", header: "Cash Advances (₱)" },
-      { key: "otherDeductions", header: "Other Deductions (₱)" },
-      { key: "totalDeductions", header: "Total Deductions (₱)" },
-      { key: "netPay", header: "Net Pay (₱)" },
+      { key: "basicPay", header: "Basic Pay", isCurrency: true },
+      { key: "overtimePay", header: "Overtime Pay", isCurrency: true },
+      { key: "nightDiffPay", header: "Night Diff Pay", isCurrency: true },
+      { key: "holidayPay", header: "Holiday Pay", isCurrency: true },
+      { key: "restDayPay", header: "Rest Day Pay", isCurrency: true },
+      { key: "grossPay", header: "Gross Pay", isCurrency: true },
+      { key: "sssContribution", header: "SSS Contribution", isCurrency: true },
+      { key: "sssLoan", header: "SSS Loan", isCurrency: true },
+      { key: "philHealthContribution", header: "PhilHealth Contribution", isCurrency: true },
+      { key: "pagibigContribution", header: "Pag-IBIG Contribution", isCurrency: true },
+      { key: "pagibigLoan", header: "Pag-IBIG Loan", isCurrency: true },
+      { key: "withholdingTax", header: "Withholding Tax", isCurrency: true },
+      { key: "advances", header: "Cash Advances", isCurrency: true },
+      { key: "otherDeductions", header: "Other Deductions", isCurrency: true },
+      { key: "totalDeductions", header: "Total Deductions", isCurrency: true },
+      { key: "netPay", header: "Net Pay", isCurrency: true },
       { key: "status", header: "Status" },
     ];
 
@@ -161,13 +169,13 @@ router.get("/api/reports/employees/export", requireAuth, requireManagerRole, asy
       employees = employees.filter(e => e.isActive);
     }
 
-    const columns = [
+    const columns: ColumnDef[] = [
       { key: "id", header: "Employee ID" },
       { key: "firstName", header: "First Name" },
       { key: "lastName", header: "Last Name" },
       { key: "email", header: "Email" },
       { key: "position", header: "Position" },
-      { key: "hourlyRate", header: "Hourly Rate (₱)" },
+      { key: "hourlyRate", header: "Hourly Rate", isCurrency: true },
       { key: "role", header: "Role" },
       { key: "isActive", header: "Active" },
       { key: "createdAt", header: "Hire Date" },
@@ -238,17 +246,17 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
       })
     );
 
-    const columns = [
+    const columns: ColumnDef[] = [
       { key: "employeeName", header: "Employee Name" },
-      { key: "sssContribution", header: "SSS (₱)" },
-      { key: "sssLoan", header: "SSS Loan (₱)" },
-      { key: "philHealthContribution", header: "PhilHealth (₱)" },
-      { key: "pagibigContribution", header: "Pag-IBIG (₱)" },
-      { key: "pagibigLoan", header: "Pag-IBIG Loan (₱)" },
-      { key: "withholdingTax", header: "Tax (₱)" },
-      { key: "advances", header: "Advances (₱)" },
-      { key: "otherDeductions", header: "Other (₱)" },
-      { key: "totalDeductions", header: "Total (₱)" },
+      { key: "sssContribution", header: "SSS Contribution", isCurrency: true },
+      { key: "sssLoan", header: "SSS Loan", isCurrency: true },
+      { key: "philHealthContribution", header: "PhilHealth Contribution", isCurrency: true },
+      { key: "pagibigContribution", header: "Pag-IBIG Contribution", isCurrency: true },
+      { key: "pagibigLoan", header: "Pag-IBIG Loan", isCurrency: true },
+      { key: "withholdingTax", header: "Withholding Tax", isCurrency: true },
+      { key: "advances", header: "Cash Advances", isCurrency: true },
+      { key: "otherDeductions", header: "Other Deductions", isCurrency: true },
+      { key: "totalDeductions", header: "Total Deductions", isCurrency: true },
     ];
 
     const csv = generateCSV(enrichedEntries, columns);
