@@ -4,7 +4,8 @@
  */
 
 import { useState, useCallback } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 import { useRealtime } from "@/hooks/use-realtime";
 import {
   Box,
@@ -221,11 +222,10 @@ export default function MuiAuditLogs() {
     return params.toString();
   }, [entityTypeFilter, actionFilter, page, rowsPerPage]);
 
-  const { data: logsData, isLoading } = useQuery<{ logs: AuditLog[]; total: number }>({
+  const { data: logsData, isLoading, refetch: refetchLogs } = useQuery<{ logs: AuditLog[]; total: number }>({
     queryKey: ["/api/audit-logs", entityTypeFilter, actionFilter, page, rowsPerPage],
     queryFn: async () => {
-      const res = await fetch(`/api/audit-logs?${buildQueryParams()}`);
-      if (!res.ok) throw new Error("Failed to fetch audit logs");
+      const res = await apiRequest("GET", `/api/audit-logs?${buildQueryParams()}`);
       return res.json();
     },
     refetchInterval: 30000,
@@ -247,6 +247,7 @@ export default function MuiAuditLogs() {
         const user = data?.auditLog?.userName || "Unknown user";
         setSnackbarMessage(`${user} — ${actionLabels[action] || action} (${entityTypeLabels[entity] || entity})`);
         setSnackbarOpen(true);
+        refetchLogs();
       }
     },
     []

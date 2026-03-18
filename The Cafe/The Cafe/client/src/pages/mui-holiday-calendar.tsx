@@ -108,8 +108,7 @@ export default function MuiHolidayCalendar() {
   const { data: holidaysData, isLoading } = useQuery<{ holidays: Holiday[] }>({
     queryKey: ["/api/holidays", { year: selectedYear }],
     queryFn: async () => {
-      const res = await fetch(`/api/holidays?year=${selectedYear}`, { credentials: "include" });
-      if (!res.ok) throw new Error("Failed to fetch holidays");
+      const res = await apiRequest("GET", `/api/holidays?year=${selectedYear}`);
       return res.json();
     },
     refetchInterval: 10000,
