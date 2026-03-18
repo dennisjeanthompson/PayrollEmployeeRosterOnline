@@ -142,6 +142,7 @@ export const timeOffRequests = pgTable("time_off_requests", {
 export const notifications = pgTable("notifications", {
   id: text("id").primaryKey(),
   userId: text("user_id").references(() => users.id).notNull(),
+  branchId: text("branch_id").references(() => branches.id), // Added branchId for filtering
   type: text("type").notNull(),
   title: text("title").notNull(),
   message: text("message").notNull(),

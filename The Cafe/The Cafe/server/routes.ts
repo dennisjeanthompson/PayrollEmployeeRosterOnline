@@ -4015,12 +4015,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/notifications", requireAuth, asyncHandler(async (req, res) => {
     try {
       const userId = req.user!.id;
+      const activeBranchId = req.user!.branchId;
       const notifications = await storage.getUserNotifications(userId);
+
+      // Filter to only show branch-specific notifications for the active branch (or global null branch notifications)
+      const branchFiltered = notifications.filter((n: any) => !n.branchId || n.branchId === activeBranchId);
 
       // Employees should not see internal manager/admin exception logs.
       const filteredNotifications = req.user!.role === 'employee'
-        ? notifications.filter((notification: any) => notification.type !== 'adjustment')
-        : notifications;
+        ? branchFiltered.filter((notification: any) => notification.type !== 'adjustment')
+        : branchFiltered;
 
       res.json({ notifications: filteredNotifications });
     } catch (error: any) {

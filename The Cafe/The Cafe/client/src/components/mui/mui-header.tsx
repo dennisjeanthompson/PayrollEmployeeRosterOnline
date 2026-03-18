@@ -95,8 +95,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 }));
 
 export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void }) {
-  const currentUser = getCurrentUser();
-  const { switchBranch, isAuthenticated } = useAuth();
+  const { user: currentUser, switchBranch, isAuthenticated } = useAuth();
   const canSwitchBranch = isAdmin() || isManager();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [location, setLocation] = useLocation();

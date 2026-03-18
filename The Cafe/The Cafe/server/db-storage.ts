@@ -712,11 +712,22 @@ export class DatabaseStorage implements IStorage {
   // Notifications
   async createNotification(notification: InsertNotification): Promise<Notification> {
     const id = randomUUID();
+    let branchId = notification.branchId;
+
+    // Auto-populate branchId from the target user if not explicitly provided
+    if (!branchId && notification.userId) {
+      const userResult = await db.select({ branchId: users.branchId }).from(users).where(eq(users.id, notification.userId)).limit(1);
+      if (userResult.length > 0) {
+        branchId = userResult[0].branchId;
+      }
+    }
+
     const dataString = notification.data ? JSON.stringify(notification.data) : null;
     
     await db.insert(notifications).values({
       id,
       ...notification,
+      branchId,
       data: dataString,
       createdAt: new Date(),
     });
