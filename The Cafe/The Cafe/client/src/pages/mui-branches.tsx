@@ -124,8 +124,7 @@ interface Employee {
 
 export default function MuiBranches() {
   const theme = useTheme();
-  const currentUser = getCurrentUser();
-  const { switchBranch } = useAuth();
+  const { user: currentUser, switchBranch } = useAuth();
   const isAdminRole = isAdmin();
   const isManagerRole = isManager();
   const isEmployeeRole = isEmployee();
@@ -137,7 +136,7 @@ export default function MuiBranches() {
   // Branch switching state - auto-detect from user's branch or last used
   const getStoredBranch = (): string => {
     try {
-      const stored = localStorage.getItem('selectedBranchId');
+      const stored = localStorage.getItem('lastBranchId');
       if (stored && canSwitchBranch) return stored;
     } catch {}
     return currentUser?.branchId || '';
@@ -203,12 +202,12 @@ export default function MuiBranches() {
   const allEmployees: Employee[] = Array.isArray(employeesResponse?.employees) ? employeesResponse.employees : (Array.isArray(employeesResponse) ? employeesResponse : []);
   const activeBranches = branches.filter((b: Branch) => b.isActive);
 
-  // Auto-select user's branch if not set
+  // Sync local selection with global user branch if it changes externally (e.g., from top nav)
   useEffect(() => {
-    if (!selectedBranchId && currentUser?.branchId && branches.length > 0) {
+    if (currentUser?.branchId && currentUser.branchId !== selectedBranchId) {
       setSelectedBranchId(currentUser.branchId);
     }
-  }, [currentUser?.branchId, branches, selectedBranchId]);
+  }, [currentUser?.branchId, selectedBranchId]);
 
   // Filter branches based on view mode and role
   const displayedBranches = useMemo(() => {
