@@ -203,7 +203,8 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(csv);
+    // Pass explicit Buffer to prevent Express from messing with the BOM bytes
+    res.send(Buffer.from(csv, "utf8"));
 
     await createAuditLog({
       action: "export_payroll",
@@ -283,7 +284,7 @@ router.get("/api/reports/employees/export", requireAuth, requireManagerRole, asy
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(csv);
+    res.send(Buffer.from(csv, "utf8"));
 
     await createAuditLog({
       action: "export_employees",
@@ -388,7 +389,7 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(csv);
+    res.send(Buffer.from(csv, "utf8"));
 
     await createAuditLog({
       action: "export_deductions",
