@@ -430,6 +430,7 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
     const periodMap = new Map(allPeriods.map((p) => [p.id, p]));
 
     let totalGross = 0, totalDeductions = 0, totalNet = 0, totalHours = 0;
+    let totalSSS = 0, totalPhilHealth = 0, totalPagibig = 0, totalTax = 0;
 
     for (const employee of activeEmployees) {
       const entries = await storage.getPayrollEntriesByUser(employee.id);
@@ -442,6 +443,11 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
             totalDeductions += parseFloat(entry.totalDeductions || "0");
             totalNet += parseFloat(entry.netPay || "0");
             totalHours += parseFloat(entry.totalHours || "0");
+            
+            totalSSS += parseFloat(entry.sssContribution || "0");
+            totalPhilHealth += parseFloat(entry.philHealthContribution || "0");
+            totalPagibig += parseFloat(entry.pagibigContribution || "0");
+            totalTax += parseFloat(entry.withholdingTax || "0");
           }
         }
       }
@@ -455,6 +461,10 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
         totalDeductions: (Math.round(totalDeductions * 100) / 100).toFixed(2),
         totalNet: (Math.round(totalNet * 100) / 100).toFixed(2),
         totalHours: totalHours.toFixed(2),
+        totalSSS: (Math.round(totalSSS * 100) / 100).toFixed(2),
+        totalPhilHealth: (Math.round(totalPhilHealth * 100) / 100).toFixed(2),
+        totalPagibig: (Math.round(totalPagibig * 100) / 100).toFixed(2),
+        totalTax: (Math.round(totalTax * 100) / 100).toFixed(2),
         month: targetMonth + 1,
         year: targetYear,
       },

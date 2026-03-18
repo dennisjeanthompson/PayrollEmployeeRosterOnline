@@ -47,6 +47,7 @@ import {
 } from "recharts";
 import { format, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -127,10 +128,7 @@ export default function MuiAnalytics() {
   } = useQuery<TrendsData>({
     queryKey: ["analytics-trends"],
     queryFn: async () => {
-      const res = await fetch("/api/analytics/trends?days=56&view=daily", {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch trends");
+      const res = await apiRequest("GET", "/api/analytics/trends?days=56&view=daily");
       return res.json();
     },
     retry: 2,
@@ -145,10 +143,7 @@ export default function MuiAnalytics() {
   } = useQuery<LaborForecast>({
     queryKey: ["forecast-labor", forecastDays],
     queryFn: async () => {
-      const res = await fetch(`/api/forecast/labor?days=${forecastDays}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch labor forecast");
+      const res = await apiRequest("GET", `/api/forecast/labor?days=${forecastDays}`);
       return res.json();
     },
     retry: 2,
@@ -163,10 +158,7 @@ export default function MuiAnalytics() {
   } = useQuery<PayrollForecast>({
     queryKey: ["forecast-payroll", forecastDays],
     queryFn: async () => {
-      const res = await fetch(`/api/forecast/payroll?days=${forecastDays}`, {
-        credentials: "include",
-      });
-      if (!res.ok) throw new Error("Failed to fetch payroll forecast");
+      const res = await apiRequest("GET", `/api/forecast/payroll?days=${forecastDays}`);
       return res.json();
     },
     retry: 2,

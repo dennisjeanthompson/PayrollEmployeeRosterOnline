@@ -42,7 +42,7 @@ export default function MuiReports() {
     queryKey: ["/api/payroll/periods"],
   });
 
-  const { data: summaryData, isLoading } = useQuery<{ summary: { totalEmployees: number; activeEmployees: number; totalGross: string; totalDeductions: string; totalNet: string; totalHours: string } }>({
+  const { data: summaryData, isLoading } = useQuery<{ summary: { totalEmployees: number; activeEmployees: number; totalGross: string; totalDeductions: string; totalNet: string; totalHours: string; totalSSS: string; totalPhilHealth: string; totalPagibig: string; totalTax: string; } }>({
     queryKey: ["/api/reports/summary", selectedMonth],
     queryFn: async () => {
       const [year, month] = selectedMonth.split("-");
@@ -179,6 +179,60 @@ export default function MuiReports() {
                   </Typography>
                 </Box>
               </Stack>
+            </CardContent>
+          </Card>
+        </Stack>
+      )}
+
+      {/* Detailed Deductions Summary Cards */}
+      {!isLoading && summary && (
+        <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 4 }}>
+          <Card elevation={0} sx={{ flex: 1, borderRadius: 3, bgcolor: alpha(theme.palette.error.main, 0.05) }}>
+            <CardContent>
+              <Box>
+                <Typography variant="h5" fontWeight={700} color="error.main">
+                  ₱{parseFloat(summary.totalSSS || "0").toLocaleString()}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total SSS
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+          <Card elevation={0} sx={{ flex: 1, borderRadius: 3, bgcolor: alpha(theme.palette.error.main, 0.05) }}>
+            <CardContent>
+              <Box>
+                <Typography variant="h5" fontWeight={700} color="error.main">
+                  ₱{parseFloat(summary.totalPhilHealth || "0").toLocaleString()}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total PhilHealth
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+          <Card elevation={0} sx={{ flex: 1, borderRadius: 3, bgcolor: alpha(theme.palette.error.main, 0.05) }}>
+            <CardContent>
+              <Box>
+                <Typography variant="h5" fontWeight={700} color="error.main">
+                  ₱{parseFloat(summary.totalPagibig || "0").toLocaleString()}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total Pag-IBIG
+                </Typography>
+              </Box>
+            </CardContent>
+          </Card>
+          <Card elevation={0} sx={{ flex: 1, borderRadius: 3, bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
+            <CardContent>
+              <Box>
+                <Typography variant="h5" fontWeight={700} color="warning.main">
+                  ₱{parseFloat(summary.totalTax || "0").toLocaleString()}
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  Total Tax
+                </Typography>
+              </Box>
             </CardContent>
           </Card>
         </Stack>
