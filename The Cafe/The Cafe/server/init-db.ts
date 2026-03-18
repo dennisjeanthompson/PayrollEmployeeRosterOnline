@@ -433,20 +433,23 @@ export async function createAdminAccount() {
       return;
     }
 
-    // Check if default branch exists, create if not
-    let branch = await db.select().from(branches).limit(1);
-    
-    if (branch.length === 0) {
-      const branchId = randomUUID();
-      await db.insert(branches).values({
-        id: branchId,
-        name: 'Main Branch',
-        address: '123 Main Street',
-        phone: '555-0100',
-        isActive: true,
-      });
-      branch = await db.select().from(branches).where(eq(branches.id, branchId));
-      console.log('✅ Created default branch');
+    // Seed 3 PERO branches if none exist
+    const existingBranches = await db.select().from(branches);
+    let mainBranchId: string;
+
+    if (existingBranches.length === 0) {
+      const branchSeeds = [
+        { id: 'branch-malate', name: 'PERO – Malate', address: 'Taft Avenue, Malate, Manila', phone: '(02) 8521-1234' },
+        { id: 'branch-tondo', name: 'PERO – Tondo', address: 'Dok. Alejandro Roces Avenue, Tondo, Manila', phone: '(02) 8251-5678' },
+        { id: 'branch-quezon', name: 'PERO – Quezon City', address: 'Timog Avenue, Quezon City', phone: '(02) 7902-8900' },
+      ];
+      for (const b of branchSeeds) {
+        await db.insert(branches).values({ ...b, isActive: true });
+      }
+      mainBranchId = 'branch-malate';
+      console.log('✅ Created 3 PERO branches (Malate, Tondo, Quezon City)');
+    } else {
+      mainBranchId = existingBranches[0].id;
     }
 
     // Create admin user
@@ -459,11 +462,11 @@ export async function createAdminAccount() {
       password: hashedPassword,
       firstName: 'System',
       lastName: 'Administrator',
-      email: 'admin@thecafe.com',
+      email: 'admin@pero.com.ph',
       role: 'admin',
       position: 'Administrator',
       hourlyRate: '0',
-      branchId: branch[0].id,
+      branchId: mainBranchId,
       isActive: true,
     });
 
@@ -703,105 +706,141 @@ export async function seedSampleUsers() {
       return;
     }
 
-    // Get the default branch
-    const branch = await db.select().from(branches).limit(1);
-    if (branch.length === 0) {
-      console.log('⚠️  No branch found, skipping sample users');
+    // Get or create the 3 PERO branches
+    const allBranches = await db.select().from(branches);
+
+    // Map by name for easy lookup
+    const getBranchId = (keyword: string) => {
+      const found = allBranches.find(b => b.name.toLowerCase().includes(keyword.toLowerCase()));
+      return found?.id || allBranches[0]?.id || 'branch-malate';
+    };
+
+    const malateId = getBranchId('malate');
+    const tondoId = getBranchId('tondo');
+    const quezonId = getBranchId('quezon');
+
+    if (allBranches.length === 0) {
+      console.log('⚠️  No branches found, skipping sample users');
       return;
     }
 
-    const branchId = branch[0].id;
     const hashedPassword = await bcrypt.hash('password123', 10);
 
-    // Realistic NCR café employees — 2026 minimum-wage-based rates
-    // NCR daily minimum ~₱645 (2026 est.) = ₱80.63/hr
-    // Rates: Manager ~₱120/hr, Shift Lead ~₱97.50, Barista ~₱85, Cashier ~₱82, Kitchen ~₱82.50, Server ~₱80
+    // ─── NCR café employees with Filipino names, spread across 3 branches ───
+    // NCR daily min ~₱645 (2026) = ₱80.63/hr
     const sampleUsers = [
-      // Manager (monthly ~₱24,960)
+      // === PERO – Malate ===
       { 
         id: 'user-mgr-sarah',
-        username: 'sarah', 
-        firstName: 'Sarah', 
-        lastName: 'Cruz', 
-        email: 'sarah.cruz@thecafe.ph', 
+        username: 'bautista.m', 
+        firstName: 'Maria Lourdes', 
+        lastName: 'Bautista', 
+        email: 'maria.bautista@pero.com.ph', 
         role: 'manager', 
         position: 'Branch Manager', 
         hourlyRate: '120.00',
-        sssLoan: '0',
-        pagibigLoan: '0',
+        branchId: malateId,
+        sssLoan: '0', pagibigLoan: '0',
       },
-      // Employees
       { 
         id: 'user-emp-sam',
-        username: 'sam', 
-        firstName: 'Sam', 
+        username: 'santos.j', 
+        firstName: 'Juan Miguel', 
         lastName: 'Santos', 
-        email: 'sam.santos@thecafe.ph', 
+        email: 'juan.santos@pero.com.ph', 
         role: 'employee', 
         position: 'Senior Barista', 
         hourlyRate: '85.00',
-        sssLoan: '0',
-        pagibigLoan: '0',
+        branchId: malateId,
+        sssLoan: '0', pagibigLoan: '0',
       },
       { 
         id: 'user-emp-ana',
-        username: 'ana', 
+        username: 'garcia.a', 
         firstName: 'Ana Marie', 
         lastName: 'Garcia', 
-        email: 'ana.garcia@thecafe.ph', 
+        email: 'ana.garcia@pero.com.ph', 
         role: 'employee', 
         position: 'Cashier', 
         hourlyRate: '82.00',
-        sssLoan: '0',
-        pagibigLoan: '0',
+        branchId: malateId,
+        sssLoan: '0', pagibigLoan: '0',
+      },
+
+      // === PERO – Tondo ===
+      { 
+        id: 'user-mgr-tondo',
+        username: 'reyes.r', 
+        firstName: 'Renato', 
+        lastName: 'Reyes', 
+        email: 'renato.reyes@pero.com.ph', 
+        role: 'manager', 
+        position: 'Branch Manager', 
+        hourlyRate: '120.00',
+        branchId: tondoId,
+        sssLoan: '0', pagibigLoan: '0',
       },
       { 
         id: 'user-emp-pedro',
-        username: 'pedro', 
+        username: 'dela.cruz.p', 
         firstName: 'Pedro Miguel', 
-        lastName: 'Reyes', 
-        email: 'pedro.reyes@thecafe.ph', 
+        lastName: 'Dela Cruz', 
+        email: 'pedro.delacruz@pero.com.ph', 
         role: 'employee', 
         position: 'Kitchen Staff', 
         hourlyRate: '82.50',
-        sssLoan: '800',
-        pagibigLoan: '0',
+        branchId: tondoId,
+        sssLoan: '800', pagibigLoan: '0',
       },
       {
         id: 'user-emp-sofia',
-        username: 'sofia',
-        firstName: 'Sofia',
+        username: 'mendoza.s',
+        firstName: 'Sofia Isabelle',
         lastName: 'Mendoza',
-        email: 'sofia.mendoza@thecafe.ph',
+        email: 'sofia.mendoza@pero.com.ph',
         role: 'employee',
         position: 'Shift Lead',
         hourlyRate: '97.50',
-        sssLoan: '0',
-        pagibigLoan: '500',
+        branchId: tondoId,
+        sssLoan: '0', pagibigLoan: '500',
+      },
+
+      // === PERO – Quezon City ===
+      {
+        id: 'user-mgr-quezon',
+        username: 'cruz.m',
+        firstName: 'Maricel',
+        lastName: 'Cruz',
+        email: 'maricel.cruz@pero.com.ph',
+        role: 'manager',
+        position: 'Branch Manager',
+        hourlyRate: '120.00',
+        branchId: quezonId,
+        sssLoan: '0', pagibigLoan: '0',
       },
       {
         id: 'user-emp-miguel',
-        username: 'miguel',
+        username: 'torres.l',
         firstName: 'Luis Miguel',
         lastName: 'Torres',
-        email: 'miguel.torres@thecafe.ph',
+        email: 'luis.torres@pero.com.ph',
         role: 'employee',
         position: 'Barista',
         hourlyRate: '80.00',
-        sssLoan: '0',
-        pagibigLoan: '0',
+        branchId: quezonId,
+        sssLoan: '0', pagibigLoan: '0',
       },
       {
         id: 'user-emp-bea',
-        username: 'bea',
-        firstName: 'Bea',
+        username: 'alonzo.b',
+        firstName: 'Beatriz',
         lastName: 'Alonzo',
-        email: 'bea.alonzo@thecafe.ph',
+        email: 'beatriz.alonzo@pero.com.ph',
         role: 'employee',
         position: 'Server',
         hourlyRate: '80.00',
-        sssLoan: '0',
-        pagibigLoan: '0',
+        branchId: quezonId,
+        sssLoan: '0', pagibigLoan: '0',
       },
     ];
 
@@ -823,14 +862,14 @@ export async function seedSampleUsers() {
         role: user.role,
         position: user.position,
         hourlyRate: user.hourlyRate,
-        branchId: branchId,
+        branchId: user.branchId,
         isActive: true,
         sssLoanDeduction: user.sssLoan || '0',
         pagibigLoanDeduction: user.pagibigLoan || '0',
       });
     }
 
-    console.log('✅ Sample users created (password: password123)');
+    console.log('✅ Sample users created — 3 branches × Filipino names (password: password123)');
   } catch (error) {
     console.error('❌ Error seeding sample users:', error);
     throw error;

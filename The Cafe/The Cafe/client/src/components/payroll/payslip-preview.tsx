@@ -388,7 +388,7 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     const mediumGray = [153, 153, 153] as [number, number, number];
 
     let y = 20;
-    const companyName = payslipData.companyName || "The Café";
+    const companyName = payslipData.companyName || "PERO";
     const companyAddress = payslipData.companyAddress || "Philippines";
     const companyTin = payslipData.companyTin || "N/A";
     const companyEmail = payslipData.companyEmail || "hr@thecafe.com.ph";
@@ -682,7 +682,7 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
                 )}
               </div>
               <div className="payslip-company-info">
-                <h1>{payslip.companyName || "The Café"}</h1>
+                <h1>{payslip.companyName || "PERO"}</h1>
                 <p>{payslip.companyAddress || "Philippines"}</p>
                 <p>TIN: {payslip.companyTin || "N/A"}</p>
               </div>

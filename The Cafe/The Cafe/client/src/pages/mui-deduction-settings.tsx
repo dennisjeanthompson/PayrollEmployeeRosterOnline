@@ -1,68 +1,95 @@
-import { useState } from "react";
+/**
+ * Deductions Page (PERO Payroll System)
+ * Clean reference view for mandatory Philippine government deductions.
+ * No configuration needed — rates are applied automatically.
+ */
+
 import {
   Box,
   Card,
   CardContent,
-  CardHeader,
   Typography,
   Stack,
   Divider,
-  CircularProgress,
   useTheme,
   alpha,
-  Alert,
   Chip,
+  Tooltip,
   Button,
 } from "@mui/material";
+import Grid from "@mui/material/Grid";
 import {
   CheckCircle,
   Security,
   LocalHospital,
   Home,
   Receipt,
-  Info,
   OpenInNew,
+  InfoOutlined,
+  AutoAwesome,
 } from "@mui/icons-material";
-import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 
-// 2026 Philippine mandatory deduction rates (for display only)
-const mandatoryDeductions = [
+const deductions = [
   {
     key: "sss",
-    label: "SSS Contribution",
-    description: "Social Security System - Employee share 5% of MSC (+ MPF/WISP for salary > ₱20,000)",
-    details: "MSC Floor: ₱5,000 | Ceiling: ₱35,000 | 61 salary brackets | Total rate: 15% (5% EE / 10% ER)",
+    label: "SSS",
+    fullLabel: "Social Security System",
+    rate: "5%",
+    employeeShare: "5% of MSC",
+    employerShare: "10% of MSC",
+    floor: "₱5,000",
+    ceiling: "₱35,000",
+    cap: null,
     icon: Security,
     color: "#3b82f6",
-    rate: "5%",
+    note: "61 salary brackets | MPF/WISP applies above ₱20,000",
+    basis: "SSS Circular 2024-006",
   },
   {
     key: "philhealth",
-    label: "PhilHealth Contribution",
-    description: "Philippine Health Insurance Corporation - 5% total (2.5% EE + 2.5% ER)",
-    details: "Floor: ₱10,000 | Ceiling: ₱100,000 | Premium: ₱500-₱5,000/month",
+    label: "PhilHealth",
+    fullLabel: "Philippine Health Insurance",
+    rate: "2.5%",
+    employeeShare: "2.5% of monthly salary",
+    employerShare: "2.5% of monthly salary",
+    floor: "₱10,000",
+    ceiling: "₱100,000",
+    cap: "Max ₱2,500/mo",
     icon: LocalHospital,
     color: "#10b981",
-    rate: "5%",
+    note: "5% total rate split equally between employee and employer",
+    basis: "PhilHealth Circular 2025-0001",
   },
   {
     key: "pagibig",
-    label: "Pag-IBIG (HDMF) Contribution",
-    description: "Home Development Mutual Fund - 2% employee share",
-    details: "Maximum contribution: ₱200 (updated 2026) | Salary base cap: ₱10,000",
+    label: "Pag-IBIG",
+    fullLabel: "Home Development Mutual Fund",
+    rate: "2%",
+    employeeShare: "2% of basic salary",
+    employerShare: "2% of basic salary",
+    floor: null,
+    ceiling: "₱10,000",
+    cap: "Max ₱200/mo",
     icon: Home,
     color: "#8b5cf6",
-    rate: "2%",
+    note: "Maximum employee monthly contribution capped at ₱200 (2026 update)",
+    basis: "HDMF 2nd Amendment of Circular No. 274",
   },
   {
     key: "tax",
-    label: "Withholding Tax (BIR)",
-    description: "Bureau of Internal Revenue - TRAIN Law progressive brackets",
-    details: "Annual: ₱0-250k = 0% | ₱250k-400k = 15% | ₱400k-800k = 20% | ₱800k-2M = 25% | ₱2M-8M = 30% | ₱8M+ = 35%",
+    label: "Withholding Tax",
+    fullLabel: "BIR Withholding Tax (TRAIN Law)",
+    rate: "0–35%",
+    employeeShare: "Progressive brackets",
+    employerShare: "—",
+    floor: null,
+    ceiling: null,
+    cap: null,
     icon: Receipt,
     color: "#f59e0b",
-    rate: "TRAIN",
+    note: "Annual ≤₱250k = 0% · ₱250k–₱400k = 15% · ₱400k–₱800k = 20% · ₱800k–₱2M = 25% · ₱2M–₱8M = 30% · >₱8M = 35%",
+    basis: "BIR RR 11-2018 / TRAIN Law",
   },
 ];
 
@@ -70,224 +97,248 @@ export default function MuiDeductionSettings() {
   const theme = useTheme();
   const [, setLocation] = useLocation();
 
-  const { isLoading } = useQuery({
-    queryKey: ["/api/deduction-settings"],
-    refetchInterval: 30000,
-  });
-
-  if (isLoading) {
-    return (
-      <Box
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          minHeight: 300,
-        }}
-      >
-        <CircularProgress color="primary" />
-      </Box>
-    );
-  }
-
   return (
-    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 900, mx: "auto" }}>
-      {/* Header */}
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
-        <Box
-          sx={{
-            width: 48,
-            height: 48,
-            borderRadius: 3,
-            background: `linear-gradient(135deg, ${theme.palette.success.main}, ${theme.palette.success.dark})`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: `0 4px 16px ${alpha(theme.palette.success.main, 0.3)}`,
-          }}
-        >
-          <CheckCircle sx={{ color: "white" }} />
-        </Box>
-        <Box>
-          <Typography variant="h5" fontWeight={700}>
-            Mandatory Deductions
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Philippine government contributions automatically applied per 2026 law
-          </Typography>
-        </Box>
-      </Box>
-
-      {/* Compliance Banner */}
-      <Alert
-        severity="success"
-        icon={<CheckCircle fontSize="inherit" />}
-        sx={{
-          mb: 4,
-          borderRadius: 3,
-          "& .MuiAlert-message": { width: "100%" },
-        }}
-      >
-        <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", width: "100%" }}>
+    <Box
+      sx={{
+        p: { xs: 2, md: 4 },
+        minHeight: "100%",
+        display: "flex",
+        flexDirection: "column",
+        gap: 3,
+      }}
+    >
+      {/* Page Header */}
+      <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Box
+            sx={{
+              width: 48,
+              height: 48,
+              borderRadius: 3,
+              background: `linear-gradient(135deg, ${theme.palette.success.main}, ${theme.palette.success.dark})`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: `0 4px 16px ${alpha(theme.palette.success.main, 0.35)}`,
+            }}
+          >
+            <CheckCircle sx={{ color: "white", fontSize: 24 }} />
+          </Box>
           <Box>
-            <Typography fontWeight={600} gutterBottom>
-              ✅ Mandatory Deductions Auto-Applied
+            <Typography variant="h5" fontWeight={700}>
+              Deductions
             </Typography>
-            <Typography variant="body2">
-              SSS, PhilHealth, Pag-IBIG, and BIR withholding tax are automatically calculated
-              using official 2026 government rate tables. No manual configuration required.
+            <Typography variant="body2" color="text.secondary">
+              Philippine mandatory deductions — auto-applied per 2026 law
             </Typography>
           </Box>
-          <Chip
-            label="Compliant"
-            color="success"
-            size="small"
-            sx={{ fontWeight: 600 }}
-          />
         </Box>
-      </Alert>
 
-      {/* Mandatory Deductions Info Cards */}
+        <Chip
+          icon={<AutoAwesome sx={{ fontSize: 16 }} />}
+          label="Auto-Compliant"
+          color="success"
+          sx={{ fontWeight: 700, px: 1 }}
+        />
+      </Box>
+
+      {/* Info Banner */}
       <Card
         elevation={0}
         sx={{
-          borderRadius: 4,
-          border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-          overflow: "hidden",
+          borderRadius: 3,
+          bgcolor: alpha(theme.palette.success.main, 0.07),
+          border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
         }}
       >
-        <CardHeader
-          title={
-            <Typography variant="h6" fontWeight={600}>
-              2026 Contribution Rates
-            </Typography>
-          }
-          subheader={
-            <Typography variant="body2" color="text.secondary">
-              Based on SSS Circular 2025, PhilHealth Circular 2026, Pag-IBIG Circular (₱200 max), BIR TRAIN Law
-            </Typography>
-          }
-          sx={{
-            bgcolor: alpha(theme.palette.primary.main, 0.03),
-            borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
-          }}
-        />
-        <CardContent sx={{ p: 0 }}>
-          <Stack spacing={0} divider={<Divider />}>
-            {mandatoryDeductions.map((item) => {
-              const Icon = item.icon;
-
-              return (
-                <Box
-                  key={item.key}
-                  sx={{
-                    display: "flex",
-                    alignItems: "flex-start",
-                    justifyContent: "space-between",
-                    p: 3,
-                    transition: "background-color 0.2s",
-                    "&:hover": {
-                      bgcolor: alpha(theme.palette.action.hover, 0.3),
-                    },
-                  }}
-                >
-                  <Box sx={{ display: "flex", alignItems: "flex-start", gap: 2, flex: 1 }}>
-                    <Box
-                      sx={{
-                        width: 48,
-                        height: 48,
-                        borderRadius: 2.5,
-                        bgcolor: alpha(item.color, 0.1),
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Icon sx={{ color: item.color, fontSize: 24 }} />
-                    </Box>
-                    <Box sx={{ flex: 1 }}>
-                      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 0.5 }}>
-                        <Typography variant="subtitle1" fontWeight={600}>
-                          {item.label}
-                        </Typography>
-                        <Chip
-                          label={item.rate}
-                          size="small"
-                          sx={{
-                            bgcolor: alpha(item.color, 0.1),
-                            color: item.color,
-                            fontWeight: 600,
-                            fontSize: "0.75rem",
-                          }}
-                        />
-                      </Box>
-                      <Typography variant="body2" color="text.secondary" gutterBottom>
-                        {item.description}
-                      </Typography>
-                      <Typography variant="caption" color="text.disabled">
-                        {item.details}
-                      </Typography>
-                    </Box>
-                  </Box>
-                  <Chip
-                    icon={<CheckCircle sx={{ fontSize: 16 }} />}
-                    label="Active"
-                    size="small"
-                    color="success"
-                    variant="outlined"
-                    sx={{ mt: 0.5 }}
-                  />
-                </Box>
-              );
-            })}
+        <CardContent sx={{ py: 2, "&:last-child": { pb: 2 } }}>
+          <Stack direction="row" spacing={2} alignItems="flex-start">
+            <CheckCircle color="success" sx={{ mt: 0.25 }} />
+            <Box>
+              <Typography fontWeight={600} color="success.main">
+                Mandatory deductions are calculated automatically
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                SSS, PhilHealth, Pag-IBIG, and BIR withholding tax are applied to every payroll run using the official
+                2026 government rate tables. No manual setup is required.
+              </Typography>
+            </Box>
           </Stack>
         </CardContent>
       </Card>
 
-      {/* Admin Link to Rate Tables */}
-      <Alert
-        severity="info"
-        icon={<Info fontSize="inherit" />}
-        sx={{ mt: 3, borderRadius: 3 }}
-        action={
-          <Button
-            color="inherit"
-            size="small"
-            endIcon={<OpenInNew sx={{ fontSize: 16 }} />}
-            onClick={() => setLocation("/admin/deduction-rates")}
-          >
-            View Tables
-          </Button>
-        }
-      >
-        <Typography variant="body2">
-          <strong>Admins:</strong> Rate tables can be viewed and updated in Settings → Deduction Rates.
-          Changes apply to future payroll calculations only.
-        </Typography>
-      </Alert>
+      {/* Deduction Rate Cards */}
+      <Grid container spacing={3}>
+        {deductions.map((item) => {
+          const Icon = item.icon;
+          return (
+            <Grid key={item.key} size={{ xs: 12, sm: 6, lg: 3 }}>
+              <Card
+                elevation={0}
+                sx={{
+                  borderRadius: 3,
+                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                  height: "100%",
+                  transition: "box-shadow 0.2s, transform 0.2s",
+                  "&:hover": {
+                    boxShadow: `0 8px 24px ${alpha(item.color, 0.15)}`,
+                    transform: "translateY(-2px)",
+                  },
+                }}
+              >
+                <CardContent sx={{ p: 3, "&:last-child": { pb: 3 } }}>
+                  <Stack spacing={2}>
+                    {/* Icon + label */}
+                    <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <Box
+                        sx={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 2.5,
+                          bgcolor: alpha(item.color, 0.12),
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        <Icon sx={{ color: item.color, fontSize: 22 }} />
+                      </Box>
+                      <Chip
+                        label={item.rate}
+                        size="small"
+                        sx={{
+                          bgcolor: alpha(item.color, 0.12),
+                          color: item.color,
+                          fontWeight: 700,
+                          fontSize: "0.8rem",
+                        }}
+                      />
+                    </Box>
 
-      {/* Additional Info */}
+                    {/* Name */}
+                    <Box>
+                      <Typography variant="subtitle1" fontWeight={700}>
+                        {item.label}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        {item.fullLabel}
+                      </Typography>
+                    </Box>
+
+                    <Divider />
+
+                    {/* Details */}
+                    <Stack spacing={0.75}>
+                      <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                        <Typography variant="caption" color="text.secondary">Employee</Typography>
+                        <Typography variant="caption" fontWeight={600}>{item.employeeShare}</Typography>
+                      </Box>
+                      <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                        <Typography variant="caption" color="text.secondary">Employer</Typography>
+                        <Typography variant="caption" fontWeight={600}>{item.employerShare}</Typography>
+                      </Box>
+                      {item.cap && (
+                        <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                          <Typography variant="caption" color="text.secondary">Cap</Typography>
+                          <Typography variant="caption" fontWeight={600} color="warning.main">{item.cap}</Typography>
+                        </Box>
+                      )}
+                      {item.floor && (
+                        <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                          <Typography variant="caption" color="text.secondary">Floor</Typography>
+                          <Typography variant="caption" fontWeight={600}>{item.floor}</Typography>
+                        </Box>
+                      )}
+                      {item.ceiling && (
+                        <Box sx={{ display: "flex", justifyContent: "space-between" }}>
+                          <Typography variant="caption" color="text.secondary">Ceiling</Typography>
+                          <Typography variant="caption" fontWeight={600}>{item.ceiling}</Typography>
+                        </Box>
+                      )}
+                    </Stack>
+
+                    {/* Note */}
+                    <Tooltip title={item.basis} placement="top">
+                      <Box
+                        sx={{
+                          display: "flex",
+                          gap: 0.75,
+                          alignItems: "flex-start",
+                          bgcolor: alpha(theme.palette.action.hover, 0.5),
+                          borderRadius: 2,
+                          p: 1.25,
+                        }}
+                      >
+                        <InfoOutlined sx={{ fontSize: 14, color: "text.disabled", mt: 0.2, flexShrink: 0 }} />
+                        <Typography variant="caption" color="text.secondary" lineHeight={1.4}>
+                          {item.note}
+                        </Typography>
+                      </Box>
+                    </Tooltip>
+
+                    {/* Active badge */}
+                    <Chip
+                      icon={<CheckCircle sx={{ fontSize: "14px !important" }} />}
+                      label="Active"
+                      size="small"
+                      color="success"
+                      variant="outlined"
+                      sx={{ alignSelf: "flex-start" }}
+                    />
+                  </Stack>
+                </CardContent>
+              </Card>
+            </Grid>
+          );
+        })}
+      </Grid>
+
+      {/* Per-Employee Extra Deductions */}
       <Card
         elevation={0}
         sx={{
-          mt: 3,
           borderRadius: 3,
           bgcolor: alpha(theme.palette.warning.main, 0.05),
           border: `1px solid ${alpha(theme.palette.warning.main, 0.2)}`,
         }}
       >
-        <CardContent>
-          <Typography variant="subtitle2" color="warning.main" fontWeight={600} gutterBottom>
-            Per-Employee Deductions
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            For employee-specific deductions (SSS Loan, Pag-IBIG Loan, Cash Advance, Other recurring),
-            go to <strong>Employees → Select Employee → Deductions</strong>. These are added on top of
-            mandatory government contributions.
-          </Typography>
+        <CardContent sx={{ py: 2.5, "&:last-child": { pb: 2.5 } }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 2 }}>
+            <Box>
+              <Typography variant="subtitle1" fontWeight={700} color="warning.main">
+                Per-Employee Deductions
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                SSS Loan, Pag-IBIG Loan, Cash Advance, and other recurring deductions are managed per employee under
+                <strong> Employees → Select Employee → Deductions</strong>.
+              </Typography>
+            </Box>
+            <Button
+              variant="outlined"
+              color="warning"
+              size="small"
+              endIcon={<OpenInNew sx={{ fontSize: 16 }} />}
+              onClick={() => setLocation("/employees")}
+              sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
+            >
+              Go to Employees
+            </Button>
+          </Box>
         </CardContent>
       </Card>
+
+      {/* Admin Rate Tables Link */}
+      <Box sx={{ display: "flex", justifyContent: "flex-end" }}>
+        <Button
+          variant="text"
+          size="small"
+          endIcon={<OpenInNew sx={{ fontSize: 14 }} />}
+          onClick={() => setLocation("/admin/deduction-rates")}
+          sx={{ textTransform: "none", color: "text.secondary" }}
+        >
+          View Deduction Rate Tables
+        </Button>
+      </Box>
     </Box>
   );
 }

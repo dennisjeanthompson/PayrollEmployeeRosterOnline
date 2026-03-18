@@ -175,7 +175,7 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
       "/reports": { title: "Analytics", subtitle: "Business insights & reports" },
       "/branches": { title: "Branches", subtitle: "Manage locations" },
     };
-    return titles[location] || { title: "The Café", subtitle: "Payroll System" };
+    return titles[location] || { title: "PERO", subtitle: "Payroll System" };
   };
 
   const pageInfo = getPageInfo();

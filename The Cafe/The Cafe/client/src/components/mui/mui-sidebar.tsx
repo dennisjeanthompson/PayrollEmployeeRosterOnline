@@ -322,7 +322,7 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
                   gap: 0.5,
                 }}
               >
-                The Café
+                PERO
                 <SparklesIcon
                   sx={{
                     fontSize: 14,

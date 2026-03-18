@@ -69,7 +69,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
               <Coffee sx={{ fontSize: 18, color: "white" }} />
             </Box>
             <Typography variant="subtitle1" fontWeight={700} color="text.primary">
-              The Café
+              PERO
             </Typography>
           </Box>
           <IconButton onClick={() => setLocation("/employee/profile")} sx={{ p: 0.5 }}>

@@ -121,7 +121,7 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
 
     // ── Title / metadata block ──
     const meta = [
-      row("THE CAFE PAYROLL SYSTEM — PAYROLL SUMMARY EXPORT"),
+      row("PERO PAYROLL SYSTEM — PAYROLL SUMMARY EXPORT"),
       row("All monetary values are in Philippine Peso (PHP)"),
       row(`Period:`, periodLabel),
       row(`Generated:`, exportedAt),
@@ -238,7 +238,7 @@ router.get("/api/reports/employees/export", requireAuth, requireManagerRole, asy
     const exportedAt = format(new Date(), "MMMM d yyyy HH:mm");
 
     const meta = [
-      row("THE CAFE PAYROLL SYSTEM — EMPLOYEE LIST EXPORT"),
+      row("PERO PAYROLL SYSTEM — EMPLOYEE LIST EXPORT"),
       row(`Generated:`, exportedAt),
       row(`Total Employees:`, String(exportEmployees.length)),
       "",
@@ -326,7 +326,7 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
     const exportedAt = format(new Date(), "MMMM d yyyy HH:mm");
 
     const meta = [
-      row("THE CAFE PAYROLL SYSTEM — DEDUCTIONS SUMMARY EXPORT"),
+      row("PERO PAYROLL SYSTEM — DEDUCTIONS SUMMARY EXPORT"),
       row("All amounts are in Philippine Peso (PHP). DOLE Order 174 Compliant."),
       row(`Period:`, periodLabel),
       row(`Generated:`, exportedAt),

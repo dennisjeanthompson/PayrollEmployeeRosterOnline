@@ -177,7 +177,7 @@ export default function MuiLogin() {
               <Coffee sx={{ fontSize: 32, color: "white" }} />
             </Box>
             <Typography variant="h3" fontWeight={700} color="text.primary" gutterBottom>
-              The Café
+              PERO
             </Typography>
             <Typography variant="h6" color="text.secondary">
               Smart Payroll & Employee Management
@@ -244,7 +244,7 @@ export default function MuiLogin() {
               <Coffee sx={{ fontSize: 28, color: "white" }} />
             </Box>
             <Typography variant="h5" fontWeight={700} color="text.primary">
-              The Café
+              PERO
             </Typography>
             <Typography variant="body2" color="text.secondary">
               Smart Payroll System
@@ -380,7 +380,7 @@ export default function MuiLogin() {
             color="text.secondary"
             sx={{ display: "block", textAlign: "center", mt: 3 }}
           >
-            © 2026 The Café. All rights reserved.
+            © 2026 PERO Payroll System. All rights reserved.
           </Typography>
             </Box>
           </Grid>
