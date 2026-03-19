@@ -273,6 +273,7 @@ router.post('/api/employees', requireAuth, requireRole(['manager']), async (req,
       sssNumber,
       philhealthNumber,
       pagibigNumber,
+      isMwe,
     } = req.body;
 
     // Basic validation
@@ -317,6 +318,7 @@ router.post('/api/employees', requireAuth, requireRole(['manager']), async (req,
       sssNumber: sssNumber || null,
       philhealthNumber: philhealthNumber || null,
       pagibigNumber: pagibigNumber || null,
+      isMwe: !!isMwe,
     });
 
     if (!newEmployee) {
@@ -386,7 +388,7 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager']), async (r
 
     // Whitelist allowed fields to prevent mass assignment
     const updates: Record<string, any> = {};
-    const allowedFields = ['firstName', 'lastName', 'email', 'position', 'hourlyRate', 'role', 'isActive', 'tin', 'sssNumber', 'philhealthNumber', 'pagibigNumber'];
+    const allowedFields = ['firstName', 'lastName', 'email', 'position', 'hourlyRate', 'role', 'isActive', 'tin', 'sssNumber', 'philhealthNumber', 'pagibigNumber', 'isMwe'];
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
         // Treat empty strings as null for government IDs

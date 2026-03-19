@@ -24,6 +24,7 @@ export interface PayslipEmployee {
   philhealth: string; // Will be masked for display (show last 4)
   pagibig: string;  // Will be masked for display (show last 4)
   hire_date?: string;
+  is_mwe?: boolean; // Flag to indicate Minimum Wage Earner (tax exempt)
 }
 
 // Pay Period Information
@@ -392,9 +393,9 @@ export const SAMPLE_PAYSLIP_DATA: PayslipData = {
     { code: "PAGIBIG", label: "Pag-IBIG Contribution", amount: 100.00 },
     { code: "SSS_LOAN", label: "SSS Loan", amount: 500.00, is_loan: true, loan_balance: 4500.00 }
   ],
-  gross: 12690.91,
+  gross: 12668.18,
   total_deductions: 2525.00,
-  net_pay: 10165.91,
+  net_pay: 10143.18,
   ytd: {
     gross: 278400.00,
     deductions: 55440.00,

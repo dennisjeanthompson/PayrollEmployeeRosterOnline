@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, boolean, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, integer, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -37,6 +37,8 @@ export const users = pgTable("users", {
   sssNumber: text("sss_number"),  // SSS Member ID
   philhealthNumber: text("philhealth_number"), // PhilHealth Member Number
   pagibigNumber: text("pagibig_number"),       // Pag-IBIG / HDMF Member Number
+  // BIR Minimum Wage Earner exemption — if true, withholding tax is forced to ₱0.00
+  isMwe: boolean("is_mwe").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -108,6 +110,8 @@ export const payrollEntries = pgTable("payroll_entries", {
   netPay: text("net_pay").notNull(),
   payBreakdown: text("pay_breakdown"),
   status: text("status").default("pending"),
+  // RA 11360 — Service Charge share for this employee in this period
+  serviceCharge: text("service_charge").default("0"),
   createdAt: timestamp("created_at").defaultNow(),
   paidAt: timestamp("paid_at"),
 });
@@ -306,6 +310,66 @@ export const adjustmentLogs = pgTable("adjustment_logs", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// ─── PH Compliance Tables ───────────────────────────────────────────────────
+
+/**
+ * 13th Month Pay Ledger (RA 7641 / Presidential Decree 851)
+ * Each processed payroll period adds a row per employee recording basicPay only
+ * (OT, Holiday, Night Diff excluded per BIR rules).
+ * Year-end 13th month = SUM(basicPayEarned for year) / 12
+ */
+export const thirteenthMonthLedger = pgTable("thirteenth_month_ledger", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  branchId: text("branch_id").references(() => branches.id).notNull(),
+  payrollPeriodId: text("payroll_period_id").references(() => payrollPeriods.id).notNull(),
+  year: integer("year").notNull(),
+  basicPayEarned: text("basic_pay_earned").notNull(), // Only basic pay — no OT/Holiday/NightDiff
+  periodStartDate: timestamp("period_start_date").notNull(),
+  periodEndDate: timestamp("period_end_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+/**
+ * Leave Credits / Leave Balance (DOLE Labor Standards)
+ * Tracks SIL (5 days), Solo Parent Leave (7 days), VAWC Leave (10 days), etc.
+ * One row per employee per year per leave type.
+ */
+export const leaveCredits = pgTable("leave_credits", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  branchId: text("branch_id").references(() => branches.id).notNull(),
+  year: integer("year").notNull(),
+  // 'sil' | 'solo_parent' | 'vawc' | 'vacation' | 'sick' | 'other'
+  leaveType: text("leave_type").notNull(),
+  totalCredits: text("total_credits").notNull(),   // Total days granted (e.g. '5.00')
+  usedCredits: text("used_credits").default("0"),  // Days consumed via approved time-off
+  remainingCredits: text("remaining_credits").notNull(), // totalCredits - usedCredits
+  grantedBy: text("granted_by").references(() => users.id), // Manager who granted
+  notes: text("notes"),
+  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+/**
+ * Service Charge Distribution Pools (RA 11360)
+ * Admin/Manager enters total service charge collected for a period;
+ * system auto-calculates per-employee share (rank-and-file only).
+ */
+export const serviceChargePools = pgTable("service_charge_pools", {
+  id: text("id").primaryKey(),
+  branchId: text("branch_id").references(() => branches.id).notNull(),
+  periodStartDate: timestamp("period_start_date").notNull(),
+  periodEndDate: timestamp("period_end_date").notNull(),
+  totalCollected: text("total_collected").notNull(),        // Total service charge entered by manager
+  eligibleEmployeeCount: integer("eligible_employee_count").notNull(), // Rank-and-file only
+  perEmployeeAmount: text("per_employee_amount").notNull(), // totalCollected / eligibleCount
+  status: text("status").default("draft"),  // 'draft' | 'distributed'
+  distributedAt: timestamp("distributed_at"),
+  createdBy: text("created_by").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 // Insert Schemas
 export const insertBranchSchema = createInsertSchema(branches).omit({
   id: true,
@@ -413,6 +477,28 @@ export const insertAdjustmentLogSchema = createInsertSchema(adjustmentLogs).omit
   date: z.union([z.date(), z.string().pipe(z.coerce.date())]),
 });
 
+export const insertThirteenthMonthLedgerSchema = createInsertSchema(thirteenthMonthLedger).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  periodStartDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+  periodEndDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+});
+
+export const insertLeaveCreditsSchema = createInsertSchema(leaveCredits).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertServiceChargePoolSchema = createInsertSchema(serviceChargePools).omit({
+  id: true,
+  createdAt: true,
+}).extend({
+  periodStartDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+  periodEndDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+});
+
 export const insertCompanySettingsSchema = createInsertSchema(companySettings).omit({
   id: true,
   createdAt: true,
@@ -451,6 +537,9 @@ export type TimeOffPolicy = typeof timeOffPolicy.$inferSelect;
 export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
 export type AdjustmentLog = typeof adjustmentLogs.$inferSelect;
 export type CompanySettings = typeof companySettings.$inferSelect;
+export type ThirteenthMonthLedger = typeof thirteenthMonthLedger.$inferSelect;
+export type LeaveCredit = typeof leaveCredits.$inferSelect;
+export type ServiceChargePool = typeof serviceChargePools.$inferSelect;
 
 
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
@@ -470,3 +559,6 @@ export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type InsertTimeOffPolicy = z.infer<typeof insertTimeOffPolicySchema>;
 export type InsertAdjustmentLog = z.infer<typeof insertAdjustmentLogSchema>;
 export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
+export type InsertThirteenthMonthLedger = z.infer<typeof insertThirteenthMonthLedgerSchema>;
+export type InsertLeaveCredit = z.infer<typeof insertLeaveCreditsSchema>;
+export type InsertServiceChargePool = z.infer<typeof insertServiceChargePoolSchema>;

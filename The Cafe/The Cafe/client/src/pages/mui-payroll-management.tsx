@@ -74,6 +74,7 @@ import { apiUrl } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { PayslipPreview as DigitalPayslip } from "@/components/payroll/payslip-preview";
+import { ServiceChargeTab } from "@/components/payroll/ServiceChargeTab";
 
 interface PayrollPeriod {
   id: string;
@@ -713,6 +714,11 @@ export default function MuiPayrollManagement() {
             iconPosition="start"
             label={`Exception Logs ${adjLogs.length > 0 ? `(${adjLogs.length})` : ""}`}
           />
+          <Tab
+            icon={<Receipt sx={{ fontSize: 18 }} />}
+            iconPosition="start"
+            label="Service Charge"
+          />
         </Tabs>
       </Box>
 
@@ -1316,6 +1322,8 @@ export default function MuiPayrollManagement() {
             </TableContainer>
           )}
         </Card>
+      ) : activeTab === 3 ? (
+        <ServiceChargeTab />
       ) : null}
 
       {/* Create Period Dialog */}

@@ -303,6 +303,9 @@ function drawEmployeeInfo(
   if (data.employee.department) {
     positionText += ` • ${data.employee.department}`;
   }
+  if (data.employee.is_mwe) {
+    positionText += ` • MWE (Tax Exempt)`;
+  }
   page.drawText(positionText, {
     x: MARGIN + 10,
     y,

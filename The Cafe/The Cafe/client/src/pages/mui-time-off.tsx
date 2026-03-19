@@ -153,6 +153,17 @@ export default function MuiTimeOff() {
     },
   });
 
+  // Fetch leave credits for current user
+  const { data: creditsData } = useQuery({
+    queryKey: ["leave-credits", new Date().getFullYear(), "my"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", `/api/leave-credits/my?year=${new Date().getFullYear()}`);
+      return response.json();
+    },
+    enabled: !isManagerRole,
+  });
+  const myCredits = creditsData?.credits || [];
+
   // Submit time off request
   const submitMutation = useMutation({
     mutationFn: async (data: typeof formData) => {
@@ -553,6 +564,25 @@ export default function MuiTimeOff() {
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Stack spacing={3}>
+            {!isManagerRole && myCredits.length > 0 && (
+              <Paper sx={{ p: 2, bgcolor: "primary.50", border: 1, borderColor: "primary.100" }} elevation={0}>
+                <Typography variant="subtitle2" color="primary.main" sx={{ mb: 1, fontWeight: 600 }}>
+                  Available Leave Balances ({new Date().getFullYear()})
+                </Typography>
+                <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                  {myCredits.map((credit: any) => (
+                    <Chip 
+                      key={credit.id}
+                      size="small"
+                      label={`${credit.leaveTypeConfig.label}: ${Number(credit.remainingCredits).toFixed(1)}d`}
+                      color={Number(credit.remainingCredits) > 0 ? "primary" : "default"}
+                      variant={Number(credit.remainingCredits) > 0 ? "filled" : "outlined"}
+                    />
+                  ))}
+                </Stack>
+              </Paper>
+            )}
+
             <FormControl fullWidth>
               <InputLabel>Type of Leave</InputLabel>
               <Select

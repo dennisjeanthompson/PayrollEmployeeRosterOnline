@@ -136,6 +136,7 @@ interface Employee {
   sssNumber?: string;
   philhealthNumber?: string;
   pagibigNumber?: string;
+  isMwe?: boolean;
 }
 
 interface Branch {
@@ -158,6 +159,7 @@ interface EmployeeFormData {
   sssNumber: string;
   philhealthNumber: string;
   pagibigNumber: string;
+  isMwe: boolean;
 }
 
 const initialFormData: EmployeeFormData = {
@@ -175,6 +177,7 @@ const initialFormData: EmployeeFormData = {
   sssNumber: "",
   philhealthNumber: "",
   pagibigNumber: "",
+  isMwe: false,
 };
 
 export default function MuiEmployees() {
@@ -555,6 +558,7 @@ export default function MuiEmployees() {
       sssNumber: employee.sssNumber || "",
       philhealthNumber: employee.philhealthNumber || "",
       pagibigNumber: employee.pagibigNumber || "",
+      isMwe: employee.isMwe || false,
     });
     setFormDialogOpen(true);
   };
@@ -678,6 +682,15 @@ export default function MuiEmployees() {
         <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 0.5, py: 0.5 }}>
           <Typography variant="body2" sx={{ fontWeight: 500, lineHeight: 1.2 }}>
             {params.row.position}
+            {params.row.isMwe && (
+              <Chip
+                size="small"
+                label="MWE"
+                color="secondary"
+                sx={{ height: 16, fontSize: "0.6rem", ml: 1, fontWeight: "bold" }}
+                title="Minimum Wage Earner (Tax Exempt)"
+              />
+            )}
           </Typography>
           <Chip
             size="small"
@@ -1242,15 +1255,34 @@ export default function MuiEmployees() {
                   </Grid>
                 </Grid>
 
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={formData.isActive}
-                      onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
-                    />
-                  }
-                  label="Active Employee"
-                />
+                <Stack direction="row" spacing={3}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={formData.isActive}
+                        onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                      />
+                    }
+                    label="Active Employee"
+                  />
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={formData.isMwe}
+                        onChange={(e) => setFormData({ ...formData, isMwe: e.target.checked })}
+                        color="secondary"
+                      />
+                    }
+                    label={
+                      <Box>
+                        MWE Exemption
+                        <Typography variant="caption" color="text.secondary" display="block">
+                          Tax exempt for Minimum Wage Earners
+                        </Typography>
+                      </Box>
+                    }
+                  />
+                </Stack>
 
                 <Divider sx={{ my: 2 }} />
                 <Typography variant="subtitle2" color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: 0.5 }}>

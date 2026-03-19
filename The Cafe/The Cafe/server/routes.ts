@@ -9,7 +9,10 @@ import type { PayrollEntry } from "@shared/schema";
 import type { PayrollEntryBreakdownPayload, ShiftPayBreakdown } from "@shared/payroll-types";
 import { z } from "zod";
 import { registerBranchesRoutes } from "./routes/branches";
+import { getPaymentPeriodDates, getShiftPenaltyRate } from '../shared/payroll-dates';
+import { setupWebsocketServer } from './websocket-server';
 import { createEmployeeRouter } from "./routes/employees";
+import { deductLeaveCredit } from './routes/leave-credits';
 import { router as hoursRoutes } from "./routes/hours";
 import payslipsRouter from "./routes/payslips";
 import companySettingsRouter from "./routes/company-settings";
@@ -19,6 +22,12 @@ import { forecastRouter } from "./routes/forecast";
 import { seedRatesRouter } from "./routes/seed-rates";
 import holidaysRouter from "./routes/holidays";
 import employeeUploadsRouter from "./routes/employee-uploads";
+import { thirteenthMonthRouter } from "./routes/thirteenth-month";
+import { leaveCreditsRouter } from "./routes/leave-credits";
+import { serviceChargeRouter } from "./routes/service-charge";
+import { db } from "./db";
+import { thirteenthMonthLedger } from "@shared/schema";
+import { randomUUID as _randomUUID } from "crypto";
 import { resetDatabase, initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll, seedSampleShiftTrades, markSetupComplete } from "./init-db";
 import bcrypt from "bcrypt";
 import { format } from "date-fns";
@@ -1157,6 +1166,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(reportsRouter);
   app.use(forecastRouter);
   app.use(seedRatesRouter);
+  
+  // Register Philippine compliance routes
+  app.use(thirteenthMonthRouter);
+  app.use(leaveCreditsRouter);
+  app.use(serviceChargeRouter);
 
   // ===== ADJUSTMENT LOGS (Manual OT/Lateness/Exception Logging) =====
   
@@ -1701,11 +1715,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const advances = parseFloat(employee.cashAdvanceDeduction || '0');
         const otherDeductions = parseFloat(employee.otherDeductions || '0');
 
+        // ─── Feature 1: MWE Exemption (BIR TRAIN Law) ─────────────────────────
+        // If employee is flagged as Minimum Wage Earner, withholding tax is 0.
+        // MWE holiday pay, OT, and night diff are also exempt under BIR rulings.
+        const mweWithholdingTax = (employee as any).isMwe ? 0 : withholdingTax;
+
         const totalDeductions =
           sssContribution +
           philHealthContribution +
           pagibigContribution +
-          withholdingTax +
+          mweWithholdingTax +
           sssLoan +
           pagibigLoan +
           advances +
@@ -1732,7 +1751,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           philHealthContribution: philHealthContribution.toString(),
           pagibigContribution: pagibigContribution.toString(),
           pagibigLoan: pagibigLoan.toString(),
-          withholdingTax: withholdingTax.toString(),
+          withholdingTax: mweWithholdingTax.toString(),
           advances: advances.toString(),
           otherDeductions: otherDeductions.toString(),
           totalDeductions: totalDeductions.toString(),
@@ -1740,6 +1759,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           netPay: netPay.toString(),
           status: 'pending'
         });
+
+        // ─── Feature 2: 13th Month Ledger (PD 851) ──────────────────────────
+        // Record the basicPay only — OT/Holiday/NightDiff excluded per BIR rules
+        try {
+          const periodYear = new Date(period.startDate).getFullYear();
+          await db.insert(thirteenthMonthLedger).values({
+            id: crypto.randomUUID(),
+            userId: employee.id,
+            branchId: branchId,
+            payrollPeriodId: id,
+            year: periodYear,
+            basicPayEarned: basicPay.toFixed(2),
+            periodStartDate: new Date(period.startDate),
+            periodEndDate: new Date(period.endDate),
+            createdAt: new Date(),
+          });
+        } catch (ledgerErr) {
+          // Non-blocking: if table not yet migrated, log but don't fail payroll
+          console.warn('13th month ledger insert skipped (table may not exist yet):', (ledgerErr as any).message);
+        }
 
         payrollEntries.push(entry);
         createdEntryIds.push(entry.id);
@@ -3823,6 +3862,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (!request) {
       return res.status(404).json({ message: "Time off request not found" });
+    }
+
+    // Deduct leave credits
+    try {
+      const startD = new Date(request.startDate);
+      const endD = new Date(request.endDate);
+      const daysToDeduct = Math.max(1, Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+      
+      await deductLeaveCredit(
+        request.userId,
+        employee.branchId,
+        request.type,
+        daysToDeduct,
+        startD.getFullYear()
+      );
+    } catch (deductionErr) {
+      console.error('Leave deduction error:', deductionErr);
     }
 
     // Sync with approvals table

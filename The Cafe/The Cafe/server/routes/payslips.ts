@@ -192,6 +192,15 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
         amount: restDayPay,
       });
     }
+
+    const serviceChargePay = parseFloat(String(entry.serviceCharge || 0));
+    if (serviceChargePay > 0) {
+      earnings.push({
+        code: 'SC',
+        label: 'Service Charge (RA 11360)',
+        amount: serviceChargePay,
+      });
+    }
     
     // Build deductions
     const deductions: any[] = [];
@@ -255,6 +264,7 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
         sss: employee.sssNumber ? `XX-XXXX${employee.sssNumber.slice(-4)}` : 'N/A',
         philhealth: employee.philhealthNumber ? `XX-XXXXXX${employee.philhealthNumber.slice(-4)}` : 'N/A',
         pagibig: employee.pagibigNumber ? `XXXX-XXXX-${employee.pagibigNumber.slice(-4)}` : 'N/A',
+        is_mwe: (employee as any).isMwe || false,
       },
       pay_period: {
         start: period.startDate.toISOString().split('T')[0],

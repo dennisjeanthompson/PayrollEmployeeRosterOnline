@@ -44,6 +44,8 @@ const MuiHolidayCalendar = lazy(() => import("@/pages/mui-holiday-calendar"));
 const MuiComplianceDashboard = lazy(() => import("@/pages/mui-compliance-dashboard"));
 const MuiProfileSettings = lazy(() => import("@/pages/mui-profile-settings"));
 const MuiCompanySettings = lazy(() => import("@/pages/mui-company-settings"));
+const MuiThirteenthMonth = lazy(() => import("@/pages/mui-thirteenth-month"));
+const MuiLeaveCredits = lazy(() => import("@/pages/mui-leave-credits"));
 
 const Setup = lazy(() => import("@/pages/setup"));
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -287,6 +289,30 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
             </ErrorBoundary>
           </RouteLoader>
         </DesktopLayout>
+      </Route>
+
+      <Route path="/thirteenth-month">
+        <RequireManagerOrAdmin>
+          <DesktopLayout>
+            <RouteLoader>
+              <ErrorBoundary>
+                <MuiThirteenthMonth />
+              </ErrorBoundary>
+            </RouteLoader>
+          </DesktopLayout>
+        </RequireManagerOrAdmin>
+      </Route>
+
+      <Route path="/leave-credits">
+        <RequireManagerOrAdmin>
+          <DesktopLayout>
+            <RouteLoader>
+              <ErrorBoundary>
+                <MuiLeaveCredits />
+              </ErrorBoundary>
+            </RouteLoader>
+          </DesktopLayout>
+        </RequireManagerOrAdmin>
       </Route>
 
       <Route path="/employees">

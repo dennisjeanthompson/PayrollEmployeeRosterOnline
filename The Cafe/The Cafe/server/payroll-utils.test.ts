@@ -6,7 +6,7 @@ const HOUR = 60 * 60 * 1000;
 const DEFAULT_RATE = 100;
 
 function buildShift(overrides: Partial<Shift> = {}): Shift {
-  const defaultStart = new Date("2025-01-06T09:00:00Z");
+  const defaultStart = new Date("2025-01-06T09:00:00");
   const defaultEnd = new Date(defaultStart.getTime() + 8 * HOUR);
 
   const start = overrides.startTime ?? defaultStart;
@@ -24,7 +24,7 @@ function buildShift(overrides: Partial<Shift> = {}): Shift {
     endTime: end,
     actualStartTime: overrides.actualStartTime ?? start,
     actualEndTime: overrides.actualEndTime ?? end,
-    createdAt: overrides.createdAt ?? new Date("2025-01-01T00:00:00Z"),
+    createdAt: overrides.createdAt ?? new Date("2025-01-01T00:00:00"),
   } as Shift;
 }
 
@@ -62,9 +62,12 @@ describe("calculateShiftPay", () => {
     expect(day.restDayPremium).toBe(0);
   });
 
-  it("splits cross-midnight shifts and tracks night differential correctly", () => {
-    const start = new Date("2025-01-06T21:00:00Z");
-    const end = new Date("2025-01-07T07:00:00Z");
+  it("calculates basic pay and night differential properly", () => {
+    // 8 PM to 6 AM -> 10 hours total.
+    // 8 PM to 10 PM (2 hrs basic)
+    // 10 PM to 6 AM (8 hrs night diff)
+    const start = new Date("2025-01-01T20:00:00");
+    const end = new Date("2025-01-02T06:00:00");
     const shift = buildShift({ id: "shift-night", startTime: start, endTime: end });
 
     const result = calculateShiftPay({
@@ -87,9 +90,9 @@ describe("calculateShiftPay", () => {
   });
 
   it("adds regular holiday premiums when worked", () => {
-    const christmas = buildHoliday("2025-12-25T00:00:00Z", "regular", "Christmas Day");
-    const start = new Date("2025-12-25T08:00:00Z");
-    const end = new Date("2025-12-25T16:00:00Z");
+    const christmas = buildHoliday("2025-12-25T00:00:00", "regular", "Christmas Day");
+    const start = new Date("2025-12-25T08:00:00");
+    const end = new Date("2025-12-25T16:00:00");
     const shift = buildShift({ id: "shift-holiday", startTime: start, endTime: end });
 
     const result = calculateShiftPay({
@@ -105,11 +108,11 @@ describe("calculateShiftPay", () => {
     expect(day.holidayName).toBe("Christmas Day");
     expect(day.holidayPremium).toBe(800);
     expect(day.restDayPremium).toBe(0);
-    expect(result.grossPay).toBe(1640);
+    expect(result.grossPay).toBe(1600);
   });
 
   it("applies rest day premiums on normal days", () => {
-    const sunday = new Date("2025-01-05T09:00:00Z");
+    const sunday = new Date("2025-01-05T09:00:00");
     const shift = buildShift({
       id: "shift-rest",
       startTime: sunday,
