@@ -47,7 +47,9 @@ export default function MuiReports() {
     queryFn: async () => {
       const [year, month] = selectedMonth.split("-");
       const res = await apiRequest("GET", `/api/reports/summary?month=${month}&year=${year}`);
-      return res.json();
+      const resJson = await res.json();
+      console.log("FRONTEND DEBUG: Raw API Response for Summary:", resJson);
+      return resJson;
     },
   });
 
