@@ -61,6 +61,22 @@ router.get("/my", async (req, res) => {
   }
 });
 
+// Manager/Admin: Get loans for a specific employee
+router.get("/user/:userId", async (req, res) => {
+  try {
+    const user = req.user;
+    if (!user || (user.role !== 'admin' && user.role !== 'manager')) {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const loans = await storage.getLoanRequestsByUser(req.params.userId);
+    res.json(loans);
+  } catch (error) {
+    console.error("Error fetching employee loans:", error);
+    res.status(500).json({ message: "Failed to fetch employee loans" });
+  }
+});
+
 // Manager: Get all loans for the branch
 router.get("/branch", async (req, res) => {
   try {
