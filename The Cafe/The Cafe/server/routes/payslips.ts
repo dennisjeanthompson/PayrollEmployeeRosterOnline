@@ -157,16 +157,20 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
       });
     }
     
-    if (overtimePay > 0) {
-      earnings.push({
-        code: 'OT',
-        label: 'Overtime Pay (130%)',
-        hours: parseFloat(String(entry.overtimeHours || 0)),
-        amount: overtimePay,
-        is_overtime: true,
-        multiplier: 130,
-      });
-    }
+    // Overtime: Art.87 LC — regular weekday OT = 125%, rest day/holiday OT = 130%+
+    // Determine actual OT rate from payBreakdown if available, else default 125%
+    const otMultiplierUsed = payBreakdown?.overtimeMultiplier
+      ? Math.round(payBreakdown.overtimeMultiplier * 100)
+      : 125;
+    // Always show OT line (shows 0 when no OT was logged)
+    earnings.push({
+      code: 'OT',
+      label: `Overtime Pay (${otMultiplierUsed}%)`,
+      hours: parseFloat(String(entry.overtimeHours || 0)),
+      amount: overtimePay,
+      is_overtime: true,
+      multiplier: otMultiplierUsed,
+    });
     
     if (nightDiffPay > 0) {
       earnings.push({
@@ -177,13 +181,12 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
       });
     }
     
-    if (holidayPay > 0) {
-      earnings.push({
-        code: 'HOL',
-        label: 'Holiday Pay',
-        amount: holidayPay,
-      });
-    }
+    // Always show holiday pay (Art. 94 LC) — shows 0 if no holiday in period
+    earnings.push({
+      code: 'HOL',
+      label: 'Holiday Pay',
+      amount: holidayPay,
+    });
     
     if (restDayPay > 0) {
       earnings.push({
@@ -260,10 +263,10 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
         name: `${employee.firstName} ${employee.lastName}`,
         position: employee.position,
         department: 'Operations',
-        tin: employee.tin ? `XXX-XXX-${employee.tin.slice(-4)}` : 'N/A',
-        sss: employee.sssNumber ? `XX-XXXX${employee.sssNumber.slice(-4)}` : 'N/A',
-        philhealth: employee.philhealthNumber ? `XX-XXXXXX${employee.philhealthNumber.slice(-4)}` : 'N/A',
-        pagibig: employee.pagibigNumber ? `XXXX-XXXX-${employee.pagibigNumber.slice(-4)}` : 'N/A',
+        tin: employee.tin ? `XXX-XXX-${employee.tin.slice(-4)}` : '—',
+        sss: employee.sssNumber ? `XX-XXXX${employee.sssNumber.slice(-4)}` : '—',
+        philhealth: employee.philhealthNumber ? `XX-XXXXXX${employee.philhealthNumber.slice(-4)}` : '—',
+        pagibig: employee.pagibigNumber ? `XXXX-XXXX-${employee.pagibigNumber.slice(-4)}` : '—',
         is_mwe: (employee as any).isMwe || false,
       },
       pay_period: {

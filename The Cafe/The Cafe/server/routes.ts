@@ -1540,6 +1540,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       for (const employee of employees) {
         if (!employee.isActive) continue;
 
+        // --- DOLE COMPLIANCE: MSEC/BIR Mandatory Verification ---
+        // Block payroll processing completely if any active employee lacks government IDs
+        if (!employee.tin || !employee.sssNumber || !employee.philhealthNumber || !employee.pagibigNumber ||
+            employee.tin === '—' || employee.sssNumber === '—') {
+          return res.status(400).json({
+            message: `DOLE/BIR Compliance Error: Cannot process payroll. Employee "${employee.firstName} ${employee.lastName}" is missing mandatory government IDs. Please update their profile with valid TIN, SSS, PhilHealth, and Pag-IBIG numbers.`
+          });
+        }
+
         // Get shifts for this employee in the period
         const shifts = await storage.getShiftsByUser(
           employee.id,

@@ -462,6 +462,29 @@ export function calculatePeriodPay(
     nightDiffPay += nightDiff;
   }
 
+  // --- DOLE Art. 94 Unworked Regular Holiday Pay ---
+  // If a regular holiday falls in the period and the employee didn't work, they get 100% of daily wage.
+  for (const holiday of holidays) {
+    if (holiday.type === 'regular' || holiday.type === 'special_working') {
+      // Note: Only 'regular' mandates 100% unworked pay by default, but keeping flexibility.
+      // special_non_working is "no work, no pay".
+      if (holiday.type === 'regular') {
+        const holidayDateStr = new Date(holiday.date).toISOString().split('T')[0];
+        const workedThatDay = Array.from(dailyBreakdown.values()).some((dayData) => {
+          return dayData.date.toISOString().split('T')[0] === holidayDateStr;
+        });
+
+        if (!workedThatDay) {
+          // Grant 100% of daily wage (assuming standard 8-hour day)
+          const unworkedHolidayPay = 8 * hourlyRate;
+          holidayPay += unworkedHolidayPay;
+          // Note: we do NOT add this to basicPay because 13th month computation
+          // strictly uses basic pay earned from actual days worked.
+        }
+      }
+    }
+  }
+
   return {
     basicPay: Math.round(basicPay * 100) / 100,
     overtimePay: Math.round(overtimePay * 100) / 100,
