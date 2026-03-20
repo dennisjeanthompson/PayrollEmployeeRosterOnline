@@ -42,7 +42,7 @@ export default function MobileLoans() {
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const { data: loans = [], isLoading } = useQuery({
+  const { data: loans = [], isLoading } = useQuery<any[]>({
     queryKey: ['/api/loans/my'],
   });
 

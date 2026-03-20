@@ -46,8 +46,8 @@ const MuiProfileSettings = lazy(() => import("@/pages/mui-profile-settings"));
 const MuiCompanySettings = lazy(() => import("@/pages/mui-company-settings"));
 const MuiThirteenthMonth = lazy(() => import("@/pages/mui-thirteenth-month"));
 const MuiLeaveCredits = lazy(() => import("@/pages/mui-leave-credits"));
-const MuiLoans = lazy(() => import("@/pages/mui-loans"));
-const MobileLoans = lazy(() => import("@/pages/mobile-loans"));
+const MuiRequests = lazy(() => import("@/pages/mui-requests"));
+const MobileRequests = lazy(() => import("@/pages/mobile-requests"));
 
 const Setup = lazy(() => import("@/pages/setup"));
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -317,12 +317,12 @@ function DesktopRouter({ authState }: { authState: { isAuthenticated: boolean; u
         </RequireManagerOrAdmin>
       </Route>
 
-      <Route path="/loans">
+      <Route path="/requests">
         <RequireManagerOrAdmin>
           <DesktopLayout>
             <RouteLoader>
               <ErrorBoundary>
-                <MuiLoans />
+                <MuiRequests />
               </ErrorBoundary>
             </RouteLoader>
           </DesktopLayout>
@@ -529,10 +529,10 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
         </MobileLayout>
       </Route>
 
-      <Route path="/employee/loans">
+      <Route path="/employee/requests">
         <MobileLayout>
           <RouteLoader>
-            <MobileLoans />
+            <MobileRequests />
           </RouteLoader>
         </MobileLayout>
       </Route>

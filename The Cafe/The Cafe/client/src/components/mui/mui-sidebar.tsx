@@ -49,7 +49,7 @@ import {
   Verified as VerifiedIcon,
   Download as DownloadIcon,
   TrendingUp as TrendingUpIcon,
-  ManageAccounts as ProfileIcon,  Business as BusinessIcon, AccountBalanceWallet as AccountBalanceWalletIcon} from "@mui/icons-material";
+  ManageAccounts as ProfileIcon,  Business as BusinessIcon, AccountBalanceWallet as AccountBalanceWalletIcon, Assignment as AssignmentIcon} from "@mui/icons-material";
 
 const DRAWER_WIDTH = 280;
 const COLLAPSED_WIDTH = 80;
@@ -75,7 +75,7 @@ const managementNavigation: NavItem[] = [
   { name: "Holidays", href: "/holiday-calendar", icon: CalendarIcon, roles: ["manager", "admin"] },
   { name: "Leave Credits", href: "/leave-credits", icon: EventIcon, roles: ["manager", "admin"] },
   { name: "13th Month", href: "/thirteenth-month", icon: MoneyIcon, roles: ["manager", "admin"] },
-  { name: "Loans", href: "/loans", icon: AccountBalanceWalletIcon, roles: ["manager", "admin"] },
+  { name: "Employee Requests", href: "/requests", icon: AssignmentIcon, roles: ["manager", "admin"] },
   { name: "Forecasting", href: "/analytics", icon: TrendingUpIcon, roles: ["manager", "admin"] },
   { name: "Branches", href: "/branches", icon: StoreIcon, roles: ["manager", "admin"] },
 ];
