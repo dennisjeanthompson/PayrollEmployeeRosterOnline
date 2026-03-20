@@ -427,30 +427,40 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
     const employees = await storage.getUsersByBranch(branchId);
     const activeEmployees = employees.filter((e) => e.isActive);
 
+    // Get all payroll periods for this branch that fall within the selected month
     const allPeriods = await storage.getPayrollPeriodsByBranch(branchId);
-    const periodMap = new Map(allPeriods.map((p) => [p.id, p]));
+    const monthPeriods = allPeriods.filter((p) => {
+      const periodEnd = new Date(p.endDate);
+      const periodStart = new Date(p.startDate);
+      // Include period if it overlaps with the target month
+      return periodEnd >= startDate && periodStart <= endDate;
+    });
 
     let totalGross = 0, totalDeductions = 0, totalNet = 0, totalHours = 0;
     let totalSSS = 0, totalPhilHealth = 0, totalPagibig = 0, totalTax = 0;
 
-    for (const employee of activeEmployees) {
-      const entries = await storage.getPayrollEntriesByUser(employee.id);
+    // Collect all entries for matching periods (more reliable than per-user lookup)
+    for (const period of monthPeriods) {
+      const entries = await storage.getPayrollEntriesByPeriod(period.id);
       for (const entry of entries) {
-        const period = periodMap.get(entry.payrollPeriodId);
-        if (period) {
-          const periodEnd = new Date(period.endDate);
-          if (periodEnd >= startDate && periodEnd <= endDate) {
-            totalGross += parseFloat(entry.grossPay || "0");
-            totalDeductions += parseFloat(entry.totalDeductions || "0");
-            totalNet += parseFloat(entry.netPay || "0");
-            totalHours += parseFloat(entry.totalHours || "0");
-            
-            totalSSS += parseFloat(entry.sssContribution || "0");
-            totalPhilHealth += parseFloat(entry.philHealthContribution || "0");
-            totalPagibig += parseFloat(entry.pagibigContribution || "0");
-            totalTax += parseFloat(entry.withholdingTax || "0");
-          }
-        }
+        totalGross += parseFloat(String(entry.grossPay ?? "0")) || 0;
+        totalDeductions += parseFloat(String(entry.totalDeductions ?? "0")) || 0;
+        totalNet += parseFloat(String(entry.netPay ?? "0")) || 0;
+        totalHours += parseFloat(String(entry.totalHours ?? "0")) || 0;
+
+        // Government deductions - try all common field name variants
+        totalSSS += parseFloat(String(
+          (entry as any).sssContribution ?? (entry as any).sss_contribution ?? "0"
+        )) || 0;
+        totalPhilHealth += parseFloat(String(
+          (entry as any).philHealthContribution ?? (entry as any).phil_health_contribution ?? (entry as any).philhealthContribution ?? "0"
+        )) || 0;
+        totalPagibig += parseFloat(String(
+          (entry as any).pagibigContribution ?? (entry as any).pagibig_contribution ?? "0"
+        )) || 0;
+        totalTax += parseFloat(String(
+          (entry as any).withholdingTax ?? (entry as any).withholding_tax ?? "0"
+        )) || 0;
       }
     }
 
