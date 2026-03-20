@@ -486,4 +486,56 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
   }
 });
 
+// ─── Debug endpoint to inspect raw payroll entry data ──────────────────────
+router.get("/api/reports/debug", requireAuth, requireManagerRole, async (req, res) => {
+  try {
+    const branchId = req.user!.branchId;
+    const { month, year } = req.query;
+
+    const now = new Date();
+    const targetMonth = month ? parseInt(month as string) - 1 : now.getMonth();
+    const targetYear = year ? parseInt(year as string) : now.getFullYear();
+
+    const startDate = new Date(targetYear, targetMonth, 1);
+    const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+
+    const allPeriods = await storage.getPayrollPeriodsByBranch(branchId);
+    const monthPeriods = allPeriods.filter((p) => {
+      const periodEnd = new Date(p.endDate);
+      const periodStart = new Date(p.startDate);
+      return periodEnd >= startDate && periodStart <= endDate;
+    });
+
+    const rawEntries: any[] = [];
+    for (const period of monthPeriods) {
+      const entries = await storage.getPayrollEntriesByPeriod(period.id);
+      for (const entry of entries) {
+        rawEntries.push({
+          id: entry.id,
+          userId: entry.userId,
+          periodId: period.id,
+          grossPay: entry.grossPay,
+          totalDeductions: entry.totalDeductions,
+          netPay: entry.netPay,
+          sssContribution: (entry as any).sssContribution,
+          philHealthContribution: (entry as any).philHealthContribution,
+          pagibigContribution: (entry as any).pagibigContribution,
+          withholdingTax: (entry as any).withholdingTax,
+        });
+      }
+    }
+
+    res.json({
+      branchId,
+      targetMonth: targetMonth + 1,
+      targetYear,
+      periodsFound: monthPeriods.length,
+      entriesFound: rawEntries.length,
+      entries: rawEntries,
+    });
+  } catch (error) {
+    res.status(500).json({ message: "Debug failed", error: String(error) });
+  }
+});
+
 export { router as reportsRouter };
