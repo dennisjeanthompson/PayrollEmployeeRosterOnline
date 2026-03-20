@@ -1680,11 +1680,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // For partial periods (e.g., 2-week payroll), prorate to monthly
         let monthlyBasicSalary: number;
         if (daysInPeriod >= 28 && daysInPeriod <= 31) {
-          // Full month period - use actual gross pay as monthly salary
-          monthlyBasicSalary = grossPay;
+          // Full month period - use actual basic pay (excluding OT/ND) as monthly salary
+          monthlyBasicSalary = basicPay;
         } else {
-          // Partial period - prorate to monthly (assuming 30 days/month average)
-          monthlyBasicSalary = (grossPay / daysInPeriod) * 30;
+          // DOLE Standard: Estimate monthly salary based on hourly rate * 176 hours
+          // (average 22 working days * 8 hours), which aligns exactly with the 
+          // Employee Deductions UI estimates.
+          monthlyBasicSalary = hourlyRate * 176;
         }
 
         // Import deduction calculator
