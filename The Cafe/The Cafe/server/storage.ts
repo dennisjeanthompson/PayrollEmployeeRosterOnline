@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Branch, type InsertBranch, type Shift, type InsertShift, type ShiftTrade, type InsertShiftTrade, type PayrollPeriod, type InsertPayrollPeriod, type PayrollEntry, type InsertPayrollEntry, type Approval, type InsertApproval, type TimeOffRequest, type InsertTimeOffRequest, type Notification, type InsertNotification, type DeductionSettings, type InsertDeductionSettings, type DeductionRate, type InsertDeductionRate, type AuditLog, type InsertAuditLog, type Holiday, type InsertHoliday, type AdjustmentLog, type InsertAdjustmentLog, type CompanySettings, type InsertCompanySettings, type ArchivedPayrollPeriod, type TimeOffPolicy } from "@shared/schema";
+import { type User, type InsertUser, type Branch, type InsertBranch, type Shift, type InsertShift, type ShiftTrade, type InsertShiftTrade, type PayrollPeriod, type InsertPayrollPeriod, type PayrollEntry, type InsertPayrollEntry, type Approval, type InsertApproval, type TimeOffRequest, type InsertTimeOffRequest, type Notification, type InsertNotification, type DeductionSettings, type InsertDeductionSettings, type DeductionRate, type InsertDeductionRate, type AuditLog, type InsertAuditLog, type Holiday, type InsertHoliday, type AdjustmentLog, type InsertAdjustmentLog, type CompanySettings, type InsertCompanySettings, type ArchivedPayrollPeriod, type TimeOffPolicy, type LoanRequest, type InsertLoanRequest } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 
@@ -155,6 +155,14 @@ export interface IStorage {
   getTimeOffPolicyByType(branchId: string, leaveType: string): Promise<TimeOffPolicy | undefined>;
   upsertTimeOffPolicy(branchId: string, leaveType: string, minimumAdvanceDays: number): Promise<TimeOffPolicy>;
   initializeDefaultTimeOffPolicies(branchId: string): Promise<void>;
+
+  // Government Loans (Art. 113)
+  createLoanRequest(data: InsertLoanRequest): Promise<LoanRequest>;
+  getLoanRequestsByUser(userId: string): Promise<LoanRequest[]>;
+  getLoanRequestsByBranch(branchId: string): Promise<LoanRequest[]>;
+  getLoanRequest(id: string): Promise<LoanRequest | undefined>;
+  updateLoanRequest(id: string, status: string, hrApprovalNote?: string, approvedBy?: string): Promise<LoanRequest | undefined>;
+  getActiveApprovedLoans(userId: string, targetDate: Date): Promise<LoanRequest[]>;
 }
 
 export class MemStorage implements IStorage {

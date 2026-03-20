@@ -13,7 +13,8 @@ import {
   Shield,
   Sun,
   Moon,
-  Palette
+  Palette,
+  Wallet
 } from "lucide-react";
 import { getCurrentUser } from "@/lib/auth";
 import { useLocation } from "wouter";
@@ -100,6 +101,15 @@ export default function MobileMore() {
       path: "/employee/notifications",
       color: "text-orange-600",
       bgColor: "bg-orange-100 dark:bg-orange-950",
+      badge: null,
+    },
+    {
+      icon: Wallet,
+      label: "Government Loans",
+      description: "Manage SSS & Pag-IBIG loans",
+      path: "/employee/loans",
+      color: "text-blue-600",
+      bgColor: "bg-blue-100 dark:bg-blue-950",
       badge: null,
     },
   ];

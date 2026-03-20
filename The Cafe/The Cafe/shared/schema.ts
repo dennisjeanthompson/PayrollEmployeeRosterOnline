@@ -376,6 +376,29 @@ export const serviceChargePools = pgTable("service_charge_pools", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+/**
+ * Government Loan Requests (SSS & Pag-IBIG) - DOLE Art. 113 Compliance
+ * Tracks employee loan applications, proofs, and Manager/HR approval statuses.
+ * Only approved loans are deducted during payroll processing.
+ */
+export const loanRequests = pgTable("loan_requests", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  branchId: text("branch_id").references(() => branches.id).notNull(),
+  loanType: text("loan_type").notNull(), // 'SSS' | 'Pag-IBIG'
+  referenceNumber: text("reference_number").notNull(),
+  accountNumber: text("account_number").notNull(),
+  monthlyAmortization: text("monthly_amortization").notNull(),
+  deductionStartDate: timestamp("deduction_start_date").notNull(),
+  status: text("status").default("pending"), // 'pending' | 'approved' | 'rejected'
+  proofFileUrl: text("proof_file_url"),
+  hrApprovalNote: text("hr_approval_note"),
+  approvedBy: text("approved_by").references(() => users.id),
+  approvedAt: timestamp("approved_at"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Insert Schemas
 export const insertBranchSchema = createInsertSchema(branches).omit({
   id: true,
@@ -503,6 +526,14 @@ export const insertServiceChargePoolSchema = createInsertSchema(serviceChargePoo
 }).extend({
   periodStartDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
   periodEndDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+});
+
+export const insertLoanRequestSchema = createInsertSchema(loanRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+}).extend({
+  deductionStartDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
 });
 
 export const insertCompanySettingsSchema = createInsertSchema(companySettings).omit({

@@ -1,7 +1,7 @@
 import { db } from './db';
-import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, auditLogs, timeOffPolicy, adjustmentLogs, employeeDocuments, companySettings } from '@shared/schema';
+import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, auditLogs, timeOffPolicy, adjustmentLogs, employeeDocuments, companySettings, loanRequests } from '@shared/schema';
 import type { IStorage } from './storage';
-import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftTrade, InsertShiftTrade, PayrollPeriod, InsertPayrollPeriod, PayrollEntry, InsertPayrollEntry, Approval, InsertApproval, TimeOffRequest, InsertTimeOffRequest, Notification, InsertNotification, DeductionSettings, InsertDeductionSettings, DeductionRate, InsertDeductionRate, Holiday, InsertHoliday, ArchivedPayrollPeriod, InsertArchivedPayrollPeriod, TimeOffPolicy, InsertTimeOffPolicy, AuditLog, InsertAuditLog, AdjustmentLog, InsertAdjustmentLog, CompanySettings, InsertCompanySettings } from '@shared/schema';
+import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftTrade, InsertShiftTrade, PayrollPeriod, InsertPayrollPeriod, PayrollEntry, InsertPayrollEntry, Approval, InsertApproval, TimeOffRequest, InsertTimeOffRequest, Notification, InsertNotification, DeductionSettings, InsertDeductionSettings, DeductionRate, InsertDeductionRate, Holiday, InsertHoliday, ArchivedPayrollPeriod, InsertArchivedPayrollPeriod, TimeOffPolicy, InsertTimeOffPolicy, AuditLog, InsertAuditLog, AdjustmentLog, InsertAdjustmentLog, CompanySettings, InsertCompanySettings, LoanRequest, InsertLoanRequest } from '@shared/schema';
 import { eq, and, gte, lte, gt, lt, ne, desc, or, sql, isNull } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcrypt';
@@ -1332,6 +1332,52 @@ export class DatabaseStorage implements IStorage {
     await db.update(companySettings).set({ ...settings, updatedAt: new Date() }).where(eq(companySettings.id, id));
     const result = await db.select().from(companySettings).where(eq(companySettings.id, id)).limit(1);
     return result[0];
+  }
+
+  // Government Loans (Art. 113 Compliance)
+  async createLoanRequest(data: InsertLoanRequest): Promise<LoanRequest> {
+    const id = randomUUID();
+    const result = await db.insert(loanRequests).values({ 
+      id, 
+      ...data,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+    return result[0];
+  }
+
+  async getLoanRequestsByUser(userId: string): Promise<LoanRequest[]> {
+    return await db.select().from(loanRequests).where(eq(loanRequests.userId, userId)).orderBy(desc(loanRequests.createdAt));
+  }
+
+  async getLoanRequestsByBranch(branchId: string): Promise<LoanRequest[]> {
+    return await db.select().from(loanRequests).where(eq(loanRequests.branchId, branchId)).orderBy(desc(loanRequests.createdAt));
+  }
+
+  async getLoanRequest(id: string): Promise<LoanRequest | undefined> {
+    const result = await db.select().from(loanRequests).where(eq(loanRequests.id, id)).limit(1);
+    return result[0];
+  }
+
+  async updateLoanRequest(id: string, status: string, hrApprovalNote?: string, approvedBy?: string): Promise<LoanRequest | undefined> {
+    const updateData: any = { status, updatedAt: new Date() };
+    if (hrApprovalNote !== undefined) updateData.hrApprovalNote = hrApprovalNote;
+    if (approvedBy) {
+      updateData.approvedBy = approvedBy;
+      updateData.approvedAt = new Date();
+    }
+    const result = await db.update(loanRequests).set(updateData).where(eq(loanRequests.id, id)).returning();
+    return result[0];
+  }
+
+  async getActiveApprovedLoans(userId: string, targetDate: Date): Promise<LoanRequest[]> {
+    return await db.select().from(loanRequests).where(
+      and(
+        eq(loanRequests.userId, userId),
+        eq(loanRequests.status, "approved"),
+        lte(loanRequests.deductionStartDate, targetDate)
+      )
+    );
   }
 }
 

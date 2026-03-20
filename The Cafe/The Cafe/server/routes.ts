@@ -24,6 +24,7 @@ import employeeUploadsRouter from "./routes/employee-uploads";
 import { thirteenthMonthRouter } from "./routes/thirteenth-month";
 import { leaveCreditsRouter } from "./routes/leave-credits";
 import { serviceChargeRouter } from "./routes/service-charge";
+import loansRouter from "./routes/loans";
 import { db } from "./db";
 import { thirteenthMonthLedger } from "@shared/schema";
 import { randomUUID as _randomUUID } from "crypto";
@@ -235,6 +236,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: 'Failed to check setup status' });
     }
   }));
+
+  // Mount API Routers
+  app.use("/api/loans", requireAuth, loansRouter);
 
   // Setup endpoint (no auth required, only works if setup not complete)
   app.post("/api/setup", asyncHandler(async (req: Request, res: Response) => {
@@ -1720,9 +1724,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const monthlyTax = await calculateWithholdingTax(monthlyTaxableIncome);
         const withholdingTax = Math.round(monthlyTax * periodFraction * 100) / 100;
 
-        // Get recurring deductions from employee record
-        const sssLoan = parseFloat(employee.sssLoanDeduction || '0');
-        const pagibigLoan = parseFloat(employee.pagibigLoanDeduction || '0');
+        // ─── Feature 5: DOLE Art. 113 Compliant Government Loan Deductions ───
+        // Only deduct if there is an approved active loan with a start date <= period endDate
+        const activeLoans = await storage.getActiveApprovedLoans(employee.id, new Date(period.endDate));
+        
+        let sssLoan = 0;
+        let pagibigLoan = 0;
+        
+        for (const loan of activeLoans) {
+          // If semi-monthly, split the monthly amortization evenly across the two cutoff periods
+          const deduction = Math.round(parseFloat(loan.monthlyAmortization) * periodFraction * 100) / 100;
+          if (loan.loanType === 'SSS') {
+            sssLoan += deduction;
+          } else if (loan.loanType === 'Pag-IBIG') {
+            pagibigLoan += deduction;
+          }
+        }
+
         const advances = parseFloat(employee.cashAdvanceDeduction || '0');
         const otherDeductions = parseFloat(employee.otherDeductions || '0');
 
