@@ -35,12 +35,10 @@ import IconButton from "@mui/material/IconButton";
 import Divider from "@mui/material/Divider";
 
 
-// FullCalendar
-import FullCalendar from '@fullcalendar/react';
-import dayGridPlugin from '@fullcalendar/daygrid';
-import timeGridPlugin from '@fullcalendar/timegrid';
-import interactionPlugin from '@fullcalendar/interaction';
-import listPlugin from '@fullcalendar/list';
+// MUI Data Grid
+import { DataGrid, GridColDef, GridRenderCellParams } from '@mui/x-data-grid';
+import Tooltip from '@mui/material/Tooltip';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import { addDays } from 'date-fns';
 
 // MUI Date Pickers
@@ -361,8 +359,8 @@ export default function MuiTimeOff() {
   };
 
   return (
-    <Box sx={{ minHeight: "100vh", bgcolor: "background.default", py: 4 }}>
-      <Container maxWidth="lg">
+    <Box sx={{ minHeight: "100vh", bgcolor: "background.default", py: 4, px: { xs: 2, sm: 3, md: 4 } }}>
+      <Box sx={{ width: '100%' }}>
         {/* Header */}
         <Stack
           direction="row"
@@ -500,62 +498,61 @@ export default function MuiTimeOff() {
               </Alert>
             </CardContent>
           ) : (
-            <>
-            <>
-              <Box sx={{ p: 2, height: '700px', '& .fc-event': { cursor: 'pointer' } }}>
-                <FullCalendar
-                  plugins={[dayGridPlugin, timeGridPlugin, interactionPlugin, listPlugin]}
-                  initialView={isManagerRole ? "dayGridMonth" : "dayGridMonth"}
-                  headerToolbar={{
-                    left: 'prev,next today',
-                    center: 'title',
-                    right: 'dayGridMonth,listMonth'
-                  }}
-                  events={filteredRequests.map(req => {
-                    // FullCalendar end date is exclusive for all-day events
-                    const endDate = addDays(parseISO(req.endDate), 1).toISOString().split('T')[0];
-                    
-                    // Calculate advance days for this request (from requestedAt to startDate)
-                    const reqStartDate = parseISO(req.startDate);
-                    const reqRequestedAt = parseISO(req.requestedAt);
-                    const advanceDays = Math.ceil((reqStartDate.getTime() - reqRequestedAt.getTime()) / (1000 * 60 * 60 * 24));
-                    
-                    // Check if this is a short notice request based on type
-                    const typeConfig = timeOffTypes.find(t => t.value === req.type);
-                    const minAdvance = typeConfig?.minAdvance ?? 0;
-                    const isShortNotice = advanceDays < minAdvance && !['sick', 'emergency'].includes(req.type) && req.status === 'pending';
-                    
-                    let color = 'gray';
-                    if (req.status === 'approved') color = '#10B981'; // Success Green
-                    if (req.status === 'pending') color = '#F59E0B'; // Warning Orange
-                    if (req.status === 'rejected') color = '#EF4444'; // Error Red
-
-                    // Add short notice indicator for managers
-                    const shortNoticeLabel = isManagerRole && isShortNotice ? ` ⚠️` : '';
-
-                    return {
-                       id: req.id,
-                       title: isManagerRole && req.userName 
-                         ? `${req.userName} - ${capitalizeFirstLetter(req.type)}${shortNoticeLabel}` 
-                         : capitalizeFirstLetter(req.type),
-                       start: req.startDate,
-                       end: endDate,
-                       backgroundColor: color,
-                       borderColor: color,
-                       allDay: true,
-                       extendedProps: { ...req, advanceDays, isShortNotice }
-                    };
-                  })}
-                  dateClick={handleDateClick}
-                  eventClick={handleEventClick}
-                  height="100%"
-                />
-              </Box>
-            </>
-            </>
+            <DataGrid
+              rows={filteredRequests.map(req => ({...req, id: req.id}))}
+              columns={[
+                { field: "userName", headerName: "Employee", flex: 1.5, minWidth: 150, renderCell: (params) => (
+                  <Typography variant="body2" fontWeight="bold">
+                    {params.row.userName || (currentUser?.firstName + ' ' + currentUser?.lastName) || 'Employee'}
+                  </Typography>
+                )},
+                { field: "type", headerName: "Leave Type", width: 140, renderCell: (params) => (
+                  <Chip label={capitalizeFirstLetter(params.value)} size="small" variant="outlined" color="primary" />
+                )},
+                { field: "dates", headerName: "Dates", flex: 1.5, minWidth: 200, renderCell: (params) => (
+                  <Typography variant="body2">
+                    {format(parseISO(params.row.startDate), "MMM d, yyyy")} - {format(parseISO(params.row.endDate), "MMM d, yyyy")}
+                  </Typography>
+                )},
+                { field: "duration", headerName: "Duration", width: 100, align: 'center', headerAlign: 'center', renderCell: (params) => (
+                  <Typography variant="body2">
+                    {getDaysDifference(params.row.startDate, params.row.endDate)} days
+                  </Typography>
+                )},
+                { field: "reason", headerName: "Reason", flex: 2, minWidth: 200 },
+                { field: "status", headerName: "Status", width: 130, renderCell: (params) => (
+                  <Chip 
+                    label={params.value.toUpperCase()} 
+                    color={getStatusColor(params.value)} 
+                    size="small" 
+                    icon={getStatusIcon(params.value) as any}
+                  />
+                )},
+                { field: "actions", headerName: isManagerRole ? "Actions" : "", width: isManagerRole ? 180 : 0, renderCell: (params) => {
+                  if (!isManagerRole) return null;
+                  if (params.row.status !== "pending") return null;
+                  return (
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ height: '100%' }}>
+                      <Button size="small" variant="contained" color="success" onClick={(e) => { e.stopPropagation(); approveMutation.mutate({ requestId: params.row.id, status: "approved" }); }}>Approve</Button>
+                      <Button size="small" variant="outlined" color="error" onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setRejectingRequest(params.row);
+                        setRejectionReason("");
+                        setRejectDialogOpen(true);
+                      }}>Reject</Button>
+                    </Stack>
+                  )
+                }}
+              ]}
+              disableRowSelectionOnClick
+              rowHeight={60}
+              autoHeight
+              density="comfortable"
+              sx={{ border: 0 }}
+            />
           )}
         </Card>
-      </Container>
+      </Box>
 
       {/* Request Dialog */}
       <Dialog open={openDialog} onClose={handleCloseDialog} maxWidth="sm" fullWidth>

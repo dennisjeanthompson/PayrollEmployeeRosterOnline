@@ -296,7 +296,14 @@ export default function MuiAuditLogs() {
     const params = new URLSearchParams();
     if (entityTypeFilter) params.set("entityType", entityTypeFilter);
     if (actionFilter) params.set("action", actionFilter);
-    window.open(`/api/audit-logs/export?${params.toString()}`, "_blank");
+    const now = new Date();
+    const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const a = document.createElement("a");
+    a.href = `/api/audit-logs/export?${params.toString()}`;
+    a.download = `audit_logs_${ts}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const availableActions = stats ? Object.keys(stats.byAction).sort() : [];

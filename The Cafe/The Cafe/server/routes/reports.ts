@@ -70,7 +70,8 @@ const row = (...cells: any[]) => cells.map(escapeCSV).join(",");
 /** Build a CSV from header row + data rows (all pre-built strings) */
 const buildCSV = (sections: string[]): string => {
   // Prepend UTF-8 BOM so Excel/WPS recognises ₱ correctly
-  return "\uFEFF" + sections.join("\n");
+  // Prepend sep=, to force Excel to use comma separator regardless of regional settings
+  return "\uFEFFsep=,\n" + sections.join("\n");
 };
 
 // ─── Payroll Summary Export ─────────────────────────────────────────────────
@@ -188,14 +189,36 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
     );
 
     // ── Summary totals ──
-    const totalGross = enriched.reduce((s, { e }) => s + (parseFloat(String(e.grossPay)) || 0), 0);
-    const totalNet = enriched.reduce((s, { e }) => s + (parseFloat(String(e.netPay)) || 0), 0);
-    const totalDeductions = enriched.reduce((s, { e }) => s + (parseFloat(String(e.totalDeductions)) || 0), 0);
-    const totalHours = enriched.reduce((s, { e }) => s + (parseFloat(String(e.totalHours)) || 0), 0);
+    const sum = (field: string) => enriched.reduce((s, { e }) => s + (parseFloat(String((e as any)[field])) || 0), 0);
+    const totalRegHours = sum("regularHours");
+    const totalOTHours = sum("overtimeHours");
+    const totalNDHours = sum("nightDiffHours");
+    const totalHours = sum("totalHours");
+    const totalBasic = sum("basicPay");
+    const totalOTPay = sum("overtimePay");
+    const totalNDPay = sum("nightDiffPay");
+    const totalHoliday = sum("holidayPay");
+    const totalRestDay = sum("restDayPay");
+    const totalGross = sum("grossPay");
+    const totalSSS = sum("sssContribution");
+    const totalSSSLoan = sum("sssLoan");
+    const totalPhilHealth = sum("philHealthContribution");
+    const totalPagibig = sum("pagibigContribution");
+    const totalPagibigLoan = sum("pagibigLoan");
+    const totalTax = sum("withholdingTax");
+    const totalAdvances = sum("advances");
+    const totalOtherDed = sum("otherDeductions");
+    const totalDeductions = sum("totalDeductions");
+    const totalNet = sum("netPay");
 
     const summaryRows = [
       "",
-      row("TOTALS", "", "", "", "", "", totalHours.toFixed(2), "", "", "", "", "", peso(totalGross), "", "", "", "", "", "", "", "", peso(totalDeductions), peso(totalNet), ""),
+      row("TOTALS", "", "",
+        totalRegHours.toFixed(2), totalOTHours.toFixed(2), totalNDHours.toFixed(2), totalHours.toFixed(2),
+        peso(totalBasic), peso(totalOTPay), peso(totalNDPay), peso(totalHoliday), peso(totalRestDay),
+        peso(totalGross), peso(totalSSS), peso(totalSSSLoan), peso(totalPhilHealth),
+        peso(totalPagibig), peso(totalPagibigLoan), peso(totalTax),
+        peso(totalAdvances), peso(totalOtherDed), peso(totalDeductions), peso(totalNet), ""),
     ];
 
     const csv = buildCSV([...meta, headers, ...dataRows, ...summaryRows]);
@@ -203,8 +226,7 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    // Pass explicit Buffer to prevent Express from messing with the BOM bytes
-    res.send(Buffer.from(csv, "utf8"));
+    res.end(Buffer.from(csv, "utf8"));
 
     await createAuditLog({
       action: "export_payroll",
@@ -272,10 +294,10 @@ router.get("/api/reports/employees/export", requireAuth, requireManagerRole, asy
         peso(e.hourlyRate),
         e.isActive ? "Active" : "Inactive",
         e.createdAt ? format(new Date(e.createdAt), "MMM d yyyy") : "N/A",
-        (e as any).tinNumber || "",
+        (e as any).tin || "",
         (e as any).sssNumber || "",
-        (e as any).philHealthNumber || "",
-        (e as any).pagIbigNumber || "",
+        (e as any).philhealthNumber || "",
+        (e as any).pagibigNumber || "",
       )
     );
 
@@ -284,7 +306,7 @@ router.get("/api/reports/employees/export", requireAuth, requireManagerRole, asy
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(Buffer.from(csv, "utf8"));
+    res.end(Buffer.from(csv, "utf8"));
 
     await createAuditLog({
       action: "export_employees",
@@ -337,7 +359,12 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
 
     const headers = row(
       "Employee Name",
+      "Employee ID",
       "Position",
+      "TIN",
+      "SSS Number",
+      "PhilHealth Number",
+      "Pag-IBIG Number",
       "SSS Contribution (PHP)",
       "SSS Loan (PHP)",
       "PhilHealth (PHP)",
@@ -352,7 +379,12 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
     const dataRows = enriched.map(({ e, user }) =>
       row(
         user ? `${user.firstName} ${user.lastName}` : "Unknown",
+        user?.id || e.userId,
         user?.position || "N/A",
+        (user as any)?.tin || "",
+        (user as any)?.sssNumber || "",
+        (user as any)?.philhealthNumber || "",
+        (user as any)?.pagibigNumber || "",
         peso(e.sssContribution),
         peso(e.sssLoan),
         peso(e.philHealthContribution),
@@ -378,7 +410,7 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
 
     const summaryRows = [
       "",
-      row("TOTALS", "",
+      row("TOTALS", "", "", "", "", "", "",
         peso(totalSSS), peso(totalSSSLoan), peso(totalPhilHealth),
         peso(totalPagibig), peso(totalPagibigLoan),
         peso(totalTax), peso(totalAdvances), peso(totalOther), peso(totalDeductions)),
@@ -389,7 +421,7 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
 
     res.setHeader("Content-Type", "text/csv; charset=utf-8");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.send(Buffer.from(csv, "utf8"));
+    res.end(Buffer.from(csv, "utf8"));
 
     await createAuditLog({
       action: "export_deductions",

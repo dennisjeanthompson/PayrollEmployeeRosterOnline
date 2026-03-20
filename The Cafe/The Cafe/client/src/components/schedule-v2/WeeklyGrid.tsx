@@ -171,6 +171,8 @@ function TradeBadge({ trade }: { trade: ShiftTrade }) {
 
 // Shift pill — the colored chip inside each cell
 function ShiftPill({ shift, onClick, trade }: { shift: Shift; onClick: () => void; trade?: ShiftTrade }) {
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
   const rc = getRoleColor(shift.position, shift.user?.role);
   const startStr = format(new Date(shift.startTime), 'h:mma').toLowerCase().replace(':00', '');
   const endStr = format(new Date(shift.endTime), 'h:mma').toLowerCase().replace(':00', '');
@@ -193,23 +195,27 @@ function ShiftPill({ shift, onClick, trade }: { shift: Shift; onClick: () => voi
           px: 1,
           py: 0.5,
           borderRadius: 1.5,
-          bgcolor: hasTrade ? alpha(rc.bg, 0.7) : rc.bg,
-          color: rc.text,
+          bgcolor: hasTrade ? alpha(rc.bg, 0.25) : alpha(rc.bg, 0.15),
+          border: '1px solid',
+          borderColor: alpha(rc.border, 0.3),
+          borderLeft: `4px solid ${rc.bg}`,
+          color: isDark ? alpha(rc.bgLight, 0.9) : rc.bgDark,
           cursor: 'pointer',
           fontSize: '0.72rem',
           fontWeight: 600,
           lineHeight: 1.3,
           minHeight: 28,
-          transition: 'all 0.15s ease',
-          textShadow: '0 1px 1px rgba(0,0,0,0.15)',
+          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           ...(hasTrade && {
             outline: '2px dashed',
             outlineColor: trade.status === 'accepted' ? '#3B82F6' : '#8B5CF6',
             outlineOffset: 1,
           }),
           '&:hover': {
-            transform: 'scale(1.03)',
-            boxShadow: `0 2px 8px ${alpha(rc.bg, 0.4)}`,
+            transform: 'translateY(-1px)',
+            bgcolor: alpha(rc.bg, 0.25),
+            boxShadow: `0 4px 12px ${alpha(rc.bg, 0.15)}`,
+            borderColor: alpha(rc.border, 0.5),
           },
         }}
       >

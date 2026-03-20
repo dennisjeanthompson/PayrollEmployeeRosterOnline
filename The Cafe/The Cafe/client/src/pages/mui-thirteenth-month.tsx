@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { apiUrl } from "@/lib/api";
 import { format, subYears, addYears } from "date-fns";
 import { isManager, isAdmin } from "@/lib/auth";
 import { useLocation } from "wouter";
@@ -83,42 +84,31 @@ export default function MuiThirteenthMonth() {
   const totalProjected = summaryData.reduce((sum, row) => sum + row.projectedThirteenthMonth, 0);
   const eligibleCount = summaryData.length;
 
-  const handleExport = async () => {
-    try {
-      setIsExporting(true);
-      const res = await apiRequest("GET", `/api/thirteenth-month/export?year=${selectedYear}`);
-      
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `13th_month_${selectedYear}_${format(new Date(), "yyyyMMdd_HHmm")}.csv`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      
-      toast({ title: "Success", description: "Ledger exported successfully" });
-    } catch (err: any) {
-      toast({ title: "Error", description: err.message || "Failed to export ledger", variant: "destructive" });
-    } finally {
-      setIsExporting(false);
-    }
+  const handleExport = () => {
+    const now = new Date();
+    const ts = format(now, "yyyyMMdd_HHmm");
+    const a = document.createElement("a");
+    a.href = apiUrl(`/api/thirteenth-month/export?year=${selectedYear}`);
+    a.download = `13th_month_${selectedYear}_${ts}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    toast({ title: "Success", description: "Ledger exported successfully" });
   };
 
   const columns: GridColDef[] = [
     {
       field: "employeeName",
       headerName: "Employee Name",
-      flex: 1.5,
-      minWidth: 200,
+      flex: 2,
+      minWidth: 300,
       renderCell: (params: GridRenderCellParams) => (
-        <Box>
-          <Typography variant="body2" fontWeight={600}>
-            {params.row.employeeName}
+        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
+          <Typography variant="body1" fontWeight={600} noWrap>
+            {params.row.employeeName || 'Unknown Employee'}
           </Typography>
-          <Typography variant="caption" color="text.secondary">
-            {params.row.position}
+          <Typography variant="caption" color="text.secondary" noWrap>
+            {params.row.position || 'No Position'}
           </Typography>
         </Box>
       ),
@@ -258,8 +248,9 @@ export default function MuiThirteenthMonth() {
               columns={columns}
               loading={isLoading}
               disableRowSelectionOnClick
-              rowHeight={60}
+              rowHeight={72}
               autoHeight
+              density="comfortable"
               slots={{ toolbar: GridToolbar }}
               slotProps={{
                 toolbar: { showQuickFilter: true },
@@ -274,6 +265,7 @@ export default function MuiThirteenthMonth() {
                 "& .MuiDataGrid-cell": { display: "flex", alignItems: "center" },
                 "& .MuiDataGrid-columnHeaders": { bgcolor: "action.hover", borderRadius: 0 },
                 "& .MuiDataGrid-columnHeaderTitle": { fontWeight: 600 },
+                "& .MuiDataGrid-row:hover": { bgcolor: "action.hover" },
               }}
             />
           ) : (

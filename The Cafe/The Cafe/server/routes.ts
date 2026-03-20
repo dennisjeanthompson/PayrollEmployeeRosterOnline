@@ -1425,15 +1425,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create payroll period (Manager only)
   app.post("/api/payroll/periods", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
-      const { startDate, endDate } = req.body;
+      const { startDate, endDate, payDate } = req.body;
       const branchId = req.user!.branchId;
 
-      if (!startDate || !endDate) {
-        return res.status(400).json({ message: "Start date and end date are required" });
+      if (!startDate || !endDate || !payDate) {
+        return res.status(400).json({ message: "Start date, end date, and pay date are required" });
       }
 
       const parsedStart = new Date(startDate);
       const parsedEnd = new Date(endDate);
+      const parsedPayDate = new Date(payDate);
 
       if (parsedEnd <= parsedStart) {
         return res.status(400).json({ message: "End date must be after start date" });
@@ -1441,6 +1442,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check for overlapping periods
       const existingPeriods = await storage.getPayrollPeriodsByBranch(branchId);
+      
+      // ─── Feature 1: DOLE 16-Day Enforcement ───
+      const sortedPeriods = [...existingPeriods].sort((a, b) => 
+        new Date(b.payDate || b.endDate).getTime() - new Date(a.payDate || a.endDate).getTime()
+      );
+      const lastPeriod = sortedPeriods[0];
+      
+      if (lastPeriod) {
+        const lastPayDate = new Date(lastPeriod.payDate || lastPeriod.endDate);
+        const msPerDay = 1000 * 60 * 60 * 24;
+        const gapDays = Math.ceil((parsedPayDate.getTime() - lastPayDate.getTime()) / msPerDay);
+        
+        if (gapDays > 16) {
+          return res.status(400).json({ 
+            message: `DOLE Violation: Maximum interval between successive pay dates cannot exceed 16 days. Gap is ${gapDays} days from previous period's pay date.` 
+          });
+        }
+      }
       const hasOverlap = existingPeriods.some(p => {
         const pStart = new Date(p.startDate);
         const pEnd = new Date(p.endDate);
@@ -1454,6 +1473,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         branchId,
         startDate: parsedStart,
         endDate: parsedEnd,
+        payDate: parsedPayDate,
         status: 'open'
       });
 
@@ -1562,13 +1582,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         if (shifts.length === 0) continue;
 
-        // Calculate pay using DOLE-compliant calculations
-        // - Daily 8-hour overtime rule
-        // - Holiday pay rates (Regular 200%, Special 130%)
-        // - Night differential (+10% for 10PM-6AM)
-        // - Rest day premiums
+        // --- DOLE COMPLIANCE: Holiday Exemption Gateway (Feature 4) ---
+        // Exemption applies if branch intends it, aligns with retail/service, and active headcount <= 5
+        const activeHeadcount = employees.filter(e => e.isActive).length;
+        const branchRecord = await storage.getBranch(branchId);
+        const isHolidayExempt = !!(
+          branchRecord?.intentHolidayExempt && 
+          ['retail', 'service'].includes(branchRecord?.establishmentType || '') && 
+          activeHeadcount <= 5
+        );
+
         const hourlyRate = parseFloat(employee.hourlyRate);
-        const payCalculation = calculatePeriodPay(shifts, hourlyRate, periodHolidays, 0); // 0 = Sunday as rest day
+        const payCalculation = calculatePeriodPay(shifts, hourlyRate, periodHolidays, 0, isHolidayExempt); // 0 = Sunday as rest day
 
         // Calculate total hours from breakdown
         let employeeTotalHours = 0;
@@ -1717,12 +1742,55 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const philHealthContribution = Math.round(mandatoryBreakdown.philHealthContribution * periodFraction * 100) / 100;
         const pagibigContribution = Math.round(mandatoryBreakdown.pagibigContribution * periodFraction * 100) / 100;
 
+        // --- Feature 3: De Minimis Benefits & Allowances ---
+        const { workerAllowances, allowanceTypes } = await import('../shared/schema');
+        const { eq, and } = await import('drizzle-orm');
+        const { db } = await import('./db');
+        
+        let totalAllowanceAmount = 0;
+        let taxableAllowanceExcess = 0;
+
+        const empAllowances = await db.select({
+          amount: workerAllowances.amount,
+          ceiling: allowanceTypes.ceilingValue,
+          isDeMinimis: allowanceTypes.isDeMinimis,
+        }).from(workerAllowances)
+          .innerJoin(allowanceTypes, eq(workerAllowances.allowanceTypeId, allowanceTypes.id))
+          .where(and(eq(workerAllowances.userId, employee.id), eq(workerAllowances.isActive, true)));
+
+        for (const al of empAllowances) {
+          // Adjust allowance based on period fraction (semi-monthly splits it)
+          const periodAllowance = Math.round(parseFloat(al.amount) * periodFraction * 100) / 100;
+          const periodCeiling = al.ceiling ? Math.round(parseFloat(al.ceiling) * periodFraction * 100) / 100 : null;
+          
+          totalAllowanceAmount += periodAllowance;
+          
+          if (al.isDeMinimis) {
+            if (periodCeiling !== null && periodAllowance > periodCeiling) {
+              taxableAllowanceExcess += (periodAllowance - periodCeiling);
+            }
+          } else {
+            taxableAllowanceExcess += periodAllowance; // Fully taxable
+          }
+        }
+        
         // Step 2: BIR withholding tax is computed on TAXABLE INCOME
         // Taxable = monthly gross - SSS - PhilHealth - Pag-IBIG (mandatory deductions)
         const monthlyMandatory = mandatoryBreakdown.sssContribution + mandatoryBreakdown.philHealthContribution + mandatoryBreakdown.pagibigContribution;
-        const monthlyTaxableIncome = Math.max(0, monthlyBasicSalary - monthlyMandatory);
+        
+        // Base taxable income
+        let monthlyTaxableIncome = Math.max(0, monthlyBasicSalary - monthlyMandatory);
+        
+        // Add taxable allowance excess (extrapolated to monthly for bracket lookup)
+        if (taxableAllowanceExcess > 0) {
+           monthlyTaxableIncome += (taxableAllowanceExcess / periodFraction);
+        }
+
         const monthlyTax = await calculateWithholdingTax(monthlyTaxableIncome);
         const withholdingTax = Math.round(monthlyTax * periodFraction * 100) / 100;
+        
+        // Add gross allowances to gross Pay (after basic basicPay computations)
+        grossPay += totalAllowanceAmount;
 
         // ─── Feature 5: DOLE Art. 113 Compliant Government Loan Deductions ───
         // Only deduct if there is an approved active loan with a start date <= period endDate

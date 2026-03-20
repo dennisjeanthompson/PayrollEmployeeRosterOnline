@@ -363,7 +363,11 @@ export function EmptyState({ icon, title, description, action, sx }: EmptyStateP
         justifyContent: "center",
         py: 8,
         px: 3,
+        m: 2,
         textAlign: "center",
+        bgcolor: alpha(theme.palette.background.default, 0.4),
+        borderRadius: 4,
+        border: `2px dashed ${theme.palette.divider}`,
         ...sx,
       }}
     >

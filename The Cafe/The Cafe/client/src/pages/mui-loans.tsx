@@ -117,7 +117,7 @@ export default function MuiLoans() {
   ];
 
   return (
-    <Box sx={{ p: 4, maxWidth: 1200, margin: '0 auto' }}>
+    <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, py: 4, width: '100%', margin: '0 auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <AccountBalanceWalletIcon sx={{ fontSize: 40, color: theme.palette.primary.main, mr: 2 }} />
         <Box>

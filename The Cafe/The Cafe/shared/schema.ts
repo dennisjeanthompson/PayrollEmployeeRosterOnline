@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, boolean, timestamp, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, integer, numeric, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -14,6 +14,8 @@ export const branches = pgTable("branches", {
   name: text("name").notNull(),
   address: text("address").notNull(),
   phone: text("phone"),
+  intentHolidayExempt: boolean("intent_holiday_exempt").default(false), // DOLE: Admin claims < 5 workers exemption
+  establishmentType: text("establishment_type").default("other"), // 'retail', 'service', 'other'
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -28,6 +30,7 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("employee"),
   position: text("position").notNull(),
   hourlyRate: text("hourly_rate").notNull(),
+  dailyRate: text("daily_rate").default("0"),
   branchId: text("branch_id").references(() => branches.id).notNull(),
   isActive: boolean("is_active").default(true),
   sssLoanDeduction: text("sss_loan_deduction").default("0"),
@@ -83,6 +86,7 @@ export const payrollPeriods = pgTable("payroll_periods", {
   branchId: text("branch_id").references(() => branches.id).notNull(),
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
+  payDate: timestamp("pay_date"), // Pay Date for DOLE 16-day limit
   status: text("status").default("open"),
   totalHours: text("total_hours"),
   totalPay: text("total_pay"),
@@ -399,6 +403,63 @@ export const loanRequests = pgTable("loan_requests", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// ─── Phase 2 Compliance Tables ───────────────────────────────────────────────────
+
+export const sssContributionTable = pgTable("sss_contribution_table", {
+  id: serial("id").primaryKey(),
+  year: integer("year").notNull(),
+  minCompensation: numeric("min_compensation", { precision: 12, scale: 4 }).notNull(),
+  maxCompensation: numeric("max_compensation", { precision: 12, scale: 4 }).notNull(),
+  monthlySalaryCredit: numeric("monthly_salary_credit", { precision: 12, scale: 4 }).notNull(),
+  employeeShare: numeric("employee_share", { precision: 12, scale: 4 }).notNull(),
+  employerShare: numeric("employer_share", { precision: 12, scale: 4 }).notNull(),
+  ecContribution: numeric("ec_contribution", { precision: 12, scale: 4 }).notNull(),
+});
+
+export const wageOrders = pgTable("wage_orders", {
+  id: serial("id").primaryKey(),
+  region: text("region").notNull(),
+  effectiveDate: timestamp("effective_date").notNull(),
+  dailyRate: numeric("daily_rate", { precision: 12, scale: 4 }).notNull(),
+  isActive: boolean("is_active").default(true),
+});
+
+export const allowanceTypes = pgTable("allowance_types", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  isDeMinimis: boolean("is_de_minimis").default(true),
+  ceilingType: text("ceiling_type"), // 'peso_monthly', 'peso_annual', 'days_annual'
+  ceilingValue: numeric("ceiling_value", { precision: 12, scale: 4 }),
+});
+
+export const workerAllowances = pgTable("worker_allowances", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  allowanceTypeId: text("allowance_type_id").references(() => allowanceTypes.id).notNull(),
+  amount: numeric("amount", { precision: 12, scale: 4 }).notNull(),
+  isActive: boolean("is_active").default(true),
+});
+
+export const deMinimisYtd = pgTable("de_minimis_ytd", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  branchId: text("branch_id").references(() => branches.id).notNull(),
+  year: integer("year").notNull(),
+  allowanceTypeId: text("allowance_type_id").references(() => allowanceTypes.id).notNull(),
+  amountGivenYtd: numeric("amount_given_ytd", { precision: 12, scale: 4 }).default("0"),
+});
+
+export const employeeTaxYtd = pgTable("employee_tax_ytd", {
+  id: text("id").primaryKey(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  year: integer("year").notNull(),
+  otherBenefitsYtd: numeric("other_benefits_ytd", { precision: 12, scale: 4 }).default("0"),
+  thirteenthMonthYtd: numeric("thirteenth_month_ytd", { precision: 12, scale: 4 }).default("0"),
+  grossCompensationYtd: numeric("gross_compensation_ytd", { precision: 12, scale: 4 }).default("0"),
+  taxableCompensationYtd: numeric("taxable_compensation_ytd", { precision: 12, scale: 4 }).default("0"),
+  taxWithheldYtd: numeric("tax_withheld_ytd", { precision: 12, scale: 4 }).default("0"),
+});
+
 // Insert Schemas
 export const insertBranchSchema = createInsertSchema(branches).omit({
   id: true,
@@ -599,3 +660,25 @@ export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
 export type InsertThirteenthMonthLedger = z.infer<typeof insertThirteenthMonthLedgerSchema>;
 export type InsertLeaveCredit = z.infer<typeof insertLeaveCreditsSchema>;
 export type InsertServiceChargePool = z.infer<typeof insertServiceChargePoolSchema>;
+
+// Phase 2 Types
+export const insertSssContributionTableSchema = createInsertSchema(sssContributionTable).omit({ id: true });
+export const insertWageOrderSchema = createInsertSchema(wageOrders).omit({ id: true });
+export const insertAllowanceTypeSchema = createInsertSchema(allowanceTypes).omit({ id: true });
+export const insertWorkerAllowanceSchema = createInsertSchema(workerAllowances).omit({ id: true });
+export const insertDeMinimisYtdSchema = createInsertSchema(deMinimisYtd).omit({ id: true });
+export const insertEmployeeTaxYtdSchema = createInsertSchema(employeeTaxYtd).omit({ id: true });
+
+export type SssContributionTable = typeof sssContributionTable.$inferSelect;
+export type WageOrder = typeof wageOrders.$inferSelect;
+export type AllowanceType = typeof allowanceTypes.$inferSelect;
+export type WorkerAllowance = typeof workerAllowances.$inferSelect;
+export type DeMinimisYtd = typeof deMinimisYtd.$inferSelect;
+export type EmployeeTaxYtd = typeof employeeTaxYtd.$inferSelect;
+
+export type InsertSssContributionTable = z.infer<typeof insertSssContributionTableSchema>;
+export type InsertWageOrder = z.infer<typeof insertWageOrderSchema>;
+export type InsertAllowanceType = z.infer<typeof insertAllowanceTypeSchema>;
+export type InsertWorkerAllowance = z.infer<typeof insertWorkerAllowanceSchema>;
+export type InsertDeMinimisYtd = z.infer<typeof insertDeMinimisYtdSchema>;
+export type InsertEmployeeTaxYtd = z.infer<typeof insertEmployeeTaxYtdSchema>;

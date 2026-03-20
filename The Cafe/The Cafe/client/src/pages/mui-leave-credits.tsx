@@ -72,7 +72,7 @@ interface LeaveCredit {
   };
 }
 
-export default function MuiLeaveCredits() {
+export default function MuiLeaveCredits({ hideHeader }: { hideHeader?: boolean }) {
   const theme = useTheme();
   const { toast } = useToast();
   const currentUser = getCurrentUser();

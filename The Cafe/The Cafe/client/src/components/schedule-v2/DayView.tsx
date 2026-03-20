@@ -147,7 +147,9 @@ export function MyDayView({
               >
                 <Box sx={{
                   px: 2, py: 1.5,
-                  bgcolor: rc.bg, color: rc.text,
+                  bgcolor: isDark ? alpha(rc.bg, 0.15) : alpha(rc.bg, 0.1),
+                  color: isDark ? rc.bgLight : rc.bgDark,
+                  borderBottom: `1px solid ${alpha(rc.border, 0.2)}`,
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 }}>
                   <Typography variant="subtitle2" fontWeight={700}>{period}</Typography>
@@ -159,12 +161,12 @@ export function MyDayView({
                         size="small"
                         sx={{
                           height: 22, fontSize: '0.6rem', fontWeight: 700,
-                          bgcolor: 'rgba(255,255,255,0.25)', color: rc.text,
+                          bgcolor: alpha(rc.bg, 0.2), color: isDark ? rc.bgLight : rc.bgDark,
                           '& .MuiChip-icon': { color: 'inherit' },
                         }}
                       />
                     )}
-                    <Chip label={shift.position || 'Staff'} size="small" sx={{ height: 22, bgcolor: 'rgba(255,255,255,0.2)', color: rc.text, fontWeight: 700 }} />
+                    <Chip label={shift.position || 'Staff'} size="small" sx={{ height: 22, bgcolor: alpha(rc.bg, 0.2), color: isDark ? rc.bgLight : rc.bgDark, fontWeight: 700, border: `1px solid ${alpha(rc.border, 0.3)}` }} />
                   </Box>
                 </Box>
                 <Box sx={{ p: 2 }}>

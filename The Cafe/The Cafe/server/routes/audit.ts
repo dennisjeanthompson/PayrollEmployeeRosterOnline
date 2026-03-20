@@ -167,11 +167,11 @@ router.get("/api/audit-logs/export", requireAuth, requireManagerRole, async (req
       log.ipAddress || "",
     ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","));
 
-    const csv = [headers.join(","), ...rows].join("\n");
+    const csv = '\uFEFFsep=,\n' + [headers.join(","), ...rows].join("\n");
 
-    res.setHeader("Content-Type", "text/csv");
-    res.setHeader("Content-Disposition", `attachment; filename=audit-logs-${new Date().toISOString().split("T")[0]}.csv`);
-    res.send(csv);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="audit-logs-${new Date().toISOString().split("T")[0]}.csv"`);
+    res.end(Buffer.from(csv, "utf8"));
   } catch (error) {
     console.error("Error exporting audit logs:", error);
     res.status(500).json({ message: "Failed to export audit logs" });

@@ -73,7 +73,6 @@ const managementNavigation: NavItem[] = [
   { name: "Employees", href: "/employees", icon: PeopleIcon, roles: ["manager", "admin"] },
   { name: "Payroll", href: "/payroll-management", icon: MoneyIcon, roles: ["manager", "admin"] },
   { name: "Holidays", href: "/holiday-calendar", icon: CalendarIcon, roles: ["manager", "admin"] },
-  { name: "Leave Credits", href: "/leave-credits", icon: EventIcon, roles: ["manager", "admin"] },
   { name: "13th Month", href: "/thirteenth-month", icon: MoneyIcon, roles: ["manager", "admin"] },
   { name: "Employee Requests", href: "/requests", icon: AssignmentIcon, roles: ["manager", "admin"] },
   { name: "Forecasting", href: "/analytics", icon: TrendingUpIcon, roles: ["manager", "admin"] },

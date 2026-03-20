@@ -413,7 +413,8 @@ export function calculatePeriodPay(
   shifts: { startTime: Date | string; endTime: Date | string; actualStartTime?: Date | string | null; actualEndTime?: Date | string | null }[],
   hourlyRate: number,
   holidays: Holiday[],
-  restDay: number = 0
+  restDay: number = 0,
+  isHolidayExempt: boolean = false
 ): PayCalculation {
   const dailyBreakdown = calculateDailyHoursBreakdown(shifts, holidays, restDay);
 
@@ -426,7 +427,13 @@ export function calculatePeriodPay(
 
   for (const [, dayData] of dailyBreakdown) {
     breakdown.push(dayData);
-    const rates = HOLIDAY_RATES[dayData.holidayType];
+    let rates = HOLIDAY_RATES[dayData.holidayType];
+
+    // DOLE Feature 4: Holiday Exemption
+    // Retail/service under 10 (or 5 for some provisions) drops holiday premium
+    if (isHolidayExempt && dayData.holidayType !== 'normal') {
+      rates = HOLIDAY_RATES['normal'];
+    }
 
     let regularRate = rates.worked;
     let otRate = rates.overtime;
@@ -464,22 +471,24 @@ export function calculatePeriodPay(
 
   // --- DOLE Art. 94 Unworked Regular Holiday Pay ---
   // If a regular holiday falls in the period and the employee didn't work, they get 100% of daily wage.
-  for (const holiday of holidays) {
-    if (holiday.type === 'regular' || holiday.type === 'special_working') {
-      // Note: Only 'regular' mandates 100% unworked pay by default, but keeping flexibility.
-      // special_non_working is "no work, no pay".
-      if (holiday.type === 'regular') {
-        const holidayDateStr = new Date(holiday.date).toISOString().split('T')[0];
-        const workedThatDay = Array.from(dailyBreakdown.values()).some((dayData) => {
-          return dayData.date.toISOString().split('T')[0] === holidayDateStr;
-        });
+  if (!isHolidayExempt) {
+    for (const holiday of holidays) {
+      if (holiday.type === 'regular' || holiday.type === 'special_working') {
+        // Note: Only 'regular' mandates 100% unworked pay by default, but keeping flexibility.
+        // special_non_working is "no work, no pay".
+        if (holiday.type === 'regular') {
+          const holidayDateStr = new Date(holiday.date).toISOString().split('T')[0];
+          const workedThatDay = Array.from(dailyBreakdown.values()).some((dayData) => {
+            return dayData.date.toISOString().split('T')[0] === holidayDateStr;
+          });
 
-        if (!workedThatDay) {
-          // Grant 100% of daily wage (assuming standard 8-hour day)
-          const unworkedHolidayPay = 8 * hourlyRate;
-          holidayPay += unworkedHolidayPay;
-          // Note: we do NOT add this to basicPay because 13th month computation
-          // strictly uses basic pay earned from actual days worked.
+          if (!workedThatDay) {
+            // Grant 100% of daily wage (assuming standard 8-hour day)
+            const unworkedHolidayPay = 8 * hourlyRate;
+            holidayPay += unworkedHolidayPay;
+            // Note: we do NOT add this to basicPay because 13th month computation
+            // strictly uses basic pay earned from actual days worked.
+          }
         }
       }
     }

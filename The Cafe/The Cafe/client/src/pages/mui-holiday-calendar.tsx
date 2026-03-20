@@ -257,8 +257,8 @@ export default function MuiHolidayCalendar() {
         id: holiday.id,
         title: holiday.name,
         date: new Date(holiday.date).toISOString().split("T")[0],
-        backgroundColor: holiday.workAllowed ? typeConfig.color : "#6b7280",
-        borderColor: holiday.workAllowed ? typeConfig.color : "#6b7280",
+        backgroundColor: 'transparent',
+        borderColor: 'transparent',
         extendedProps: {
           holiday,
           payRule: holiday.payRule,
@@ -450,6 +450,7 @@ export default function MuiHolidayCalendar() {
               eventContent={(arg) => {
                 const holiday = arg.event.extendedProps.holiday as Holiday;
                 const typeConfig = getTypeConfig(holiday?.type);
+                const color = holiday.workAllowed ? typeConfig.color : "#6b7280";
                 return (
                   <Tooltip
                     title={
@@ -486,6 +487,16 @@ export default function MuiHolidayCalendar() {
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
                         cursor: "pointer",
+                        bgcolor: alpha(color, 0.15),
+                        color: color,
+                        borderLeft: `4px solid ${color}`,
+                        borderTop: '1px solid',
+                        borderRight: '1px solid',
+                        borderBottom: '1px solid',
+                        borderColor: alpha(color, 0.2),
+                        fontWeight: 600,
+                        width: '100%',
+                        boxSizing: 'border-box'
                       }}
                     >
                       {arg.event.title}

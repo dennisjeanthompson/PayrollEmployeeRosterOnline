@@ -12,6 +12,9 @@
  */
 
 import { dbStorage } from '../db-storage';
+import { db } from '../db';
+import { sssContributionTable } from '../../shared/schema';
+import { eq } from 'drizzle-orm';
 
 export interface DeductionBreakdown {
   sssContribution: number;
@@ -28,46 +31,16 @@ export interface DeductionBreakdown {
  */
 export async function calculateSSS(monthlyBasicSalary: number): Promise<number> {
   try {
-    const sssRates = await dbStorage.getDeductionRatesByType('sss');
-
-    // Filter only active rates and sort by min salary
-    const activeRates = sssRates
-      .filter(rate => rate.isActive)
-      .sort((a, b) => parseFloat(a.minSalary) - parseFloat(b.minSalary));
-
-    // If database has rates configured, use them
-    if (activeRates.length > 0) {
-      for (const bracket of activeRates) {
-        const min = parseFloat(bracket.minSalary);
-        const max = bracket.maxSalary ? parseFloat(bracket.maxSalary) : Infinity;
-
-        if (monthlyBasicSalary >= min && monthlyBasicSalary <= max) {
-          // Return fixed contribution amount if specified
-          if (bracket.employeeContribution) {
-            return parseFloat(bracket.employeeContribution);
-          }
-          // Otherwise calculate based on rate
-          if (bracket.employeeRate) {
-            return monthlyBasicSalary * (parseFloat(bracket.employeeRate) / 100);
-          }
-        }
+    // Fetch 2026 brackets
+    const brackets = await db.select().from(sssContributionTable).where(eq(sssContributionTable.year, 2026));
+    
+    for (const b of brackets) {
+      if (monthlyBasicSalary >= parseFloat(b.minCompensation) && monthlyBasicSalary <= parseFloat(b.maxCompensation)) {
+        return parseFloat(b.employeeShare);
       }
     }
-
-    // Fallback: Use 2026 SSS rates if database not configured
-    // Employee share = 5% of MSC
-    // MSC floor = ₱5,000, ceiling = ₱35,000
-    const SSS_EMPLOYEE_RATE = 0.05; // 5% employee share
-    const SSS_MSC_FLOOR = 5000;
-    const SSS_MSC_CEILING = 35000;
     
-    // Apply MSC floor and ceiling
-    let msc = monthlyBasicSalary;
-    if (msc < SSS_MSC_FLOOR) msc = SSS_MSC_FLOOR;
-    if (msc > SSS_MSC_CEILING) msc = SSS_MSC_CEILING;
-    
-    const contribution = msc * SSS_EMPLOYEE_RATE;
-    return Math.round(contribution * 100) / 100;
+    return 0;
   } catch (error) {
     console.error('Error calculating SSS:', error);
     return 0;
@@ -81,30 +54,9 @@ export async function calculateSSS(monthlyBasicSalary: number): Promise<number> 
  */
 export async function calculatePhilHealth(monthlyBasicSalary: number): Promise<number> {
   try {
-    const philHealthRates = await dbStorage.getDeductionRatesByType('philhealth');
-
-    // Get the active rate (should be only one)
-    const activeRate = philHealthRates.find(rate => rate.isActive);
-
-    if (activeRate) {
-      const minSalary = parseFloat(activeRate.minSalary);
-      const maxSalary = activeRate.maxSalary ? parseFloat(activeRate.maxSalary) : 100000;
-      const employeeRate = activeRate.employeeRate ? parseFloat(activeRate.employeeRate) / 100 : 0.025;
-
-      let baseSalary = monthlyBasicSalary;
-
-      // Apply floor and ceiling
-      if (baseSalary < minSalary) baseSalary = minSalary;
-      if (baseSalary > maxSalary) baseSalary = maxSalary;
-
-      const employeeContribution = baseSalary * employeeRate;
-      return Math.round(employeeContribution * 100) / 100;
-    }
-
-    // Fallback: Use 2026 PhilHealth rates if database not configured
-    // Employee share = 2.5% (half of 5% total)
-    // Salary floor = ₱10,000, ceiling = ₱100,000
-    const PHILHEALTH_EMPLOYEE_RATE = 0.025; // 2.5% employee share
+    // 2026 Rate: 2.5% employee share (5% total)
+    // Floor: 10,000, Ceiling: 100,000
+    const PHILHEALTH_EMPLOYEE_RATE = 0.025;
     const PHILHEALTH_FLOOR = 10000;
     const PHILHEALTH_CEILING = 100000;
     
@@ -127,35 +79,16 @@ export async function calculatePhilHealth(monthlyBasicSalary: number): Promise<n
  */
 export async function calculatePagibig(monthlyBasicSalary: number): Promise<number> {
   try {
-    const pagibigRates = await dbStorage.getDeductionRatesByType('pagibig');
-
-    // Filter active rates and sort by min salary
-    const activeRates = pagibigRates
-      .filter(rate => rate.isActive)
-      .sort((a, b) => parseFloat(a.minSalary) - parseFloat(b.minSalary));
-
-    if (activeRates.length > 0) {
-      for (const bracket of activeRates) {
-        const min = parseFloat(bracket.minSalary);
-        const max = bracket.maxSalary ? parseFloat(bracket.maxSalary) : Infinity;
-
-        if (monthlyBasicSalary >= min && monthlyBasicSalary <= max) {
-          const rate = bracket.employeeRate ? parseFloat(bracket.employeeRate) / 100 : 0.02;
-          const contribution = monthlyBasicSalary * rate;
-
-          // Maximum employee contribution is ₱200 (2026 rate)
-          return Math.min(contribution, 200);
-        }
-      }
-    }
-
-    // Fallback: Use 2026 Pag-IBIG rates if database not configured
-    // Employee share = 2% of monthly salary, capped at ₱200
-    const PAGIBIG_RATE = 0.02; // 2% employee share
-    const PAGIBIG_MAX = 200; // Maximum ₱200 contribution (2026 increase)
+    // 2026 Rate: 2% employee share
+    // MFS Cap: 10,000 max basic salary for computation -> Max Contribution = 200
+    const PAGIBIG_RATE = 0.02;
+    const PAGIBIG_MFS_CAP = 10000;
     
-    const contribution = monthlyBasicSalary * PAGIBIG_RATE;
-    return Math.min(Math.round(contribution * 100) / 100, PAGIBIG_MAX);
+    let baseSalary = monthlyBasicSalary;
+    if (baseSalary > PAGIBIG_MFS_CAP) baseSalary = PAGIBIG_MFS_CAP;
+    
+    const contribution = baseSalary * PAGIBIG_RATE;
+    return Math.round(contribution * 100) / 100;
   } catch (error) {
     console.error('Error calculating Pag-IBIG:', error);
     return 0;

@@ -28,6 +28,9 @@ import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -102,26 +105,25 @@ function TimeOffTab() {
     reason: ''
   });
 
-  const { data: requests = [], isLoading } = useQuery({
+  const { data: requestsData, isLoading } = useQuery({
     queryKey: ['/api/time-off-requests/my'],
     queryFn: async () => {
-      // NOTE: We might need to map to backend if there's no /my endpoint
-      // We'll fallback to fetching all employee requests if needed.
       const res = await fetch('/api/time-off-requests');
       if (!res.ok) throw new Error('Failed to fetch requests');
       return res.json();
     }
   });
+  const requests = Array.isArray(requestsData) ? requestsData : (requestsData?.requests || []);
 
-  const { data: balances } = useQuery({
+  const { data: balancesData } = useQuery({
     queryKey: ['/api/leave-credits/my'],
     queryFn: async () => {
       const res = await fetch('/api/leave-credits');
       if (!res.ok) throw new Error('Failed to fetch balance');
-      const data = await res.json();
-      return data;
+      return res.json();
     }
   });
+  const balances = Array.isArray(balancesData) ? balancesData : (balancesData?.credits || []);
 
   const submitMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -239,24 +241,22 @@ function TimeOffTab() {
               <MenuItem value="personal">Personal Leave</MenuItem>
               <MenuItem value="other">Other</MenuItem>
             </TextField>
-            <TextField
-              label="Start Date"
-              type="date"
-              fullWidth
-              required
-              InputLabelProps={{ shrink: true }}
-              value={formData.startDate}
-              onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
-            />
-            <TextField
-              label="End Date"
-              type="date"
-              fullWidth
-              required
-              InputLabelProps={{ shrink: true }}
-              value={formData.endDate}
-              onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
-            />
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+                <DatePicker
+                  label="Start Date"
+                  value={formData.startDate ? new Date(formData.startDate) : null}
+                  onChange={(newValue) => setFormData({ ...formData, startDate: newValue ? format(newValue, 'yyyy-MM-dd') : '' })}
+                  slotProps={{ textField: { fullWidth: true, required: true } }}
+                />
+                <DatePicker
+                  label="End Date"
+                  value={formData.endDate ? new Date(formData.endDate) : null}
+                  onChange={(newValue) => setFormData({ ...formData, endDate: newValue ? format(newValue, 'yyyy-MM-dd') : '' })}
+                  slotProps={{ textField: { fullWidth: true, required: true } }}
+                />
+              </Box>
+            </LocalizationProvider>
             <TextField
               label="Reason (Required)"
               fullWidth
@@ -296,7 +296,8 @@ function LoansTab({ user, theme }: any) {
   });
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
-  const { data: loans = [], isLoading } = useQuery<any[]>({ queryKey: ['/api/loans/my'] });
+  const { data: loansRaw, isLoading } = useQuery({ queryKey: ['/api/loans/my'] });
+  const loans: any[] = Array.isArray(loansRaw) ? loansRaw : (loansRaw as any)?.loans || [];
 
   const submitMutation = useMutation({
     mutationFn: async (payload: any) => {
@@ -479,15 +480,14 @@ function LoansTab({ user, theme }: any) {
               value={formData.monthlyAmortization}
               onChange={(e) => setFormData({ ...formData, monthlyAmortization: e.target.value })}
             />
-            <TextField
-              label="Deduction Start Cut-off"
-              type="date"
-              fullWidth
-              required
-              InputLabelProps={{ shrink: true }}
-              value={formData.deductionStartDate}
-              onChange={(e) => setFormData({ ...formData, deductionStartDate: e.target.value })}
-            />
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <DatePicker
+                label="Deduction Start Cut-off"
+                value={formData.deductionStartDate ? new Date(formData.deductionStartDate) : null}
+                onChange={(newValue) => setFormData({ ...formData, deductionStartDate: newValue ? format(newValue, 'yyyy-MM-dd') : '' })}
+                slotProps={{ textField: { fullWidth: true, required: true } }}
+              />
+            </LocalizationProvider>
             <Box sx={{ border: `1px dashed ${theme.palette.primary.main}`, borderRadius: 2, p: 2, textAlign: 'center', bgcolor: alpha(theme.palette.primary.main, 0.02) }}>
               <input
                 accept="image/*,application/pdf"

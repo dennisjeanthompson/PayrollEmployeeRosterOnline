@@ -620,12 +620,19 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   const isDark = theme.palette.mode === 'dark';
   const primaryColor = theme.palette.primary.main;
 
-  // Get latest payslip
+  // Get latest payslip and current period estimates
   const records = payrollHistory?.records || payrollHistory?.payroll || [];
   const latestPay = records?.[0];
-  const netPay = latestPay?.netPay ?? null;
   const currentPeriod = payrollData?.period;
-  const hoursWorked = payrollData?.totalHours ?? latestPay?.totalHours ?? totalHoursThisWeek;
+  
+  // Hours worked this period. Fallback to this week\'s scheduled hours.
+  const hoursWorked = payrollData?.totalHours ?? totalHoursThisWeek;
+  
+  // Calculate Estimated Net Pay
+  // If there's already a payroll record for the current period, use its netPay.
+  // Otherwise, estimate it based on hours * hourlyRate
+  const hourlyRate = Number(currentUser?.hourlyRate || 0);
+  const estNetPay = payrollData?.payrollRecord?.netPay ?? (hoursWorked * hourlyRate);
 
   const quickActions = [
     {
@@ -728,21 +735,21 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
 
           {/* Stats row */}
           <Stack direction="row" divider={<Divider orientation="vertical" flexItem />}>
-            <Box sx={{ flex: 1, textAlign: 'center', py: 1.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Hours</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: 'primary.main', lineHeight: 1.3 }}>
+            <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>Hours</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: 'primary.main', lineHeight: 1.3, mt: 0.5 }}>
                 {hoursWorked ? `${Number(hoursWorked).toFixed(0)}h` : `${totalHoursThisWeek.toFixed(0)}h`}
               </Typography>
             </Box>
-            <Box sx={{ flex: 1, textAlign: 'center', py: 1.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Est. Net Pay</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: 'success.main', lineHeight: 1.3 }}>
-                {netPay != null ? `₱${Number(netPay).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : '--'}
+            <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>Est. Net Pay</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: 'success.main', lineHeight: 1.3, mt: 0.5 }}>
+                {estNetPay > 0 ? `₱${Number(estNetPay).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : '--'}
               </Typography>
             </Box>
-            <Box sx={{ flex: 1, textAlign: 'center', py: 1.5 }}>
-              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', fontSize: '0.6rem', textTransform: 'uppercase', letterSpacing: 0.5 }}>Shifts</Typography>
-              <Typography variant="h6" sx={{ fontWeight: 800, color: 'info.main', lineHeight: 1.3 }}>
+            <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>Shifts</Typography>
+              <Typography variant="h5" sx={{ fontWeight: 800, color: 'info.main', lineHeight: 1.3, mt: 0.5 }}>
                 {employeeShifts?.shifts?.length || 0}
               </Typography>
             </Box>

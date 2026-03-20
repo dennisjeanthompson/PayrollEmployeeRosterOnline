@@ -174,12 +174,12 @@ router.get('/api/thirteenth-month/export', requireAuth, requireManagerRole, asyn
       ].map(escapeCSV).join(',');
     });
 
-    const csv = '\uFEFF' + [headerMeta, header, ...rows].join('\n');
+    const csv = '\uFEFFsep=,\n' + [headerMeta, header, ...rows].join('\n');
     const filename = `13th_month_${year}_${format(new Date(), 'yyyy-MM-dd_HHmmss')}.csv`;
 
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.send(Buffer.from(csv, 'utf8'));
+    res.end(Buffer.from(csv, 'utf8'));
   } catch (error: any) {
     console.error('Error exporting 13th month:', error);
     res.status(500).json({ message: error.message || 'Failed to export 13th month data' });

@@ -56,19 +56,25 @@ export default function MuiReports() {
   const periods = periodsData?.periods || [];
   const summary = summaryData?.summary;
 
-  const handleExport = async (type: "payroll" | "employees" | "deductions") => {
+  const handleExport = (type: "payroll" | "employees" | "deductions") => {
     setExporting(type);
-    try {
-      const url = type === "employees" 
-        ? "/api/reports/employees/export"
-        : type === "deductions" && periods[0]
-          ? `/api/reports/deductions/export?periodId=${periods[0].id}`
-          : "/api/reports/payroll/export";
-      
-      window.open(apiUrl(url), "_blank");
-    } finally {
-      setTimeout(() => setExporting(null), 1000);
-    }
+    const url = type === "employees"
+      ? "/api/reports/employees/export"
+      : type === "deductions" && periods[0]
+        ? `/api/reports/deductions/export?periodId=${periods[0].id}`
+        : "/api/reports/payroll/export";
+
+    const now = new Date();
+    const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+    const filename = `${type}_export_${ts}.csv`;
+
+    const a = document.createElement("a");
+    a.href = apiUrl(url);
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => setExporting(null), 1000);
   };
 
   // Generate last 12 months for dropdown

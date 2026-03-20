@@ -762,8 +762,9 @@ export default function MuiShiftTrading() {
                     title: `My Shift: ${format(parseISO(shift.startTime), 'h:mm a')}`,
                     start: shift.startTime,
                     end: shift.endTime,
-                    backgroundColor: theme.palette.primary.main, // Green/Primary
-                    extendedProps: { type: 'shift', ...shift }
+                    backgroundColor: 'transparent',
+                    borderColor: 'transparent',
+                    extendedProps: { type: 'shift', originalColor: theme.palette.primary.main, ...shift }
                 })),
                 // Trades (Visualized)
                 ...trades.map((trade: any) => {
@@ -786,12 +787,39 @@ export default function MuiShiftTrading() {
                      title: `${isIncoming ? 'Incoming' : (isOutgoing ? 'My Req' : 'Trade')}: ${capitalizeFirstLetter(trade.status)}`,
                      start: start,
                      end: end,
-                     backgroundColor: color,
-                     borderColor: color,
-                     extendedProps: { type: 'trade', ...trade }
+                     backgroundColor: 'transparent',
+                     borderColor: 'transparent',
+                     extendedProps: { type: 'trade', originalColor: color, ...trade }
                    };
                 }).filter(Boolean) as any[]
               ]}
+              eventContent={(eventInfo) => {
+                const color = eventInfo.event.extendedProps.originalColor || theme.palette.primary.main;
+                // create a raw rgba equivalent for 0.15 alpha
+                // note: assuming mui palette main values are hex or rgb
+                
+                return (
+                  <div style={{
+                    padding: '2px 6px',
+                    borderRadius: '4px',
+                    backgroundColor: `color-mix(in srgb, ${color} 15%, transparent)`,
+                    color: color,
+                    borderLeft: `4px solid ${color}`,
+                    borderTop: `1px solid rgba(255,255,255,0.05)`,
+                    borderRight: `1px solid rgba(255,255,255,0.05)`,
+                    borderBottom: `1px solid rgba(255,255,255,0.05)`,
+                    fontWeight: 600,
+                    fontSize: '0.85em',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    width: '100%',
+                    boxSizing: 'border-box'
+                  }}>
+                    {eventInfo.event.title}
+                  </div>
+                );
+              }}
               eventClick={(info) => {
                 const props = info.event.extendedProps;
                 if (props.type === 'shift') {

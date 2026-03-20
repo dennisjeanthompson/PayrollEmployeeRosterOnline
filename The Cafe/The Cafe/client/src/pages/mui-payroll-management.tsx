@@ -136,6 +136,7 @@ export default function MuiPayrollManagement() {
   const [selectedPeriod, setSelectedPeriod] = useState<PayrollPeriod | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+  const [payDate, setPayDate] = useState<Date | null>(null);
   const [periodType, setPeriodType] = useState<PeriodType>('2weeks');
   
   // Digital payslip viewer state
@@ -175,16 +176,20 @@ export default function MuiPayrollManagement() {
   };
 
   const [exporting, setExporting] = useState(false);
-  const handleExport = async () => {
+  const handleExport = () => {
     if (!selectedPeriod) return;
     setExporting(true);
-    try {
-      const url = `/api/reports/payroll/export?periodId=${selectedPeriod.id}`;
-      // Use apiUrl to ensure we hit the backend on Render instead of Vercel
-      window.open(apiUrl(url), "_blank");
-    } finally {
-      setTimeout(() => setExporting(false), 1000);
-    }
+    const url = `/api/reports/payroll/export?periodId=${selectedPeriod.id}`;
+    const now = new Date();
+    const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+    const a = document.createElement("a");
+    a.href = apiUrl(url);
+    a.download = `payroll_export_${ts}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => setExporting(false), 1000);
   };
 
   // Get the current semi-monthly period dates (Philippine standard: 1-15, 16-end)
@@ -210,6 +215,7 @@ export default function MuiPayrollManagement() {
     const { start, end } = getCurrentSemiMonthlyDates();
     setStartDate(start);
     setEndDate(end);
+    setPayDate(end);
     setPeriodType('custom');
     setIsCreateDialogOpen(true);
   };
@@ -223,9 +229,11 @@ export default function MuiPayrollManagement() {
     if (type === '2weeks') {
       setStartDate(today);
       setEndDate(addDays(today, 13)); // 14 days total (2 weeks)
+      setPayDate(addDays(today, 13));
     } else if (type === 'month') {
       setStartDate(startOfMonth(today));
       setEndDate(endOfMonth(today));
+      setPayDate(endOfMonth(today));
     }
     // For 'custom', don't change dates - let user pick
   };
@@ -453,13 +461,14 @@ export default function MuiPayrollManagement() {
   const adjLogs = adjustmentLogsData?.logs || [];
 
   const handleCreatePeriod = () => {
-    if (!startDate || !endDate) {
-      toast({ title: "Missing Dates", description: "Please select both dates", variant: "destructive" });
+    if (!startDate || !endDate || !payDate) {
+      toast({ title: "Missing Dates", description: "Please select start, end, and pay dates", variant: "destructive" });
       return;
     }
     createPeriodMutation.mutate({ 
       startDate: format(startDate, "yyyy-MM-dd"), 
-      endDate: format(endDate, "yyyy-MM-dd") 
+      endDate: format(endDate, "yyyy-MM-dd"),
+      payDate: format(payDate, "yyyy-MM-dd")
     });
   };
 
@@ -486,6 +495,7 @@ export default function MuiPayrollManagement() {
 
     setStartDate(start);
     setEndDate(end);
+    setPayDate(end);
     setIsCreateDialogOpen(true);
   };
 
@@ -1525,7 +1535,58 @@ export default function MuiPayrollManagement() {
                 />
               </Box>
 
-              {startDate && endDate && (
+              <Box
+                sx={{
+                  p: 3,
+                  borderRadius: 3,
+                  bgcolor: alpha(theme.palette.warning.main, 0.04),
+                  border: `1px solid ${alpha(theme.palette.warning.main, 0.1)}`,
+                }}
+              >
+                <Typography variant="subtitle2" color="warning.main" fontWeight={600} sx={{ mb: 2 }}>
+                  💰 Expected Pay Date
+                </Typography>
+                <DatePicker
+                  value={payDate}
+                  onChange={(newValue) => setPayDate(newValue)}
+                  minDate={endDate || undefined}
+                  slotProps={{
+                    textField: {
+                      fullWidth: true,
+                      sx: {
+                        "& .MuiOutlinedInput-root": {
+                          borderRadius: 2,
+                          bgcolor: "background.paper",
+                          fontSize: "1.1rem",
+                          fontWeight: 500,
+                          "& input": {
+                            padding: "14px 16px",
+                          },
+                          "&:hover": {
+                            bgcolor: alpha(theme.palette.warning.main, 0.02),
+                          },
+                          "& .MuiOutlinedInput-notchedOutline": {
+                            borderColor: alpha(theme.palette.warning.main, 0.2),
+                          },
+                          "&:hover .MuiOutlinedInput-notchedOutline": {
+                            borderColor: theme.palette.warning.main,
+                          },
+                        },
+                      },
+                    },
+                    popper: {
+                      sx: {
+                        "& .MuiPaper-root": {
+                          borderRadius: 3,
+                          boxShadow: `0 8px 32px ${alpha(theme.palette.warning.main, 0.15)}`,
+                        },
+                      },
+                    },
+                  }}
+                />
+              </Box>
+
+              {startDate && endDate && payDate && (
                 <Paper
                   elevation={0}
                   sx={{
@@ -1538,7 +1599,7 @@ export default function MuiPayrollManagement() {
                   <Stack direction="row" alignItems="center" spacing={1}>
                     <CheckCircle sx={{ color: "success.main", fontSize: 20 }} />
                     <Typography variant="body2" color="success.main" fontWeight={500}>
-                      Period: {format(startDate, "MMM d, yyyy")} - {format(endDate, "MMM d, yyyy")}
+                      Period: {format(startDate, "MMM d, yyyy")} - {format(endDate, "MMM d, yyyy")} | Pays on {format(payDate, "MMM d")}
                     </Typography>
                   </Stack>
                 </Paper>
@@ -1556,7 +1617,7 @@ export default function MuiPayrollManagement() {
           <Button
             variant="contained"
             onClick={handleCreatePeriod}
-            disabled={!startDate || !endDate || createPeriodMutation.isPending}
+            disabled={!startDate || !endDate || !payDate || createPeriodMutation.isPending}
             sx={{ 
               borderRadius: 2, 
               textTransform: "none", 
@@ -1776,7 +1837,14 @@ export default function MuiPayrollManagement() {
           onClick={() => {
             if (menuPeriod) {
               const url = `/api/reports/payroll/export?periodId=${menuPeriod.id}`;
-              window.open(apiUrl(url), '_blank');
+              const now = new Date();
+              const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+              const a = document.createElement("a");
+              a.href = apiUrl(url);
+              a.download = `payroll_export_${ts}.csv`;
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
             }
             closePeriodMenu();
           }}
