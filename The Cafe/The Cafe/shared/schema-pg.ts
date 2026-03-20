@@ -3,6 +3,12 @@ import { pgTable, text, boolean, timestamp, integer } from "drizzle-orm/pg-core"
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
+export const session = pgTable("session", {
+  sid: text("sid").primaryKey(),
+  sess: text("sess").notNull(), // json stored as text, or json("sess")
+  expire: timestamp("expire", { precision: 6 }).notNull(),
+});
+
 export const branches = pgTable("branches", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
