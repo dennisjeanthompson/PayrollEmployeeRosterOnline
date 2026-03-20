@@ -2135,17 +2135,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Retrieve the pay period so the payslip shows the correct date range
     let periodStart: string | null = null;
     let periodEnd: string | null = null;
+    let payDate: string | null = null;
+    
     try {
-      const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
-      if (period) {
+      const { payrollPeriods } = await import('../shared/schema');
+      const { eq } = await import('drizzle-orm');
+      const { db } = await import('./db');
+      
+      const periods = await db.select().from(payrollPeriods).where(eq(payrollPeriods.id, entry.payrollPeriodId)).limit(1);
+      if (periods.length > 0) {
+        const period = periods[0];
         periodStart = period.startDate instanceof Date
           ? period.startDate.toISOString()
           : String(period.startDate);
         periodEnd = period.endDate instanceof Date
           ? period.endDate.toISOString()
           : String(period.endDate);
+        payDate = period.payDate
+          ? (period.payDate instanceof Date ? period.payDate.toISOString() : String(period.payDate))
+          : null;
       }
-    } catch {}
+    } catch (e) {
+      console.error("[Payslip] Error fetching payroll period:", e);
+    }
 
     // Company settings for dynamic payslip branding/details
     const company = await storage.getCompanySettings();
@@ -2166,6 +2178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       period: entry.createdAt!,
       periodStart,
       periodEnd,
+      payDate,
       regularHours: entry.regularHours,
       overtimeHours: entry.overtimeHours,
       nightDiffHours: (entry as any).nightDiffHours || 0,

@@ -39,6 +39,7 @@ interface PayslipData {
   period: string;
   periodStart: string;
   periodEnd: string;
+  payDate?: string;
   
   // Hours
   regularHours: number;
@@ -461,7 +462,12 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
 
     const dateStart = payslipData.periodStart ? format(new Date(payslipData.periodStart), "MMMM d") : "";
     const dateEnd = payslipData.periodEnd ? format(new Date(payslipData.periodEnd), "MMMM d, yyyy") : "";
-    const payDate = payslipData.periodEnd ? format(getPaymentDate(payslipData.periodEnd), "MMMM d, yyyy") : "";
+    let payDate = "";
+    if (payslipData.payDate) {
+      payDate = format(new Date(payslipData.payDate), "MMMM d, yyyy");
+    } else if (payslipData.periodEnd) {
+      payDate = format(getPaymentDate(payslipData.periodEnd), "MMMM d, yyyy");
+    }
     
     y = drawInfoRow(y, "EMPLOYEE:", payslipData.employeeName, "PERIOD:", `${dateStart} - ${dateEnd}`);
     y = drawInfoRow(y, "POSITION:", payslipData.position, "PAY DATE:", payDate);
@@ -540,7 +546,7 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     const ndHrs = safeNumber(payslipData.nightDiffHours);
     const earnings: Array<{ label: string; value: string }> = [];
     earnings.push({ label: `Regular Hours (${safeNumber(payslipData.regularHours).toFixed(1)}h${rateStr}):`, value: formatCurrency(payslipData.basicPay) });
-    earnings.push({ label: `OT Pay (${safeNumber(payslipData.overtimeHours).toFixed(1)}h × 130%):`, value: formatCurrency(payslipData.overtimePay) });
+    earnings.push({ label: `OT Pay (${safeNumber(payslipData.overtimeHours).toFixed(1)}h × 125%):`, value: formatCurrency(payslipData.overtimePay) });
     earnings.push({ label: `Night Diff (${ndHrs.toFixed(1)}h × +10%):`, value: formatCurrency(payslipData.nightDifferential) });
     earnings.push({ label: "Holiday Pay:", value: formatCurrency(payslipData.holidayPay) });
     const restDay = safeNumber(payslipData.restDayPay);
@@ -641,7 +647,7 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
   const rateDisplay = payslip.hourlyRate ? `@ PHP ${safeNumber(payslip.hourlyRate).toFixed(2)}/hr` : "";
   const earningsList: Array<{ label: string; value: number | string; isMoney: boolean }> = [
     { label: `Basic Pay (${safeNumber(payslip.regularHours).toFixed(1)}h ${rateDisplay})`, value: payslip.basicPay, isMoney: true },
-    { label: `Overtime Pay (${safeNumber(payslip.overtimeHours).toFixed(1)}h × 130%)`, value: payslip.overtimePay, isMoney: true },
+    { label: `Overtime Pay (${safeNumber(payslip.overtimeHours).toFixed(1)}h × 125%)`, value: payslip.overtimePay, isMoney: true },
     { label: `Night Differential (${ndHrsDisplay.toFixed(1)}h × +10%)`, value: payslip.nightDifferential, isMoney: true },
     { label: "Holiday Pay", value: payslip.holidayPay, isMoney: true },
     { label: "Rest Day Premium", value: safeNumber(payslip.restDayPay), isMoney: true },
@@ -707,7 +713,9 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
                   <td className="value">{payslip.position}</td>
                   <td className="label">PAY DATE:</td>
                   <td className="value">
-                    {payslip.periodEnd ? format(getPaymentDate(payslip.periodEnd), "MMMM d, yyyy") : ""}
+                    {payslip.payDate 
+                      ? format(new Date(payslip.payDate), "MMMM d, yyyy") 
+                      : (payslip.periodEnd ? format(getPaymentDate(payslip.periodEnd), "MMMM d, yyyy") : "")}
                   </td>
                 </tr>
                 <tr>
