@@ -439,28 +439,69 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
     let totalGross = 0, totalDeductions = 0, totalNet = 0, totalHours = 0;
     let totalSSS = 0, totalPhilHealth = 0, totalPagibig = 0, totalTax = 0;
 
+    // Helper to calculate deductions on the fly for old entries that saved 0
+    const { calculateAllDeductions, calculateWithholdingTax } = await import('../utils/deductions');
+
     // Collect all entries for matching periods (more reliable than per-user lookup)
     for (const period of monthPeriods) {
       const entries = await storage.getPayrollEntriesByPeriod(period.id);
+      
+      // Determine if period is semi-monthly (15 days) to halve deductions
+      const startDateObj = new Date(period.startDate);
+      const endDateObj = new Date(period.endDate);
+      const daysInPeriod = Math.round((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      const periodFraction = daysInPeriod < 28 ? 0.5 : 1;
+
       for (const entry of entries) {
         totalGross += parseFloat(String(entry.grossPay ?? "0")) || 0;
         totalDeductions += parseFloat(String(entry.totalDeductions ?? "0")) || 0;
         totalNet += parseFloat(String(entry.netPay ?? "0")) || 0;
         totalHours += parseFloat(String(entry.totalHours ?? "0")) || 0;
 
-        // Government deductions - try all common field name variants
-        totalSSS += parseFloat(String(
-          (entry as any).sssContribution ?? (entry as any).sss_contribution ?? "0"
-        )) || 0;
-        totalPhilHealth += parseFloat(String(
-          (entry as any).philHealthContribution ?? (entry as any).phil_health_contribution ?? (entry as any).philhealthContribution ?? "0"
-        )) || 0;
-        totalPagibig += parseFloat(String(
-          (entry as any).pagibigContribution ?? (entry as any).pagibig_contribution ?? "0"
-        )) || 0;
-        totalTax += parseFloat(String(
-          (entry as any).withholdingTax ?? (entry as any).withholding_tax ?? "0"
-        )) || 0;
+        // Try getting actual DB values first
+        let currentSSS = parseFloat(String((entry as any).sssContribution ?? (entry as any).sss_contribution ?? "0")) || 0;
+        let currentPhilHealth = parseFloat(String((entry as any).philHealthContribution ?? (entry as any).phil_health_contribution ?? (entry as any).philhealthContribution ?? "0")) || 0;
+        let currentPagibig = parseFloat(String((entry as any).pagibigContribution ?? (entry as any).pagibig_contribution ?? "0")) || 0;
+        let currentTax = parseFloat(String((entry as any).withholdingTax ?? (entry as any).withholding_tax ?? "0")) || 0;
+
+        // Fallback: If ALL government deductions are 0 in the DB, it's likely an older entry
+        // before the deduction system was active. We must recalculate them dynamically.
+        if (currentSSS === 0 && currentPhilHealth === 0 && currentPagibig === 0) {
+          const basicPay = parseFloat(String(entry.basicPay ?? "0")) || 0;
+          // Calculate monthly equivalent salary (basic pay / period fraction)
+          const monthlyBasicSalary = basicPay / periodFraction;
+
+          if (monthlyBasicSalary > 0) {
+            const mandatoryBreakdown = await calculateAllDeductions(monthlyBasicSalary, {
+              deductSSS: true,
+              deductPhilHealth: true,
+              deductPagibig: true,
+              deductWithholdingTax: false
+            });
+
+            currentSSS = Math.round(mandatoryBreakdown.sssContribution * periodFraction * 100) / 100;
+            currentPhilHealth = Math.round(mandatoryBreakdown.philHealthContribution * periodFraction * 100) / 100;
+            currentPagibig = Math.round(mandatoryBreakdown.pagibigContribution * periodFraction * 100) / 100;
+
+            // Recalculate tax ONLY IF also 0, taking MWE into account
+            if (currentTax === 0) {
+              const user = employees.find(e => e.id === entry.userId);
+              const isMwe = user ? (user as any).isMwe : false;
+              
+              if (!isMwe) {
+                const monthlyMandatory = mandatoryBreakdown.sssContribution + mandatoryBreakdown.philHealthContribution + mandatoryBreakdown.pagibigContribution;
+                const monthlyTaxableIncome = Math.max(0, monthlyBasicSalary - monthlyMandatory);
+                const monthlyTax = await calculateWithholdingTax(monthlyTaxableIncome);
+                currentTax = Math.round(monthlyTax * periodFraction * 100) / 100;
+              }
+            }
+          }
+        }
+
+        totalSSS += currentSSS;
+        totalPhilHealth += currentPhilHealth;
+        totalPagibig += currentPagibig;
+        totalTax += currentTax;
       }
     }
 
