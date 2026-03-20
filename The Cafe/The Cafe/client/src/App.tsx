@@ -48,6 +48,7 @@ const MuiThirteenthMonth = lazy(() => import("@/pages/mui-thirteenth-month"));
 const MuiLeaveCredits = lazy(() => import("@/pages/mui-leave-credits"));
 const MuiRequests = lazy(() => import("@/pages/mui-requests"));
 const MobileRequests = lazy(() => import("@/pages/mobile-requests"));
+const MobileMore = lazy(() => import("@/pages/mobile-more"));
 
 const Setup = lazy(() => import("@/pages/setup"));
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -557,7 +558,7 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
       <Route path="/employee/more">
         <MobileLayout>
           <RouteLoader>
-            <MuiProfileSettings />
+            <MobileMore />
           </RouteLoader>
         </MobileLayout>
       </Route>

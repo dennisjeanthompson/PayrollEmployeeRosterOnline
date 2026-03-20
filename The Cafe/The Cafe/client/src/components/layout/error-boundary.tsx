@@ -16,6 +16,17 @@ export default class ErrorBoundary extends React.Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: unknown) {
     // eslint-disable-next-line no-console
     console.error("Component crashed:", error, errorInfo);
+    
+    // SAFEGUARD: If a Radix/MUI Dialog crashes abruptly, it can leave pointer-events trapped on the body
+    // This removes the "freeze" so the user can actually click the "Reload" buttons below.
+    if (typeof document !== 'undefined') {
+      document.body.style.pointerEvents = "auto";
+      document.body.style.overflow = "auto";
+      
+      // Also forcefully remove any leftover MUI backdrops that might be orphaned outside the React tree
+      const orphanedBackdrops = document.querySelectorAll('.MuiBackdrop-root');
+      orphanedBackdrops.forEach(el => el.remove());
+    }
   }
 
   render() {

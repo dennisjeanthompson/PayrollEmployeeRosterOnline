@@ -15,6 +15,7 @@ import {
   EventRounded as ScheduleIcon,
   PaymentsRounded as PayrollIcon,
   PersonRounded as ProfileIcon,
+  MenuRounded as MenuIcon,
   Coffee
 } from "@mui/icons-material";
 import { useLocation } from "wouter";
@@ -37,7 +38,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
     if (location.includes("/employee/dashboard")) setValue(0);
     else if (location.includes("/employee/schedule")) setValue(1);
     else if (location.includes("/employee/payroll")) setValue(2);
-    else if (location.includes("/employee/profile")) setValue(3);
+    else if (location.includes("/employee/profile") || location.includes("/employee/more") || location.includes("/employee/requests")) setValue(3);
   }, [location]);
 
   return (
@@ -126,7 +127,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
               case 0: setLocation("/employee/dashboard"); break;
               case 1: setLocation("/employee/schedule"); break;
               case 2: setLocation("/employee/payroll"); break;
-              case 3: setLocation("/employee/profile"); break;
+              case 3: setLocation("/employee/more"); break;
             }
           }}
           sx={{
@@ -154,7 +155,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
           <BottomNavigationAction label="Home" icon={<HomeIcon />} />
           <BottomNavigationAction label="Schedule" icon={<ScheduleIcon />} />
           <BottomNavigationAction label="Payslips" icon={<PayrollIcon />} />
-          <BottomNavigationAction label="Profile" icon={<ProfileIcon />} />
+          <BottomNavigationAction label="More" icon={<MenuIcon />} />
         </BottomNavigation>
       </Paper>
     </Box>

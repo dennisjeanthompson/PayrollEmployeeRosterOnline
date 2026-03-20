@@ -148,6 +148,9 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
             component={Link}
             href={item.href}
             selected={isActive}
+            onClick={() => {
+              if (onMobileClose) onMobileClose();
+            }}
             sx={{
               borderRadius: 3,
               mx: 1,
