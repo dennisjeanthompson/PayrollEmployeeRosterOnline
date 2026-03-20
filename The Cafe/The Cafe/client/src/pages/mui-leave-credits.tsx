@@ -102,7 +102,7 @@ export default function MuiLeaveCredits() {
     },
   });
 
-  const { data: employeesData } = useQuery({
+  const { data: employeesData } = useQuery<{ employees: any[] }>({
     queryKey: ["/api/employees"],
     enabled: isMgrOptions,
   });
@@ -406,8 +406,8 @@ export default function MuiLeaveCredits() {
                 </Select>
               </FormControl>
 
-              <Grid container spacing={2}>
-                <Grid item xs={editingCredit ? 6 : 12}>
+              <Stack direction="row" spacing={2} sx={{ width: '100%' }}>
+                <Box sx={{ flex: editingCredit ? 1 : 2 }}>
                   <TextField
                     fullWidth
                     label="Total Credits (Days)"
@@ -417,9 +417,9 @@ export default function MuiLeaveCredits() {
                     onChange={(e) => setFormData({ ...formData, totalCredits: e.target.value })}
                     required
                   />
-                </Grid>
+                </Box>
                 {editingCredit && (
-                  <Grid item xs={6}>
+                  <Box sx={{ flex: 1 }}>
                     <TextField
                       fullWidth
                       label="Used Credits (Days)"
@@ -429,9 +429,9 @@ export default function MuiLeaveCredits() {
                       onChange={(e) => setFormData({ ...formData, usedCredits: e.target.value })}
                       required
                     />
-                  </Grid>
+                  </Box>
                 )}
-              </Grid>
+              </Stack>
 
               <TextField
                 fullWidth

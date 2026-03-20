@@ -506,7 +506,7 @@ export default function MuiProfileSettings() {
                             sx: { borderRadius: 2 },
                             endAdornment: (
                                 <InputAdornment position="end">
-                                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" color="action">
+                                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: "action.active" }}>
                                         {showPassword ? <VisibilityOff /> : <Visibility />}
                                     </IconButton>
                                 </InputAdornment>

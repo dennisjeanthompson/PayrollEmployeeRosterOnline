@@ -34,7 +34,7 @@ import {
   Delete as DeleteIcon,
   AutoAwesome as DistributeIcon,
 } from "@mui/icons-material";
-import { EmptyState } from "./cards";
+import { EmptyState } from "@/components/mui/cards";
 
 interface ServiceChargePool {
   id: string;

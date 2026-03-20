@@ -213,6 +213,11 @@ export class MemStorage implements IStorage {
       philhealthDeduction: null,
       photoUrl: null,
       photoPublicId: null,
+      tin: null,
+      sssNumber: null,
+      philhealthNumber: null,
+      pagibigNumber: null,
+      isMwe: false,
     };
     this.users.set(manager.id, manager);
 
@@ -237,6 +242,11 @@ export class MemStorage implements IStorage {
       philhealthDeduction: null,
       photoUrl: null,
       photoPublicId: null,
+      tin: null,
+      sssNumber: null,
+      philhealthNumber: null,
+      pagibigNumber: null,
+      isMwe: false,
     };
     this.users.set(employee.id, employee);
 
@@ -320,6 +330,11 @@ export class MemStorage implements IStorage {
       philhealthDeduction: null,
       photoUrl: insertUser.photoUrl ?? null,
       photoPublicId: insertUser.photoPublicId ?? null,
+      tin: insertUser.tin ?? null,
+      sssNumber: insertUser.sssNumber ?? null,
+      philhealthNumber: insertUser.philhealthNumber ?? null,
+      pagibigNumber: insertUser.pagibigNumber ?? null,
+      isMwe: insertUser.isMwe ?? false,
     };
     this.users.set(id, user);
     return user;
@@ -506,6 +521,7 @@ export class MemStorage implements IStorage {
       id, 
       createdAt: new Date(),
       status: insertEntry.status || 'pending',
+      serviceCharge: insertEntry.serviceCharge ?? "0",
       overtimeHours: insertEntry.overtimeHours || '0',
       nightDiffHours: insertEntry.nightDiffHours || '0',
       holidayPay: (insertEntry.holidayPay ?? null) as string | null,
@@ -628,7 +644,8 @@ export class MemStorage implements IStorage {
       requestedAt: new Date(),
       approvedAt: null,
       status: insertRequest.status || 'pending',
-      approvedBy: insertRequest.approvedBy || null
+      approvedBy: insertRequest.approvedBy || null,
+      rejectionReason: insertRequest.rejectionReason ?? null
     };
     this.timeOffRequests.set(id, request);
     return request;
@@ -662,7 +679,8 @@ export class MemStorage implements IStorage {
       id,
       createdAt: new Date(),
       isRead: false,
-      data: insertNotification.data || null
+      data: insertNotification.data || null,
+      branchId: insertNotification.branchId ?? null
     };
     this.notifications.set(id, notification);
     return notification;
