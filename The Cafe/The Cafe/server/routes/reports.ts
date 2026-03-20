@@ -439,18 +439,24 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
     let totalGross = 0, totalDeductions = 0, totalNet = 0, totalHours = 0;
     let totalSSS = 0, totalPhilHealth = 0, totalPagibig = 0, totalTax = 0;
 
+    console.log(`\n=== REPORTS SUMMARY API [${targetMonth + 1}/${targetYear}] ===`);
+    console.log(`Branch: ${branchId}, Active Employees: ${activeEmployees.length}`);
+    console.log(`Found ${monthPeriods.length} overlapping periods.`);
+
     // Helper to calculate deductions on the fly for old entries that saved 0
     const { calculateAllDeductions, calculateWithholdingTax } = await import('../utils/deductions');
 
     // Collect all entries for matching periods (more reliable than per-user lookup)
     for (const period of monthPeriods) {
       const entries = await storage.getPayrollEntriesByPeriod(period.id);
+      console.log(`>> Period ${period.id}: Found ${entries.length} entries. startDate: ${period.startDate}, endDate: ${period.endDate}`);
       
       // Determine if period is semi-monthly (15 days) to halve deductions
       const startDateObj = new Date(period.startDate);
       const endDateObj = new Date(period.endDate);
       const daysInPeriod = Math.round((endDateObj.getTime() - startDateObj.getTime()) / (1000 * 60 * 60 * 24)) + 1;
       const periodFraction = daysInPeriod < 28 ? 0.5 : 1;
+      console.log(`   Period days: ${daysInPeriod}, fraction multiplier: ${periodFraction}`);
 
       for (const entry of entries) {
         totalGross += parseFloat(String(entry.grossPay ?? "0")) || 0;
@@ -470,6 +476,8 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
           const basicPay = parseFloat(String(entry.basicPay ?? "0")) || 0;
           // Calculate monthly equivalent salary (basic pay / period fraction)
           const monthlyBasicSalary = basicPay / periodFraction;
+
+          console.log(`   [User: ${entry.userId}] DB stored "0". Recalculating... BasicPay: ${basicPay}, MonthlyEq: ${monthlyBasicSalary}`);
 
           if (monthlyBasicSalary > 0) {
             const mandatoryBreakdown = await calculateAllDeductions(monthlyBasicSalary, {
@@ -495,7 +503,10 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
                 currentTax = Math.round(monthlyTax * periodFraction * 100) / 100;
               }
             }
+            console.log(`     Calculated -> SSS: ${currentSSS}, PH: ${currentPhilHealth}, PI: ${currentPagibig}, Tax: ${currentTax}`);
           }
+        } else {
+          console.log(`   [User: ${entry.userId}] Found saved deductions -> SSS: ${currentSSS}, PH: ${currentPhilHealth}, PI: ${currentPagibig}, Tax: ${currentTax}`);
         }
 
         totalSSS += currentSSS;
@@ -504,6 +515,8 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
         totalTax += currentTax;
       }
     }
+
+    console.log(`=== GRAND TOTALS -> SSS: ${totalSSS}, PH: ${totalPhilHealth}, PI: ${totalPagibig}, Tax: ${totalTax} ===\n`);
 
     res.json({
       summary: {
