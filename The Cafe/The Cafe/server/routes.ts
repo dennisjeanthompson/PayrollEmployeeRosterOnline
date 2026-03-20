@@ -184,7 +184,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }),
     secret: process.env.SESSION_SECRET || (() => {
       if (process.env.NODE_ENV === 'production') {
-        throw new Error('SESSION_SECRET environment variable must be set in production');
+        console.warn('[WARN] SESSION_SECRET env var is not set! Using auto-generated fallback. Sessions will be invalidated on each restart.');
+        return crypto.randomBytes(64).toString('hex');
       }
       return 'cafe-dev-secret-key-local-only';
     })(),
