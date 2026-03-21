@@ -406,7 +406,7 @@ function ManagerDashboard({
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar sx={{ bgcolor: 'primary.main', width: 40, height: 40, fontSize: '0.9rem', fontWeight: 600 }}>
+                        <Avatar src={shift.user?.photoUrl || undefined} sx={{ bgcolor: 'primary.main', width: 40, height: 40, fontSize: '0.9rem', fontWeight: 600 }}>
                           {getInitials(shift.user?.firstName, shift.user?.lastName)}
                         </Avatar>
                         <Box>
