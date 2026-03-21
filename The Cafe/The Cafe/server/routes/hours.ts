@@ -151,7 +151,7 @@ router.get('/api/hours/team-summary', requireAuth, requireRole(['manager']), asy
 
     // Get employee count
     const employees = await storage.getUsersByBranch(branchId);
-    const activeEmployees = employees.filter(e => e.isActive && e.role === 'employee');
+    const activeEmployees = employees.filter(e => e.isActive && (e.role === 'employee' || e.role === 'manager'));
 
     res.json({
       thisWeek: Number(weekHours.toFixed(2)),

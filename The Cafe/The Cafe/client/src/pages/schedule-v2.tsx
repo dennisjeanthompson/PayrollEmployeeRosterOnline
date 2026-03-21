@@ -174,7 +174,7 @@ export default function ScheduleV2() {
   const shifts = useMemo(() => Array.isArray(shiftsData) ? shiftsData : (shiftsData?.shifts || []), [shiftsData]);
   const employees = useMemo(() => {
     const raw = Array.isArray(employeesData) ? employeesData : (employeesData?.employees || []);
-    return raw.filter((e: Employee) => e.isActive !== false);
+    return raw.filter((e: Employee) => e.isActive !== false && e.role !== 'admin');
   }, [employeesData]);
   const holidays = holidaysData?.holidays || [];
   const timeOffRequests = timeOffData?.requests || [];
