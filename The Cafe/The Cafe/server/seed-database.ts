@@ -113,7 +113,9 @@ async function seedShifts(branchId: string, employees: any[]) {
     const isWeekend = dow === 0 || dow === 5 || dow === 6;
 
     // Sunday: skeleton crew (30%), Weekend: busy (85%), Weekday: normal (65%)
-    const pct = isSunday ? 0.3 : isWeekend ? 0.85 : 0.65;
+    // But for the current day (offset === 0), always schedule everyone (100%) so the dashboard demo looks full!
+    let pct = isSunday ? 0.3 : isWeekend ? 0.85 : 0.65;
+    if (offset === 0) pct = 1.0;
     const target = Math.max(2, Math.ceil(employees.length * pct));
 
     const shuffled = [...employees].sort(() => 0.5 - Math.random());
