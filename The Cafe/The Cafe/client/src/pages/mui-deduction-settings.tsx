@@ -264,13 +264,14 @@ export default function MuiDeductionSettings() {
                           display: "flex",
                           gap: 0.75,
                           alignItems: "flex-start",
-                          bgcolor: alpha(theme.palette.action.hover, 0.5),
+                          bgcolor: alpha(item.color, 0.08),
+                          border: `1px solid ${alpha(item.color, 0.2)}`,
                           borderRadius: 2,
                           p: 1.25,
                         }}
                       >
-                        <InfoOutlined sx={{ fontSize: 14, color: "text.disabled", mt: 0.2, flexShrink: 0 }} />
-                        <Typography variant="caption" color="text.secondary" lineHeight={1.4}>
+                        <InfoOutlined sx={{ fontSize: 14, color: item.color, mt: 0.2, flexShrink: 0 }} />
+                        <Typography variant="caption" sx={{ color: "text.primary", fontWeight: 500, lineHeight: 1.4 }}>
                           {item.note}
                         </Typography>
                       </Box>
