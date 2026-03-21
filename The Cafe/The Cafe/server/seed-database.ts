@@ -210,7 +210,15 @@ async function seedPayroll(branchId: string, employees: any[]) {
       const sss = pay.totalGrossPay > 0 ? 500 : 0;
       const phic = pay.totalGrossPay > 0 ? 300 : 0;
       const hdmf = pay.totalGrossPay > 0 ? 200 : 0;
-      const totalDed = sss + phic + hdmf;
+      
+      // Calculate Withholding Tax (roughly 10% of taxable income above ~10k)
+      let tax = 0;
+      const taxable = pay.totalGrossPay - (sss + phic + hdmf);
+      if (taxable > 10000) {
+        tax = (taxable - 10000) * 0.10;
+      }
+      
+      const totalDed = sss + phic + hdmf + tax;
       const net = pay.totalGrossPay - totalDed;
 
       periodTotalHours += totalHours;
@@ -232,7 +240,7 @@ async function seedPayroll(branchId: string, employees: any[]) {
         sssContribution: sss.toFixed(2),
         philHealthContribution: phic.toFixed(2),
         pagibigContribution: hdmf.toFixed(2),
-        withholdingTax: '0.00',
+        withholdingTax: tax.toFixed(2),
         advances: '0.00',
         otherDeductions: '0.00',
         totalDeductions: totalDed.toFixed(2),

@@ -30,9 +30,9 @@ interface WeeklyGridProps {
   onOpenRequests?: () => void;
 }
 
-/** Generate array of 6 days: Mon–Sat (Sunday is rest day in PH) */
+/** Generate array of 7 days: Mon–Sun */
 function getWeekDays(weekStart: Date): Date[] {
-  return Array.from({ length: 6 }, (_, i) => addDays(weekStart, i));
+  return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 }
 
 /** Get shifts for a specific employee on a specific date */
