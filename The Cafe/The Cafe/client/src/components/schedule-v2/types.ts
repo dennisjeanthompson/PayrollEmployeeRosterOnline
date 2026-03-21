@@ -30,6 +30,7 @@ export interface Employee {
   role?: string;
   username?: string;
   isActive?: boolean;
+  photoUrl?: string;
 }
 
 export interface TimeOffRequest {

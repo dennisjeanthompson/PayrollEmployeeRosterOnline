@@ -691,13 +691,16 @@ export default function MuiPayrollManagement() {
           value={activeTab}
           onChange={(_, newValue) => setActiveTab(newValue)}
           sx={{
-            bgcolor: alpha(theme.palette.action.hover, 0.5),
+            bgcolor: theme.palette.mode === 'dark' ? '#2A2018' : '#F5F0E8',
             borderRadius: 3,
             p: 0.5,
+            border: '1px solid',
+            borderColor: theme.palette.mode === 'dark' ? '#3D3228' : '#E0D5C5',
             "& .MuiTabs-indicator": {
               height: "100%",
               borderRadius: 2.5,
-              bgcolor: "background.paper",
+              bgcolor: theme.palette.mode === 'dark' ? '#4A3820' : '#FFFFFF',
+              boxShadow: theme.palette.mode === 'dark' ? '0 1px 4px rgba(0,0,0,0.4)' : '0 1px 4px rgba(0,0,0,0.12)',
               zIndex: 0,
             },
             "& .MuiTab-root": {
@@ -706,6 +709,11 @@ export default function MuiPayrollManagement() {
               fontWeight: 600,
               minHeight: 44,
               borderRadius: 2.5,
+              color: theme.palette.mode === 'dark' ? '#C4AA88' : '#6B5944',
+              "&.Mui-selected": {
+                color: theme.palette.mode === 'dark' ? '#F5E6D3' : '#3C2415',
+                fontWeight: 700,
+              },
             },
           }}
         >
