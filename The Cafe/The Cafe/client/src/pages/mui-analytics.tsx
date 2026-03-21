@@ -205,7 +205,7 @@ export default function MuiAnalytics() {
 
   // ── Render ──
   return (
-    <Box sx={{ p: { xs: 2, md: 4 } }}>
+    <Box sx={{ p: { xs: 2, md: 4 }, maxWidth: 1400, mx: "auto" }}>
       {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 3, flexWrap: "wrap" }}>
         <Box
@@ -272,7 +272,7 @@ export default function MuiAnalytics() {
           {/* ── Summary Cards ── */}
           <Grid container spacing={2}>
             {/* This Week Hours */}
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Card
                 elevation={0}
                 sx={{
@@ -304,7 +304,7 @@ export default function MuiAnalytics() {
             </Grid>
 
             {/* Predicted Payroll */}
-            <Grid item xs={12} sm={6}>
+            <Grid size={{ xs: 12, sm: 6 }}>
               <Card
                 elevation={0}
                 sx={{
@@ -334,7 +334,7 @@ export default function MuiAnalytics() {
           {/* ── Labor & Payroll Forecast Side-by-Side ── */}
           <Grid container spacing={3}>
             {/* Labor Hours Forecast */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Paper
                 elevation={0}
                 sx={{
@@ -438,7 +438,7 @@ export default function MuiAnalytics() {
             </Grid>
 
             {/* Payroll Cost Forecast */}
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Paper
                 elevation={0}
                 sx={{
