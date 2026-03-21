@@ -795,11 +795,15 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
 
             {/* Action Buttons */}
             <div className="payslip-actions mt-6 flex gap-3 print:hidden">
-              <Button className="flex-1 bg-black hover:bg-gray-800" onClick={handleDownloadPDF}>
+              <Button className="flex-1 bg-black hover:bg-gray-800 text-white" onClick={handleDownloadPDF}>
                 <FileDown className="h-4 w-4 mr-2" /> Download PDF
               </Button>
-              <Button variant="outline" className="flex-1" onClick={handlePrint}>
-                <Printer className="h-4 w-4 mr-2" /> Print
+              <Button
+                onClick={handlePrint}
+                className="flex-1 bg-white text-gray-800 border border-gray-400 hover:bg-gray-100 hover:text-gray-900"
+                style={{ color: '#1a1a1a', backgroundColor: '#ffffff', borderColor: '#9ca3af' }}
+              >
+                <Printer className="h-4 w-4 mr-2" style={{ color: '#1a1a1a' }} /> Print
               </Button>
             </div>
             
