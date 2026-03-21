@@ -45,6 +45,7 @@ export async function runMigrations() {
       await db.execute(sql`DELETE FROM adjustment_logs`);
       await db.execute(sql`DELETE FROM archived_payroll_periods`);
       await db.execute(sql`DELETE FROM payroll_entries`);
+      await db.execute(sql`DELETE FROM thirteenth_month_ledger`);
       await db.execute(sql`DELETE FROM payroll_periods`);
       console.log('  ✅ Old data cleared — will re-seed with PHT-correct timestamps');
     }
@@ -896,6 +897,7 @@ export async function seedSampleSchedulesAndPayroll() {
         await db.execute(sql`DELETE FROM adjustment_logs`);
         await db.execute(sql`DELETE FROM archived_payroll_periods`);
         await db.execute(sql`DELETE FROM payroll_entries`);
+        await db.execute(sql`DELETE FROM thirteenth_month_ledger`);
         await db.execute(sql`DELETE FROM payroll_periods`);
       } catch (e) {
         console.warn('  ⚠️ Could not clear payroll data:', e);
