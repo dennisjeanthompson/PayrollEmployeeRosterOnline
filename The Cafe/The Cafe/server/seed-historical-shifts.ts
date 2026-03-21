@@ -3,7 +3,7 @@ import { db } from './db';
 import { users, branches, shifts } from '../shared/schema';
 import crypto from 'crypto';
 import { format, addDays, startOfDay, getDay } from 'date-fns';
-import { eq, or } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 async function seedHistoricalShifts() {
   console.log('🌱 Seeding historical and future shifts for accurate forecasting...\n');
@@ -31,19 +31,19 @@ async function seedHistoricalShifts() {
       return d;
     };
 
-    const positions = ['Barista', 'Cashier', 'Kitchen Staff', 'Server', 'Shift Lead'];
-    
+    // PHT-safe shift patterns — avoid UTC hours 6, 10, 14 which trigger old migration
+    // These hours represent Philippine Time (UTC+8) standard café shifts
     const weekdayPatterns = [
-      { start: 7, end: 15 },
-      { start: 10, end: 18 },
-      { start: 14, end: 22 },
+      { start: 8, end: 16 },   // 8am - 4pm
+      { start: 11, end: 19 },  // 11am - 7pm
+      { start: 15, end: 23 },  // 3pm - 11pm
     ];
     
     const weekendPatterns = [
-      { start: 6, end: 14 },
-      { start: 8, end: 16 },
-      { start: 12, end: 20 },
-      { start: 15, end: 23 },
+      { start: 7, end: 15 },   // 7am - 3pm
+      { start: 8, end: 16 },   // 8am - 4pm
+      { start: 12, end: 20 },  // 12pm - 8pm
+      { start: 15, end: 23 },  // 3pm - 11pm
     ];
 
     let shiftCount = 0;
@@ -53,10 +53,14 @@ async function seedHistoricalShifts() {
     for (let dayOffset = -60; dayOffset <= 14; dayOffset++) {
       const currentDate = addDays(today, dayOffset);
       const dayOfWeek = getDay(currentDate); 
+      const isSunday = dayOfWeek === 0;
       const isWeekend = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0;
       
-      const staffPercentage = isWeekend ? 0.9 : 0.6;
-      const targetStaffCount = Math.ceil(employees.length * staffPercentage);
+      // Sunday: skeleton crew only (30% of staff)
+      // Weekend (Fri/Sat): busy, 90% of staff
+      // Weekday: normal, 60% of staff
+      const staffPercentage = isSunday ? 0.3 : (isWeekend ? 0.9 : 0.6);
+      const targetStaffCount = Math.max(2, Math.ceil(employees.length * staffPercentage));
       
       const shuffledEmployees = [...employees].sort(() => 0.5 - Math.random());
       const selectedEmployees = shuffledEmployees.slice(0, targetStaffCount);
@@ -67,7 +71,7 @@ async function seedHistoricalShifts() {
         
         const shiftId = `hist-shift-${emp.id}-d${dayOffset}-${crypto.randomUUID().slice(0, 8)}`;
         let status = 'completed';
-        if (dayOffset === 0) status = 'scheduled'; // Use 'scheduled' for today to match most frontend filters
+        if (dayOffset === 0) status = 'scheduled';
         if (dayOffset > 0) status = 'scheduled';
         
         shiftsToInsert.push({
@@ -76,7 +80,7 @@ async function seedHistoricalShifts() {
           branchId: branch.id,
           startTime: getDateObj(currentDate, pattern.start),
           endTime: getDateObj(currentDate, pattern.end),
-          position: emp.position || positions[Math.floor(Math.random() * positions.length)],
+          position: emp.position || 'Staff',
           status: status,
           createdAt: new Date(),
         });

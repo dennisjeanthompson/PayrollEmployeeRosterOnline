@@ -13,42 +13,11 @@ import { eq, sql } from 'drizzle-orm';
 export async function runMigrations() {
   console.log('🔄 Running startup migrations...');
   try {
-    // Migration 1: Delete any shifts on Sunday in Philippine time (UTC+8 hours)
-    // First delete related shift_trades to respect FK constraints
-    await db.execute(
-      sql`DELETE FROM shift_trades WHERE shift_id IN (
-        SELECT id FROM shifts WHERE EXTRACT(DOW FROM start_time + INTERVAL '8 hours') = 0
-        OR EXTRACT(DOW FROM start_time) = 0
-      )`
-    );
-    await db.execute(
-      sql`DELETE FROM shifts WHERE EXTRACT(DOW FROM start_time + INTERVAL '8 hours') = 0`
-    );
-    await db.execute(
-      sql`DELETE FROM shifts WHERE EXTRACT(DOW FROM start_time) = 0`
-    );
-    console.log('  ✅ Sunday shifts cleanup complete');
-
-    // Migration 2: Delete old-pattern shifts that used raw UTC hours (6,10,14)
-    // These cause midnight-crossing in PHT and display on wrong days
-    // New pattern uses PHT-aware UTC hours (0,3,7) that don't cross midnight in PHT
-    const oldPattern = await db.execute(
-      sql`SELECT COUNT(*) as cnt FROM shifts WHERE EXTRACT(HOUR FROM start_time) IN (6, 10, 14)`
-    );
-    const oldCount = Number((oldPattern as any)?.[0]?.cnt || (oldPattern as any)?.rows?.[0]?.cnt || 0);
-    if (oldCount > 0) {
-      console.log(`  🔄 Found ${oldCount} old-pattern shifts (UTC hours 6/10/14), deleting for re-seed...`);
-      // Delete in correct order to respect foreign key constraints
-      await db.execute(sql`DELETE FROM shift_trades`);
-      await db.execute(sql`DELETE FROM shifts`);
-      // Clear payroll data (respect FK: adjustment_logs → payroll_periods)
-      await db.execute(sql`DELETE FROM adjustment_logs`);
-      await db.execute(sql`DELETE FROM archived_payroll_periods`);
-      await db.execute(sql`DELETE FROM payroll_entries`);
-      await db.execute(sql`DELETE FROM thirteenth_month_ledger`);
-      await db.execute(sql`DELETE FROM payroll_periods`);
-      console.log('  ✅ Old data cleared — will re-seed with PHT-correct timestamps');
-    }
+    // NOTE: Destructive migrations (Sunday cleanup + old-pattern nuke) have been
+    // disabled. They were one-time fixes that have already served their purpose.
+    // Keeping them active was causing data loss on every server restart — deleting
+    // valid seed shifts and payroll entries.
+    console.log('  ✅ Migrations check complete (no destructive migrations pending)');
   } catch (error) {
     console.warn('  ⚠️ Migration error:', error);
   }
