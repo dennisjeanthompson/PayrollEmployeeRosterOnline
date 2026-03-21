@@ -940,45 +940,6 @@ export default function MuiEmployees() {
             </Stack>
           </Box>
 
-          {/* Stats Grid */}
-          <Grid container spacing={3}>
-            <Grid size={{ xs: 6, lg: 3 }}>
-              <StatCard
-                title="Total Employees"
-                value={stats.totalEmployees}
-                subtitle={`${stats.activeEmployees} active`}
-                icon={<UsersIcon />}
-                color="primary"
-              />
-            </Grid>
-            <Grid size={{ xs: 6, lg: 3 }}>
-              <StatCard
-                title="Active Staff"
-                value={stats.activeEmployees}
-                subtitle="Currently working"
-                icon={<CheckCircleIcon />}
-                color="success"
-              />
-            </Grid>
-            <Grid size={{ xs: 6, lg: 3 }}>
-              <StatCard
-                title={`Hours This Month`}
-                value={stats.totalHoursThisMonth.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                subtitle={format(new Date(), 'MMMM yyyy')}
-                icon={<ClockIcon />}
-                color="info"
-              />
-            </Grid>
-            <Grid size={{ xs: 6, lg: 3 }}>
-              <StatCard
-                title="Monthly Payroll"
-                value={`₱${stats.totalPayrollThisMonth.toLocaleString('en-PH', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`}
-                subtitle={`${format(new Date(), 'MMMM yyyy')} estimate`}
-                icon={<DollarIcon />}
-                color="warning"
-              />
-            </Grid>
-          </Grid>
 
 
           {/* Filters */}
