@@ -1,0 +1,104 @@
+import 'dotenv/config';
+import { db } from './db';
+import { users, branches, shifts } from '../shared/schema';
+import crypto from 'crypto';
+import { format, addDays, startOfDay, getDay } from 'date-fns';
+import { eq, or } from 'drizzle-orm';
+
+async function seedHistoricalShifts() {
+  console.log('🌱 Seeding historical and future shifts for accurate forecasting...\n');
+
+  try {
+    const allUsers = await db.select().from(users);
+    const allBranches = await db.select().from(branches).limit(1);
+    const branch = allBranches[0];
+    
+    if (!branch) {
+      console.log('❌ No branch found. Please run setup first.');
+      return;
+    }
+
+    const employees = allUsers.filter(u => u.role === 'employee' || u.role === 'manager');
+
+    console.log(`📍 Branch: ${branch.name}`);
+    console.log(`👥 Generating shifts for ${employees.length} employees/managers\n`);
+
+    const today = startOfDay(new Date());
+
+    const getDateObj = (date: Date, hour: number = 0, minute: number = 0) => {
+      const d = new Date(date);
+      d.setHours(hour, minute, 0, 0);
+      return d;
+    };
+
+    const positions = ['Barista', 'Cashier', 'Kitchen Staff', 'Server', 'Shift Lead'];
+    
+    const weekdayPatterns = [
+      { start: 7, end: 15 },
+      { start: 10, end: 18 },
+      { start: 14, end: 22 },
+    ];
+    
+    const weekendPatterns = [
+      { start: 6, end: 14 },
+      { start: 8, end: 16 },
+      { start: 12, end: 20 },
+      { start: 15, end: 23 },
+    ];
+
+    let shiftCount = 0;
+    const batchSize = 100;
+    let shiftsToInsert: any[] = [];
+    
+    for (let dayOffset = -60; dayOffset <= 14; dayOffset++) {
+      const currentDate = addDays(today, dayOffset);
+      const dayOfWeek = getDay(currentDate); 
+      const isWeekend = dayOfWeek === 5 || dayOfWeek === 6 || dayOfWeek === 0;
+      
+      const staffPercentage = isWeekend ? 0.9 : 0.6;
+      const targetStaffCount = Math.ceil(employees.length * staffPercentage);
+      
+      const shuffledEmployees = [...employees].sort(() => 0.5 - Math.random());
+      const selectedEmployees = shuffledEmployees.slice(0, targetStaffCount);
+      
+      for (const emp of selectedEmployees) {
+        const patterns = isWeekend ? weekendPatterns : weekdayPatterns;
+        const pattern = patterns[Math.floor(Math.random() * patterns.length)];
+        
+        const shiftId = `hist-shift-${emp.id}-d${dayOffset}-${crypto.randomUUID().slice(0, 8)}`;
+        let status = 'completed';
+        if (dayOffset === 0) status = 'scheduled'; // Use 'scheduled' for today to match most frontend filters
+        if (dayOffset > 0) status = 'scheduled';
+        
+        shiftsToInsert.push({
+          id: shiftId,
+          userId: emp.id,
+          branchId: branch.id,
+          startTime: getDateObj(currentDate, pattern.start),
+          endTime: getDateObj(currentDate, pattern.end),
+          position: emp.position || positions[Math.floor(Math.random() * positions.length)],
+          status: status,
+          createdAt: new Date(),
+        });
+        
+        shiftCount++;
+
+        if (shiftsToInsert.length >= batchSize) {
+          await db.insert(shifts).values(shiftsToInsert).onConflictDoNothing();
+          shiftsToInsert = [];
+        }
+      }
+    }
+
+    if (shiftsToInsert.length > 0) {
+      await db.insert(shifts).values(shiftsToInsert).onConflictDoNothing();
+    }
+
+    console.log(`✅ Created ${shiftCount} realistic historical and future shifts (60 days back, 14 days forward).`);
+    console.log('📈 Forecasting APIs will now detect clear weekly patterns and use real data instead of defaults.\n');
+  } catch (err) {
+    console.error('Error seeding shifts:', err);
+  }
+}
+
+seedHistoricalShifts().catch(console.error);

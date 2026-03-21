@@ -331,112 +331,10 @@ export default function MuiAnalytics() {
             </Grid>
           </Grid>
 
-          {/* ── Labor Hours Forecast ── */}
-          <Paper
-            elevation={0}
-            sx={{
-              p: 3,
-              borderRadius: 3,
-              border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
-            }}
-          >
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }} flexWrap="wrap" gap={1}>
-              <Box>
-                <Typography variant="h6" fontWeight={600}>
-                  Labor Hours Forecast
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {isLowConfidence
-                    ? "Estimated daily hours (default patterns — no historical shifts found)"
-                    : "Predicted daily staff-hours based on 8-week patterns"}
-                </Typography>
-              </Box>
-              <ToggleButtonGroup
-                value={forecastDays}
-                exclusive
-                onChange={(_, v) => v && setForecastDays(v)}
-                size="small"
-              >
-                <ToggleButton value={7}>7d</ToggleButton>
-                <ToggleButton value={14}>14d</ToggleButton>
-                <ToggleButton value={30}>30d</ToggleButton>
-              </ToggleButtonGroup>
-            </Stack>
-
-            <Box sx={{ height: 280 }}>
-              {forecastChartData.length === 0 ? (
-                <EmptyChart message="No forecast data available. The server may be restarting. Click Refresh to try again." />
-              ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={forecastChartData} margin={{ left: 0, right: 10 }}>
-                    <defs>
-                      <linearGradient id="laborBand" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="0%" stopColor={theme.palette.primary.main} stopOpacity={0.15} />
-                        <stop offset="100%" stopColor={theme.palette.primary.main} stopOpacity={0.03} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.2)} />
-                    <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
-                    <YAxis
-                      tick={{ fontSize: 11 }}
-                      domain={[0, "auto"]}
-                      label={{ value: "Hours", angle: -90, position: "insideLeft", style: { fontSize: 11 } }}
-                    />
-                    <RechartsTooltip
-                      contentStyle={{
-                        backgroundColor: theme.palette.background.paper,
-                        border: `1px solid ${theme.palette.divider}`,
-                        borderRadius: 8,
-                        fontSize: 13,
-                      }}
-                      formatter={(value: any, name: string) => {
-                        if (name === "Range") {
-                          const [lo, hi] = Array.isArray(value) ? value : [value, value];
-                          return [`${lo} – ${hi} hrs`, "±10% Range"];
-                        }
-                        return [`${value} hrs`, "Predicted"];
-                      }}
-                      labelFormatter={(label: any, payload: any[]) => {
-                        const holiday = payload?.[0]?.payload?.isHoliday;
-                        const dow = payload?.[0]?.payload?.dayOfWeek;
-                        return holiday ? `${dow}, ${label} — 🎌 ${holiday}` : `${dow}, ${label}`;
-                      }}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="upper"
-                      fill={alpha(theme.palette.primary.main, 0.08)}
-                      stroke="none"
-                      name="Upper"
-                      isAnimationActive={false}
-                    />
-                    <Area
-                      type="monotone"
-                      dataKey="lower"
-                      fill={theme.palette.background.paper}
-                      stroke="none"
-                      name="Lower"
-                      isAnimationActive={false}
-                    />
-                    <Line
-                      type="monotone"
-                      dataKey="predicted"
-                      stroke={theme.palette.primary.main}
-                      strokeWidth={2.5}
-                      dot={{ r: 3, fill: theme.palette.primary.main }}
-                      activeDot={{ r: 5 }}
-                      name="Predicted Hours"
-                      isAnimationActive={false}
-                    />
-                  </ComposedChart>
-                </ResponsiveContainer>
-              )}
-            </Box>
-          </Paper>
-
-          {/* ── Payroll Forecast + Weekly Patterns ── */}
+          {/* ── Labor & Payroll Forecast Side-by-Side ── */}
           <Grid container spacing={3}>
-            <Grid size={{ xs: 12, md: 7 }}>
+            {/* Labor Hours Forecast */}
+            <Grid size={{ xs: 12, md: 6 }}>
               <Paper
                 elevation={0}
                 sx={{
@@ -446,15 +344,121 @@ export default function MuiAnalytics() {
                   height: "100%",
                 }}
               >
-                <Typography variant="h6" fontWeight={600} gutterBottom>
-                  Payroll Cost Forecast
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  {isLowConfidence
-                    ? "Estimated payroll (default ₱800/day base — add shifts for real predictions)"
-                    : "Projected daily costs (includes holiday premiums)"}
-                </Typography>
-                <Box sx={{ height: 240 }}>
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }} flexWrap="wrap" gap={1}>
+                  <Box>
+                    <Typography variant="h6" fontWeight={600}>
+                      Labor Hours Forecast
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Projected daily staff-hours
+                    </Typography>
+                  </Box>
+                  <ToggleButtonGroup
+                    value={forecastDays}
+                    exclusive
+                    onChange={(_, v) => v && setForecastDays(v)}
+                    size="small"
+                  >
+                    <ToggleButton value={7}>7d</ToggleButton>
+                    <ToggleButton value={14}>14d</ToggleButton>
+                    <ToggleButton value={30}>30d</ToggleButton>
+                  </ToggleButtonGroup>
+                </Stack>
+
+                <Box sx={{ height: 280 }}>
+                  {forecastChartData.length === 0 ? (
+                    <EmptyChart message="No forecast data available. The server may be restarting. Click Refresh to try again." />
+                  ) : (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <ComposedChart data={forecastChartData} margin={{ left: 0, right: 10 }}>
+                        <defs>
+                          <linearGradient id="laborBand" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stopColor={theme.palette.primary.main} stopOpacity={0.15} />
+                            <stop offset="100%" stopColor={theme.palette.primary.main} stopOpacity={0.03} />
+                          </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.2)} />
+                        <XAxis dataKey="date" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
+                        <YAxis
+                          tick={{ fontSize: 11 }}
+                          domain={[0, "auto"]}
+                          label={{ value: "Hours", angle: -90, position: "insideLeft", style: { fontSize: 11 } }}
+                        />
+                        <RechartsTooltip
+                          contentStyle={{
+                            backgroundColor: theme.palette.background.paper,
+                            border: `1px solid ${theme.palette.divider}`,
+                            borderRadius: 8,
+                            fontSize: 13,
+                          }}
+                          formatter={(value: any, name: string) => {
+                            if (name === "Range") {
+                              const [lo, hi] = Array.isArray(value) ? value : [value, value];
+                              return [`${lo} – ${hi} hrs`, "±10% Range"];
+                            }
+                            return [`${value} hrs`, "Predicted"];
+                          }}
+                          labelFormatter={(label: any, payload: any[]) => {
+                            const holiday = payload?.[0]?.payload?.isHoliday;
+                            const dow = payload?.[0]?.payload?.dayOfWeek;
+                            return holiday ? `${dow}, ${label} — 🎌 ${holiday}` : `${dow}, ${label}`;
+                          }}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="upper"
+                          fill={alpha(theme.palette.primary.main, 0.08)}
+                          stroke="none"
+                          name="Upper"
+                          isAnimationActive={false}
+                        />
+                        <Area
+                          type="monotone"
+                          dataKey="lower"
+                          fill={theme.palette.background.paper}
+                          stroke="none"
+                          name="Lower"
+                          isAnimationActive={false}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="predicted"
+                          stroke={theme.palette.primary.main}
+                          strokeWidth={2.5}
+                          dot={{ r: 3, fill: theme.palette.primary.main }}
+                          activeDot={{ r: 5 }}
+                          name="Predicted Hours"
+                          isAnimationActive={false}
+                        />
+                      </ComposedChart>
+                    </ResponsiveContainer>
+                  )}
+                </Box>
+              </Paper>
+            </Grid>
+
+            {/* Payroll Cost Forecast */}
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Paper
+                elevation={0}
+                sx={{
+                  p: 3,
+                  borderRadius: 3,
+                  border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+                  height: "100%",
+                }}
+              >
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }} flexWrap="wrap" gap={1}>
+                  <Box>
+                    <Typography variant="h6" fontWeight={600}>
+                      Payroll Cost Forecast
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Projected daily costs (includes holiday premiums)
+                    </Typography>
+                  </Box>
+                </Stack>
+                <Box sx={{ height: 280 }}>
                   {payrollChartData.length === 0 ? (
                     <EmptyChart message="No payroll forecast data available." />
                   ) : (
@@ -496,48 +500,6 @@ export default function MuiAnalytics() {
                           isAnimationActive={false}
                         />
                       </AreaChart>
-                    </ResponsiveContainer>
-                  )}
-                </Box>
-              </Paper>
-            </Grid>
-
-            <Grid size={{ xs: 12, md: 5 }}>
-              <Paper
-                elevation={0}
-                sx={{
-                  p: 3,
-                  borderRadius: 3,
-                  border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
-                  height: "100%",
-                }}
-              >
-                <Typography variant="h6" fontWeight={600} gutterBottom>
-                  Weekly Patterns
-                </Typography>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                  Average daily hours (past 8 weeks)
-                </Typography>
-                <Box sx={{ height: 240 }}>
-                  {patternsData.length === 0 || patternsData.every((d) => d.hours === 0) ? (
-                    <EmptyChart message="No weekly patterns yet. Schedule some shifts to see patterns here." />
-                  ) : (
-                    <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={patternsData}>
-                        <CartesianGrid strokeDasharray="3 3" stroke={alpha(theme.palette.divider, 0.2)} />
-                        <XAxis dataKey="day" tick={{ fontSize: 11 }} />
-                        <YAxis tick={{ fontSize: 11 }} domain={[0, "auto"]} />
-                        <RechartsTooltip
-                          formatter={(value: number) => [`${value} hrs`, "Avg Hours"]}
-                          contentStyle={{
-                            backgroundColor: theme.palette.background.paper,
-                            border: `1px solid ${theme.palette.divider}`,
-                            borderRadius: 8,
-                            fontSize: 13,
-                          }}
-                        />
-                        <Bar dataKey="hours" fill={theme.palette.info.main} radius={[4, 4, 0, 0]} isAnimationActive={false} />
-                      </BarChart>
                     </ResponsiveContainer>
                   )}
                 </Box>
