@@ -272,7 +272,7 @@ export default function MuiAnalytics() {
           {/* ── Summary Cards ── */}
           <Grid container spacing={2}>
             {/* This Week Hours */}
-            <Grid size={{ xs: 6 }}>
+            <Grid item xs={12} sm={6}>
               <Card
                 elevation={0}
                 sx={{
@@ -304,7 +304,7 @@ export default function MuiAnalytics() {
             </Grid>
 
             {/* Predicted Payroll */}
-            <Grid size={{ xs: 6 }}>
+            <Grid item xs={12} sm={6}>
               <Card
                 elevation={0}
                 sx={{
@@ -334,7 +334,7 @@ export default function MuiAnalytics() {
           {/* ── Labor & Payroll Forecast Side-by-Side ── */}
           <Grid container spacing={3}>
             {/* Labor Hours Forecast */}
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid item xs={12} md={6}>
               <Paper
                 elevation={0}
                 sx={{
@@ -438,7 +438,7 @@ export default function MuiAnalytics() {
             </Grid>
 
             {/* Payroll Cost Forecast */}
-            <Grid size={{ xs: 12, md: 6 }}>
+            <Grid item xs={12} md={6}>
               <Paper
                 elevation={0}
                 sx={{
