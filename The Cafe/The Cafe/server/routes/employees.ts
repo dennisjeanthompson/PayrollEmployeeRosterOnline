@@ -56,6 +56,7 @@ export function createEmployeeRouter(realTimeManager: RealTimeManager) {
           branchId: emp.branchId,
           role: emp.role,
           isActive: emp.isActive ?? true, // Include isActive for client-side filtering
+          photoUrl: emp.photoUrl || null, // Profile picture for schedule avatars
         }));
       
         // Shift trading and schedule assignment require visibility of same-branch coworkers
