@@ -501,11 +501,15 @@ export default function MuiTimeOff() {
             <DataGrid
               rows={filteredRequests.map(req => ({...req, id: req.id}))}
               columns={[
-                { field: "userName", headerName: "Employee", flex: 1.5, minWidth: 150, renderCell: (params) => (
-                  <Typography variant="body2" fontWeight="bold">
-                    {params.row.userName || (currentUser?.firstName + ' ' + currentUser?.lastName) || 'Employee'}
-                  </Typography>
-                )},
+                { field: "userName", headerName: "Employee", flex: 1.5, minWidth: 150, renderCell: (params) => {
+                  const reqUser = params.row.user;
+                  const fullName = reqUser ? `${reqUser.firstName} ${reqUser.lastName}` : params.row.userName;
+                  return (
+                    <Typography variant="body2" fontWeight="bold">
+                      {fullName || (currentUser?.firstName + ' ' + currentUser?.lastName) || 'Employee'}
+                    </Typography>
+                  );
+                }},
                 { field: "type", headerName: "Leave Type", width: 140, renderCell: (params) => (
                   <Chip label={capitalizeFirstLetter(params.value)} size="small" variant="outlined" color="primary" />
                 )},
