@@ -35,7 +35,6 @@ import {
   payrollPeriods, payrollEntries, timeOffRequests,
   notifications, approvals, thirteenthMonthLedger,
   leaveCredits, loanRequests, adjustmentLogs, auditLogs,
-  serviceChargePools,
 } from '../shared/schema';
 import { eq } from 'drizzle-orm';
 import { addDays, startOfDay, getDay, format, subDays } from 'date-fns';
@@ -67,7 +66,6 @@ async function cleanTransactionalData() {
     'shifts',
     'loan_requests',
     'leave_credits',
-    'service_charge_pools',
   ];
 
   for (const table of tables) {
@@ -591,44 +589,7 @@ async function seedAuditLogs(branchId: string, managerId: string) {
   console.log(`   ✅ Created ${count} audit logs\n`);
 }
 
-// ─── STEP 9: Seed service charge pools ──────────────────────────────────────
 
-async function seedServiceChargePools(branchId: string, employees: any[], managerId: string) {
-  console.log('💸 Step 9 — Seeding service charge pools...\n');
-
-  const staff = employees.filter(e => e.role === 'employee');
-  const eligibleCount = staff.length;
-  
-  const pools = [
-    { start: '2026-01-01', end: '2026-01-15', total: 12500, status: 'distributed' },
-    { start: '2026-01-16', end: '2026-01-31', total: 15000, status: 'distributed' },
-    { start: '2026-02-01', end: '2026-02-15', total: 11800, status: 'distributed' },
-    { start: '2026-02-16', end: '2026-02-28', total: 13200, status: 'distributed' },
-    { start: '2026-03-01', end: '2026-03-15', total: 14500, status: 'distributed' },
-    { start: '2026-03-16', end: '2026-03-31', total: 16000, status: 'draft' },
-  ];
-
-  let count = 0;
-  for (const pool of pools) {
-    const perEmployee = Math.round((pool.total / eligibleCount) * 100) / 100;
-    await db.insert(serviceChargePools).values({
-      id: uuid(),
-      branchId,
-      periodStartDate: new Date(pool.start),
-      periodEndDate: new Date(pool.end),
-      totalCollected: pool.total.toFixed(2),
-      eligibleEmployeeCount: eligibleCount,
-      perEmployeeAmount: perEmployee.toFixed(2),
-      status: pool.status,
-      distributedAt: pool.status === 'distributed' ? new Date(pool.end) : null,
-      createdBy: managerId,
-      createdAt: new Date(pool.start),
-    });
-    count++;
-  }
-
-  console.log(`   ✅ Created ${count} service charge pools\n`);
-}
 
 // ─── MAIN ───────────────────────────────────────────────────────────────────
 
@@ -698,10 +659,7 @@ async function main() {
     await seedAuditLogs(branchId, manager.id);
   }
 
-  // Step 9: Service Charge Pools
-  if (manager) {
-    await seedServiceChargePools(branchId, employees, manager.id);
-  }
+
 
   // Summary
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

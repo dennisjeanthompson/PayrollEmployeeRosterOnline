@@ -361,24 +361,7 @@ export const leaveCredits = pgTable("leave_credits", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-/**
- * Service Charge Distribution Pools (RA 11360)
- * Admin/Manager enters total service charge collected for a period;
- * system auto-calculates per-employee share (rank-and-file only).
- */
-export const serviceChargePools = pgTable("service_charge_pools", {
-  id: text("id").primaryKey(),
-  branchId: text("branch_id").references(() => branches.id).notNull(),
-  periodStartDate: timestamp("period_start_date").notNull(),
-  periodEndDate: timestamp("period_end_date").notNull(),
-  totalCollected: text("total_collected").notNull(),        // Total service charge entered by manager
-  eligibleEmployeeCount: integer("eligible_employee_count").notNull(), // Rank-and-file only
-  perEmployeeAmount: text("per_employee_amount").notNull(), // totalCollected / eligibleCount
-  status: text("status").default("draft"),  // 'draft' | 'distributed'
-  distributedAt: timestamp("distributed_at"),
-  createdBy: text("created_by").references(() => users.id),
-  createdAt: timestamp("created_at").defaultNow(),
-});
+
 
 /**
  * Government Loan Requests (SSS & Pag-IBIG) - DOLE Art. 113 Compliance
@@ -581,13 +564,7 @@ export const insertLeaveCreditsSchema = createInsertSchema(leaveCredits).omit({
   updatedAt: true,
 });
 
-export const insertServiceChargePoolSchema = createInsertSchema(serviceChargePools).omit({
-  id: true,
-  createdAt: true,
-}).extend({
-  periodStartDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
-  periodEndDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
-});
+
 
 export const insertLoanRequestSchema = createInsertSchema(loanRequests).omit({
   id: true,

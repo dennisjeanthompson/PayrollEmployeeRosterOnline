@@ -74,7 +74,7 @@ import { apiUrl } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { PayslipPreview as DigitalPayslip } from "@/components/payroll/payslip-preview";
-import { ServiceChargeTab } from "@/components/payroll/ServiceChargeTab";
+
 
 interface PayrollPeriod {
   id: string;
@@ -661,7 +661,7 @@ export default function MuiPayrollManagement() {
 
       {/* Stats Grid */}
       <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 6, md: 3 }}>
+        <Grid size={{ xs: 12, md: 3 }}>
           <StatCard
             title="Total Periods"
             value={totalPeriods.toString()}
@@ -670,7 +670,7 @@ export default function MuiPayrollManagement() {
             color={theme.palette.primary.main}
           />
         </Grid>
-        <Grid size={{ xs: 6, md: 3 }}>
+        <Grid size={{ xs: 12, md: 3 }}>
           <StatCard
             title="Open Periods"
             value={openPeriods.toString()}
@@ -679,7 +679,7 @@ export default function MuiPayrollManagement() {
             color={theme.palette.warning.main}
           />
         </Grid>
-        <Grid size={{ xs: 6, md: 3 }}>
+        <Grid size={{ xs: 12, md: 3 }}>
           <StatCard
             title="Total Disbursed"
             value={`₱${totalPaid.toLocaleString()}`}
@@ -688,7 +688,7 @@ export default function MuiPayrollManagement() {
             color={theme.palette.success.main}
           />
         </Grid>
-        <Grid size={{ xs: 6, md: 3 }}>
+        <Grid size={{ xs: 12, md: 3 }}>
           <StatCard
             title="Hours Logged"
             value={`${totalHours.toFixed(0)}h`}
@@ -746,18 +746,13 @@ export default function MuiPayrollManagement() {
             iconPosition="start"
             label={`Exception Logs ${adjLogs.length > 0 ? `(${adjLogs.length})` : ""}`}
           />
-          <Tab
-            icon={<Receipt sx={{ fontSize: 18 }} />}
-            iconPosition="start"
-            label="Service Charge"
-          />
         </Tabs>
       </Box>
 
       {/* Content */}
       {activeTab === 0 ? (
         <Grid container spacing={3}>
-          <Grid size={{ xs: 12, lg: 8 }}>
+          <Grid item xs={12} lg={8}>
             {periodsLoading ? (
               <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
                 <CircularProgress />
@@ -936,7 +931,7 @@ export default function MuiPayrollManagement() {
           </Grid>
 
           {/* Sidebar */}
-          <Grid size={{ xs: 12, lg: 4 }}>
+          <Grid item xs={12} lg={4}>
             <Card
               elevation={0}
               sx={{
@@ -1354,8 +1349,6 @@ export default function MuiPayrollManagement() {
             </TableContainer>
           )}
         </Card>
-      ) : activeTab === 3 ? (
-        <ServiceChargeTab />
       ) : null}
 
       {/* Create Period Dialog */}

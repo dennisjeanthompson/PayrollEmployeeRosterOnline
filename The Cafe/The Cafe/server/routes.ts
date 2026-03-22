@@ -23,7 +23,7 @@ import holidaysRouter from "./routes/holidays";
 import employeeUploadsRouter from "./routes/employee-uploads";
 import { thirteenthMonthRouter } from "./routes/thirteenth-month";
 import { leaveCreditsRouter } from "./routes/leave-credits";
-import { serviceChargeRouter } from "./routes/service-charge";
+
 import loansRouter from "./routes/loans";
 import { db } from "./db";
 import { thirteenthMonthLedger } from "@shared/schema";
@@ -1174,7 +1174,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Register Philippine compliance routes
   app.use(thirteenthMonthRouter);
   app.use(leaveCreditsRouter);
-  app.use(serviceChargeRouter);
+
 
   // ===== ADJUSTMENT LOGS (Manual OT/Lateness/Exception Logging) =====
   
