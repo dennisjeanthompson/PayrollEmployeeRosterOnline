@@ -33,7 +33,8 @@ import { sql } from 'drizzle-orm';
 import {
   users, branches, shifts, shiftTrades,
   payrollPeriods, payrollEntries, timeOffRequests,
-  notifications, approvals,
+  notifications, approvals, thirteenthMonthLedger,
+  leaveCredits, loanRequests,
 } from '../shared/schema';
 import { eq } from 'drizzle-orm';
 import { addDays, startOfDay, getDay, format, subDays } from 'date-fns';
@@ -63,8 +64,8 @@ async function cleanTransactionalData() {
     'notifications',
     'employee_documents',
     'shifts',
-    'loans',
-    'loan_payments',
+    'loan_requests', // DOLE App 113
+    'leave_credits', // DOLE SIL
   ];
 
   for (const table of tables) {
@@ -251,6 +252,21 @@ async function seedPayroll(branchId: string, employees: any[]) {
         status: def.status === 'open' ? 'pending' : 'paid',
         payBreakdown: JSON.stringify(pay),
       });
+
+      // Inject 13th Month Ledger record (based ONLY on basic pay)
+      const periodYear = startDt.getFullYear();
+      await db.insert(thirteenthMonthLedger).values({
+        id: uuid(),
+        userId: emp.id,
+        branchId,
+        payrollPeriodId: def.id,
+        year: periodYear,
+        basicPayEarned: pay.basicPay.toFixed(2),
+        periodStartDate: startDt,
+        periodEndDate: endDt,
+        createdAt: new Date(),
+      });
+
       totalEntries++;
     }
 
@@ -317,6 +333,76 @@ async function seedTimeOff(employees: any[], managerId: string) {
   }
 
   console.log(`   ✅ Created ${count} time-off requests\n`);
+}
+
+// ─── STEP 4b: Seed leave credits ────────────────────────────────────────────
+
+async function seedLeaveCredits(branchId: string, employees: any[]) {
+  console.log('⛱️  Step 4b — Seeding leave credits...\n');
+
+  const currentYear = new Date().getFullYear();
+  let count = 0;
+
+  for (const emp of employees) {
+    if (emp.role === 'admin') continue;
+    await db.insert(leaveCredits).values({
+      id: uuid(),
+      userId: emp.id,
+      branchId,
+      year: currentYear,
+      leaveType: 'sil',
+      totalCredits: '5.00',
+      usedCredits: '0.00',
+      remainingCredits: '5.00',
+      notes: 'Annual Service Incentive Leave allocation',
+    });
+    count++;
+  }
+
+  console.log(`   ✅ Created ${count} leave credits\n`);
+}
+
+// ─── STEP 4c: Seed government loans ─────────────────────────────────────────
+
+async function seedLoans(branchId: string, employees: any[], managerId: string | undefined) {
+  console.log('🏦 Step 4c — Seeding government loans...\n');
+  
+  let count = 0;
+  const staff = employees.filter(e => e.role === 'employee');
+  
+  if (staff.length >= 2) {
+    // SSS Loan
+    await db.insert(loanRequests).values({
+      id: uuid(),
+      userId: staff[0].id,
+      branchId,
+      loanType: 'SSS',
+      referenceNumber: 'SSS-' + Math.floor(Math.random() * 1000000),
+      accountNumber: staff[0].sssNumber || '01-2345678-9',
+      monthlyAmortization: '500.00',
+      deductionStartDate: startOfDay(new Date()),
+      status: 'approved',
+      approvedBy: managerId,
+      approvedAt: subDays(new Date(), 5),
+    });
+    count++;
+    
+    // Pag-IBIG Loan
+    await db.insert(loanRequests).values({
+      id: uuid(),
+      userId: staff[1].id,
+      branchId,
+      loanType: 'Pag-IBIG',
+      referenceNumber: 'HDMF-' + Math.floor(Math.random() * 1000000),
+      accountNumber: staff[1].pagibigNumber || '0000-1234-5678',
+      monthlyAmortization: '300.00',
+      deductionStartDate: startOfDay(new Date()),
+      status: 'pending',
+    });
+    count++;
+  }
+  
+  console.log(`   ✅ Created ${count} loan requests\n`);
 }
 
 // ─── STEP 5: Seed shift trades ──────────────────────────────────────────────
@@ -438,6 +524,12 @@ async function main() {
   if (manager) {
     await seedTimeOff(employees, manager.id);
   }
+
+  // Step 4b: Leave credits
+  await seedLeaveCredits(branchId, employees);
+
+  // Step 4c: Government Loans
+  await seedLoans(branchId, employees, manager?.id);
 
   // Step 5: Shift trades
   await seedShiftTrades(branchId, employees);
