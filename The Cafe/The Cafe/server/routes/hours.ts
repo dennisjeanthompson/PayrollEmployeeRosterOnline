@@ -132,7 +132,7 @@ router.get('/api/hours/my-summary', requireAuth, async (req, res) => {
 });
 
 // Get team hours summary (manager only)
-router.get('/api/hours/team-summary', requireAuth, requireRole(['manager']), async (req, res) => {
+router.get('/api/hours/team-summary', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const branchId = req.session.user!.branchId;
     const now = new Date();
@@ -167,7 +167,7 @@ router.get('/api/hours/team-summary', requireAuth, requireRole(['manager']), asy
 });
 
 // Get individual employee hours (manager only)
-router.get('/api/hours/employee/:employeeId', requireAuth, requireRole(['manager']), async (req, res) => {
+router.get('/api/hours/employee/:employeeId', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { employeeId } = req.params;
     const branchId = req.session.user!.branchId;
@@ -207,7 +207,7 @@ router.get('/api/hours/employee/:employeeId', requireAuth, requireRole(['manager
 });
 
 // Get hours report with date range filtering (manager only)
-router.get('/api/hours/report', requireAuth, requireRole(['manager']), async (req, res) => {
+router.get('/api/hours/report', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const branchId = req.session.user!.branchId;
     const { startDate, endDate, employeeId } = req.query;
@@ -331,7 +331,7 @@ function calculateAllScheduledHours(shifts: any[]): number {
 
 // Get all employees with their hours for a specified period (for employee table)
 // Accepts optional startDate and endDate query params, defaults to current month
-router.get('/api/hours/all-employees', requireAuth, requireRole(['manager']), async (req, res) => {
+router.get('/api/hours/all-employees', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const branchId = req.session.user!.branchId;
     const { startDate, endDate } = req.query;

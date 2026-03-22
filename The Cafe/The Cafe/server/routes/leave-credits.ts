@@ -83,7 +83,7 @@ router.get('/api/leave-credits/my', requireAuth, async (req, res) => {
 
 // ─── GET /api/leave-credits/branch?year=2025 ─────────────────────────────────
 // Manager: view all employees' leave balances for the branch
-router.get('/api/leave-credits/branch', requireAuth, requireRole(['manager']), async (req, res) => {
+router.get('/api/leave-credits/branch', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const branchId = req.user!.branchId;
     const year = req.query.year ? parseInt(req.query.year as string) : new Date().getFullYear();
@@ -119,7 +119,7 @@ router.get('/api/leave-credits/branch', requireAuth, requireRole(['manager']), a
 
 // ─── POST /api/leave-credits/grant ──────────────────────────────────────────
 // Manager: grant leave credits to an employee
-router.post('/api/leave-credits/grant', requireAuth, requireRole(['manager']), async (req, res) => {
+router.post('/api/leave-credits/grant', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { userId, leaveType, totalCredits, year, notes } = req.body;
     const branchId = req.user!.branchId;
@@ -208,7 +208,7 @@ router.post('/api/leave-credits/grant', requireAuth, requireRole(['manager']), a
 
 // ─── PUT /api/leave-credits/:id ──────────────────────────────────────────────
 // Manager: edit a leave credit row
-router.put('/api/leave-credits/:id', requireAuth, requireRole(['manager']), async (req, res) => {
+router.put('/api/leave-credits/:id', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const branchId = req.user!.branchId;

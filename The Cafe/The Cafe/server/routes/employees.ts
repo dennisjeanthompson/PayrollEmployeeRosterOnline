@@ -70,7 +70,7 @@ export function createEmployeeRouter(realTimeManager: RealTimeManager) {
   });
 
   // Get all employees across all branches (admin/manager only - for branch overview)
-  router.get('/api/employees/all-branches', requireAuth, requireRole(['manager']), async (req, res) => {
+  router.get('/api/employees/all-branches', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
     try {
       const allUsers = await storage.getAllUsers();
       const sanitizedEmployees = allUsers.map(emp => ({
@@ -91,7 +91,7 @@ export function createEmployeeRouter(realTimeManager: RealTimeManager) {
   });
 
 // Get employee stats (must be before /:id route)
-router.get('/api/employees/stats', requireAuth, requireRole(['manager']), async (req, res) => {
+router.get('/api/employees/stats', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const branchId = req.session.user?.branchId;
     if (!branchId) return res.status(400).json({ message: 'Branch ID not found in session' });
@@ -177,7 +177,7 @@ router.get('/api/employees/stats', requireAuth, requireRole(['manager']), async 
 });
 
 // Get employee performance data (must be before /:id route)
-router.get('/api/employees/performance', requireAuth, requireRole(['manager']), async (req, res) => {
+router.get('/api/employees/performance', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const branchId = req.session.user?.branchId;
     if (!branchId) return res.status(400).json({ message: 'Branch ID not found in session' });
@@ -231,7 +231,7 @@ router.get('/api/employees/performance', requireAuth, requireRole(['manager']), 
 });
 
 // Get a single employee by ID
-router.get('/api/employees/:id', requireAuth, requireRole(['manager']), async (req, res) => {
+router.get('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const employee = await storage.getUser(id);
@@ -257,7 +257,7 @@ router.get('/api/employees/:id', requireAuth, requireRole(['manager']), async (r
 });
 
 // Create a new employee
-router.post('/api/employees', requireAuth, requireRole(['manager']), async (req, res) => {
+router.post('/api/employees', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const {
       username,
@@ -387,7 +387,7 @@ router.post('/api/employees', requireAuth, requireRole(['manager']), async (req,
 });
 
 // Update an employee
-router.put('/api/employees/:id', requireAuth, requireRole(['manager']), async (req, res) => {
+router.put('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const body = req.body;
@@ -488,7 +488,7 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager']), async (r
 
 
 // Update employee deductions (Manager only)
-router.put('/api/employees/:id/deductions', requireAuth, requireRole(['manager']), async (req, res) => {
+router.put('/api/employees/:id/deductions', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const { sssLoanDeduction, pagibigLoanDeduction, cashAdvanceDeduction, otherDeductions } = req.body;
@@ -552,7 +552,7 @@ router.put('/api/employees/:id/deductions', requireAuth, requireRole(['manager']
 });
 
 // Toggle employee status (activate/deactivate) - Manager/Admin only
-router.patch('/api/employees/:id/status', requireAuth, requireRole(['manager']), async (req, res) => {
+router.patch('/api/employees/:id/status', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const { isActive } = req.body;
@@ -601,7 +601,7 @@ router.patch('/api/employees/:id/status', requireAuth, requireRole(['manager']),
 });
 
 // Check if employee has related data (for UI decision making)
-router.get('/api/employees/:id/related-data', requireAuth, requireRole(['manager']), async (req, res) => {
+router.get('/api/employees/:id/related-data', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -614,7 +614,7 @@ router.get('/api/employees/:id/related-data', requireAuth, requireRole(['manager
 });
 
 // Export employee data (for GDPR compliance / pre-deletion backup)
-router.get('/api/employees/:id/export', requireAuth, requireRole(['manager']), async (req, res) => {
+router.get('/api/employees/:id/export', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     
@@ -642,7 +642,7 @@ router.get('/api/employees/:id/export', requireAuth, requireRole(['manager']), a
 
 // Delete employee (Manager/Admin only)
 // Supports ?force=true for cascade delete (Admin only)
-router.delete('/api/employees/:id', requireAuth, requireRole(['manager']), async (req, res) => {
+router.delete('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const force = req.query.force === 'true';

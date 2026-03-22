@@ -20,7 +20,7 @@ const router = Router();
 
 // ─── GET /api/service-charge/pools ───────────────────────────────────────────
 // Manager: list all service charge pools for branch
-router.get('/api/service-charge/pools', requireAuth, requireRole(['manager']), async (req, res) => {
+router.get('/api/service-charge/pools', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const branchId = req.user!.branchId;
 
@@ -41,7 +41,7 @@ router.get('/api/service-charge/pools', requireAuth, requireRole(['manager']), a
 
 // ─── POST /api/service-charge/pools ──────────────────────────────────────────
 // Manager: create a new service charge pool (draft)
-router.post('/api/service-charge/pools', requireAuth, requireRole(['manager']), async (req, res) => {
+router.post('/api/service-charge/pools', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const branchId = req.user!.branchId;
     const createdBy = req.user!.id;
@@ -117,7 +117,7 @@ router.post('/api/service-charge/pools', requireAuth, requireRole(['manager']), 
 
 // ─── POST /api/service-charge/pools/:id/distribute ───────────────────────────
 // Manager: distribute the pool — credits each eligible employee's most recent payroll entry
-router.post('/api/service-charge/pools/:id/distribute', requireAuth, requireRole(['manager']), async (req, res) => {
+router.post('/api/service-charge/pools/:id/distribute', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const branchId = req.user!.branchId;
@@ -226,7 +226,7 @@ router.post('/api/service-charge/pools/:id/distribute', requireAuth, requireRole
 
 // ─── DELETE /api/service-charge/pools/:id ────────────────────────────────────
 // Manager: delete a draft pool only
-router.delete('/api/service-charge/pools/:id', requireAuth, requireRole(['manager']), async (req, res) => {
+router.delete('/api/service-charge/pools/:id', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
     const branchId = req.user!.branchId;
