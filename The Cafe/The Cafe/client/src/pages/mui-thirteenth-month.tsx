@@ -36,6 +36,8 @@ import {
   ChevronRight as ChevronRightIcon,
   CalendarMonth as CalendarIcon,
   AccountBalanceWallet as LedgerIcon,
+  InfoOutlined as InfoIcon,
+  Payment as PaymentIcon,
 } from "@mui/icons-material";
 
 // Components
@@ -48,6 +50,7 @@ interface ThirteenthMonthSummary {
   year: number;
   totalBasicPaid: number;
   projectedThirteenthMonth: number;
+  paidThirteenthMonth: number;
   periodsCount: number;
   earliestPeriod: string | null;
   latestPeriod: string | null;
@@ -100,8 +103,8 @@ export default function MuiThirteenthMonth() {
     {
       field: "employeeName",
       headerName: "Employee Name",
-      flex: 2,
-      minWidth: 300,
+      flex: 1.5,
+      minWidth: 250,
       renderCell: (params: GridRenderCellParams) => (
         <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
           <Typography variant="body1" fontWeight={600} noWrap>
@@ -115,21 +118,35 @@ export default function MuiThirteenthMonth() {
     },
     {
       field: "periodsCount",
-      headerName: "Periods",
       width: 100,
       align: "center",
       headerAlign: "center",
+      renderHeader: () => (
+        <Tooltip title="Number of payroll cutoffs this employee was included in this year." placement="top">
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="body2" fontWeight={600}>Periods</Typography>
+            <InfoIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+          </Box>
+        </Tooltip>
+      ),
       renderCell: (params: GridRenderCellParams) => (
         <Typography variant="body2">{params.row.periodsCount}</Typography>
       ),
     },
     {
       field: "totalBasicPaid",
-      headerName: "Total Basic Earned (₱)",
       flex: 1,
       minWidth: 150,
       align: "right",
       headerAlign: "right",
+      renderHeader: () => (
+        <Tooltip title="Sum of all basic pay earned this year. Excludes overtime, holiday pay, and night diff per DOLE rules." placement="top">
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'flex-end', width: '100%' }}>
+            <InfoIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+            <Typography variant="body2" fontWeight={600}>Total Basic Earned</Typography>
+          </Box>
+        </Tooltip>
+      ),
       renderCell: (params: GridRenderCellParams) => (
         <Typography variant="body2" fontWeight={500}>
           ₱{params.row.totalBasicPaid.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -137,16 +154,65 @@ export default function MuiThirteenthMonth() {
       ),
     },
     {
-      field: "projectedThirteenthMonth",
-      headerName: "Projected 13th Month (₱)",
+      field: "paidThirteenthMonth",
       flex: 1,
       minWidth: 150,
       align: "right",
       headerAlign: "right",
+      renderHeader: () => (
+        <Tooltip title="The portion of the 13th month pay that has already been explicitly paid out to the employee this year." placement="top">
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'flex-end', width: '100%' }}>
+            <InfoIcon sx={{ fontSize: 16, color: "text.secondary" }} />
+            <Typography variant="body2" fontWeight={600}>Amount Paid (YTD)</Typography>
+          </Box>
+        </Tooltip>
+      ),
+      renderCell: (params: GridRenderCellParams) => {
+        const val = params.row.paidThirteenthMonth || 0;
+        return (
+          <Typography variant="body2" fontWeight={500} color={val > 0 ? "success.main" : "text.secondary"}>
+            ₱{val.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </Typography>
+        );
+      },
+    },
+    {
+      field: "projectedThirteenthMonth",
+      flex: 1,
+      minWidth: 150,
+      align: "right",
+      headerAlign: "right",
+      renderHeader: () => (
+        <Tooltip title="Formula: Total Basic Earned ÷ 12. This is exactly what you currently owe the employee." placement="top">
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: 'flex-end', width: '100%' }}>
+            <InfoIcon sx={{ fontSize: 16, color: "primary.main" }} />
+            <Typography variant="body2" fontWeight={600} color="primary.main">Projected 13th Month</Typography>
+          </Box>
+        </Tooltip>
+      ),
       renderCell: (params: GridRenderCellParams) => (
         <Typography variant="body2" fontWeight={600} color="primary.main">
           ₱{params.row.projectedThirteenthMonth.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         </Typography>
+      ),
+    },
+    {
+      field: "actions",
+      headerName: "Actions",
+      width: 160,
+      align: "center",
+      headerAlign: "center",
+      sortable: false,
+      renderCell: (params: GridRenderCellParams) => (
+        <Button
+          variant="outlined"
+          size="small"
+          startIcon={<PaymentIcon />}
+          onClick={() => toast({ title: "Coming Soon", description: "Integration for individual 13th month payout processing will be available in Phase 2." })}
+          sx={{ borderRadius: 2, textTransform: 'none' }}
+        >
+          Process Payout
+        </Button>
       ),
     },
   ];

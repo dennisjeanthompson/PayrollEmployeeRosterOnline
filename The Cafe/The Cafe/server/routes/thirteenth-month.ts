@@ -104,6 +104,7 @@ router.get('/api/thirteenth-month/summary', requireAuth, requireManagerRole, asy
         year,
         totalBasicPaid: Math.round(emp.totalBasicPaid * 100) / 100,
         projectedThirteenthMonth,
+        paidThirteenthMonth: 0, // TODO: Pull from actual Phase 2 payout records when processed
         periodsCount: emp.periods,
         earliestPeriod: emp.earliestPeriod?.toISOString() || null,
         latestPeriod: emp.latestPeriod?.toISOString() || null,
