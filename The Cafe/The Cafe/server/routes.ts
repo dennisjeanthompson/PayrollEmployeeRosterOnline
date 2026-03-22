@@ -1280,6 +1280,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ message: error.message || "Failed to get adjustment logs" });
     }
   }));
+  // Employee request adjustment log (OT/Late submitted by employee)
+  app.post("/api/adjustment-logs/request", requireAuth, asyncHandler(async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      const { date, type, value, remarks } = req.body;
+
+      if (!date || !type || !value) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const log = await storage.createAdjustmentLog({
+        id: crypto.randomUUID(), // Assume there's an import for this or dbStorage handles if we omit
+        employeeId: userId,
+        branchId: req.user!.branchId!, // Ensure branchId is set
+        loggedBy: userId,
+        date: new Date(date),
+        type,
+        value: typeof value === 'number' ? value.toString() : value,
+        remarks: remarks || "",
+        status: "pending", // Manager needs to approve
+      });
+
+      res.status(201).json(log);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to submit exception request" });
+    }
+  }));
 
   // Employee verify adjustment log
   app.put("/api/adjustment-logs/:id/verify", requireAuth, asyncHandler(async (req, res) => {
@@ -1580,7 +1607,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           new Date(period.endDate)
         );
 
-        if (shifts.length === 0) continue;
+        // Get approved paid leave (SIL/Vacation/Sick)
+        const timeOffRequests = await storage.getTimeOffRequestsByUser(employee.id);
+        const approvedLeaves = timeOffRequests.filter(req => 
+          req.status === 'approved' && 
+          ['vacation', 'sick', 'personal'].includes(req.type) &&
+          new Date(req.startDate) <= new Date(period.endDate) &&
+          new Date(req.endDate) >= new Date(period.startDate)
+        );
+
+        if (shifts.length === 0 && approvedLeaves.length === 0) continue;
 
         // --- DOLE COMPLIANCE: Holiday Exemption Gateway (Feature 4) ---
         // Exemption applies if branch intends it, aligns with retail/service, and active headcount <= 5
@@ -1595,9 +1631,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const hourlyRate = parseFloat(employee.hourlyRate);
         const payCalculation = calculatePeriodPay(shifts, hourlyRate, periodHolidays, 0, isHolidayExempt); // 0 = Sunday as rest day
 
+        // -- Add Service Incentive Leave (Paid Time Off) --
+        let paidLeaveHours = 0;
+        let paidLeavePay = 0;
+        for (const leave of approvedLeaves) {
+          const leaveStart = new Date(Math.max(new Date(leave.startDate).getTime(), new Date(period.startDate).getTime()));
+          const leaveEnd = new Date(Math.min(new Date(leave.endDate).getTime(), new Date(period.endDate).getTime()));
+          
+          if (leaveStart <= leaveEnd) {
+            // Count inclusive days in the period
+            const daysCount = Math.floor((leaveEnd.getTime() - leaveStart.getTime()) / (24 * 60 * 60 * 1000)) + 1;
+            // 8 hours of basic pay per day of leave
+            paidLeaveHours += (daysCount * 8);
+          }
+        }
+        
+        paidLeavePay = paidLeaveHours * hourlyRate;
+
         // Calculate total hours from breakdown
-        let employeeTotalHours = 0;
-        let regularHours = 0;
+        let employeeTotalHours = paidLeaveHours;
+        let regularHours = paidLeaveHours;
         let overtimeHours = 0;
         let nightDiffHours = 0;
 
@@ -1608,12 +1661,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           employeeTotalHours += day.regularHours + day.overtimeHours;
         }
 
-        const basicPay = payCalculation.basicPay;
+        // Add paid leave to basic pay (Counts toward 13th month computation)
+        const basicPay = payCalculation.basicPay + paidLeavePay;
         const overtimePay = payCalculation.overtimePay;
         const holidayPay = payCalculation.holidayPay;
         const nightDiffPay = payCalculation.nightDiffPay;
         const restDayPay = payCalculation.restDayPay;
-        let grossPay = payCalculation.totalGrossPay;
+        let grossPay = payCalculation.totalGrossPay + paidLeavePay;
 
         // ===== MANUAL ADJUSTMENT LOGS (OT/Lateness from Manager input) =====
         // Process approved adjustment logs for this employee in this period

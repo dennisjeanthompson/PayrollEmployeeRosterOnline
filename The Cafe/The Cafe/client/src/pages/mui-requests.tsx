@@ -7,6 +7,8 @@ import AssignmentIcon from '@mui/icons-material/Assignment';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import AssessmentIcon from '@mui/icons-material/Assessment';
+import GavelIcon from '@mui/icons-material/Gavel';
+import MuiExceptionLogs from './mui-exception-logs';
 
 export default function MuiRequests() {
   const [tabIndex, setTabIndex] = useState(0);
@@ -32,6 +34,7 @@ export default function MuiRequests() {
           scrollButtons="auto"
         >
           <Tab icon={<CalendarMonthIcon fontSize="small"/>} iconPosition="start" label="Time Off / SIL" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
+          <Tab icon={<GavelIcon fontSize="small"/>} iconPosition="start" label="Exception Logs" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
           <Tab icon={<AccountBalanceWalletIcon fontSize="small"/>} iconPosition="start" label="Government Loans" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
           <Tab icon={<AssessmentIcon fontSize="small"/>} iconPosition="start" label="Leave Credits LEDGER" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
         </Tabs>
@@ -46,21 +49,28 @@ export default function MuiRequests() {
         display: tabIndex === 0 ? 'block' : 'none', 
         '& > div': { pt: 2, minHeight: 'auto', bgcolor: 'transparent' },
         '& .MuiContainer-root': { pt: 0 },
-        '& h1': { display: 'none' } // Hide duplicate header
+        '& h1': { display: 'none' } 
       }}>
         <MuiTimeOff />
       </Box>
       <Box sx={{ 
         display: tabIndex === 1 ? 'block' : 'none', 
+        '& > div': { pt: 2, minHeight: 'auto', bgcolor: 'transparent' },
+        '& > div > .MuiBox-root > h6': { display: 'none' } 
+      }}>
+        <MuiExceptionLogs />
+      </Box>
+      <Box sx={{ 
+        display: tabIndex === 2 ? 'block' : 'none', 
         '& > div': { pt: 2, minHeight: 'auto' },
-        '& h4': { display: 'none' } // Hide duplicate header
+        '& h4': { display: 'none' } 
       }}>
         <MuiLoans />
       </Box>
       <Box sx={{ 
-        display: tabIndex === 2 ? 'block' : 'none', 
+        display: tabIndex === 3 ? 'block' : 'none', 
         '& > div': { pt: 2, minHeight: 'auto', bgcolor: 'transparent' },
-        '& > div > .MuiStack-root > div:first-of-type': { display: 'none' } // Hides Leave Credits Header
+        '& > div > .MuiStack-root > div:first-of-type': { display: 'none' } 
       }}>
         <MuiLeaveCredits />
       </Box>
