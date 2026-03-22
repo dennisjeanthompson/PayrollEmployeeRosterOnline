@@ -34,7 +34,8 @@ import {
   users, branches, shifts, shiftTrades,
   payrollPeriods, payrollEntries, timeOffRequests,
   notifications, approvals, thirteenthMonthLedger,
-  leaveCredits, loanRequests,
+  leaveCredits, loanRequests, adjustmentLogs, auditLogs,
+  serviceChargePools,
 } from '../shared/schema';
 import { eq } from 'drizzle-orm';
 import { addDays, startOfDay, getDay, format, subDays } from 'date-fns';
@@ -64,8 +65,9 @@ async function cleanTransactionalData() {
     'notifications',
     'employee_documents',
     'shifts',
-    'loan_requests', // DOLE App 113
-    'leave_credits', // DOLE SIL
+    'loan_requests',
+    'leave_credits',
+    'service_charge_pools',
   ];
 
   for (const table of tables) {
@@ -479,6 +481,155 @@ async function seedNotifications(employees: any[]) {
   console.log(`   ✅ Created ${count} notifications\n`);
 }
 
+// ─── STEP 7: Seed adjustment/exception logs ─────────────────────────────────
+
+async function seedAdjustmentLogs(branchId: string, employees: any[], managerId: string) {
+  console.log('📝 Step 7 — Seeding adjustment/exception logs...\n');
+
+  const now = new Date();
+  const staff = employees.filter(e => e.role === 'employee');
+  let count = 0;
+
+  const adjustments = [
+    { empIdx: 0, type: 'overtime', value: '2.0', remarks: 'Extended shift to cover closing duties', status: 'approved', daysAgo: 5 },
+    { empIdx: 0, type: 'late', value: '15', remarks: 'Traffic due to road construction on MacArthur Hwy', status: 'employee_verified', daysAgo: 3 },
+    { empIdx: 1, type: 'overtime', value: '1.5', remarks: 'Stayed to train new barista', status: 'approved', daysAgo: 7 },
+    { empIdx: 1, type: 'undertime', value: '30', remarks: 'Left early — medical appointment (with proof)', status: 'approved', daysAgo: 10 },
+    { empIdx: 2, type: 'night_diff', value: '4.0', remarks: 'Covered night shift for absent coworker', status: 'pending', daysAgo: 2 },
+    { empIdx: 2, type: 'late', value: '45', remarks: 'Overslept, documented warning issued', status: 'employee_verified', daysAgo: 8 },
+    { empIdx: 3, type: 'rest_day_ot', value: '8.0', remarks: 'Sunday coverage — peak season', status: 'approved', daysAgo: 14 },
+    { empIdx: 4, type: 'absent', value: '1', remarks: 'No call, no show — first offense', status: 'pending', daysAgo: 4 },
+  ];
+
+  for (const adj of adjustments) {
+    if (!staff[adj.empIdx]) continue;
+    await db.insert(adjustmentLogs).values({
+      id: uuid(),
+      employeeId: staff[adj.empIdx].id,
+      branchId,
+      loggedBy: managerId,
+      date: subDays(now, adj.daysAgo),
+      type: adj.type,
+      value: adj.value,
+      remarks: adj.remarks,
+      status: adj.status,
+      verifiedByEmployee: adj.status === 'employee_verified' || adj.status === 'approved',
+      verifiedAt: adj.status !== 'pending' ? subDays(now, adj.daysAgo - 1) : null,
+      approvedBy: adj.status === 'approved' ? managerId : null,
+      approvedAt: adj.status === 'approved' ? subDays(now, adj.daysAgo - 1) : null,
+      createdAt: subDays(now, adj.daysAgo),
+    });
+    count++;
+  }
+
+  console.log(`   ✅ Created ${count} adjustment logs\n`);
+}
+
+// ─── STEP 8: Seed audit logs ────────────────────────────────────────────────
+
+async function seedAuditLogs(branchId: string, managerId: string) {
+  console.log('🔒 Step 8 — Seeding audit logs...\n');
+
+  const now = new Date();
+  const logs = [
+    {
+      action: 'payroll_process', entityType: 'payroll_period', entityId: 'period-2026-01-01',
+      reason: 'Processed payroll for Jan 1-15, 2026', daysAgo: 60,
+      oldValues: JSON.stringify({ status: 'open' }),
+      newValues: JSON.stringify({ status: 'paid', totalPay: '39697.00' }),
+    },
+    {
+      action: 'payroll_process', entityType: 'payroll_period', entityId: 'period-2026-01-16',
+      reason: 'Processed payroll for Jan 16-31, 2026', daysAgo: 45,
+      oldValues: JSON.stringify({ status: 'open' }),
+      newValues: JSON.stringify({ status: 'paid', totalPay: '51331.00' }),
+    },
+    {
+      action: 'payroll_process', entityType: 'payroll_period', entityId: 'period-2026-02-01',
+      reason: 'Processed payroll for Feb 1-15, 2026', daysAgo: 30,
+      oldValues: JSON.stringify({ status: 'open' }),
+      newValues: JSON.stringify({ status: 'paid', totalPay: '47945.00' }),
+    },
+    {
+      action: 'payroll_process', entityType: 'payroll_period', entityId: 'period-2026-03-01',
+      reason: 'Processed payroll for Mar 1-15, 2026', daysAgo: 7,
+      oldValues: JSON.stringify({ status: 'open' }),
+      newValues: JSON.stringify({ status: 'closed', totalPay: '51345.00' }),
+    },
+    {
+      action: 'rate_update', entityType: 'deduction_rate', entityId: 'sss-2026',
+      reason: 'SSS 2026 contribution table update per SSS Circular', daysAgo: 90,
+      oldValues: JSON.stringify({ rate: '4.5%' }),
+      newValues: JSON.stringify({ rate: '5.0%' }),
+    },
+    {
+      action: 'deduction_change', entityType: 'employee', entityId: 'emp-hourly-rate',
+      reason: 'Annual salary adjustment per CBA', daysAgo: 85,
+      oldValues: JSON.stringify({ hourlyRate: '55.00' }),
+      newValues: JSON.stringify({ hourlyRate: '60.00' }),
+    },
+  ];
+
+  let count = 0;
+  for (const log of logs) {
+    await db.insert(auditLogs).values({
+      id: uuid(),
+      action: log.action,
+      entityType: log.entityType,
+      entityId: log.entityId,
+      userId: managerId,
+      oldValues: log.oldValues,
+      newValues: log.newValues,
+      reason: log.reason,
+      ipAddress: '192.168.1.100',
+      userAgent: 'PERO Payroll System / Seed Script',
+      createdAt: subDays(now, log.daysAgo),
+    });
+    count++;
+  }
+
+  console.log(`   ✅ Created ${count} audit logs\n`);
+}
+
+// ─── STEP 9: Seed service charge pools ──────────────────────────────────────
+
+async function seedServiceChargePools(branchId: string, employees: any[], managerId: string) {
+  console.log('💸 Step 9 — Seeding service charge pools...\n');
+
+  const staff = employees.filter(e => e.role === 'employee');
+  const eligibleCount = staff.length;
+  
+  const pools = [
+    { start: '2026-01-01', end: '2026-01-15', total: 12500, status: 'distributed' },
+    { start: '2026-01-16', end: '2026-01-31', total: 15000, status: 'distributed' },
+    { start: '2026-02-01', end: '2026-02-15', total: 11800, status: 'distributed' },
+    { start: '2026-02-16', end: '2026-02-28', total: 13200, status: 'distributed' },
+    { start: '2026-03-01', end: '2026-03-15', total: 14500, status: 'distributed' },
+    { start: '2026-03-16', end: '2026-03-31', total: 16000, status: 'draft' },
+  ];
+
+  let count = 0;
+  for (const pool of pools) {
+    const perEmployee = Math.round((pool.total / eligibleCount) * 100) / 100;
+    await db.insert(serviceChargePools).values({
+      id: uuid(),
+      branchId,
+      periodStartDate: new Date(pool.start),
+      periodEndDate: new Date(pool.end),
+      totalCollected: pool.total.toFixed(2),
+      eligibleEmployeeCount: eligibleCount,
+      perEmployeeAmount: perEmployee.toFixed(2),
+      status: pool.status,
+      distributedAt: pool.status === 'distributed' ? new Date(pool.end) : null,
+      createdBy: managerId,
+      createdAt: new Date(pool.start),
+    });
+    count++;
+  }
+
+  console.log(`   ✅ Created ${count} service charge pools\n`);
+}
+
 // ─── MAIN ───────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -536,6 +687,21 @@ async function main() {
 
   // Step 6: Notifications
   await seedNotifications(employees);
+
+  // Step 7: Adjustment / Exception Logs
+  if (manager) {
+    await seedAdjustmentLogs(branchId, employees, manager.id);
+  }
+
+  // Step 8: Audit Logs
+  if (manager) {
+    await seedAuditLogs(branchId, manager.id);
+  }
+
+  // Step 9: Service Charge Pools
+  if (manager) {
+    await seedServiceChargePools(branchId, employees, manager.id);
+  }
 
   // Summary
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
