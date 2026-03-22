@@ -88,11 +88,11 @@ export default function MuiLoans() {
     )},
     { field: 'referenceNumber', headerName: 'Ref Number', width: 160 },
     { field: 'accountNumber', headerName: 'Account Num', width: 160 },
-    { field: 'totalAmount', headerName: 'Total Loan', width: 130, valueFormatter: (params: any) => `₱${Number(params?.value || params).toFixed(2)}` },
+    { field: 'totalAmount', headerName: 'Total Loan', width: 130, valueFormatter: (params: any) => params?.value ? `₱${Number(params.value).toFixed(2)}` : '₱0.00' },
     { field: 'remainingBalance', headerName: 'Remaining Bal.', width: 140, renderCell: (params: GridRenderCellParams) => (
-      <Typography variant="body2" color="error.main" sx={{ pt: 1.5 }}>₱{Number(params.value).toFixed(2)}</Typography>
+      <Typography variant="body2" color="error.main" sx={{ pt: 1.5 }}>{params.row.remainingBalance ? `₱${Number(params.row.remainingBalance).toFixed(2)}` : '₱0.00'}</Typography>
     )},
-    { field: 'monthlyAmortization', headerName: 'Monthly Amort.', width: 140, valueFormatter: (params: any) => `₱${Number(params?.value || params).toFixed(2)}` },
+    { field: 'monthlyAmortization', headerName: 'Monthly Amort.', width: 140, valueFormatter: (params: any) => params?.value ? `₱${Number(params.value).toFixed(2)}` : '₱0.00' },
     { field: 'deductionStartDate', headerName: 'Start Cutoff', width: 140, valueFormatter: (params: any) => {
         try { 
           const val = params?.value || params;
@@ -126,7 +126,7 @@ export default function MuiLoans() {
   ];
 
   return (
-    <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, py: 4, width: '100%', margin: '0 auto' }}>
+    <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, py: 4, width: '100%', maxWidth: '100%', margin: '0 auto', overflowX: 'hidden' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <AccountBalanceWalletIcon sx={{ fontSize: 40, color: theme.palette.primary.main, mr: 2 }} />
         <Box>

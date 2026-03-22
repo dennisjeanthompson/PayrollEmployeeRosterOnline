@@ -22,6 +22,8 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
+import Tooltip from "@mui/material/Tooltip";
+import IconButton from "@mui/material/IconButton";
 
 // MUI Data Grid
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
@@ -77,12 +79,14 @@ const getStatusLabel = (status: string) => {
   }
 };
 
-export default function MuiExceptionLogs() {
+export default function MuiExceptionLogs({ isManagerView = false }: { isManagerView?: boolean }) {
   const currentUser = getCurrentUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState(false);
+  const [rejectLogId, setRejectLogId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
   const [formData, setFormData] = useState({
     type: "overtime",
     startDate: new Date() as Date | null,
@@ -93,11 +97,11 @@ export default function MuiExceptionLogs() {
 
   // Fetch adjustment logs for the current employee
   const { data: requestData, isLoading } = useQuery({
-    queryKey: ["employee-adjustment-logs", currentUser?.id],
+    queryKey: [isManagerView ? "adjustment-logs-branch" : "employee-adjustment-logs"],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/api/adjustment-logs/mine");
+      const response = await apiRequest("GET", isManagerView ? "/api/adjustment-logs/branch" : "/api/adjustment-logs/mine");
       const data = await response.json();
-      return data.logs || [];
+      return isManagerView ? data : (data.logs || []);
     },
   });
 
@@ -139,6 +143,35 @@ export default function MuiExceptionLogs() {
     },
   });
 
+  // Approve exception log
+  const approveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("PUT", `/api/adjustment-logs/${id}/approve`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["adjustment-logs-branch"] });
+      toast({ title: "Approved", description: "Exception log has been approved." });
+    },
+  });
+
+  // Reject exception log
+  const rejectMutation = useMutation({
+    mutationFn: async (data: { id: string, reason: string }) => {
+      const response = await apiRequest("PUT", `/api/adjustment-logs/${data.id}/reject`, { reason: data.reason });
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["adjustment-logs-branch"] });
+      toast({ title: "Rejected", description: "Exception log has been rejected." });
+      setRejectLogId(null);
+      setRejectReason("");
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const handleOpenDialog = () => setOpenDialog(true);
   const handleCloseDialog = () => {
     setOpenDialog(false);
@@ -169,6 +202,11 @@ export default function MuiExceptionLogs() {
   };
 
   const columns: GridColDef[] = [
+    ...(isManagerView ? [{
+      field: 'employeeName',
+      headerName: 'Employee',
+      width: 180,
+    } as GridColDef] : []),
     {
       field: 'startDate',
       headerName: 'Start Date',
@@ -200,7 +238,22 @@ export default function MuiExceptionLogs() {
         return `${params.value} ${isMins ? 'mins' : isDays ? 'days' : 'hrs'}`;
       }
     },
-    { field: 'remarks', headerName: 'Remarks', flex: 1, minWidth: 200 },
+    { 
+      field: 'remarks', 
+      headerName: 'Remarks', 
+      flex: 1, 
+      minWidth: 200,
+      renderCell: (params) => (
+        <Box sx={{ py: 1 }}>
+          <Typography variant="body2">{params.value}</Typography>
+          {params.row.status === 'rejected' && params.row.rejectionReason && (
+            <Typography variant="caption" color="error.main" sx={{ display: 'block', mt: 0.5, fontWeight: 500 }}>
+              Reason: {params.row.rejectionReason}
+            </Typography>
+          )}
+        </Box>
+      )
+    },
     {
       field: 'status',
       headerName: 'Status',
@@ -218,12 +271,43 @@ export default function MuiExceptionLogs() {
     {
       field: 'actions',
       headerName: 'Action',
-      width: 140,
+      width: 120,
       sortable: false,
       renderCell: (params) => {
         const isPending = params.row.status === 'pending';
+        const isEmployeeVerified = params.row.status === 'employee_verified';
+        
+        if (isManagerView && (isPending || isEmployeeVerified)) {
+          return (
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Tooltip title="Approve">
+                <IconButton 
+                  size="small" 
+                  color="success" 
+                  onClick={() => approveMutation.mutate(params.row.id)}
+                  disabled={approveMutation.isPending}
+                >
+                  <CheckCircleIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+              <Tooltip title="Reject">
+                <IconButton 
+                  size="small" 
+                  color="error" 
+                  onClick={() => {
+                    setRejectLogId(params.row.id);
+                    setRejectReason("");
+                  }}
+                >
+                  <CancelIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          );
+        }
+
         const isManagerLogged = params.row.loggedBy !== currentUser?.id;
-        if (isPending && isManagerLogged) {
+        if (!isManagerView && isPending && isManagerLogged) {
           return (
             <Button
               variant="contained"
@@ -244,10 +328,14 @@ export default function MuiExceptionLogs() {
   return (
     <Box>
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h6" fontWeight="bold">My Exception Logs</Typography>
-        <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={handleOpenDialog}>
-          Request Exception
-        </Button>
+        <Typography variant="h6" fontWeight="bold">
+          {isManagerView ? "Team Exception Logs" : "My Exception Logs"}
+        </Typography>
+        {!isManagerView && (
+          <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={handleOpenDialog}>
+            Request Exception
+          </Button>
+        )}
       </Box>
 
       <Card elevation={1}>
@@ -336,6 +424,36 @@ export default function MuiExceptionLogs() {
             disabled={submitMutation.isPending}
           >
             {submitMutation.isPending ? <CircularProgress size={24} /> : "Submit Request"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!rejectLogId} onClose={() => setRejectLogId(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Reject Exception Log</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Please provide a reason for rejecting this exception log. This will be visible to the employee.
+          </Typography>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Rejection Reason"
+            fullWidth
+            multiline
+            rows={3}
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setRejectLogId(null)}>Cancel</Button>
+          <Button
+            onClick={() => rejectLogId && rejectMutation.mutate({ id: rejectLogId, reason: rejectReason })}
+            color="error"
+            variant="contained"
+            disabled={!rejectReason.trim() || rejectMutation.isPending}
+          >
+            {rejectMutation.isPending ? "Rejecting..." : "Reject"}
           </Button>
         </DialogActions>
       </Dialog>

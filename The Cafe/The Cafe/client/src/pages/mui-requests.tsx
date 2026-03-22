@@ -58,7 +58,7 @@ export default function MuiRequests() {
         '& > div': { pt: 2, minHeight: 'auto', bgcolor: 'transparent' },
         '& > div > .MuiBox-root > h6': { display: 'none' } 
       }}>
-        <MuiExceptionLogs />
+        <MuiExceptionLogs isManagerView />
       </Box>
       <Box sx={{ 
         display: tabIndex === 2 ? 'block' : 'none', 

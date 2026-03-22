@@ -312,6 +312,7 @@ export const adjustmentLogs = pgTable("adjustment_logs", {
   value: text("value").notNull(), // Numeric value stored as text
   remarks: text("remarks"), // DOLE compliance: reason/context for the adjustment
   status: text("status").default("pending"), // 'pending', 'employee_verified', 'approved', 'rejected'
+  rejectionReason: text("rejection_reason"), // Manager reason if rejected
   verifiedByEmployee: boolean("verified_by_employee").default(false),
   verifiedAt: timestamp("verified_at"),
   approvedBy: text("approved_by").references(() => users.id), // Admin who approved for payroll

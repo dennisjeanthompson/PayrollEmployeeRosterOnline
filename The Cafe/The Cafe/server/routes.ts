@@ -1198,9 +1198,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const log = await storage.createAdjustmentLog({
         employeeId,
-        branchId,
         loggedBy,
-        date: new Date(date),
+        startDate: new Date(date),
+        endDate: new Date(date),
         type,
         value: value.toString(),
         remarks: remarks || null,

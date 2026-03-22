@@ -166,6 +166,8 @@ export default function MuiPayrollManagement() {
   const [adjType, setAdjType] = useState("overtime");
   const [adjValue, setAdjValue] = useState("");
   const [adjRemarks, setAdjRemarks] = useState("");
+  const [rejectLogId, setRejectLogId] = useState<string | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
 
   // Enable real-time updates for payroll management
   useRealtime({
@@ -425,12 +427,14 @@ export default function MuiPayrollManagement() {
   });
 
   const rejectAdjustmentMutation = useMutation({
-    mutationFn: async (id: string) => {
-      const response = await apiRequest("PUT", `/api/adjustment-logs/${id}/reject`);
+    mutationFn: async (data: { id: string, reason: string }) => {
+      const response = await apiRequest("PUT", `/api/adjustment-logs/${data.id}/reject`, { reason: data.reason });
       return response.json();
     },
     onSuccess: () => {
       toast({ title: "Adjustment Rejected" });
+      setRejectLogId(null);
+      setRejectReason("");
       queryClient.invalidateQueries({ queryKey: ["adjustment-logs-branch"] });
     },
     onError: (error: any) => {
@@ -1264,9 +1268,11 @@ export default function MuiPayrollManagement() {
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          <Typography variant="body2">
-                            {log.date && !isNaN(new Date(log.date).getTime()) 
-                              ? format(new Date(log.date), "MMM d, yyyy") 
+                          <Typography variant="body2" sx={{ whiteSpace: "nowrap" }}>
+                            {log.startDate && log.endDate && log.startDate !== log.endDate && new Date(log.startDate).getTime() !== new Date(log.endDate).getTime()
+                              ? `${format(new Date(log.startDate), "MMM d, yy")} - ${format(new Date(log.endDate), "MMM d, yy")}`
+                              : log.startDate
+                              ? format(new Date(log.startDate), "MMM d, yyyy")
                               : "—"}
                           </Typography>
                         </TableCell>
@@ -1335,8 +1341,10 @@ export default function MuiPayrollManagement() {
                                   <IconButton
                                     size="small"
                                     color="error"
-                                    disabled={rejectAdjustmentMutation.isPending}
-                                    onClick={() => rejectAdjustmentMutation.mutate(log.id)}
+                                    onClick={() => {
+                                      setRejectLogId(log.id);
+                                      setRejectReason("");
+                                    }}
                                   >
                                     <Cancel fontSize="small" />
                                   </IconButton>
@@ -1832,6 +1840,37 @@ export default function MuiPayrollManagement() {
             }}
           >
             {createAdjustmentMutation.isPending ? "Logging..." : "Log Exception"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Reject Exception Dialog */}
+      <Dialog open={!!rejectLogId} onClose={() => setRejectLogId(null)} maxWidth="sm" fullWidth>
+        <DialogTitle>Reject Exception Log</DialogTitle>
+        <DialogContent dividers>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            Please provide a reason for rejecting this exception log. This will be visible to the employee.
+          </Typography>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Rejection Reason"
+            fullWidth
+            multiline
+            rows={3}
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setRejectLogId(null)}>Cancel</Button>
+          <Button
+            onClick={() => rejectLogId && rejectAdjustmentMutation.mutate({ id: rejectLogId, reason: rejectReason })}
+            color="error"
+            variant="contained"
+            disabled={!rejectReason.trim() || rejectAdjustmentMutation.isPending}
+          >
+            {rejectAdjustmentMutation.isPending ? "Rejecting..." : "Reject"}
           </Button>
         </DialogActions>
       </Dialog>
