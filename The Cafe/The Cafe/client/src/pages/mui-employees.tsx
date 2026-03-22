@@ -1694,7 +1694,7 @@ export default function MuiEmployees() {
                 </Alert>
 
                 <Stack spacing={2.5}>
-                  {/* â”€â”€ Government Loan Deductions â€” Linked to Approved Loans â”€â”€ */}
+                  {/* ── Government Loan Deductions — Linked to Approved Loans ── */}
                   <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: alpha(theme.palette.warning.main, 0.04) }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -1708,7 +1708,7 @@ export default function MuiEmployees() {
                     <Alert severity="info" sx={{ mb: 1.5, py: 0.5 }} icon={false}>
                       <Typography variant="caption">
                         Loan deductions are automatically sourced from approved loan records.
-                        To add or change a loan, use <strong>Employee Requests â†’ Loans</strong> tab.
+                        To add or change a loan, use <strong>Employee Requests → Loans</strong> tab.
                       </Typography>
                     </Alert>
                     <ActiveLoansDisplay employeeId={currentEmployee?.id} />

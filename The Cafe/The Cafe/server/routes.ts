@@ -1786,6 +1786,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const philHealthContribution = Math.round(mandatoryBreakdown.philHealthContribution * periodFraction * 100) / 100;
         const pagibigContribution = Math.round(mandatoryBreakdown.pagibigContribution * periodFraction * 100) / 100;
 
+        console.log(`[PAYROLL DEDUCTIONS] ${employee.firstName} ${employee.lastName}: hourlyRate=₱${hourlyRate}, monthlyBasic=₱${monthlyBasicSalary.toFixed(2)}, daysInPeriod=${daysInPeriod}, isSemiMonthly=${isSemiMonthly}, periodFraction=${periodFraction}`);
+        console.log(`[PAYROLL DEDUCTIONS] Monthly SSS=₱${mandatoryBreakdown.sssContribution.toFixed(2)} → Period SSS=₱${sssContribution.toFixed(2)}, Monthly PH=₱${mandatoryBreakdown.philHealthContribution.toFixed(2)} → Period PH=₱${philHealthContribution.toFixed(2)}, Monthly PI=₱${mandatoryBreakdown.pagibigContribution.toFixed(2)} → Period PI=₱${pagibigContribution.toFixed(2)}`);
+
         // --- Feature 3: De Minimis Benefits & Allowances ---
         const { workerAllowances, allowanceTypes } = await import('../shared/schema');
         const { eq, and } = await import('drizzle-orm');
