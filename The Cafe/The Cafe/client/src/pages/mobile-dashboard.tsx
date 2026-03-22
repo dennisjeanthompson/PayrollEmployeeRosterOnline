@@ -367,9 +367,9 @@ export default function MobileDashboard() {
                 <div className="flex items-start justify-between mb-3 sm:mb-4">
                   <div className="flex-1 min-w-0">
                     <Badge className="bg-white/20 text-white border-0 text-xs sm:text-sm px-2 sm:px-3 py-1 mb-2 sm:mb-3">
-                      {nextShiftInfo.hoursUntil <= 0 ? 'ðŸ”¥ Now' : 
-                       nextShiftInfo.hoursUntil < 2 ? 'â° Soon' : 
-                       `ðŸ“… ${getShiftTimeLabel(nextShiftInfo.shift)}`}
+                      {nextShiftInfo.hoursUntil <= 0 ? '🔥 Now' : 
+                       nextShiftInfo.hoursUntil < 2 ? '⏰ Soon' : 
+                       `📅 ${getShiftTimeLabel(nextShiftInfo.shift)}`}
                     </Badge>
                     <h2 className="text-xl sm:text-2xl font-bold mb-1">Next Shift</h2>
                     <p className="text-primary-foreground/80 text-sm sm:text-base truncate">
@@ -401,7 +401,7 @@ export default function MobileDashboard() {
                   <GreetingIcon className="w-6 h-6 sm:w-8 sm:h-8" />
                 </div>
                 <h2 className="text-xl sm:text-2xl font-bold mb-2">No Upcoming Shifts</h2>
-                <p className="text-white/80 text-sm sm:text-lg">Enjoy your time off! ðŸŒ´</p>
+                <p className="text-white/80 text-sm sm:text-lg">Enjoy your time off! 🌴</p>
               </CardContent>
             </Card>
           )}
@@ -478,7 +478,7 @@ export default function MobileDashboard() {
                       />
                     </div>
                     <p className="text-xs sm:text-base text-muted-foreground">
-                      {hoursProgress >= 100 ? 'ðŸŽ‰ Goal reached!' : `${(targetWeeklyHours - weeklyHours).toFixed(1)}h to go`}
+                      {hoursProgress >= 100 ? '🎉 Goal reached!' : `${(targetWeeklyHours - weeklyHours).toFixed(1)}h to go`}
                     </p>
                   </div>
                 </div>
@@ -510,7 +510,7 @@ export default function MobileDashboard() {
           <StatCard
             icon={DollarSign}
             label="Last Pay"
-            value={latestPayroll ? `â‚±${parseFloat(String(latestPayroll.netPay)).toLocaleString()}` : 'â‚±0'}
+            value={latestPayroll ? `₱${parseFloat(String(latestPayroll.netPay)).toLocaleString()}` : '₱0'}
             subLabel="Net Pay"
             color="bg-emerald-500/20 text-emerald-500"
             trend={earningsTrend}
@@ -527,7 +527,7 @@ export default function MobileDashboard() {
           <StatCard
             icon={Award}
             label="Streak"
-            value={shifts.length > 0 ? 'ðŸ”¥' : 'ðŸ’¤'}
+            value={shifts.length > 0 ? '🔥' : '💤'}
             subLabel={shifts.length > 0 ? 'Active' : 'On Break'}
             color="bg-amber-500/20 text-amber-500"
             delay={0.45}
@@ -715,7 +715,7 @@ export default function MobileDashboard() {
                   <div className="bg-white/10 rounded-lg sm:rounded-xl p-3 sm:p-4">
                     <p className="text-emerald-100 text-xs sm:text-sm mb-1">Gross Pay</p>
                     <p className="text-lg sm:text-2xl font-bold truncate">
-                      â‚±{latestPayroll?.grossPay ? parseFloat(String(latestPayroll.grossPay)).toLocaleString() : '0'}
+                      ₱{latestPayroll?.grossPay ? parseFloat(String(latestPayroll.grossPay)).toLocaleString() : '0'}
                     </p>
                   </div>
                 </div>
@@ -723,7 +723,7 @@ export default function MobileDashboard() {
                   <div className="flex-1 min-w-0">
                     <p className="text-emerald-100 text-xs sm:text-sm">Net Pay</p>
                     <p className="text-2xl sm:text-4xl font-bold truncate">
-                      â‚±{latestPayroll?.netPay ? parseFloat(String(latestPayroll.netPay)).toLocaleString() : '0'}
+                      ₱{latestPayroll?.netPay ? parseFloat(String(latestPayroll.netPay)).toLocaleString() : '0'}
                     </p>
                   </div>
                   <Badge className="bg-white/20 text-white border-0 text-xs sm:text-base px-2 sm:px-4 py-1 sm:py-2 flex-shrink-0">

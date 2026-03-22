@@ -368,7 +368,7 @@ export default function ShiftTradingPanel() {
                 <Stack direction="row" spacing={1} alignItems="center">
                   <TimeIcon fontSize="small" color="action" />
                   <Typography variant="body2" fontWeight={500}>
-                    {format(parseISO(trade.shift.startTime), "MMM d, yyyy")} â€¢{" "}
+                    {format(parseISO(trade.shift.startTime), "MMM d, yyyy")} •{" "}
                     {format(parseISO(trade.shift.startTime), "h:mm a")} -{" "}
                     {format(parseISO(trade.shift.endTime), "h:mm a")}
                   </Typography>
@@ -553,8 +553,8 @@ export default function ShiftTradingPanel() {
               >
                 {availableShifts.map((shift: Shift) => (
                   <MenuItem key={shift.id} value={shift.id}>
-                    {format(parseISO(shift.startTime), "MMM d")} â€¢{" "}
-                    {format(parseISO(shift.startTime), "h:mm a")} - {format(parseISO(shift.endTime), "h:mm a")} â€¢{" "}
+                    {format(parseISO(shift.startTime), "MMM d")} •{" "}
+                    {format(parseISO(shift.startTime), "h:mm a")} - {format(parseISO(shift.endTime), "h:mm a")} •{" "}
                     {shift.position}
                   </MenuItem>
                 ))}

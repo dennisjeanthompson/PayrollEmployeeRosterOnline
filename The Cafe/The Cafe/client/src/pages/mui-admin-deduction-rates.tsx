@@ -399,7 +399,7 @@ export default function MuiAdminDeductionRates() {
                           <TableRow key={rate.id} hover>
                             <TableCell>
                               <Typography variant="body2" fontWeight={500}>
-                                â‚±{parseFloat(rate.minSalary).toLocaleString(undefined, {
+                                ₱{parseFloat(rate.minSalary).toLocaleString(undefined, {
                                   minimumFractionDigits: 2,
                                 })}
                               </Typography>
@@ -407,7 +407,7 @@ export default function MuiAdminDeductionRates() {
                             <TableCell>
                               {rate.maxSalary ? (
                                 <Typography variant="body2">
-                                  â‚±{parseFloat(rate.maxSalary).toLocaleString(undefined, {
+                                  ₱{parseFloat(rate.maxSalary).toLocaleString(undefined, {
                                     minimumFractionDigits: 2,
                                   })}
                                 </Typography>
@@ -420,7 +420,7 @@ export default function MuiAdminDeductionRates() {
                                 <TableCell>
                                   {rate.employeeContribution ? (
                                     <Chip
-                                      label={`â‚±${parseFloat(rate.employeeContribution).toLocaleString(undefined, {
+                                      label={`₱${parseFloat(rate.employeeContribution).toLocaleString(undefined, {
                                         minimumFractionDigits: 2,
                                       })}`}
                                       color="success"
@@ -455,7 +455,7 @@ export default function MuiAdminDeductionRates() {
                                 <TableCell>
                                   {rate.employeeContribution ? (
                                     <Typography variant="body2" fontWeight={500}>
-                                      â‚±{parseFloat(rate.employeeContribution).toLocaleString(undefined, {
+                                      ₱{parseFloat(rate.employeeContribution).toLocaleString(undefined, {
                                         minimumFractionDigits: 2,
                                       })}
                                     </Typography>
@@ -534,7 +534,7 @@ export default function MuiAdminDeductionRates() {
             </TextField>
 
             <TextField
-              label="Minimum Salary (â‚±)"
+              label="Minimum Salary (₱)"
               type="number"
               value={formData.minSalary}
               onChange={(e) => setFormData({ ...formData, minSalary: e.target.value })}
@@ -544,7 +544,7 @@ export default function MuiAdminDeductionRates() {
             />
 
             <TextField
-              label="Maximum Salary (â‚±) - Leave empty for unlimited"
+              label="Maximum Salary (₱) - Leave empty for unlimited"
               type="number"
               value={formData.maxSalary}
               onChange={(e) => setFormData({ ...formData, maxSalary: e.target.value })}
@@ -564,7 +564,7 @@ export default function MuiAdminDeductionRates() {
             />
 
             <TextField
-              label="Fixed Contribution (â‚±) - For fixed amount"
+              label="Fixed Contribution (₱) - For fixed amount"
               type="number"
               value={formData.employeeContribution}
               onChange={(e) => setFormData({ ...formData, employeeContribution: e.target.value })}
