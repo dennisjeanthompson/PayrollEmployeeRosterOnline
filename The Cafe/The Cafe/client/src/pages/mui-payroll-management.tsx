@@ -68,7 +68,7 @@ import {
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
-import { format, subDays, addDays, startOfMonth, endOfMonth, differenceInDays } from "date-fns";
+import { format, eachDayOfInterval, subDays, addDays, startOfMonth, endOfMonth, differenceInDays } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { apiUrl } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -160,6 +160,8 @@ export default function MuiPayrollManagement() {
   const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
   const [adjEmployeeId, setAdjEmployeeId] = useState("");
   const [adjDate, setAdjDate] = useState<Date | null>(null);
+  const [adjEndDate, setAdjEndDate] = useState<Date | null>(null);
+  const [adjIsRange, setAdjIsRange] = useState(false);
   const [adjType, setAdjType] = useState("overtime");
   const [adjValue, setAdjValue] = useState("");
   const [adjRemarks, setAdjRemarks] = useState("");
@@ -396,6 +398,8 @@ export default function MuiPayrollManagement() {
       setIsAdjustmentDialogOpen(false);
       setAdjEmployeeId("");
       setAdjDate(null);
+      setAdjEndDate(null);
+      setAdjIsRange(false);
       setAdjType("overtime");
       setAdjValue("");
       setAdjRemarks("");
@@ -433,18 +437,28 @@ export default function MuiPayrollManagement() {
     },
   });
 
-  const handleCreateAdjustment = () => {
+  const handleCreateAdjustment = async () => {
     if (!adjEmployeeId || !adjDate || !adjValue) {
       toast({ title: "Missing Fields", description: "Employee, date, and value are required", variant: "destructive" });
       return;
     }
-    createAdjustmentMutation.mutate({
-      employeeId: adjEmployeeId,
-      date: format(adjDate, "yyyy-MM-dd"),
-      type: adjType,
-      value: adjValue,
-      remarks: adjRemarks,
-    });
+
+    // Build array of dates to log
+    let datesToLog: Date[] = [adjDate];
+    if (adjIsRange && adjEndDate && adjEndDate > adjDate) {
+      datesToLog = eachDayOfInterval({ start: adjDate, end: adjEndDate });
+    }
+
+    // Submit one entry per day
+    for (const d of datesToLog) {
+      await createAdjustmentMutation.mutateAsync({
+        employeeId: adjEmployeeId,
+        date: format(d, "yyyy-MM-dd"),
+        type: adjType,
+        value: adjValue,
+        remarks: adjRemarks,
+      });
+    }
   };
 
   const adjustmentTypeOptions = [
@@ -1693,12 +1707,36 @@ export default function MuiPayrollManagement() {
             </FormControl>
 
             <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DatePicker
-                label="Date"
-                value={adjDate}
-                onChange={(val: Date | null) => setAdjDate(val)}
-                slotProps={{ textField: { size: "small", fullWidth: true } }}
-              />
+              <Stack direction="row" spacing={1} alignItems="center">
+                <DatePicker
+                  label={adjIsRange ? "Start Date" : "Date"}
+                  value={adjDate}
+                  onChange={(val: Date | null) => setAdjDate(val)}
+                  slotProps={{ textField: { size: "small", fullWidth: true } }}
+                />
+                {adjIsRange && (
+                  <DatePicker
+                    label="End Date"
+                    value={adjEndDate}
+                    onChange={(val: Date | null) => setAdjEndDate(val)}
+                    minDate={adjDate || undefined}
+                    slotProps={{ textField: { size: "small", fullWidth: true } }}
+                  />
+                )}
+              </Stack>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => { setAdjIsRange(!adjIsRange); setAdjEndDate(null); }}
+                sx={{ textTransform: 'none', alignSelf: 'flex-start', mt: -1 }}
+              >
+                {adjIsRange ? '← Single day' : '📅 Log for multiple days (date range)'}
+              </Button>
+              {adjIsRange && adjDate && adjEndDate && adjEndDate > adjDate && (
+                <Typography variant="caption" color="info.main" sx={{ mt: -1 }}>
+                  This will create {eachDayOfInterval({ start: adjDate, end: adjEndDate }).length} entries (one per day)
+                </Typography>
+              )}
             </LocalizationProvider>
 
             <FormControl fullWidth size="small">
