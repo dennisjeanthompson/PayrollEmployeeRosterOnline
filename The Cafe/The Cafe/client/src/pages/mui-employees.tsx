@@ -213,7 +213,7 @@ function ActiveLoansDisplay({ employeeId }: { employeeId?: string }) {
             <Typography variant="caption" color="text.secondary">Ref: {loan.referenceNumber}</Typography>
           </Box>
           <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="body2" fontWeight={700} color="primary.main">â‚±{Number(loan.monthlyAmortization).toFixed(2)}/mo</Typography>
+            <Typography variant="body2" fontWeight={700} color="primary.main">₱{Number(loan.monthlyAmortization).toFixed(2)}/mo</Typography>
             <Chip label="ACTIVE" size="small" color="success" sx={{ height: 18, fontSize: '0.6rem' }} />
           </Box>
         </Box>
@@ -225,7 +225,7 @@ function ActiveLoansDisplay({ employeeId }: { employeeId?: string }) {
             <Typography variant="caption" color="text.secondary">Ref: {loan.referenceNumber}</Typography>
           </Box>
           <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="body2" color="text.secondary">â‚±{Number(loan.monthlyAmortization).toFixed(2)}/mo</Typography>
+            <Typography variant="body2" color="text.secondary">₱{Number(loan.monthlyAmortization).toFixed(2)}/mo</Typography>
             <Chip label="PENDING APPROVAL" size="small" color="warning" sx={{ height: 18, fontSize: '0.6rem' }} />
           </Box>
         </Box>
@@ -778,7 +778,7 @@ export default function MuiEmployees() {
               color: rate === 0 ? 'text.disabled' : 'text.primary'
             }}
           >
-            â‚±{rate.toLocaleString('en-PH')}/hr
+            ₱{rate.toLocaleString('en-PH')}/hr
           </Typography>
         );
       },
@@ -1222,7 +1222,7 @@ export default function MuiEmployees() {
                   <Grid size={{ xs: 6 }}>
                     <TextField
                       fullWidth
-                      label="Hourly Rate (â‚±)"
+                      label="Hourly Rate (₱)"
                       type="number"
                       value={formData.hourlyRate}
                       onChange={(e) => setFormData({ ...formData, hourlyRate: e.target.value })}
@@ -1444,7 +1444,7 @@ export default function MuiEmployees() {
                             <Stack spacing={0.5}>
                               <Typography variant="caption" color="text.secondary">Hourly Rate</Typography>
                               <Typography variant="body2" sx={{ fontWeight: 600, color: 'primary.main' }}>
-                                â‚±{parseFloat(currentEmployee.hourlyRate).toLocaleString('en-PH', { minimumFractionDigits: 2 })}/hr
+                                ₱{parseFloat(currentEmployee.hourlyRate).toLocaleString('en-PH', { minimumFractionDigits: 2 })}/hr
                               </Typography>
                             </Stack>
                           </Grid>
@@ -1613,27 +1613,27 @@ export default function MuiEmployees() {
                 <Alert severity="info" sx={{ mb: 2, py: 0.5 }} icon={false}>
                   <Typography variant="caption">
                     These are automatically calculated based on 2025 Philippine government rates.
-                    Values shown are estimates based on hourly rate Ã— 176 hrs/month.
+                    Values shown are estimates based on hourly rate × 176 hrs/month.
                   </Typography>
                 </Alert>
 
                 {/* Calculate estimated monthly salary for preview */}
                 {(() => {
                   const hourlyRate = parseFloat(currentEmployee?.hourlyRate || '0');
-                  const estimatedMonthly = hourlyRate * 176; // ~22 days Ã— 8 hours
+                  const estimatedMonthly = hourlyRate * 176; // ~22 days × 8 hours
                   
-                  // SSS: 5% of MSC (floor â‚±5k, ceiling â‚±35k)
+                  // SSS: 5% of MSC (floor ₱5k, ceiling ₱35k)
                   const msc = Math.min(Math.max(estimatedMonthly, 5000), 35000);
                   const sss = msc * 0.05;
                   
-                  // PhilHealth: 2.5% (floor â‚±10k, ceiling â‚±100k)
+                  // PhilHealth: 2.5% (floor ₱10k, ceiling ₱100k)
                   const philBase = Math.min(Math.max(estimatedMonthly, 10000), 100000);
                   const philHealth = philBase * 0.025;
                   
-                  // Pag-IBIG: 2% max â‚±200 (2026 rate)
+                  // Pag-IBIG: 2% max ₱200 (2026 rate)
                   const pagibig = Math.min(estimatedMonthly * 0.02, 200);
                   
-                  // BIR: 0% if annual <â‚±250k
+                  // BIR: 0% if annual <₱250k
                   const annualEstimate = estimatedMonthly * 12;
                   const tax = annualEstimate <= 250000 ? 0 : (annualEstimate - 250000) * 0.15 / 12;
 
@@ -1644,33 +1644,33 @@ export default function MuiEmployees() {
                           <SecurityIcon sx={{ fontSize: 18, color: '#3b82f6' }} />
                           <Typography variant="body2">SSS (5%)</Typography>
                         </Box>
-                        <Typography variant="body2" fontWeight={600}>â‚±{sss.toFixed(2)}</Typography>
+                        <Typography variant="body2" fontWeight={600}>₱{sss.toFixed(2)}</Typography>
                       </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <LocalHospitalIcon sx={{ fontSize: 18, color: '#10b981' }} />
                           <Typography variant="body2">PhilHealth (2.5%)</Typography>
                         </Box>
-                        <Typography variant="body2" fontWeight={600}>â‚±{philHealth.toFixed(2)}</Typography>
+                        <Typography variant="body2" fontWeight={600}>₱{philHealth.toFixed(2)}</Typography>
                       </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <HomeIcon sx={{ fontSize: 18, color: '#8b5cf6' }} />
                           <Typography variant="body2">Pag-IBIG (2%)</Typography>
                         </Box>
-                        <Typography variant="body2" fontWeight={600}>â‚±{pagibig.toFixed(2)}</Typography>
+                        <Typography variant="body2" fontWeight={600}>₱{pagibig.toFixed(2)}</Typography>
                       </Box>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <ReceiptIcon sx={{ fontSize: 18, color: '#f59e0b' }} />
                           <Typography variant="body2">Withholding Tax</Typography>
                         </Box>
-                        <Typography variant="body2" fontWeight={600}>â‚±{tax.toFixed(2)}</Typography>
+                        <Typography variant="body2" fontWeight={600}>₱{tax.toFixed(2)}</Typography>
                       </Box>
                       <Divider sx={{ my: 1 }} />
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2" color="text.secondary">Est. Monthly Salary:</Typography>
-                        <Typography variant="body2" color="text.secondary">â‚±{estimatedMonthly.toLocaleString()}</Typography>
+                        <Typography variant="body2" color="text.secondary">₱{estimatedMonthly.toLocaleString()}</Typography>
                       </Box>
                     </Stack>
                   );
@@ -1723,7 +1723,7 @@ export default function MuiEmployees() {
                     onChange={(e) => setDeductionsFormData({ ...deductionsFormData, cashAdvanceDeduction: e.target.value })}
                     inputProps={{ min: 0, step: 0.01 }}
                     InputProps={{
-                      startAdornment: <Typography sx={{ mr: 1, color: 'text.secondary' }}>â‚±</Typography>,
+                      startAdornment: <Typography sx={{ mr: 1, color: 'text.secondary' }}>₱</Typography>,
                     }}
                     helperText="Per pay period"
                   />
@@ -1737,7 +1737,7 @@ export default function MuiEmployees() {
                     onChange={(e) => setDeductionsFormData({ ...deductionsFormData, otherDeductions: e.target.value })}
                     inputProps={{ min: 0, step: 0.01 }}
                     InputProps={{
-                      startAdornment: <Typography sx={{ mr: 1, color: 'text.secondary' }}>â‚±</Typography>,
+                      startAdornment: <Typography sx={{ mr: 1, color: 'text.secondary' }}>₱</Typography>,
                     }}
                     helperText="Per pay period (e.g., uniform, penalties)"
                   />
