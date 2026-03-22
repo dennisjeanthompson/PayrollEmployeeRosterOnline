@@ -1753,25 +1753,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         grossPay = grossPay + manualOtPay - lateDeduction - undertimeDeduction;
         overtimeHours += manualOtHours;
 
-        // Calculate monthly equivalent salary for deduction calculations
-        // For Philippine statutory deductions (SSS/PhilHealth/Pag-IBIG), we need monthly basis
         const periodStartDate = new Date(period.startDate);
         const periodEndDate = new Date(period.endDate);
         const daysInPeriod = Math.ceil((periodEndDate.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
         
-        // Determine if this is approximately a full month period (28-31 days)
-        // For full month periods, use actual gross pay as the monthly basis
-        // For partial periods (e.g., 2-week payroll), prorate to monthly
-        let monthlyBasicSalary: number;
-        if (daysInPeriod >= 28 && daysInPeriod <= 31) {
-          // Full month period - use actual basic pay (excluding OT/ND) as monthly salary
-          monthlyBasicSalary = basicPay;
-        } else {
-          // DOLE Standard: Estimate monthly salary based on hourly rate * 176 hours
-          // (average 22 working days * 8 hours), which aligns exactly with the 
-          // Employee Deductions UI estimates.
-          monthlyBasicSalary = hourlyRate * 176;
-        }
+        // DOLE Standard: Estimate monthly salary based on hourly rate * 176 hours
+        // (average 22 working days * 8 hours), which aligns exactly with the 
+        // Employee Deductions UI estimates and ensures MSC brackets don't drop during absences.
+        const monthlyBasicSalary = hourlyRate * 176;
 
         // Import deduction calculator
         const { calculateAllDeductions, calculateWithholdingTax } = await import('./utils/deductions');
@@ -1830,11 +1819,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
         
         // Step 2: BIR withholding tax is computed on TAXABLE INCOME
-        // Taxable = monthly gross - SSS - PhilHealth - Pag-IBIG (mandatory deductions)
         const monthlyMandatory = mandatoryBreakdown.sssContribution + mandatoryBreakdown.philHealthContribution + mandatoryBreakdown.pagibigContribution;
         
-        // Base taxable income
-        let monthlyTaxableIncome = Math.max(0, monthlyBasicSalary - monthlyMandatory);
+        // Ensure ALL taxable earnings are included (OT, holiday, night diff, manual adjustments)
+        const periodTaxableEarnings = basicPay + overtimePay + holidayPay + nightDiffPay + restDayPay + manualOtPay - lateDeduction - undertimeDeduction;
+        
+        // Base taxable income (converting the actual gross pay + premiums to monthly equivalent)
+        let monthlyTaxableIncome = Math.max(0, (periodTaxableEarnings / periodFraction) - monthlyMandatory);
         
         // Add taxable allowance excess (extrapolated to monthly for bracket lookup)
         if (taxableAllowanceExcess > 0) {

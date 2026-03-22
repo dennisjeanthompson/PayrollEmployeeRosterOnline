@@ -554,10 +554,10 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
 
     // BIR-compliant deductions — always show statutory deductions even at ₱0
     const deductions: Array<{ label: string; value: string }> = [];
-    deductions.push({ label: "SSS (Employee):", value: formatCurrency(payslipData.sssContribution) });
-    deductions.push({ label: "PhilHealth (Employee):", value: formatCurrency(payslipData.philHealthContribution) });
-    deductions.push({ label: "Pag-IBIG / HDMF:", value: formatCurrency(payslipData.pagibigContribution) });
-    deductions.push({ label: "W/holding Tax (BIR):", value: formatCurrency(payslipData.withholdingTax) });
+    deductions.push({ label: "SSS (MSC Bracketed, ÷ 2):", value: formatCurrency(payslipData.sssContribution) });
+    deductions.push({ label: "PhilHealth (5% / 2):", value: formatCurrency(payslipData.philHealthContribution) });
+    deductions.push({ label: "Pag-IBIG (MFS Capped):", value: formatCurrency(payslipData.pagibigContribution) });
+    deductions.push({ label: "BIR Tax (Annualized):", value: formatCurrency(payslipData.withholdingTax) });
     if (payslipData.sssLoan > 0) deductions.push({ label: "SSS Loan:", value: formatCurrency(payslipData.sssLoan) });
     if (payslipData.pagibigLoan > 0) deductions.push({ label: "Pag-IBIG Loan:", value: formatCurrency(payslipData.pagibigLoan) });
     if (payslipData.advances > 0) deductions.push({ label: "Cash Advances:", value: formatCurrency(payslipData.advances) });
@@ -655,10 +655,10 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
 
   // Always show all statutory deductions (BIR / TRAIN Law compliance)
   const deductionsList: Array<{ label: string; value: number }> = [
-    { label: "SSS (Employee)", value: payslip.sssContribution },
-    { label: "PhilHealth (Employee)", value: payslip.philHealthContribution },
-    { label: "Pag-IBIG / HDMF", value: payslip.pagibigContribution },
-    { label: "Withholding Tax (BIR)", value: payslip.withholdingTax },
+    { label: "SSS (MSC Bracketed, ÷ 2)", value: payslip.sssContribution },
+    { label: "PhilHealth (5% / 2)", value: payslip.philHealthContribution },
+    { label: "Pag-IBIG (MFS Capped)", value: payslip.pagibigContribution },
+    { label: "BIR Tax (Annualized)", value: payslip.withholdingTax },
     ...(payslip.sssLoan > 0 ? [{ label: "SSS Loan", value: payslip.sssLoan }] : []),
     ...(payslip.pagibigLoan > 0 ? [{ label: "Pag-IBIG Loan", value: payslip.pagibigLoan }] : []),
     ...(payslip.advances > 0 ? [{ label: "Cash Advances", value: payslip.advances }] : []),
