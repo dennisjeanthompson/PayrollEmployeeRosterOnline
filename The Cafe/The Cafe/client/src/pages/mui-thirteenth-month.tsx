@@ -271,7 +271,6 @@ export default function MuiThirteenthMonth() {
               loading={isLoading}
               disableRowSelectionOnClick
               rowHeight={72}
-              autoHeight
               density="comfortable"
               slots={{ toolbar: GridToolbar }}
               slotProps={{

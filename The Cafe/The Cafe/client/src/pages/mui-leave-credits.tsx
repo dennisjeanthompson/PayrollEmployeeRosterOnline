@@ -335,7 +335,6 @@ export default function MuiLeaveCredits({ hideHeader }: { hideHeader?: boolean }
               loading={creditsLoading}
               disableRowSelectionOnClick
               rowHeight={60}
-              autoHeight
               slots={{ toolbar: GridToolbar }}
               slotProps={{ toolbar: { showQuickFilter: true } }}
               initialState={{

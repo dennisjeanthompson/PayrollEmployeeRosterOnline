@@ -244,7 +244,6 @@ export function ServiceChargeTab() {
             loading={isLoading}
             disableRowSelectionOnClick
             rowHeight={60}
-            autoHeight
             initialState={{
               pagination: { paginationModel: { pageSize: 15 } },
               sorting: { sortModel: [{ field: "createdAt", sort: "desc" }] },

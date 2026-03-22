@@ -1047,7 +1047,6 @@ export default function MuiEmployees() {
                 sorting: { sortModel: [{ field: "employee", sort: "asc" }] },
               }}
               pageSizeOptions={[5, 10, 25, 50]}
-              autoHeight
               sx={{
                 border: "none",
                 "& .MuiDataGrid-cell": { 
