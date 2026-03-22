@@ -44,7 +44,7 @@ interface Notification {
   data?: any;
 }
 
-// ─── Type config ────────────────────────────────────────────────
+// â”€â”€â”€ Type config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; gradient: string; label: string }> = {
   shift_update:      { icon: <ScheduleIcon />, color: '#3B82F6', gradient: 'linear-gradient(135deg, #3B82F6, #1D4ED8)', label: 'Schedule' },
   shift_assigned:    { icon: <ScheduleIcon />, color: '#3B82F6', gradient: 'linear-gradient(135deg, #3B82F6, #1D4ED8)', label: 'Assigned' },
@@ -79,7 +79,7 @@ function getNavigatePath(type: string): string | null {
   return null;
 }
 
-// ─── Group by date ──────────────────────────────────────────────
+// â”€â”€â”€ Group by date â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function groupByDate(notifications: Notification[]): { label: string; items: Notification[] }[] {
   const groups: Record<string, Notification[]> = {};
   const order: string[] = [];
@@ -115,7 +115,6 @@ export default function MuiNotifications() {
   const { data: resp, isLoading } = useQuery({
     queryKey: ["/api/notifications"],
     queryFn: async () => { const r = await apiRequest("GET", "/api/notifications"); return r.json(); },
-    refetchInterval: 30000,
     refetchOnWindowFocus: true,
   });
 
@@ -166,7 +165,7 @@ export default function MuiNotifications() {
     if (path) setLocation(path);
   }, [markRead, setLocation]);
 
-  // ─── Filter pill component ────────────────────────────────────
+  // â”€â”€â”€ Filter pill component â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const FilterPill = ({ id, label, count, icon }: { id: FilterType; label: string; count?: number; icon?: React.ReactNode }) => {
     const active = filter === id;
     return (
@@ -224,7 +223,7 @@ export default function MuiNotifications() {
   return (
     <Box sx={{ px: { xs: 2, sm: 4, md: 5 }, py: { xs: 2, sm: 4 }, maxWidth: 960, mx: 'auto' }}>
 
-      {/* ─── Header ──────────────────────────────────────────── */}
+      {/* â”€â”€â”€ Header â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Box sx={{ mb: { xs: 3, sm: 4 } }}>
         <Stack direction="row" alignItems="flex-start" justifyContent="space-between" sx={{ mb: 2.5 }}>
           <Box>
@@ -278,7 +277,7 @@ export default function MuiNotifications() {
           )}
         </Stack>
 
-        {/* ─── Filter pills ────────────────────────────────── */}
+        {/* â”€â”€â”€ Filter pills â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <Stack
           direction="row" spacing={0.75} alignItems="center"
           sx={{
@@ -301,7 +300,7 @@ export default function MuiNotifications() {
         </Stack>
       </Box>
 
-      {/* ─── Stream ──────────────────────────────────────────── */}
+      {/* â”€â”€â”€ Stream â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isLoading ? (
         <Stack spacing={2}>
           {[1, 2, 3, 4].map(i => (
@@ -374,7 +373,7 @@ export default function MuiNotifications() {
 }
 
 
-// ─── Notification Card ──────────────────────────────────────────
+// â”€â”€â”€ Notification Card â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function NotificationCard({
   notification: n, isExpanded, isHovered, isManagerRole, isDark,
   onClick, onHover, onNavigate, onDelete, onMarkRead,
@@ -568,7 +567,7 @@ function NotificationCard({
         </Fade>
       </Stack>
 
-      {/* ─── Expanded ──────────────────────────────────────── */}
+      {/* â”€â”€â”€ Expanded â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Collapse in={isExpanded}>
         <Box sx={{ px: { xs: 2, sm: 2.5 }, pb: 2.5, pt: 0 }}>
           <Box sx={{ height: 1, bgcolor: isDark ? alpha('#FBF8F4', 0.06) : '#F3F4F6', mb: 2, mx: -0.5 }} />

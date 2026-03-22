@@ -16,6 +16,7 @@ import {
   MoreHoriz as MoreIcon,
 } from "@mui/icons-material";
 import { getCurrentUser } from "@/lib/auth";
+import { getInitials } from "@/lib/utils";
 
 interface MuiMobileBottomNavProps {
   notificationCount?: number;
@@ -111,17 +112,17 @@ export default function MuiMobileBottomNav({ notificationCount = 0 }: MuiMobileB
           label="Profile" 
           icon={
             <Avatar
+              src={currentUser?.photoUrl || undefined}
               sx={{
-                width: { xs: 24, sm: 28 },
-                height: { xs: 24, sm: 28 },
-                fontSize: { xs: '0.625rem', sm: '0.75rem' },
-                fontWeight: 700,
-                bgcolor: getNavValue() === 3 ? 'primary.main' : 'grey.400',
-                border: getNavValue() === 3 ? 2 : 0,
-                borderColor: (t: Theme) => alpha(t.palette.primary.main, 0.3),
+                width: 26,
+                height: 26,
+                border: getNavValue() === 3 ? "2px solid" : "2px solid transparent",
+                borderColor: getNavValue() === 3 ? "primary.main" : "transparent",
+                fontSize: "0.80rem",
+                bgcolor: "primary.main"
               }}
             >
-              {currentUser?.firstName?.[0]}{currentUser?.lastName?.[0]}
+              {getInitials(currentUser?.firstName, currentUser?.lastName, currentUser?.username)}
             </Avatar>
           } 
         />

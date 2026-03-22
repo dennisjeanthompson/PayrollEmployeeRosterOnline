@@ -35,13 +35,19 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
   useEffect(() => {
     if (!enabled || !currentUser?.id) return;
 
-    // If there's already a global socket for this user, reuse it
-    if (globalSocket && globalSocketUserId === currentUser.id && globalSocket.connected) {
+    // If there's already a global socket for this user, reuse it unconditionally
+    // Wait for it to connect if it's currently connecting, but DO NOT spawn a duplicate.
+    if (globalSocket && globalSocketUserId === currentUser.id) {
       socketRef.current = globalSocket;
+      
+      // If it was disconnected manually (or by network drop) and we're reusing it, attempt to reconnect
+      if (globalSocket.disconnected) {
+        globalSocket.connect();
+      }
       return;
     }
 
-    // Disconnect existing socket if user changed
+    // Completely tear down existing socket only if the mapped userID has changed
     if (globalSocket && globalSocketUserId !== currentUser.id) {
       globalSocket.disconnect();
       globalSocket = null;

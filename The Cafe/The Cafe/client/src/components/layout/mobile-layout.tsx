@@ -75,6 +75,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
           </Box>
           <IconButton onClick={() => setLocation("/employee/profile")} sx={{ p: 0.5 }}>
             <Avatar 
+              src={currentUser?.photoUrl || undefined}
               sx={{ 
                 width: 32, 
                 height: 32, 

@@ -228,12 +228,10 @@ export default function MuiAuditLogs() {
       const res = await apiRequest("GET", `/api/audit-logs?${buildQueryParams()}`);
       return res.json();
     },
-    refetchInterval: 30000,
   });
 
   const { data: statsData } = useQuery<{ stats: { totalLogs: number; byAction: Record<string, number>; byEntityType: Record<string, number> } }>({
     queryKey: ["/api/audit-logs/stats"],
-    refetchInterval: 60000,
   });
 
   // Real-time WebSocket integration
@@ -245,7 +243,7 @@ export default function MuiAuditLogs() {
         const action = data?.auditLog?.action || "unknown";
         const entity = data?.auditLog?.entityType || "unknown";
         const user = data?.auditLog?.userName || "Unknown user";
-        setSnackbarMessage(`${user} — ${actionLabels[action] || action} (${entityTypeLabels[entity] || entity})`);
+        setSnackbarMessage(`${user} â€” ${actionLabels[action] || action} (${entityTypeLabels[entity] || entity})`);
         setSnackbarOpen(true);
         refetchLogs();
       }
@@ -353,7 +351,7 @@ export default function MuiAuditLogs() {
             </Tooltip>
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            Track all system changes for compliance — updates appear in real time
+            Track all system changes for compliance â€” updates appear in real time
           </Typography>
         </Box>
       </Box>

@@ -73,6 +73,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { apiUrl } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
+import { getInitials } from "@/lib/utils";
 import { PayslipPreview as DigitalPayslip } from "@/components/payroll/payslip-preview";
 
 
@@ -268,7 +269,7 @@ export default function MuiPayrollManagement() {
 
   // Mutations
   const createPeriodMutation = useMutation({
-    mutationFn: async (data: { startDate: string; endDate: string }) => {
+    mutationFn: async (data: { startDate: string; endDate: string; payDate: string }) => {
       const response = await apiRequest("POST", "/api/payroll/periods", data);
       return response.json();
     },
@@ -553,32 +554,34 @@ export default function MuiPayrollManagement() {
         },
       }}
     >
-      <CardContent sx={{ p: 3 }}>
-        <Box sx={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
+      <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           <Box
             sx={{
-              width: 48,
-              height: 48,
+              width: 52,
+              height: 52,
               borderRadius: 3,
               bgcolor: alpha(color, 0.1),
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              mb: 2,
+              flexShrink: 0,
             }}
           >
-            <Icon sx={{ color, fontSize: 24 }} />
+            <Icon sx={{ color, fontSize: 28 }} />
+          </Box>
+          <Box sx={{ overflow: "hidden", flex: 1 }}>
+            <Typography variant="body2" color="text.secondary" fontWeight={600} noWrap>
+              {title}
+            </Typography>
+            <Typography variant="h5" fontWeight={800} sx={{ mt: 0.25, mb: 0.25, lineHeight: 1.2, letterSpacing: "-0.02em" }} noWrap>
+              {value}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', opacity: 0.8 }}>
+              {subtitle}
+            </Typography>
           </Box>
         </Box>
-        <Typography variant="body2" color="text.secondary" fontWeight={500}>
-          {title}
-        </Typography>
-        <Typography variant="h4" fontWeight={700} sx={{ mt: 0.5 }}>
-          {value}
-        </Typography>
-        <Typography variant="caption" color="text.secondary">
-          {subtitle}
-        </Typography>
       </CardContent>
     </Card>
   );
@@ -752,7 +755,7 @@ export default function MuiPayrollManagement() {
       {/* Content */}
       {activeTab === 0 ? (
         <Grid container spacing={3}>
-          <Grid item xs={12} lg={8}>
+          <Grid size={{ xs: 12, lg: 8 }}>
             {periodsLoading ? (
               <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
                 <CircularProgress />
@@ -820,7 +823,7 @@ export default function MuiPayrollManagement() {
                     }}
                     onClick={() => setSelectedPeriod(period)}
                   >
-                    <CardContent sx={{ p: 3 }}>
+                    <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
                       <Box
                         sx={{
                           display: "flex",
@@ -843,7 +846,7 @@ export default function MuiPayrollManagement() {
                             <CalendarMonth sx={{ color: "primary.main" }} />
                           </Box>
                           <Box>
-                            <Typography variant="subtitle1" fontWeight={600}>
+                            <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.2 }}>
                               {format(new Date(period.startDate), "MMM d")} –{" "}
                               {format(new Date(period.endDate), "MMM d, yyyy")}
                             </Typography>
@@ -856,7 +859,7 @@ export default function MuiPayrollManagement() {
                           </Box>
                         </Box>
 
-                        <Stack direction="row" spacing={2} alignItems="center">
+                        <Stack direction="row" spacing={1.5} alignItems="center">
                           <Chip
                             label={period.status}
                             size="small"
@@ -876,7 +879,7 @@ export default function MuiPayrollManagement() {
                         </Stack>
                       </Box>
 
-                      <Divider sx={{ my: 2 }} />
+                      <Divider sx={{ my: 1.5 }} />
 
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
                         {period.status === "open" && (
@@ -931,13 +934,13 @@ export default function MuiPayrollManagement() {
           </Grid>
 
           {/* Sidebar */}
-          <Grid item xs={12} lg={4}>
+          <Grid size={{ xs: 12, lg: 4 }}>
             <Card
               elevation={0}
               sx={{
                 borderRadius: 3,
                 border: `1px solid ${'rgba(255, 255, 255, 0.02)'}`,
-                p: 3,
+                p: 2.5,
               }}
             >
               <Typography variant="subtitle1" fontWeight={600} gutterBottom>
@@ -1089,8 +1092,7 @@ export default function MuiPayrollManagement() {
                                 fontSize: "0.85rem",
                               }}
                             >
-                              {entry.employee?.firstName?.[0]}
-                              {entry.employee?.lastName?.[0]}
+                              {getInitials(entry.employee?.firstName, entry.employee?.lastName, entry.employee?.email)}
                             </Avatar>
                             <Box>
                               <Typography variant="body2" fontWeight={600}>
@@ -1263,7 +1265,9 @@ export default function MuiPayrollManagement() {
                         </TableCell>
                         <TableCell>
                           <Typography variant="body2">
-                            {format(new Date(log.date), "MMM d, yyyy")}
+                            {log.date && !isNaN(new Date(log.date).getTime()) 
+                              ? format(new Date(log.date), "MMM d, yyyy") 
+                              : "—"}
                           </Typography>
                         </TableCell>
                         <TableCell>

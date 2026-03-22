@@ -1251,7 +1251,8 @@ export class DatabaseStorage implements IStorage {
       employeeId: log.employeeId,
       branchId: log.branchId,
       loggedBy: log.loggedBy,
-      date: new Date(log.date),
+      startDate: new Date(log.startDate),
+      endDate: new Date(log.endDate),
       type: log.type,
       value: log.value,
       remarks: log.remarks ?? null,
@@ -1275,16 +1276,16 @@ export class DatabaseStorage implements IStorage {
 
   async getAdjustmentLogsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<AdjustmentLog[]> {
     const conditions = [eq(adjustmentLogs.employeeId, employeeId)];
-    if (startDate) conditions.push(gte(adjustmentLogs.date, startDate));
-    if (endDate) conditions.push(lte(adjustmentLogs.date, endDate));
-    return db.select().from(adjustmentLogs).where(and(...conditions)).orderBy(desc(adjustmentLogs.date));
+    if (startDate) conditions.push(gte(adjustmentLogs.startDate, startDate));
+    if (endDate) conditions.push(lte(adjustmentLogs.endDate, endDate));
+    return db.select().from(adjustmentLogs).where(and(...conditions)).orderBy(desc(adjustmentLogs.startDate));
   }
 
   async getAdjustmentLogsByBranch(branchId: string, startDate?: Date, endDate?: Date): Promise<AdjustmentLog[]> {
     const conditions = [eq(adjustmentLogs.branchId, branchId)];
-    if (startDate) conditions.push(gte(adjustmentLogs.date, startDate));
-    if (endDate) conditions.push(lte(adjustmentLogs.date, endDate));
-    return db.select().from(adjustmentLogs).where(and(...conditions)).orderBy(desc(adjustmentLogs.date));
+    if (startDate) conditions.push(gte(adjustmentLogs.startDate, startDate));
+    if (endDate) conditions.push(lte(adjustmentLogs.endDate, endDate));
+    return db.select().from(adjustmentLogs).where(and(...conditions)).orderBy(desc(adjustmentLogs.startDate));
   }
 
   async getPendingAdjustmentLogs(branchId: string): Promise<AdjustmentLog[]> {
@@ -1296,7 +1297,7 @@ export class DatabaseStorage implements IStorage {
           eq(adjustmentLogs.status, 'employee_verified')
         )
       )
-    ).orderBy(desc(adjustmentLogs.date));
+    ).orderBy(desc(adjustmentLogs.startDate));
   }
 
   async updateAdjustmentLog(id: string, log: Partial<InsertAdjustmentLog>): Promise<AdjustmentLog | undefined> {

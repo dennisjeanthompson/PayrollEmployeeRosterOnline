@@ -16,6 +16,8 @@ export const requireAuth = (req: Request, res: Response, next: NextFunction) => 
   if (!req.session?.user) {
     return res.status(401).json({ message: 'Authentication required' });
   }
+  // Populate req.user so route handlers can use req.user!.id etc.
+  (req as any).user = req.session.user;
   next();
 };
 

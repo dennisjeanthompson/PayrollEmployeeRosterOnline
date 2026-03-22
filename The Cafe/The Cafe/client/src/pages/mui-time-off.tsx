@@ -33,6 +33,10 @@ import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
 import IconButton from "@mui/material/IconButton";
 import Divider from "@mui/material/Divider";
+import FormControlLabel from "@mui/material/FormControlLabel";
+import Switch from "@mui/material/Switch";
+import RadioGroup from "@mui/material/RadioGroup";
+import Radio from "@mui/material/Radio";
 
 
 // MUI Data Grid
@@ -57,11 +61,13 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import PersonIcon from "@mui/icons-material/Person";
 import WarningIcon from "@mui/icons-material/Warning";
+import { useTheme, alpha } from "@mui/material/styles";
 
 interface TimeOffRequest {
   id: string;
   userId: string;
   userName?: string;
+  user?: { firstName: string; lastName: string };
   startDate: string;
   endDate: string;
   type: string;
@@ -108,6 +114,7 @@ const getStatusIcon = (status: string) => {
 };
 
 export default function MuiTimeOff() {
+  const theme = useTheme();
   const currentUser = getCurrentUser();
   const isManagerRole = isManager();
   const { toast } = useToast();
@@ -132,6 +139,7 @@ export default function MuiTimeOff() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectingRequest, setRejectingRequest] = useState<TimeOffRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [useSil, setUseSil] = useState(false); // "Working Student" toggle: Use SIL for paid leave?
 
   const [formData, setFormData] = useState({
     type: "vacation",
@@ -238,11 +246,11 @@ export default function MuiTimeOff() {
 
   // Approve (manager only)
   const approveMutation = useMutation({
-    mutationFn: async ({ requestId, status, rejectionReason }: { requestId: string; status: string; rejectionReason?: string }) => {
+    mutationFn: async ({ requestId, status, rejectionReason, useSil }: { requestId: string; status: string; rejectionReason?: string; useSil?: boolean }) => {
       const endpoint = status === 'approved'
         ? `/api/time-off-requests/${requestId}/approve`
         : `/api/time-off-requests/${requestId}/reject`;
-      const body = status === 'rejected' ? { status, rejectionReason } : { status };
+      const body = status === 'rejected' ? { status, rejectionReason } : { status, useSil };
       const response = await apiRequest("PUT", endpoint, body);
       return response.json();
     },
@@ -498,62 +506,81 @@ export default function MuiTimeOff() {
               </Alert>
             </CardContent>
           ) : (
-            <DataGrid
-              rows={filteredRequests.map(req => ({...req, id: req.id}))}
-              columns={[
-                { field: "userName", headerName: "Employee", flex: 1.5, minWidth: 150, renderCell: (params) => {
-                  const reqUser = params.row.user;
-                  const fullName = reqUser ? `${reqUser.firstName} ${reqUser.lastName}` : params.row.userName;
-                  return (
-                    <Typography variant="body2" fontWeight="bold">
-                      {fullName || (currentUser?.firstName + ' ' + currentUser?.lastName) || 'Employee'}
+            <Box sx={{ height: 600, width: "100%" }}>
+              <DataGrid
+                rows={filteredRequests.map(req => ({...req, id: req.id}))}
+                columns={[
+                  { field: "userName", headerName: "Employee", flex: 1.5, minWidth: 150, renderCell: (params) => {
+                    const reqUser = params.row.user;
+                    const fullName = reqUser ? `${reqUser.firstName} ${reqUser.lastName}` : params.row.userName;
+                    return (
+                      <Typography variant="body2" fontWeight="bold">
+                        {fullName || (currentUser?.firstName + ' ' + currentUser?.lastName) || 'Employee'}
+                      </Typography>
+                    );
+                  }},
+                  { field: "type", headerName: "Leave Type", width: 140, renderCell: (params) => (
+                    <Chip label={capitalizeFirstLetter(params.value)} size="small" variant="outlined" color="primary" />
+                  )},
+                  { field: "dates", headerName: "Dates", flex: 1.5, minWidth: 200, renderCell: (params) => (
+                    <Typography variant="body2">
+                      {format(parseISO(params.row.startDate), "MMM d, yyyy")} - {format(parseISO(params.row.endDate), "MMM d, yyyy")}
                     </Typography>
-                  );
-                }},
-                { field: "type", headerName: "Leave Type", width: 140, renderCell: (params) => (
-                  <Chip label={capitalizeFirstLetter(params.value)} size="small" variant="outlined" color="primary" />
-                )},
-                { field: "dates", headerName: "Dates", flex: 1.5, minWidth: 200, renderCell: (params) => (
-                  <Typography variant="body2">
-                    {format(parseISO(params.row.startDate), "MMM d, yyyy")} - {format(parseISO(params.row.endDate), "MMM d, yyyy")}
-                  </Typography>
-                )},
-                { field: "duration", headerName: "Duration", width: 100, align: 'center', headerAlign: 'center', renderCell: (params) => (
-                  <Typography variant="body2">
-                    {getDaysDifference(params.row.startDate, params.row.endDate)} days
-                  </Typography>
-                )},
-                { field: "reason", headerName: "Reason", flex: 2, minWidth: 200 },
-                { field: "status", headerName: "Status", width: 130, renderCell: (params) => (
-                  <Chip 
-                    label={params.value.toUpperCase()} 
-                    color={getStatusColor(params.value)} 
-                    size="small" 
-                    icon={getStatusIcon(params.value) as any}
-                  />
-                )},
-                { field: "actions", headerName: isManagerRole ? "Actions" : "", width: isManagerRole ? 180 : 0, renderCell: (params) => {
-                  if (!isManagerRole) return null;
-                  if (params.row.status !== "pending") return null;
-                  return (
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ height: '100%' }}>
-                      <Button size="small" variant="contained" color="success" onClick={(e) => { e.stopPropagation(); approveMutation.mutate({ requestId: params.row.id, status: "approved" }); }}>Approve</Button>
-                      <Button size="small" variant="outlined" color="error" onClick={(e) => { 
-                        e.stopPropagation(); 
-                        setRejectingRequest(params.row);
-                        setRejectionReason("");
-                        setRejectDialogOpen(true);
-                      }}>Reject</Button>
-                    </Stack>
-                  )
+                  )},
+                  { field: "duration", headerName: "Duration", width: 100, align: 'center', headerAlign: 'center', renderCell: (params) => (
+                    <Typography variant="body2">
+                      {getDaysDifference(params.row.startDate, params.row.endDate)} days
+                    </Typography>
+                  )},
+                  { field: "reason", headerName: "Reason", flex: 2, minWidth: 200 },
+                  { field: "status", headerName: "Status", width: 130, renderCell: (params) => (
+                    <Chip 
+                      label={params.value.toUpperCase()} 
+                      color={getStatusColor(params.value)} 
+                      size="small" 
+                      icon={getStatusIcon(params.value) as any}
+                    />
+                  )},
+                  { field: "actions", headerName: isManagerRole ? "Actions" : "", width: isManagerRole ? 180 : 0, renderCell: (params) => {
+                    if (!isManagerRole) return null;
+                    if (params.row.status !== "pending") return null;
+                    return (
+                      <Stack direction="row" spacing={1} alignItems="center" sx={{ height: '100%' }}>
+                        <Button size="small" variant="contained" color="success" onClick={(e) => { e.stopPropagation(); approveMutation.mutate({ requestId: params.row.id, status: "approved" }); }}>Approve</Button>
+                        <Button size="small" variant="outlined" color="error" onClick={(e) => { 
+                          e.stopPropagation(); 
+                          setRejectingRequest(params.row);
+                          setRejectionReason("");
+                          setRejectDialogOpen(true);
+                        }}>Reject</Button>
+                      </Stack>
+                    );
+                  }},
+                ]}
+                disableRowSelectionOnClick
+                initialState={{
+                  pagination: {
+                    paginationModel: { pageSize: 15 },
+                  },
+                  sorting: {
+                    sortModel: [{ field: 'startDate', sort: 'desc' }],
+                  },
                 }}
-              ]}
-              disableRowSelectionOnClick
-              rowHeight={60}
-              autoHeight
-              density="comfortable"
-              sx={{ border: 0 }}
-            />
+                pageSizeOptions={[15, 25, 50]}
+                sx={{
+                  border: 'none',
+                  '& .MuiDataGrid-cell': {
+                    borderBottom: `1px solid ${theme.palette.divider}`,
+                  },
+                  '& .MuiDataGrid-columnHeaders': {
+                    backgroundColor: alpha(theme.palette.primary.main, 0.05),
+                    color: theme.palette.text.primary,
+                    fontWeight: 600,
+                    borderBottom: `1px solid ${theme.palette.divider}`,
+                  },
+                }}
+              />
+            </Box>
           )}
         </Card>
       </Box>
@@ -684,10 +711,40 @@ export default function MuiTimeOff() {
              )}
              {editingRequest && isManagerRole && editingRequest.status === 'pending' && (
                <>
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>Payment Handling</Typography>
+                    <RadioGroup
+                      value={useSil ? "paid" : "unpaid"}
+                      onChange={(e) => setUseSil(e.target.value === "paid")}
+                    >
+                      <FormControlLabel 
+                        value="paid" 
+                        control={<Radio color="success" size="small" />} 
+                        label={
+                          <Box>
+                            <Typography variant="body2" fontWeight="bold" color="success.main">Use SIL Credit (Paid)</Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">Deducts 1 credit per day. Employee receives normal basic pay.</Typography>
+                          </Box>
+                        } 
+                        sx={{ mb: 1, p: 1, border: '1px solid', borderColor: useSil ? 'success.main' : 'divider', borderRadius: 2, bgcolor: useSil ? 'success.50' : 'transparent', ml: 0 }}
+                      />
+                      <FormControlLabel 
+                        value="unpaid" 
+                        control={<Radio color="error" size="small" />} 
+                        label={
+                          <Box>
+                            <Typography variant="body2" fontWeight="bold" color="error.main">Leave Without Pay (Unpaid)</Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">Preserves SIL credits for year-end cash conversion. Pay will be deducted.</Typography>
+                          </Box>
+                        }
+                        sx={{ p: 1, border: '1px solid', borderColor: !useSil ? 'error.main' : 'divider', borderRadius: 2, bgcolor: !useSil ? 'error.50' : 'transparent', ml: 0 }}
+                      />
+                    </RadioGroup>
+                  </Box>
                  <Button
                    color="success"
                    onClick={() => {
-                     approveMutation.mutate({ requestId: editingRequest.id, status: 'approved' });
+                     approveMutation.mutate({ requestId: editingRequest.id, status: 'approved', useSil });
                      handleCloseDialog();
                    }}
                  >

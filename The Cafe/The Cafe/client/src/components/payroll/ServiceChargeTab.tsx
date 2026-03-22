@@ -236,7 +236,7 @@ export function ServiceChargeTab() {
         By law (RA 11360), 100% of collected service charges must be distributed equally among all covered rank-and-file employees. Managers are excluded from this distribution.
       </Alert>
 
-      <Paper elevation={0} sx={{ borderRadius: 3, overflow: "hidden", border: 1, borderColor: "divider" }}>
+      <Paper elevation={0} sx={{ height: 600, width: "100%", borderRadius: 3, overflow: "hidden", border: 1, borderColor: "divider" }}>
         {pools.length > 0 ? (
           <DataGrid
             rows={pools}

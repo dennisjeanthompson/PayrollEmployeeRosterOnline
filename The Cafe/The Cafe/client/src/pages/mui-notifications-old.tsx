@@ -127,7 +127,6 @@ export default function MuiNotifications() {
       const response = await apiRequest("GET", "/api/notifications");
       return response.json();
     },
-    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true
   });
 
@@ -750,7 +749,7 @@ export default function MuiNotifications() {
                 {selectedNotification.message}
               </Typography>
 
-              {/* Additional Data Section — Only show human-readable fields */}
+              {/* Additional Data Section â€” Only show human-readable fields */}
               {selectedNotification.data && (() => {
                 // Safely parse data if it's a string
                 let parsedData = selectedNotification.data;
@@ -762,7 +761,7 @@ export default function MuiNotifications() {
                   }
                 }
 
-                // Filter out raw IDs and technical fields — only show human-readable info  
+                // Filter out raw IDs and technical fields â€” only show human-readable info  
                 const hiddenKeys = new Set([
                   'tradeId', 'shiftId', 'requestId', 'userId', 'fromUserId', 
                   'toUserId', 'branchId', 'approvedBy', 'id', 'periodId',

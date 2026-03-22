@@ -126,7 +126,6 @@ export default function MobileSchedule() {
       );
       return response.json();
     },
-    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
   });
 

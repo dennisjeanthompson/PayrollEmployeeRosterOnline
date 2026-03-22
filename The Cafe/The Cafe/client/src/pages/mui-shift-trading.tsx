@@ -263,9 +263,7 @@ export default function MuiShiftTrading() {
       const response = await apiRequest("GET", "/api/shift-trades");
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time trade updates
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
     retry: (failureCount, error: any) => {
       // Don't retry on 401 (unauthorized) - session expired
       if (error?.status === 401) return false;
@@ -281,9 +279,7 @@ export default function MuiShiftTrading() {
       const response = await apiRequest("GET", "/api/shifts");
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time schedule updates
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
     retry: (failureCount, error: any) => {
       // Don't retry on 401 (unauthorized) - session expired
       if (error?.status === 401) return false;
@@ -299,7 +295,6 @@ export default function MuiShiftTrading() {
       const response = await apiRequest("GET", "/api/employees");
       return response.json();
     },
-    refetchInterval: 30000, // Employee list doesn't change often
     refetchOnWindowFocus: true,
     retry: (failureCount, error: any) => {
       // Don't retry on 401 (unauthorized) - session expired
@@ -361,7 +356,7 @@ export default function MuiShiftTrading() {
       setFormData({ shiftId: "", targetUserId: "", reason: "", urgency: "normal" });
     },
     onError: (error: any) => {
-      console.error("❌ Failed to create trade:", error);
+      console.error("âŒ Failed to create trade:", error);
       toast({ title: "Failed to send request", description: error?.message, variant: "destructive" });
     },
   });
@@ -380,7 +375,7 @@ export default function MuiShiftTrading() {
       toast({ title: accept ? "Trade accepted" : "Trade rejected" });
     },
     onError: (error: any) => {
-      console.error("❌ Failed to respond to trade:", error);
+      console.error("âŒ Failed to respond to trade:", error);
       toast({ title: "Failed to respond to trade", description: error?.message, variant: "destructive" });
     },
   });
@@ -399,7 +394,7 @@ export default function MuiShiftTrading() {
       toast({ title: approve ? "Trade approved" : "Trade rejected" });
     },
     onError: (error: any) => {
-      console.error("❌ Failed to approve/reject trade:", error);
+      console.error("âŒ Failed to approve/reject trade:", error);
       toast({ title: "Failed to process trade", description: error?.message, variant: "destructive" });
     },
   });

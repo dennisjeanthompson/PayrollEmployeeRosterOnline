@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUser, isManager, isAdmin, useAuth } from "@/lib/auth";
 import { invalidateQueries, getQueryFn } from "@/lib/queryClient";
+import { getInitials } from "@/lib/utils";
 import { useLocation, Link } from "wouter";
 import { useTheme as useAppTheme } from "@/components/theme-provider";
 import CommandPalette from "../search/CommandPalette";
@@ -23,6 +24,8 @@ import {
   styled,
   Select,
   MenuItem,
+  Menu,
+  Avatar,
   FormControl,
   CircularProgress,
   Snackbar,
@@ -110,6 +113,9 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
   // Global search state (trigger for Command Palette)
   const [searchOpen, setSearchOpen] = useState(false);
   const searchInputRef = React.useRef<HTMLInputElement>(null);
+  
+  // Profile dropdown state
+  const [profileMenuAnchor, setProfileMenuAnchor] = useState<null | HTMLElement>(null);
 
   const shouldLoadBranches = canSwitchBranch && isAuthenticated;
   const { data: branchesData } = useQuery<{ branches?: Array<{ id: string; name: string; isActive?: boolean }> } | null>({
@@ -391,6 +397,53 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
 
         {/* Notifications - Using dedicated dropdown component */}
         <NotificationBell />
+
+        {/* User Profile Dropdown */}
+        <IconButton
+          onClick={(e) => setProfileMenuAnchor(e.currentTarget)}
+          size="small"
+          sx={{ ml: 1, p: 0.5 }}
+        >
+          <Avatar 
+            src={currentUser?.photoUrl || undefined}
+            sx={{ width: 32, height: 32, bgcolor: alpha(theme.palette.primary.main, 0.8), fontSize: '0.85rem', fontWeight: 600 }}
+          >
+            {getInitials(currentUser?.firstName, currentUser?.lastName, currentUser?.username)}
+          </Avatar>
+        </IconButton>
+        <Menu
+          anchorEl={profileMenuAnchor}
+          open={Boolean(profileMenuAnchor)}
+          onClose={() => setProfileMenuAnchor(null)}
+          transformOrigin={{ horizontal: 'right', vertical: 'top' }}
+          anchorOrigin={{ horizontal: 'right', vertical: 'bottom' }}
+          slotProps={{ paper: { sx: { mt: 1, width: 220, borderRadius: 2, boxShadow: '0 8px 32px rgba(0,0,0,0.1)' } } }}
+        >
+          <Box sx={{ px: 2, py: 1.5, borderBottom: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
+            <Typography variant="subtitle2" fontWeight={700}>
+              {`${currentUser?.firstName || ''} ${currentUser?.lastName || ''}`.trim() || currentUser?.username}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" sx={{ textTransform: 'capitalize' }}>
+              {currentUser?.role || 'Employee'}
+            </Typography>
+          </Box>
+          <MenuItem component={Link} href="/profile" onClick={() => setProfileMenuAnchor(null)} sx={{ py: 1.5 }}>
+            Profile Settings
+          </MenuItem>
+          <MenuItem onClick={async () => {
+             setProfileMenuAnchor(null);
+             try {
+                const { logout } = await import("@/lib/auth");
+                await logout();
+                window.location.replace("/login");
+             } catch(err) {
+                 window.location.replace("/login");
+             } 
+          }} sx={{ py: 1.5, color: 'error.main' }}>
+            Log Out
+          </MenuItem>
+        </Menu>
+
       </Toolbar>
     </AppBar>
 

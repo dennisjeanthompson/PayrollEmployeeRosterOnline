@@ -147,6 +147,7 @@ export const timeOffRequests = pgTable("time_off_requests", {
   type: text("type").notNull(),
   reason: text("reason").notNull(),
   status: text("status").default("pending"),
+  isPaid: boolean("is_paid").default(false),
   requestedAt: timestamp("requested_at").defaultNow(),
   approvedAt: timestamp("approved_at"),
   approvedBy: text("approved_by").references(() => users.id),
@@ -302,7 +303,8 @@ export const adjustmentLogs = pgTable("adjustment_logs", {
   employeeId: text("employee_id").references(() => users.id).notNull(),
   branchId: text("branch_id").references(() => branches.id).notNull(),
   loggedBy: text("logged_by").references(() => users.id).notNull(), // Manager who logged it
-  date: timestamp("date").notNull(), // Date the exception occurred
+  startDate: timestamp("start_date"), // Date the exception started (nullable for backward compat)
+  endDate: timestamp("end_date"), // Date the exception ended (nullable for backward compat)
   type: text("type").notNull(), // 'overtime', 'late', 'undertime', 'absent', 'rest_day_ot', 'special_holiday_ot', 'regular_holiday_ot', 'night_diff'
   // For overtime: hours (e.g., 2.0)
   // For lateness: minutes (e.g., 30)
@@ -375,9 +377,11 @@ export const loanRequests = pgTable("loan_requests", {
   loanType: text("loan_type").notNull(), // 'SSS' | 'Pag-IBIG'
   referenceNumber: text("reference_number").notNull(),
   accountNumber: text("account_number").notNull(),
+  totalAmount: text("total_amount").notNull().default("0"),
+  remainingBalance: text("remaining_balance").notNull().default("0"),
   monthlyAmortization: text("monthly_amortization").notNull(),
   deductionStartDate: timestamp("deduction_start_date").notNull(),
-  status: text("status").default("pending"), // 'pending' | 'approved' | 'rejected'
+  status: text("status").default("pending"), // 'pending' | 'approved' | 'rejected' | 'completed'
   proofFileUrl: text("proof_file_url"),
   hrApprovalNote: text("hr_approval_note"),
   approvedBy: text("approved_by").references(() => users.id),
@@ -498,6 +502,7 @@ export const insertTimeOffRequestSchema = createInsertSchema(timeOffRequests).om
   id: true,
   requestedAt: true,
   approvedAt: true,
+  isPaid: true,
 }).extend({
   startDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
   endDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
@@ -547,7 +552,8 @@ export const insertAdjustmentLogSchema = createInsertSchema(adjustmentLogs).omit
   id: true,
   createdAt: true,
 }).extend({
-  date: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+  startDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+  endDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
 });
 
 export const insertThirteenthMonthLedgerSchema = createInsertSchema(thirteenthMonthLedger).omit({

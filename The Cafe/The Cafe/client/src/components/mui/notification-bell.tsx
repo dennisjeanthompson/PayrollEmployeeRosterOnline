@@ -79,7 +79,6 @@ export default function NotificationBell() {
       return res.json();
     },
     enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? 15000 : false,
     refetchOnWindowFocus: isAuthenticated,
   });
 

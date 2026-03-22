@@ -327,7 +327,7 @@ export default function MuiLeaveCredits({ hideHeader }: { hideHeader?: boolean }
         </Alert>
 
         {/* Data Grid */}
-        <Paper elevation={0} sx={{ borderRadius: 3, overflow: "hidden" }}>
+        <Paper elevation={0} sx={{ height: 600, width: '100%', borderRadius: 3, overflow: "hidden" }}>
           {credits.length > 0 ? (
             <DataGrid
               rows={credits}

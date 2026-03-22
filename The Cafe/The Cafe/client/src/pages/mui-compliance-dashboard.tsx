@@ -53,7 +53,6 @@ export default function MuiComplianceDashboard() {
   // Fetch employees for compliance checks
   const { data: employeesData, isLoading: loadingEmployees } = useQuery<{ employees: any[] }>({
     queryKey: ["/api/hours/all-employees"],
-    refetchInterval: 30000,
   });
 
   // Fetch deduction rates
@@ -101,7 +100,7 @@ export default function MuiComplianceDashboard() {
     status: pagibigRates.length > 0 ? "pass" : "warning",
     message: pagibigRates.length > 0 
       ? "Pag-IBIG rate configured"
-      : "Add Pag-IBIG rate (2% each, max ₱200)",
+      : "Add Pag-IBIG rate (2% each, max â‚±200)",
     icon: <HomeIcon />,
   });
 
@@ -135,7 +134,7 @@ export default function MuiComplianceDashboard() {
   });
 
   // 6. Min wage compliance
-  const minWageLaUnion = 470; // ₱470/day La Union 2025
+  const minWageLaUnion = 470; // â‚±470/day La Union 2025
   const minHourlyRate = minWageLaUnion / 8;
   const belowMinWage = employees.filter(e => 
     e.hourlyRate && parseFloat(e.hourlyRate) < minHourlyRate
@@ -145,8 +144,8 @@ export default function MuiComplianceDashboard() {
     name: "Minimum Wage (La Union)",
     status: belowMinWage.length === 0 ? "pass" : "fail",
     message: belowMinWage.length === 0 
-      ? `All employees meet ₱${minWageLaUnion}/day minimum`
-      : `${belowMinWage.length} employee(s) below ₱${minWageLaUnion}/day minimum!`,
+      ? `All employees meet â‚±${minWageLaUnion}/day minimum`
+      : `${belowMinWage.length} employee(s) below â‚±${minWageLaUnion}/day minimum!`,
     icon: <WarningIcon />,
   });
 
@@ -338,15 +337,15 @@ export default function MuiComplianceDashboard() {
           <strong>2025 Rate References:</strong>
         </Typography>
         <Typography variant="caption" component="div">
-          • SSS: CI-2024-006 (15% total, 5% employee, 10% employer, 33 brackets)
+          â€¢ SSS: CI-2024-006 (15% total, 5% employee, 10% employer, 33 brackets)
           <br />
-          • PhilHealth: PA2025-0002 (5% total, 2.5% each, ₱10k-₱100k salary range)
+          â€¢ PhilHealth: PA2025-0002 (5% total, 2.5% each, â‚±10k-â‚±100k salary range)
           <br />
-          • Pag-IBIG: Circular 460 (2% each, max ₱200/share)
+          â€¢ Pag-IBIG: Circular 460 (2% each, max â‚±200/share)
           <br />
-          • BIR: RR 11-2018/TRAIN Law (progressive 0%-35%)
+          â€¢ BIR: RR 11-2018/TRAIN Law (progressive 0%-35%)
           <br />
-          • Min Wage La Union: RB I-D-26 (₱470/day non-agri)
+          â€¢ Min Wage La Union: RB I-D-26 (â‚±470/day non-agri)
         </Typography>
       </Alert>
     </Box>

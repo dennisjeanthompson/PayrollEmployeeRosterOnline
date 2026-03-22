@@ -7,6 +7,7 @@ import MuiMobileBottomNav from "@/components/mui/mui-mobile-bottom-nav";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { apiRequest } from "@/lib/queryClient";
+import { getInitials } from "@/lib/utils";
 
 export default function MobileProfile() {
   const currentUser = getCurrentUser();
@@ -54,9 +55,13 @@ export default function MobileProfile() {
         {/* Profile Header */}
         <motion.div variants={itemVariants} className="flex flex-col items-center justify-center pt-4 pb-6">
             <div className="w-24 h-24 bg-primary rounded-3xl flex items-center justify-center shadow-xl mb-4 relative overflow-hidden group">
-                <span className="text-primary-foreground text-4xl font-bold">
-                    {currentUser?.firstName?.[0]}{currentUser?.lastName?.[0]}
-                </span>
+                {currentUser?.photoUrl ? (
+                    <img src={currentUser.photoUrl} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                    <span className="text-primary-foreground text-4xl font-bold">
+                        {getInitials(currentUser?.firstName, currentUser?.lastName, currentUser?.username)}
+                    </span>
+                )}
                 <div className="absolute inset-0 bg-black/10 hidden group-hover:flex items-center justify-center transition-all cursor-pointer">
                     <User className="text-white w-8 h-8" />
                 </div>

@@ -121,9 +121,7 @@ export default function MuiPayroll() {
       const response = await apiRequest("GET", "/api/payroll");
       return response.json();
     },
-    refetchInterval: 5000, // Poll every 5 seconds for real-time payroll updates
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   // Fetch current payroll period with real-time updates
@@ -133,9 +131,7 @@ export default function MuiPayroll() {
       const response = await apiRequest("GET", `/api/payroll/periods/current?branchId=${currentUser?.branchId}`);
       return response.json();
     },
-    refetchInterval: 10000, // Poll every 10 seconds for period updates
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   const payrollEntries: PayrollEntry[] = payrollData?.entries || [];
@@ -190,104 +186,96 @@ export default function MuiPayroll() {
         {payrollLoading && <LinearProgress sx={{ mb: 3, borderRadius: 1 }} />}
 
         {/* Summary Cards */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
-          <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+        <Grid container spacing={2} sx={{ mb: 3 }}>
+          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
             <Paper
               sx={{
-                p: 3,
-                borderRadius: 3,
+                p: 2,
+                borderRadius: 2,
                 background: `linear-gradient(135deg, ${alpha(theme.palette.success.main, 0.1)} 0%, ${alpha(theme.palette.success.main, 0.05)} 100%)`,
                 border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
               }}
             >
-              <Stack direction="row" alignItems="center" spacing={2}>
-                <Avatar sx={{ bgcolor: alpha(theme.palette.success.main, 0.2), color: "success.main" }}>
-                  <DollarIcon />
+              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
+                <Avatar sx={{ width: 32, height: 32, bgcolor: alpha(theme.palette.success.main, 0.2), color: "success.main" }}>
+                  <DollarIcon fontSize="small" />
                 </Avatar>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    YTD Earnings
-                  </Typography>
-                  <Typography variant="h5" fontWeight={700}>
-                    {formatCurrency(totalEarningsYTD)}
-                  </Typography>
-                </Box>
+                <Typography variant="body2" color="text.secondary" noWrap>
+                  YTD Earnings
+                </Typography>
               </Stack>
+              <Typography variant="h6" fontWeight={700} noWrap>
+                {formatCurrency(totalEarningsYTD)}
+              </Typography>
             </Paper>
           </Grid>
 
-          <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
             <Paper
               sx={{
-                p: 3,
-                borderRadius: 3,
+                p: 2,
+                borderRadius: 2,
                 background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
                 border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
               }}
             >
-              <Stack direction="row" alignItems="center" spacing={2}>
-                <Avatar sx={{ bgcolor: alpha(theme.palette.primary.main, 0.2), color: "primary.main" }}>
-                  <ClockIcon />
+              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
+                <Avatar sx={{ width: 32, height: 32, bgcolor: alpha(theme.palette.primary.main, 0.2), color: "primary.main" }}>
+                  <ClockIcon fontSize="small" />
                 </Avatar>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Total Hours
-                  </Typography>
-                  <Typography variant="h5" fontWeight={700}>
-                    {totalHoursYTD.toFixed(1)}h
-                  </Typography>
-                </Box>
+                <Typography variant="body2" color="text.secondary" noWrap>
+                  Total Hours
+                </Typography>
               </Stack>
+              <Typography variant="h6" fontWeight={700} noWrap>
+                {totalHoursYTD.toFixed(1)}h
+              </Typography>
             </Paper>
           </Grid>
 
-          <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
             <Paper
               sx={{
-                p: 3,
-                borderRadius: 3,
+                p: 2,
+                borderRadius: 2,
                 background: `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.1)} 0%, ${alpha(theme.palette.info.main, 0.05)} 100%)`,
                 border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
               }}
             >
-              <Stack direction="row" alignItems="center" spacing={2}>
-                <Avatar sx={{ bgcolor: alpha(theme.palette.info.main, 0.2), color: "info.main" }}>
-                  <TrendingUpIcon />
+              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
+                <Avatar sx={{ width: 32, height: 32, bgcolor: alpha(theme.palette.info.main, 0.2), color: "info.main" }}>
+                  <TrendingUpIcon fontSize="small" />
                 </Avatar>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Average Pay
-                  </Typography>
-                  <Typography variant="h5" fontWeight={700}>
-                    {formatCurrency(averagePay)}
-                  </Typography>
-                </Box>
+                <Typography variant="body2" color="text.secondary" noWrap>
+                  Average Pay
+                </Typography>
               </Stack>
+              <Typography variant="h6" fontWeight={700} noWrap>
+                {formatCurrency(averagePay)}
+              </Typography>
             </Paper>
           </Grid>
 
-          <Grid size={{ xs: 12, sm: 6, lg: 3 }}>
+          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
             <Paper
               sx={{
-                p: 3,
-                borderRadius: 3,
+                p: 2,
+                borderRadius: 2,
                 background: `linear-gradient(135deg, ${alpha(theme.palette.secondary.main, 0.1)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
                 border: `1px solid ${alpha(theme.palette.secondary.main, 0.2)}`,
               }}
             >
-              <Stack direction="row" alignItems="center" spacing={2}>
-                <Avatar sx={{ bgcolor: alpha(theme.palette.secondary.main, 0.2), color: "secondary.main" }}>
-                  <ReceiptIcon />
+              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
+                <Avatar sx={{ width: 32, height: 32, bgcolor: alpha(theme.palette.secondary.main, 0.2), color: "secondary.main" }}>
+                  <ReceiptIcon fontSize="small" />
                 </Avatar>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Pay Periods
-                  </Typography>
-                  <Typography variant="h5" fontWeight={700}>
-                    {paidEntries.length}
-                  </Typography>
-                </Box>
+                <Typography variant="body2" color="text.secondary" noWrap>
+                  Pay Periods
+                </Typography>
               </Stack>
+              <Typography variant="h6" fontWeight={700} noWrap>
+                {paidEntries.length}
+              </Typography>
             </Paper>
           </Grid>
         </Grid>

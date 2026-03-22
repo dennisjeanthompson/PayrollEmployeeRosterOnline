@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { storage } from "../storage";
+import { dbStorage as storage } from "../db-storage";
 import { insertLoanRequestSchema } from "@shared/schema";
 import { z } from "zod";
 
@@ -13,7 +13,12 @@ router.post("/", async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const data = insertLoanRequestSchema.parse(req.body);
+    // Always start the remaining balance exactly as the total amount requested
+    const parsedData = insertLoanRequestSchema.parse(req.body);
+    const data = {
+      ...parsedData,
+      remainingBalance: parsedData.totalAmount || "0",
+    };
 
     // Ensure the employee is submitting for themselves (or checking that they matched)
     if (data.userId !== user.id) {
@@ -135,6 +140,11 @@ router.put("/:id", async (req, res) => {
     }
 
     const updated = await storage.updateLoanRequest(id, status, hrApprovalNote, user.id);
+
+    // ─── Automatic Loan Deduction ─────────────────────────────────────────────
+    // Note for Phase 11: We no longer manually overwrite `user.sssLoan` here!
+    // `server/routes.ts` natively scans for 'approved' loanRequests during Paycheck Generation.
+    // The legacy static user profile properties (`sssLoanDeduction`) are deprecated in favor of accurate dynamic decrementing tracking!
     res.json(updated);
   } catch (error) {
     console.error("Error updating loan status:", error);

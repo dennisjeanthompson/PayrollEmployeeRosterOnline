@@ -74,6 +74,7 @@ router.get('/api/leave-credits/my', requireAuth, async (req, res) => {
 
     res.json({ credits: enriched, year });
   } catch (error: any) {
+    console.error('[/api/leave-credits/my] FULL ERROR:', error);
     if (error.message?.includes('does not exist') || error.message?.includes('relation')) {
       return res.json({ credits: [], year: new Date().getFullYear() });
     }

@@ -69,7 +69,6 @@ export default function MobileNotifications() {
       const response = await apiRequest('GET', '/api/notifications');
       return response.json();
     },
-    refetchInterval: 15000, // Poll every 15 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true
   });
 

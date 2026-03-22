@@ -88,8 +88,17 @@ export default function MuiLoans() {
     )},
     { field: 'referenceNumber', headerName: 'Ref Number', width: 160 },
     { field: 'accountNumber', headerName: 'Account Num', width: 160 },
-    { field: 'monthlyAmortization', headerName: 'Monthly Amort.', width: 140, valueFormatter: (params) => `₱${Number(params.value).toFixed(2)}` },
-    { field: 'deductionStartDate', headerName: 'Start Cutoff', width: 140, valueFormatter: (params) => format(new Date(params.value), 'MMM d, yyyy') },
+    { field: 'totalAmount', headerName: 'Total Loan', width: 130, valueFormatter: (params: any) => `₱${Number(params?.value || params).toFixed(2)}` },
+    { field: 'remainingBalance', headerName: 'Remaining Bal.', width: 140, renderCell: (params: GridRenderCellParams) => (
+      <Typography variant="body2" color="error.main" sx={{ pt: 1.5 }}>₱{Number(params.value).toFixed(2)}</Typography>
+    )},
+    { field: 'monthlyAmortization', headerName: 'Monthly Amort.', width: 140, valueFormatter: (params: any) => `₱${Number(params?.value || params).toFixed(2)}` },
+    { field: 'deductionStartDate', headerName: 'Start Cutoff', width: 140, valueFormatter: (params: any) => {
+        try { 
+          const val = params?.value || params;
+          return val ? format(new Date(val), 'MMM d, yyyy') : '—'; 
+        } catch { return 'Invalid Date'; }
+    }},
     { field: 'status', headerName: 'Status', width: 130, renderCell: (params) => {
         let color: 'warning' | 'success' | 'error' = 'warning';
         if (params.value === 'approved') color = 'success';
@@ -138,6 +147,7 @@ export default function MuiLoans() {
             pagination: { paginationModel: { pageSize: 15 } },
             sorting: { sortModel: [{ field: 'createdAt', sort: 'desc' }] }
           }}
+          pageSizeOptions={[10, 15, 25, 50]}
           sx={{ border: 0 }}
         />
       </Paper>
@@ -156,8 +166,14 @@ export default function MuiLoans() {
               <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1 }}>
                 <Typography variant="body2"><strong>Ref #:</strong> {selectedLoan.referenceNumber}</Typography>
                 <Typography variant="body2"><strong>Acct #:</strong> {selectedLoan.accountNumber}</Typography>
+                <Typography variant="body2"><strong>Total Amount:</strong> ₱{Number(selectedLoan.totalAmount).toFixed(2)}</Typography>
+                <Typography variant="body2" color="error.main"><strong>Remaining Bal.:</strong> ₱{Number(selectedLoan.remainingBalance).toFixed(2)}</Typography>
                 <Typography variant="body2" color="primary.main"><strong>Monthly Deduction:</strong> ₱{Number(selectedLoan.monthlyAmortization).toFixed(2)}</Typography>
-                <Typography variant="body2"><strong>Starts On:</strong> {format(new Date(selectedLoan.deductionStartDate), 'MMMM d, yyyy')}</Typography>
+                <Typography variant="body2"><strong>Starts On:</strong> {
+                  selectedLoan.deductionStartDate 
+                    ? (() => { try { return format(new Date(selectedLoan.deductionStartDate), 'MMMM d, yyyy'); } catch { return 'Invalid Date'; } })()
+                    : '—'
+                }</Typography>
               </Box>
 
               <TextField

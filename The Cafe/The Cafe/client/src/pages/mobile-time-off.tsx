@@ -80,7 +80,6 @@ export default function MobileTimeOff() {
       const response = await apiRequest('GET', '/api/time-off-requests');
       return response.json();
     },
-    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
   });
 
@@ -98,7 +97,7 @@ export default function MobileTimeOff() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['mobile-time-off'] });
       toast({
-        title: "Request Submitted! 🎉",
+        title: "Request Submitted! ðŸŽ‰",
         description: "Your time off request has been sent for approval",
       });
       setShowForm(false);

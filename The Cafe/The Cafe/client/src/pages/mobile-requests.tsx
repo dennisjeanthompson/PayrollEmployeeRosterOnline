@@ -106,22 +106,12 @@ function TimeOffTab() {
   });
 
   const { data: requestsData, isLoading } = useQuery({
-    queryKey: ['/api/time-off-requests/my'],
-    queryFn: async () => {
-      const res = await fetch('/api/time-off-requests');
-      if (!res.ok) throw new Error('Failed to fetch requests');
-      return res.json();
-    }
+    queryKey: ['/api/time-off-requests'],
   });
   const requests = Array.isArray(requestsData) ? requestsData : (requestsData?.requests || []);
 
   const { data: balancesData } = useQuery({
     queryKey: ['/api/leave-credits/my'],
-    queryFn: async () => {
-      const res = await fetch('/api/leave-credits');
-      if (!res.ok) throw new Error('Failed to fetch balance');
-      return res.json();
-    }
   });
   const balances = Array.isArray(balancesData) ? balancesData : (balancesData?.credits || []);
 
@@ -170,6 +160,7 @@ function TimeOffTab() {
       </Box>
 
       {/* Balance Summary */}
+      <Typography variant="subtitle2" color="primary.main" fontWeight="bold" sx={{ mb: 1, mt: -1 }}>Available Leave Balances (Year-End)</Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, mb: 3 }}>
         <Card variant="outlined" sx={{ textAlign: 'center', p: 1, bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
           <Typography variant="caption" color="text.secondary">SIL</Typography>
@@ -237,7 +228,7 @@ function TimeOffTab() {
             >
               <MenuItem value="vacation">Vacation Leave</MenuItem>
               <MenuItem value="sick">Sick Leave</MenuItem>
-              <MenuItem value="SIL">Service Incentive Leave (SIL)</MenuItem>
+              <MenuItem value="emergency">Emergency Leave</MenuItem>
               <MenuItem value="personal">Personal Leave</MenuItem>
               <MenuItem value="other">Other</MenuItem>
             </TextField>

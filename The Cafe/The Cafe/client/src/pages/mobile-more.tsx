@@ -26,6 +26,7 @@ import {
   StarBorder as StarBorderIcon,
 } from "@mui/icons-material";
 import { getCurrentUser } from "@/lib/auth";
+import { getInitials } from "@/lib/utils";
 import { useLocation } from "wouter";
 
 interface MenuItem {
@@ -164,6 +165,7 @@ export default function MobileMore() {
         >
           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
             <Avatar
+              src={currentUser?.photoUrl || undefined}
               sx={{
                 width: 56,
                 height: 56,
@@ -174,8 +176,7 @@ export default function MobileMore() {
                 boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
               }}
             >
-              {currentUser?.firstName?.[0]}
-              {currentUser?.lastName?.[0]}
+              {getInitials(currentUser?.firstName, currentUser?.lastName, currentUser?.username)}
             </Avatar>
             <Box>
               <Typography variant="h5" fontWeight={700}>

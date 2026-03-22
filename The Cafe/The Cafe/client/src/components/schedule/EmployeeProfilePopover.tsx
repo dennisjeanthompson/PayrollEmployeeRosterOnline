@@ -25,6 +25,7 @@ import {
   TrendingUp as TrendingUpIcon,
 } from '@mui/icons-material';
 import { format, differenceInHours } from 'date-fns';
+import { getInitials } from '@/lib/utils';
 
 // Types
 interface TimeOffRequest {
@@ -60,6 +61,7 @@ export interface Employee {
   username?: string;
   isActive?: boolean;
   hourlyRate?: string;
+  photoUrl?: string;
 }
 
 interface EmployeeProfilePopoverProps {
@@ -166,6 +168,7 @@ export function EmployeeProfilePopover({
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <Avatar
+              src={employee.photoUrl || undefined}
               sx={{
                 width: 56,
                 height: 56,
@@ -176,8 +179,7 @@ export function EmployeeProfilePopover({
                 border: `2px solid ${alpha('#fff', 0.3)}`,
               }}
             >
-              {employee.firstName[0]}
-              {employee.lastName[0]}
+              {getInitials(employee.firstName, employee.lastName, employee.username)}
             </Avatar>
             <Box>
               <Typography variant="h6" fontWeight={700} sx={{ lineHeight: 1.2 }}>

@@ -166,7 +166,7 @@ export default function MuiBranches() {
       const ok = await switchBranch(branchId);
       if (ok) {
         invalidateQueries.branchSwitch();
-        toast({ title: `Switched to branch — all pages updated` });
+        toast({ title: `Switched to branch â€” all pages updated` });
       } else {
         toast({ title: 'Failed to switch branch', variant: 'destructive' });
       }
@@ -182,9 +182,7 @@ export default function MuiBranches() {
       const response = await apiRequest("GET", "/api/branches");
       return response.json();
     },
-    refetchInterval: 5000,
     refetchOnWindowFocus: true,
-    refetchIntervalInBackground: true,
   });
 
   // Fetch employees - use all-branches endpoint for admin/manager, standard for employee
@@ -195,7 +193,6 @@ export default function MuiBranches() {
       const response = await apiRequest("GET", endpoint);
       return response.json();
     },
-    refetchInterval: 10000,
   });
 
   const branches: Branch[] = Array.isArray(branchesResponse?.branches) ? branchesResponse.branches : (Array.isArray(branchesResponse) ? branchesResponse : []);

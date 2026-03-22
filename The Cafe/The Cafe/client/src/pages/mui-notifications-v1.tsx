@@ -44,7 +44,7 @@ interface Notification {
   data?: any;
 }
 
-// ─── Notification type → visual mapping ────────────────────────
+// â”€â”€â”€ Notification type â†’ visual mapping â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; label: string }> = {
   shift_update:      { icon: <ScheduleIcon fontSize="small" />, color: '#3B82F6', label: 'Schedule' },
   shift_assigned:    { icon: <ScheduleIcon fontSize="small" />, color: '#3B82F6', label: 'Assigned' },
@@ -71,7 +71,7 @@ function getConfig(type: string) {
   return TYPE_CONFIG[type] || { icon: <InfoIcon fontSize="small" />, color: '#6B7280', label: 'General' };
 }
 
-// Manager "action required" types — these need the manager to do something
+// Manager "action required" types â€” these need the manager to do something
 const MANAGER_ACTION_TYPES = new Set([
   'trade_request', 'time_off',
 ]);
@@ -83,7 +83,7 @@ function getNavigatePath(type: string): string | null {
   return null;
 }
 
-// ─── Group by date ─────────────────────────────────────────────
+// â”€â”€â”€ Group by date â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function groupByDate(notifications: Notification[]): { label: string; items: Notification[] }[] {
   const groups: Record<string, Notification[]> = {};
   const order: string[] = [];
@@ -124,7 +124,6 @@ export default function MuiNotifications() {
       const r = await apiRequest("GET", "/api/notifications");
       return r.json();
     },
-    refetchInterval: 30000,
     refetchOnWindowFocus: true,
   });
 
@@ -143,7 +142,7 @@ export default function MuiNotifications() {
 
   const grouped = useMemo(() => groupByDate(visibleList), [visibleList]);
 
-  // ─── Mutations ────────────────────────────────────────────────
+  // â”€â”€â”€ Mutations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const markRead = useMutation({
     mutationFn: (id: string) => apiRequest("PATCH", `/api/notifications/${id}/read`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["/api/notifications"] }),
@@ -178,15 +177,15 @@ export default function MuiNotifications() {
 
   return (
     <Box sx={{ px: { xs: 2, sm: 3 }, py: 3 }}>
-      {/* ─── HEADER ──────────────────────────────────────────── */}
+      {/* â”€â”€â”€ HEADER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 3 }}>
         <Box>
           <Typography variant="h5" fontWeight={800} sx={{ color: isDark ? '#F5EDE4' : '#1F2937' }}>
             Notifications
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            {all.length === 0 ? 'No notifications yet' : unread.length > 0 ? `${unread.length} unread of ${all.length}` : `${all.length} notifications · All read`}
-            {isManagerRole && actionRequired.length > 0 && ` · ${actionRequired.length} need${actionRequired.length === 1 ? 's' : ''} action`}
+            {all.length === 0 ? 'No notifications yet' : unread.length > 0 ? `${unread.length} unread of ${all.length}` : `${all.length} notifications Â· All read`}
+            {isManagerRole && actionRequired.length > 0 && ` Â· ${actionRequired.length} need${actionRequired.length === 1 ? 's' : ''} action`}
           </Typography>
         </Box>
         <Stack direction="row" spacing={1}>
@@ -208,7 +207,7 @@ export default function MuiNotifications() {
         </Stack>
       </Stack>
 
-      {/* ─── TABS ────────────────────────────────────────────── */}
+      {/* â”€â”€â”€ TABS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Paper elevation={0} sx={{ borderRadius: 3, border: '1px solid', borderColor: isDark ? '#3D3228' : '#E5E7EB', mb: 2, overflow: 'hidden' }}>
         <Tabs
           value={tab}
@@ -246,7 +245,7 @@ export default function MuiNotifications() {
           )}
         </Tabs>
 
-        {/* ─── LIST ──────────────────────────────────────────── */}
+        {/* â”€â”€â”€ LIST â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <Box sx={{ p: { xs: 1.5, sm: 2 } }}>
           {isLoading ? (
             <Stack spacing={1.5}>
@@ -292,7 +291,7 @@ export default function MuiNotifications() {
   );
 }
 
-// ─── SINGLE NOTIFICATION ROW ────────────────────────────────────
+// â”€â”€â”€ SINGLE NOTIFICATION ROW â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function NotificationRow({
   notification: n, isExpanded, isManagerRole, isDark,
   onClick, onNavigate, onDelete, onMarkRead,
@@ -392,7 +391,7 @@ function NotificationRow({
         </Stack>
       </Stack>
 
-      {/* ─── Expanded Detail ───────────────────────────────── */}
+      {/* â”€â”€â”€ Expanded Detail â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Collapse in={isExpanded}>
         <Box sx={{ px: 2, pb: 2, pt: 0.5 }}>
           <Divider sx={{ mb: 1.5 }} />

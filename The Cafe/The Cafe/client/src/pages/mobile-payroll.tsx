@@ -71,7 +71,6 @@ export default function MobilePayroll() {
       const response = await apiRequest('GET', '/api/notifications');
       return response.json();
     },
-    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
   });
 
@@ -86,7 +85,6 @@ export default function MobilePayroll() {
       const response = await apiRequest('GET', '/api/payroll');
       return response.json();
     },
-    refetchInterval: 60000, // Poll every 60 seconds
     refetchOnWindowFocus: true,
   });
 
@@ -229,7 +227,7 @@ export default function MobilePayroll() {
             <div className="grid grid-cols-2 gap-6">
               <div className="text-center p-5 bg-emerald-50 dark:bg-emerald-950/30 rounded-xl">
                 <p className="text-3xl font-bold text-emerald-600">
-                  ₱{payrollEntries.reduce((sum, entry) =>
+                  â‚±{payrollEntries.reduce((sum, entry) =>
                     sum + (entry?.netPay ? parseFloat(String(entry.netPay)) : 0), 0).toLocaleString('en-PH', { minimumFractionDigits: 2 })}
                 </p>
                 <p className="text-base text-muted-foreground mt-2">Total Earned</p>
@@ -272,7 +270,7 @@ export default function MobilePayroll() {
                     <div>
                       <p className="text-lg font-bold">
                         {entry.periodStartDate && entry.periodEndDate
-                          ? `${format(new Date(entry.periodStartDate), "MMM d")} – ${format(new Date(entry.periodEndDate), "MMM d, yyyy")}`
+                          ? `${format(new Date(entry.periodStartDate), "MMM d")} â€“ ${format(new Date(entry.periodEndDate), "MMM d, yyyy")}`
                           : format(parseISO(entry.createdAt), "MMMM d, yyyy")}
                       </p>
                       <p className="text-base text-muted-foreground mt-1">
@@ -304,7 +302,7 @@ export default function MobilePayroll() {
                     <div className="p-4 bg-background rounded-xl">
                       <p className="text-base text-muted-foreground">Gross Pay</p>
                       <p className="text-2xl font-bold mt-1">
-                        ₱{entry?.grossPay ? parseFloat(String(entry.grossPay)).toLocaleString('en-PH', { minimumFractionDigits: 2 }) : '0'}
+                        â‚±{entry?.grossPay ? parseFloat(String(entry.grossPay)).toLocaleString('en-PH', { minimumFractionDigits: 2 }) : '0'}
                       </p>
                     </div>
                   </div>
@@ -313,7 +311,7 @@ export default function MobilePayroll() {
                     <div>
                       <p className="text-base text-muted-foreground">Net Pay</p>
                       <p className="text-3xl font-bold text-emerald-600">
-                        ₱{entry?.netPay ? parseFloat(String(entry.netPay)).toLocaleString('en-PH', { minimumFractionDigits: 2 }) : '0'}
+                        â‚±{entry?.netPay ? parseFloat(String(entry.netPay)).toLocaleString('en-PH', { minimumFractionDigits: 2 }) : '0'}
                       </p>
                     </div>
                     <div className="flex gap-3">

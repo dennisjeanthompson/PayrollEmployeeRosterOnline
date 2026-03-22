@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 export default function EmployeeStatus() {
   const { data: employeeStatus, isLoading } = useQuery<{ employeeStatus: any[] }>({
     queryKey: ["/api/dashboard/employee-status"],
-    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
   });
 

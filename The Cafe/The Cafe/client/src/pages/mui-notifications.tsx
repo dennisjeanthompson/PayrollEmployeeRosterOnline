@@ -45,7 +45,7 @@ interface Notification {
   data?: any;
 }
 
-// ─── Type config ────────────────────────────────────────────────
+// â”€â”€â”€ Type config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: string; label: string }> = {
   shift_update:      { icon: <ScheduleIcon sx={{ fontSize: 20 }} />, color: '#3B82F6', bg: '#EFF6FF', label: 'Schedule' },
   shift_assigned:    { icon: <ScheduleIcon sx={{ fontSize: 20 }} />, color: '#3B82F6', bg: '#EFF6FF', label: 'Assigned' },
@@ -124,7 +124,6 @@ export default function MuiNotifications() {
     queryKey: ["/api/notifications"],
     queryFn: async () => { const r = await apiRequest("GET", "/api/notifications"); return r.json(); },
     enabled: isAuthenticated,
-    refetchInterval: isAuthenticated ? 15000 : false,
     refetchOnWindowFocus: isAuthenticated,
   });
   const isLoading = isAuthenticated && isNotificationsLoading;
@@ -191,7 +190,7 @@ export default function MuiNotifications() {
 
   return (
     <Box sx={{ minHeight: '100vh', bgcolor: bg }}>
-      {/* ─── Header area ─────────────────────────────────────── */}
+      {/* â”€â”€â”€ Header area â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Box sx={{
         bgcolor: surface,
         borderBottom: `1px solid ${border}`,
@@ -222,8 +221,8 @@ export default function MuiNotifications() {
             </Stack>
             <Typography sx={{ color: txt2, fontSize: '0.82rem', fontWeight: 500, mt: 0.25 }}>
               {all.length === 0 ? 'No notifications yet' :
-                unread.length > 0 ? `${unread.length} unread of ${all.length} total` : `${all.length} notifications · All read`}
-              {isManagerRole && actionRequired.length > 0 && ` · ${actionRequired.length} need review`}
+                unread.length > 0 ? `${unread.length} unread of ${all.length} total` : `${all.length} notifications Â· All read`}
+              {isManagerRole && actionRequired.length > 0 && ` Â· ${actionRequired.length} need review`}
             </Typography>
           </Box>
 
@@ -246,7 +245,7 @@ export default function MuiNotifications() {
           )}
         </Stack>
 
-        {/* ─── Filter tabs ──────────────────────────────────── */}
+        {/* â”€â”€â”€ Filter tabs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
         <Stack direction="row" spacing={0}>
           {filterBtns.map(f => {
             const active = filter === f.id;
@@ -291,7 +290,7 @@ export default function MuiNotifications() {
         </Stack>
       </Box>
 
-      {/* ─── Content ─────────────────────────────────────────── */}
+      {/* â”€â”€â”€ Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, py: { xs: 2, sm: 3 } }}>
         {isLoading ? (
           <Stack spacing={1}>
@@ -375,7 +374,7 @@ export default function MuiNotifications() {
 }
 
 
-// ─── Notification Row ───────────────────────────────────────────
+// â”€â”€â”€ Notification Row â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function NotificationRow({
   notification: n, isExpanded, isManagerRole, isDark, isLast,
   surfaceAlt, border, txt1, txt2, txt3,
@@ -513,7 +512,7 @@ function NotificationRow({
         </Box>
       </Stack>
 
-      {/* ─── Expanded ──────────────────────────────────────── */}
+      {/* â”€â”€â”€ Expanded â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Collapse in={isExpanded}>
         <Box sx={{ mt: 2, ml: { xs: 0, sm: 6.5 } }}>
           {parsedData && (() => {

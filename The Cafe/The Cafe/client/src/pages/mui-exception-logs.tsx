@@ -21,9 +21,7 @@ import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import Chip from "@mui/material/Chip";
-import Grid from "@mui/material/Grid";
 import CircularProgress from "@mui/material/CircularProgress";
-import IconButton from "@mui/material/IconButton";
 
 // MUI Data Grid
 import { DataGrid, GridColDef } from '@mui/x-data-grid';
@@ -52,31 +50,21 @@ const exceptionTypes = [
 
 const getStatusColor = (status: string): "error" | "warning" | "success" | "default" | "info" => {
   switch (status) {
-    case "approved":
-      return "success";
-    case "rejected":
-      return "error";
-    case "pending":
-      return "warning";
-    case "employee_verified":
-      return "info";
-    default:
-      return "default";
+    case "approved": return "success";
+    case "rejected": return "error";
+    case "pending": return "warning";
+    case "employee_verified": return "info";
+    default: return "default";
   }
 };
 
 const getStatusIcon = (status: string) => {
   switch (status) {
-    case "approved":
-      return <CheckCircleIcon sx={{ fontSize: 18 }} />;
-    case "rejected":
-      return <CancelIcon sx={{ fontSize: 18 }} />;
-    case "pending":
-      return <AccessTimeIcon sx={{ fontSize: 18 }} />;
-    case "employee_verified":
-      return <CheckCircleIcon sx={{ fontSize: 18 }} />;
-    default:
-      return null;
+    case "approved": return <CheckCircleIcon sx={{ fontSize: 18 }} />;
+    case "rejected": return <CancelIcon sx={{ fontSize: 18 }} />;
+    case "pending": return <AccessTimeIcon sx={{ fontSize: 18 }} />;
+    case "employee_verified": return <CheckCircleIcon sx={{ fontSize: 18 }} />;
+    default: return undefined;
   }
 };
 
@@ -97,7 +85,8 @@ export default function MuiExceptionLogs() {
   const [openDialog, setOpenDialog] = useState(false);
   const [formData, setFormData] = useState({
     type: "overtime",
-    date: new Date() as Date | null,
+    startDate: new Date() as Date | null,
+    endDate: new Date() as Date | null,
     value: "",
     remarks: "",
   });
@@ -117,28 +106,21 @@ export default function MuiExceptionLogs() {
     mutationFn: async (data: typeof formData) => {
       const payload = {
         type: data.type,
-        date: data.date ? format(data.date, "yyyy-MM-dd") : "",
+        startDate: data.startDate ? format(data.startDate, "yyyy-MM-dd") : "",
+        endDate: data.endDate ? format(data.endDate, "yyyy-MM-dd") : "",
         value: Number(data.value),
         remarks: data.remarks,
       };
-
       const response = await apiRequest("POST", "/api/adjustment-logs/request", payload);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employee-adjustment-logs"] });
-      toast({
-        title: "Success",
-        description: "Exception request submitted successfully.",
-      });
+      toast({ title: "Success", description: "Exception request submitted successfully." });
       handleCloseDialog();
     },
     onError: (error: any) => {
-      toast({
-        title: "Submission Failed",
-        description: error.message || "Failed to submit exception request",
-        variant: "destructive",
-      });
+      toast({ title: "Submission Failed", description: error.message || "Failed to submit exception request", variant: "destructive" });
     },
   });
 
@@ -150,33 +132,23 @@ export default function MuiExceptionLogs() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employee-adjustment-logs"] });
-      toast({
-        title: "Verified",
-        description: "Exception log has been verified.",
-      });
+      toast({ title: "Verified", description: "Exception log has been verified." });
     },
     onError: (error: any) => {
-      toast({
-        title: "Verification Failed",
-        description: error.message || "Failed to verify exception",
-        variant: "destructive",
-      });
+      toast({ title: "Verification Failed", description: error.message || "Failed to verify exception", variant: "destructive" });
     },
   });
 
   const handleOpenDialog = () => setOpenDialog(true);
   const handleCloseDialog = () => {
     setOpenDialog(false);
-    setFormData({
-      type: "overtime",
-      date: new Date(),
-      value: "",
-      remarks: "",
-    });
+    setFormData({ type: "overtime", startDate: new Date(), endDate: new Date(), value: "", remarks: "" });
   };
 
   const validateForm = () => {
-    if (!formData.date) return "Date is required.";
+    if (!formData.startDate) return "Start Date is required.";
+    if (!formData.endDate) return "End Date is required.";
+    if (formData.endDate < formData.startDate) return "End Date cannot be before Start Date.";
     if (!formData.value || isNaN(Number(formData.value)) || Number(formData.value) <= 0) return "Please enter a valid numeric value.";
     if (!formData.remarks.trim()) return "Remarks are required.";
     return null;
@@ -186,35 +158,41 @@ export default function MuiExceptionLogs() {
     e.preventDefault();
     const error = validateForm();
     if (error) {
-      toast({
-        title: "Validation Error",
-        description: error,
-        variant: "destructive",
-      });
+      toast({ title: "Validation Error", description: error, variant: "destructive" });
       return;
     }
     submitMutation.mutate(formData);
   };
 
+  const tryFormatDate = (val: any) => {
+    try { return val ? format(new Date(val), "MMM d, yyyy") : "—"; } catch { return "—"; }
+  };
+
   const columns: GridColDef[] = [
-    { 
-      field: 'date', 
-      headerName: 'Date', 
+    {
+      field: 'startDate',
+      headerName: 'Start Date',
       width: 130,
-      renderCell: (params) => format(new Date(params.row.date), "MMM d, yyyy") 
+      renderCell: (params) => tryFormatDate(params.row.startDate),
     },
-    { 
-      field: 'type', 
-      headerName: 'Type', 
+    {
+      field: 'endDate',
+      headerName: 'End Date',
+      width: 130,
+      renderCell: (params) => tryFormatDate(params.row.endDate),
+    },
+    {
+      field: 'type',
+      headerName: 'Type',
       width: 180,
       renderCell: (params) => {
         const typeInfo = exceptionTypes.find(t => t.value === params.value);
         return typeInfo ? typeInfo.label : params.value;
       }
     },
-    { 
-      field: 'value', 
-      headerName: 'Value', 
+    {
+      field: 'value',
+      headerName: 'Value',
       width: 100,
       renderCell: (params) => {
         const isMins = ['late', 'undertime'].includes(params.row.type);
@@ -229,7 +207,7 @@ export default function MuiExceptionLogs() {
       width: 160,
       renderCell: (params) => (
         <Chip
-          icon={getStatusIcon(params.value) || undefined}
+          icon={getStatusIcon(params.value)}
           label={getStatusLabel(params.value)}
           color={getStatusColor(params.value)}
           size="small"
@@ -245,18 +223,17 @@ export default function MuiExceptionLogs() {
       renderCell: (params) => {
         const isPending = params.row.status === 'pending';
         const isManagerLogged = params.row.loggedBy !== currentUser?.id;
-        
         if (isPending && isManagerLogged) {
           return (
-             <Button
-                variant="contained"
-                size="small"
-                color="info"
-                onClick={() => verifyMutation.mutate(params.row.id)}
-                disabled={verifyMutation.isPending}
-             >
-                Verify
-             </Button>
+            <Button
+              variant="contained"
+              size="small"
+              color="info"
+              onClick={() => verifyMutation.mutate(params.row.id)}
+              disabled={verifyMutation.isPending}
+            >
+              Verify
+            </Button>
           );
         }
         return null;
@@ -268,12 +245,7 @@ export default function MuiExceptionLogs() {
     <Box>
       <Box sx={{ mb: 3, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <Typography variant="h6" fontWeight="bold">My Exception Logs</Typography>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleOpenDialog}
-        >
+        <Button variant="contained" color="primary" startIcon={<AddIcon />} onClick={handleOpenDialog}>
           Request Exception
         </Button>
       </Box>
@@ -288,7 +260,7 @@ export default function MuiExceptionLogs() {
               disableRowSelectionOnClick
               initialState={{
                 pagination: { paginationModel: { pageSize: 10 } },
-                sorting: { sortModel: [{ field: 'date', sort: 'desc' }] }
+                sorting: { sortModel: [{ field: 'startDate', sort: 'desc' }] }
               }}
               pageSizeOptions={[10, 25, 50]}
             />
@@ -309,20 +281,27 @@ export default function MuiExceptionLogs() {
                 onChange={(e) => setFormData({ ...formData, type: e.target.value })}
               >
                 {exceptionTypes.map((type) => (
-                  <MenuItem key={type.value} value={type.value}>
-                    {type.label}
-                  </MenuItem>
+                  <MenuItem key={type.value} value={type.value}>{type.label}</MenuItem>
                 ))}
               </Select>
             </FormControl>
 
             <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DatePicker
-                label="Date of Exception"
-                value={formData.date}
-                onChange={(newValue) => setFormData({ ...formData, date: newValue })}
-                slotProps={{ textField: { fullWidth: true, required: true } }}
-              />
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <DatePicker
+                  label="Start Date *"
+                  value={formData.startDate}
+                  onChange={(newValue) => setFormData({ ...formData, startDate: newValue })}
+                  slotProps={{ textField: { fullWidth: true, required: true } }}
+                />
+                <DatePicker
+                  label="End Date *"
+                  value={formData.endDate}
+                  minDate={formData.startDate || undefined}
+                  onChange={(newValue) => setFormData({ ...formData, endDate: newValue })}
+                  slotProps={{ textField: { fullWidth: true, required: true } }}
+                />
+              </Box>
             </LocalizationProvider>
 
             <TextField
@@ -350,9 +329,9 @@ export default function MuiExceptionLogs() {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleCloseDialog} color="inherit">Cancel</Button>
-          <Button 
-            onClick={handleSubmit} 
-            variant="contained" 
+          <Button
+            onClick={handleSubmit}
+            variant="contained"
             color="primary"
             disabled={submitMutation.isPending}
           >

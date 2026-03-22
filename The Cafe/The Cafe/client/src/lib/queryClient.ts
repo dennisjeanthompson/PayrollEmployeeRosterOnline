@@ -17,7 +17,7 @@ async function throwIfResNotOk(res: Response, skipBodyCheck: boolean = false) {
     
     const error = new Error(
       typeof errorData === 'object' 
-        ? errorData.message || 'An error occurred'
+        ? errorData.message || errorData.error || 'An error occurred'
         : errorData || res.statusText
     );
     
@@ -165,7 +165,7 @@ export const queryClient = new QueryClient({
       // PERFORMANCE: Disabled global refetch interval - individual queries set if needed
       refetchInterval: false,
       // Refetch when window regains focus for real-time feel
-      refetchOnWindowFocus: true,
+      refetchOnWindowFocus: false,
       // PERFORMANCE: Data considered fresh for 30 seconds (was 10s)
       staleTime: 30000,
       // Retry failed requests once

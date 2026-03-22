@@ -239,6 +239,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Mount API Routers
   app.use("/api/loans", requireAuth, loansRouter);
+  app.use(leaveCreditsRouter);
 
   // Setup endpoint (no auth required, only works if setup not complete)
   app.post("/api/setup", asyncHandler(async (req: Request, res: Response) => {
@@ -1284,17 +1285,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/adjustment-logs/request", requireAuth, asyncHandler(async (req, res) => {
     try {
       const userId = req.user!.id;
-      const { date, type, value, remarks } = req.body;
+      const { startDate, endDate, type, value, remarks } = req.body;
 
-      if (!date || !type || !value) {
-        return res.status(400).json({ message: "Missing required fields" });
+      if (!startDate || !endDate || !type || !value) {
+        return res.status(400).json({ message: "Missing required fields: startDate, endDate, type, value" });
       }
 
       const log = await storage.createAdjustmentLog({
         employeeId: userId,
-        branchId: req.user!.branchId!, // Ensure branchId is set
+        branchId: req.user!.branchId!,
         loggedBy: userId,
-        date: new Date(date),
+        startDate: new Date(startDate),
+        endDate: new Date(endDate),
         type,
         value: typeof value === 'number' ? value.toString() : value,
         remarks: remarks || "",
@@ -1852,13 +1854,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let sssLoan = 0;
         let pagibigLoan = 0;
         
+        const { db: payrollDb } = await import('./db');
+        const { loanRequests: loanReqSchema } = await import('../shared/schema');
+        const { eq: drizzleEq } = await import('drizzle-orm');
+
         for (const loan of activeLoans) {
           // If semi-monthly, split the monthly amortization evenly across the two cutoff periods
-          const deduction = Math.round(parseFloat(loan.monthlyAmortization) * periodFraction * 100) / 100;
+          let deduction = Math.round(parseFloat(loan.monthlyAmortization) * periodFraction * 100) / 100;
+          const remaining = parseFloat(loan.remainingBalance || "0");
+          
+          if (deduction > remaining && remaining > 0) {
+            deduction = remaining;
+          }
+
           if (loan.loanType === 'SSS') {
             sssLoan += deduction;
           } else if (loan.loanType === 'Pag-IBIG') {
             pagibigLoan += deduction;
+          }
+
+          if (deduction > 0) {
+            const newBalance = Math.max(0, remaining - deduction);
+            const newStatus = newBalance <= 0.01 ? 'completed' : loan.status;
+            
+            await payrollDb.update(loanReqSchema)
+              .set({ remainingBalance: newBalance.toFixed(2), status: newStatus })
+              .where(drizzleEq(loanReqSchema.id, loan.id));
           }
         }
 
@@ -4027,22 +4048,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Time off request not found" });
     }
 
-    // Deduct leave credits
-    try {
-      const startD = new Date(request.startDate);
-      const endD = new Date(request.endDate);
-      const daysToDeduct = Math.max(1, Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) + 1);
-      
-      await deductLeaveCredit(
-        request.userId,
-        employee.branchId,
-        request.type,
-        daysToDeduct,
-        startD.getFullYear()
-      );
-    } catch (deductionErr) {
-      console.error('Leave deduction error:', deductionErr);
+    // ─── Smart SIL Logic ─────────────────────────────────────────────────────
+    // Manager can pass `useSil: true` in the body to use SIL credits for the leave.
+    // If useSil is false or not provided, the leave is treated as LWOP (Leave Without Pay).
+    const useSil = req.body.useSil === true || req.body.useSil === 'true';
+    const startD = new Date(request.startDate);
+    const endD = new Date(request.endDate);
+    const daysToDeduct = Math.max(1, Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+    let isPaid = false;
+
+    if (useSil) {
+      try {
+        // 1. Try to deduct from the specific leave type balance first (vacation/sick)
+        const { db } = await import('./db');
+        const { leaveCredits } = await import('@shared/schema');
+        const { eq, and } = await import('drizzle-orm');
+
+        const specificBalance = await db.select().from(leaveCredits).where(
+          and(eq(leaveCredits.userId, request.userId), eq(leaveCredits.year, startD.getFullYear()), eq(leaveCredits.leaveType, request.type))
+        ).limit(1);
+
+        let deductedFrom: string | null = null;
+        if (specificBalance[0] && parseFloat(specificBalance[0].remainingCredits) > 0) {
+          deductedFrom = request.type;
+        } else {
+          // 2. Fall back to the SIL balance
+          const silBalance = await db.select().from(leaveCredits).where(
+            and(eq(leaveCredits.userId, request.userId), eq(leaveCredits.year, startD.getFullYear()), eq(leaveCredits.leaveType, 'sil'))
+          ).limit(1);
+          if (silBalance[0] && parseFloat(silBalance[0].remainingCredits) > 0) {
+            deductedFrom = 'sil';
+          }
+        }
+
+        if (deductedFrom) {
+          await deductLeaveCredit(request.userId, employee.branchId, deductedFrom, daysToDeduct, startD.getFullYear());
+          isPaid = true;
+        }
+      } catch (deductionErr) {
+        console.error('Smart SIL deduction error:', deductionErr);
+        // Non-blocking: leave isPaid = false if deduction fails
+      }
     }
+
+    // Mark the request as paid or unpaid based on the SIL result
+    await storage.updateTimeOffRequest(id, { isPaid } as any);
 
     // Sync with approvals table
     try {

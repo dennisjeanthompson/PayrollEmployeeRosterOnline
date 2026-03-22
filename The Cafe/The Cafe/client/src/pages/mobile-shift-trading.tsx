@@ -63,7 +63,6 @@ export default function MobileShiftTrading() {
       const response = await apiRequest('GET', '/api/shift-trades/available');
       return response.json();
     },
-    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
   });
 
@@ -74,7 +73,6 @@ export default function MobileShiftTrading() {
       const response = await apiRequest('GET', '/api/shift-trades');
       return response.json();
     },
-    refetchInterval: 30000, // Poll every 30 seconds as fallback (real-time via WebSocket)
     refetchOnWindowFocus: true,
   });
 
@@ -87,12 +85,12 @@ export default function MobileShiftTrading() {
       queryClient.invalidateQueries({ queryKey: ['mobile-shift-trades-my'] });
 
       toast({
-        title: "Request Sent! 🎉",
+        title: "Request Sent! ðŸŽ‰",
         description: "Your shift trade request has been sent for approval",
       });
     },
     onError: (error: any) => {
-      console.error("❌ Failed to take shift:", error);
+      console.error("âŒ Failed to take shift:", error);
       const message = error?.message || "Failed to take shift";
       toast({
         title: "Error",
@@ -115,7 +113,7 @@ export default function MobileShiftTrading() {
       });
     },
     onError: (error: any) => {
-      console.error("❌ Failed to cancel trade:", error);
+      console.error("âŒ Failed to cancel trade:", error);
       const message = error?.message || "Failed to cancel trade";
       toast({
         title: "Error",

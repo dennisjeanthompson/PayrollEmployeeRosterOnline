@@ -111,7 +111,6 @@ export default function MuiHolidayCalendar() {
       const res = await apiRequest("GET", `/api/holidays?year=${selectedYear}`);
       return res.json();
     },
-    refetchInterval: 10000,
     refetchOnWindowFocus: true,
   });
 
@@ -679,7 +678,7 @@ export default function MuiHolidayCalendar() {
                   </Typography>
                   {detailHoliday.isRecurring && (
                     <Typography variant="body2" color="text.secondary">
-                      🔁 Recurring annually
+                      ðŸ” Recurring annually
                     </Typography>
                   )}
                   {detailHoliday.notes && (

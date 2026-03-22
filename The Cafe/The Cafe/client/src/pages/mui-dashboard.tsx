@@ -106,31 +106,26 @@ export default function MuiDashboard() {
   const { data: approvals, isLoading: approvalsLoading } = useQuery<ApprovalsResponse>({
     queryKey: ["/api/approvals"],
     enabled: isManagerRole,
-    refetchInterval: 20000,
   });
 
   const { data: timeOffResponse, isLoading: timeOffLoading } = useQuery<TimeOffResponse>({
     queryKey: ["/api/time-off-requests"],
     enabled: isManagerRole,
-    refetchInterval: 20000,
   });
 
   const { data: shifts, isLoading: shiftsLoading } = useQuery<ShiftsResponse>({
     queryKey: ["/api/shifts/branch"],
     enabled: isManagerRole,
-    refetchInterval: 15000,
   });
 
   const { data: employeeShifts, isLoading: employeeShiftsLoading } = useQuery<ShiftsResponse>({
     queryKey: ["/api/shifts"],
     enabled: !isManagerRole,
-    refetchInterval: 15000,
   });
 
   const { data: teamHours, isLoading: teamHoursLoading } = useQuery<TeamHoursResponse>({
     queryKey: ["/api/hours/team-summary"],
     enabled: isManagerRole,
-    refetchInterval: 30000, // Keep slower polling for hours stats as they change frequently
   });
 
   // Filter today's shifts using Philippine timezone
@@ -585,14 +580,12 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   const { data: payrollData } = useQuery<any>({
     queryKey: ["/api/payroll/periods/current"],
     enabled: true,
-    refetchInterval: 60000,
   });
 
   // Fetch recent payroll history
   const { data: payrollHistory } = useQuery<any>({
     queryKey: ["/api/payroll"],
     enabled: true,
-    refetchInterval: 60000,
   });
 
   // Calculate this week's total scheduled hours
@@ -672,7 +665,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   return (
     <Box sx={{ pb: 10, bgcolor: 'background.default', minHeight: '100vh' }}>
 
-      {/* ── GREETING + PAYROLL CARD (top of page, no overlap) ─── */}
+      {/* â”€â”€ GREETING + PAYROLL CARD (top of page, no overlap) â”€â”€â”€ */}
       <Box sx={{ px: 2, pt: 2 }}>
         <Paper
           elevation={3}
@@ -702,7 +695,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                   {format(new Date(), 'EEEE, MMM d')}
                 </Typography>
                 <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>
-                  Hi, {currentUser?.firstName || 'Employee'} 👋
+                  Hi, {currentUser?.firstName || 'Employee'} ðŸ‘‹
                 </Typography>
                 <Typography variant="caption" sx={{ color: alpha('#fff', 0.7) }}>
                   {currentUser?.position || currentUser?.role || 'Team Member'}
@@ -710,7 +703,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
               </Box>
               <Chip
                 size="small"
-                label="● Online"
+                label="â— Online"
                 sx={{ bgcolor: alpha('#4ade80', 0.2), color: '#4ade80', fontWeight: 700, fontSize: '0.6rem', border: '1px solid rgba(74,222,128,0.3)' }}
               />
             </Stack>
@@ -725,7 +718,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 700 }}>
                   {currentPeriod
-                    ? `${format(new Date(currentPeriod.startDate), 'MMM d')} – ${format(new Date(currentPeriod.endDate), 'MMM d, yyyy')}`
+                    ? `${format(new Date(currentPeriod.startDate), 'MMM d')} â€“ ${format(new Date(currentPeriod.endDate), 'MMM d, yyyy')}`
                     : 'This Pay Period'}
                 </Typography>
               </Box>
@@ -744,7 +737,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
             <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
               <Typography variant="body2" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>Est. Net Pay</Typography>
               <Typography variant="h5" sx={{ fontWeight: 800, color: 'success.main', lineHeight: 1.3, mt: 0.5 }}>
-                {estNetPay > 0 ? `₱${Number(estNetPay).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : '--'}
+                {estNetPay > 0 ? `â‚±${Number(estNetPay).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : '--'}
               </Typography>
             </Box>
             <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
@@ -772,7 +765,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
       </Box>
 
 
-      {/* ── QUICK ACTIONS ────────────────────────────────── */}
+      {/* â”€â”€ QUICK ACTIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Box sx={{ px: 2, mt: 3, mb: 1 }}>
         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1 }}>
           Quick Access
@@ -820,7 +813,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
         </Paper>
       </Box>
 
-      {/* ── TODAY'S SHIFT ────────────────────────────────── */}
+      {/* â”€â”€ TODAY'S SHIFT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Box sx={{ px: 2, mt: 2.5 }}>
         <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1.5 }}>
           Today's Schedule
@@ -853,7 +846,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="body2" sx={{ fontWeight: 700 }}>{shift.position || 'Shift'}</Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {format(new Date(shift.startTime), 'h:mm a')} – {format(new Date(shift.endTime), 'h:mm a')}
+                    {format(new Date(shift.startTime), 'h:mm a')} â€“ {format(new Date(shift.endTime), 'h:mm a')}
                   </Typography>
                 </Box>
                 <Chip size="small" label={shift.status === 'completed' ? 'Done' : 'Today'} color={shift.status === 'completed' ? 'success' : 'primary'} sx={{ fontSize: '0.6rem', height: 22, fontWeight: 700 }} />
@@ -863,12 +856,12 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
         ) : (
           <Paper variant="outlined" sx={{ borderRadius: 2.5, py: 3, textAlign: 'center' }}>
             <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>No shifts today</Typography>
-            <Typography variant="caption" color="text.disabled">Enjoy your day off! 🎉</Typography>
+            <Typography variant="caption" color="text.disabled">Enjoy your day off! ðŸŽ‰</Typography>
           </Paper>
         )}
       </Box>
 
-      {/* ── UPCOMING SHIFTS ──────────────────────────────── */}
+      {/* â”€â”€ UPCOMING SHIFTS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {upcomingShifts.length > 0 && (
         <Box sx={{ px: 2, mt: 2.5 }}>
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
@@ -898,7 +891,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{shift.position || 'Shift'}</Typography>
                   <Typography variant="caption" color="text.secondary" noWrap>
-                    {format(new Date(shift.startTime), 'EEE')} · {format(new Date(shift.startTime), 'h:mm a')} – {format(new Date(shift.endTime), 'h:mm a')}
+                    {format(new Date(shift.startTime), 'EEE')} Â· {format(new Date(shift.startTime), 'h:mm a')} â€“ {format(new Date(shift.endTime), 'h:mm a')}
                   </Typography>
                 </Box>
                 <ArrowRightIcon sx={{ color: 'text.disabled', fontSize: 18 }} />

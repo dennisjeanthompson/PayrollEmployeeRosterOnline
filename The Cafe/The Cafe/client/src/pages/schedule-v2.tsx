@@ -1,10 +1,10 @@
 /**
- * Schedule V2 — Clean, separated UI architecture
+ * Schedule V2 â€” Clean, separated UI architecture
  * 
  * Key principles:
  * 1. Schedule grid shows ONLY confirmed shifts (no pending items cluttering)
  * 2. Requests/trades live in a separate panel (slide-out drawer)
- * 3. Simple toolbar with week navigation — no 12-button chaos
+ * 3. Simple toolbar with week navigation â€” no 12-button chaos
  * 4. Weekly grid for managers, personal list for employees
  * 5. Mobile-first: auto-switches to card layout
  * 
@@ -83,7 +83,7 @@ export default function ScheduleV2() {
   const [timeOffForm, setTimeOffForm] = useState({ type: 'vacation', startDate: new Date() as Date | null, endDate: new Date() as Date | null, reason: '' });
   const [tradeForm, setTradeForm] = useState({ shiftId: '', targetUserId: '', reason: '' });
 
-  // Real-time updates — refresh calendar data on any schedule/request event
+  // Real-time updates â€” refresh calendar data on any schedule/request event
   useRealtime({
     enabled: true,
     queryKeys: ['shifts', 'time-off-requests', 'shift-trades', 'employees', 'notifications'],
@@ -124,14 +124,13 @@ export default function ScheduleV2() {
     },
   });
 
-  // ─── DATA QUERIES ───────────────────────────────────────────────
+  // â”€â”€â”€ DATA QUERIES â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const { data: shiftsData, isLoading: shiftsLoading } = useQuery<{ shifts: Shift[] }>({
     queryKey: ['shifts', 'branch'],
     queryFn: async () => {
       const res = await apiRequest('GET', '/api/shifts/branch');
       return res.json();
     },
-    refetchInterval: 15000,
   });
 
   const { data: employeesData, isLoading: employeesLoading } = useQuery<{ employees: Employee[] }>({
@@ -158,7 +157,6 @@ export default function ScheduleV2() {
       const res = await apiRequest('GET', '/api/time-off-requests');
       return res.json();
     },
-    refetchInterval: 15000,
   });
 
   const { data: tradesData } = useQuery<{ trades: ShiftTrade[] }>({
@@ -167,7 +165,6 @@ export default function ScheduleV2() {
       const res = await apiRequest('GET', '/api/shift-trades');
       return res.json();
     },
-    refetchInterval: 15000,
   });
 
   // Normalize data
@@ -198,7 +195,7 @@ export default function ScheduleV2() {
       .reduce((sum, s) => sum + differenceInHours(new Date(s.endTime), new Date(s.startTime)), 0);
   }, [shifts, weekStart]);
 
-  // ─── MUTATIONS ──────────────────────────────────────────────────
+  // â”€â”€â”€ MUTATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const createShiftMutation = useMutation({
     mutationFn: async (payload: { userId: string; startTime: string; endTime: string; branchId: string; position: string; notes?: string }) => {
       const res = await apiRequest('POST', '/api/shifts', payload);
@@ -281,9 +278,9 @@ export default function ScheduleV2() {
       queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       if (variables.status === 'approved') {
-        toast.success('Time-off approved — employee notified');
+        toast.success('Time-off approved â€” employee notified');
       } else {
-        toast.info('Time-off rejected — employee notified');
+        toast.info('Time-off rejected â€” employee notified');
       }
     },
     onError: (err: Error) => toast.error(err.message),
@@ -313,7 +310,7 @@ export default function ScheduleV2() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['shift-trades'] });
       if (variables.status === 'accepted') {
-        toast.success('Trade accepted — awaiting manager approval');
+        toast.success('Trade accepted â€” awaiting manager approval');
       } else {
         toast.info('Trade declined');
       }
@@ -332,9 +329,9 @@ export default function ScheduleV2() {
       queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       if (variables.status === 'approved') {
-        toast.success('Shift trade approved — both employees notified');
+        toast.success('Shift trade approved â€” both employees notified');
       } else {
-        toast.info('Shift trade rejected — requester notified');
+        toast.info('Shift trade rejected â€” requester notified');
       }
     },
     onError: (err: Error) => toast.error(err.message),
@@ -367,7 +364,7 @@ export default function ScheduleV2() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // ─── HANDLERS ───────────────────────────────────────────────────
+  // â”€â”€â”€ HANDLERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const handleCreateShift = useCallback((employeeId: string, date: Date) => {
     const start = setMinutes(setHours(date, 8), 0);
     const end = setMinutes(setHours(date, 16), 0);
@@ -399,7 +396,7 @@ export default function ScheduleV2() {
     } else if (direction === 'prev') {
       setWeekStart(prev => {
         const newStart = subWeeks(prev, 1);
-        // Keep day view in sync — move selected day to the same weekday in the new week
+        // Keep day view in sync â€” move selected day to the same weekday in the new week
         setSelectedDay(current => {
           const dayOfWeek = current.getDay() === 0 ? 6 : current.getDay() - 1; // Mon=0
           return addDays(newStart, dayOfWeek);
@@ -418,7 +415,7 @@ export default function ScheduleV2() {
     }
   }, []);
 
-  // ─── LOADING ────────────────────────────────────────────────────
+  // â”€â”€â”€ LOADING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (shiftsLoading || employeesLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
@@ -431,7 +428,7 @@ export default function ScheduleV2() {
 
   return (
     <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: isDark ? '#1C1410' : '#FBF8F4' }}>
-      {/* ─── TOOLBAR ─────────────────────────────────────────────── */}
+      {/* â”€â”€â”€ TOOLBAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Paper
         elevation={0}
         sx={{
@@ -447,7 +444,7 @@ export default function ScheduleV2() {
           Schedule
         </Typography>
 
-        {/* Pending requests badge — opens drawer */}
+        {/* Pending requests badge â€” opens drawer */}
         <Tooltip title={`${pendingCount} pending requests`}>
           <IconButton onClick={() => setDrawerOpen(true)} sx={{ position: 'relative' }}>
             <Badge badgeContent={pendingCount} color="warning" max={99}>
@@ -474,7 +471,7 @@ export default function ScheduleV2() {
         )}
       </Paper>
 
-      {/* ─── NAVIGATION BAR ──────────────────────────────────────── */}
+      {/* â”€â”€â”€ NAVIGATION BAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Box sx={{
         px: { xs: 2, sm: 3 }, py: 1.5,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5,
@@ -493,7 +490,7 @@ export default function ScheduleV2() {
           </Box>
 
           <Typography variant="body2" fontWeight={800} sx={{ color: isDark ? '#F5EDE4' : '#3C2415', whiteSpace: 'nowrap', fontSize: { xs: '0.85rem', sm: '1rem' } }}>
-            {format(weekStart, 'MMM d')} – {format(weekEndDate, 'MMM d, yyyy')}
+            {format(weekStart, 'MMM d')} â€“ {format(weekEndDate, 'MMM d, yyyy')}
           </Typography>
 
           <Chip label={`${weeklyTotalHours}h total`} size="small" variant="filled" color="default" sx={{ height: 24, fontSize: '0.7rem', fontWeight: 700, borderRadius: 2 }} />
@@ -560,7 +557,7 @@ export default function ScheduleV2() {
         </Box>
       </Box>
 
-      {/* ─── ROLE COLOR LEGEND ───────────────────────────────────── */}
+      {/* â”€â”€â”€ ROLE COLOR LEGEND â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isManager && (
         <Box sx={{ px: { xs: 2, sm: 3 }, py: 0.75, display: 'flex', gap: 0.5, flexWrap: 'wrap', borderBottom: '1px solid', borderColor: isDark ? '#3D3228' : '#E8E0D4' }}>
           {getUniqueRoleColors(employees).map(rc => (
@@ -572,7 +569,7 @@ export default function ScheduleV2() {
         </Box>
       )}
 
-      {/* ─── MAIN CONTENT ────────────────────────────────────────── */}
+      {/* â”€â”€â”€ MAIN CONTENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1.5, sm: 3 } }}>
         {viewMode === 'week' ? (
           isManager ? (
@@ -633,7 +630,7 @@ export default function ScheduleV2() {
         )}
       </Box>
 
-      {/* ─── MOBILE FAB: Quick Actions ───────────────────────────── */}
+      {/* â”€â”€â”€ MOBILE FAB: Quick Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       {isMobile && (
         <Box sx={{
           position: 'fixed', bottom: 80, right: 16, display: 'flex', flexDirection: 'column', gap: 1, zIndex: 1200,
@@ -671,7 +668,7 @@ export default function ScheduleV2() {
         </Box>
       )}
 
-      {/* ─── REQUESTS DRAWER ─────────────────────────────────────── */}
+      {/* â”€â”€â”€ REQUESTS DRAWER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Drawer
         anchor="right"
         open={drawerOpen}
@@ -707,7 +704,7 @@ export default function ScheduleV2() {
         />
       </Drawer>
 
-      {/* ─── CREATE SHIFT MODAL ──────────────────────────────────── */}
+      {/* â”€â”€â”€ CREATE SHIFT MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Dialog open={createModalOpen} onClose={() => setCreateModalOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Create Shift</DialogTitle>
         <DialogContent>
@@ -717,7 +714,7 @@ export default function ScheduleV2() {
               <Select value={newShift.employeeId} label="Employee" onChange={e => setNewShift(p => ({ ...p, employeeId: e.target.value }))}>
                 {employees.map(emp => (
                   <MenuItem key={emp.id} value={emp.id}>
-                    {emp.firstName} {emp.lastName} {emp.position && `· ${emp.position}`}
+                    {emp.firstName} {emp.lastName} {emp.position && `Â· ${emp.position}`}
                   </MenuItem>
                 ))}
               </Select>
@@ -764,7 +761,7 @@ export default function ScheduleV2() {
         </DialogActions>
       </Dialog>
 
-      {/* ─── EDIT SHIFT MODAL ────────────────────────────────────── */}
+      {/* â”€â”€â”€ EDIT SHIFT MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Dialog open={editModalOpen} onClose={() => setEditModalOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Edit Shift</DialogTitle>
         <DialogContent>
@@ -823,7 +820,7 @@ export default function ScheduleV2() {
         </DialogActions>
       </Dialog>
 
-      {/* ─── DELETE CONFIRM ──────────────────────────────────────── */}
+      {/* â”€â”€â”€ DELETE CONFIRM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Delete Shift?</DialogTitle>
         <DialogContent><Typography>This action cannot be undone.</Typography></DialogContent>
@@ -836,7 +833,7 @@ export default function ScheduleV2() {
         </DialogActions>
       </Dialog>
 
-      {/* ─── TIME-OFF MODAL ──────────────────────────────────────── */}
+      {/* â”€â”€â”€ TIME-OFF MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Dialog open={timeOffModalOpen} onClose={() => setTimeOffModalOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Request Time Off</DialogTitle>
         <DialogContent>
@@ -886,7 +883,7 @@ export default function ScheduleV2() {
         </DialogActions>
       </Dialog>
 
-      {/* ─── SHIFT TRADE MODAL ───────────────────────────────────── */}
+      {/* â”€â”€â”€ SHIFT TRADE MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Dialog open={tradeModalOpen} onClose={() => setTradeModalOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Request Shift Trade</DialogTitle>
         <DialogContent>
@@ -898,7 +895,7 @@ export default function ScheduleV2() {
                   .filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date())
                   .map(s => (
                     <MenuItem key={s.id} value={s.id}>
-                      {format(new Date(s.startTime), 'MMM d, h:mm a')} – {format(new Date(s.endTime), 'h:mm a')} {s.position && `(${s.position})`}
+                      {format(new Date(s.startTime), 'MMM d, h:mm a')} â€“ {format(new Date(s.endTime), 'h:mm a')} {s.position && `(${s.position})`}
                     </MenuItem>
                   ))}
               </Select>
@@ -908,7 +905,7 @@ export default function ScheduleV2() {
               <Select value={tradeForm.targetUserId} label="Trade With" onChange={e => setTradeForm(p => ({ ...p, targetUserId: e.target.value }))}>
                 <MenuItem value=""><em>Open to anyone</em></MenuItem>
                 {employees.filter(e => e.id !== currentUser?.id).map(e => (
-                  <MenuItem key={e.id} value={e.id}>{e.firstName} {e.lastName} {e.position && `· ${e.position}`}</MenuItem>
+                  <MenuItem key={e.id} value={e.id}>{e.firstName} {e.lastName} {e.position && `Â· ${e.position}`}</MenuItem>
                 ))}
               </Select>
             </FormControl>

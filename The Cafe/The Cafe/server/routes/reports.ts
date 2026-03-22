@@ -572,6 +572,75 @@ router.get("/api/reports/summary", requireAuth, requireManagerRole, async (req, 
   }
 });
 
+// ─── Remittance Report (For Government PRN Generation) ──────────────────────
+router.get("/api/reports/remittance", requireAuth, requireManagerRole, async (req, res) => {
+  try {
+    const branchId = req.user!.branchId;
+    const { month, year } = req.query;
+
+    const now = new Date();
+    const targetMonth = month ? parseInt(month as string) - 1 : now.getMonth();
+    const targetYear = year ? parseInt(year as string) : now.getFullYear();
+
+    if (isNaN(targetMonth) || isNaN(targetYear) || targetMonth < 0 || targetMonth > 11) {
+      return res.status(400).json({ message: "Invalid month or year" });
+    }
+
+    const startDate = new Date(targetYear, targetMonth, 1);
+    const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
+
+    const employees = await storage.getUsersByBranch(branchId);
+    const allPeriods = await storage.getPayrollPeriodsByBranch(branchId);
+    
+    const monthPeriods = allPeriods.filter((p) => {
+      const periodEnd = new Date(p.endDate);
+      const periodStart = new Date(p.startDate);
+      return periodEnd >= startDate && periodStart <= endDate;
+    });
+
+    const employeeRemittances: Record<string, any> = {};
+
+    for (const employee of employees) {
+      employeeRemittances[employee.id] = {
+        employeeName: `${employee.firstName} ${employee.lastName}`,
+        sssContribution: 0,
+        sssLoan: 0,
+        philHealthContribution: 0,
+        pagibigContribution: 0,
+        pagibigLoan: 0,
+      };
+    }
+
+    for (const period of monthPeriods) {
+      const entries = await storage.getPayrollEntriesByPeriod(period.id);
+      for (const entry of entries) {
+        if (!employeeRemittances[entry.userId]) continue;
+        
+        let sssC = parseFloat(String(entry.sssContribution ?? "0")) || 0;
+        let phC = parseFloat(String(entry.philHealthContribution ?? "0")) || 0;
+        let pagC = parseFloat(String(entry.pagibigContribution ?? "0")) || 0;
+        let sssL = parseFloat(String(entry.sssLoan ?? "0")) || 0;
+        let pagL = parseFloat(String(entry.pagibigLoan ?? "0")) || 0;
+        
+        employeeRemittances[entry.userId].sssContribution += sssC;
+        employeeRemittances[entry.userId].philHealthContribution += phC;
+        employeeRemittances[entry.userId].pagibigContribution += pagC;
+        employeeRemittances[entry.userId].sssLoan += sssL;
+        employeeRemittances[entry.userId].pagibigLoan += pagL;
+      }
+    }
+
+    const activeRemittances = Object.values(employeeRemittances).filter(r => 
+      r.sssContribution > 0 || r.sssLoan > 0 || r.philHealthContribution > 0 || r.pagibigContribution > 0 || r.pagibigLoan > 0
+    );
+
+    res.json(activeRemittances);
+  } catch (error) {
+    console.error("Error fetching remittances:", error);
+    res.status(500).json({ message: "Failed to fetch remittances" });
+  }
+});
+
 // ─── Debug endpoint to inspect raw payroll entry data ──────────────────────
 router.get("/api/reports/debug", requireAuth, requireManagerRole, async (req, res) => {
   try {

@@ -108,7 +108,11 @@ export function capitalizeFirstLetter(str: string | null | undefined): string {
 }
 
 // Safe initials generation - prevents errors on undefined names
-export function getInitials(firstName: string | null | undefined, lastName: string | null | undefined): string {
+export function getInitials(firstName?: string | null, lastName?: string | null, username?: string | null): string {
+  if (!firstName && !lastName) {
+    if (username) return username.charAt(0).toUpperCase();
+    return "U";
+  }
   const first = firstName?.charAt(0)?.toUpperCase() || "";
   const last = lastName?.charAt(0)?.toUpperCase() || "";
   return first + last;

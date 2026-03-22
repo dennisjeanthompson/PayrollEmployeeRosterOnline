@@ -263,7 +263,7 @@ export default function MuiThirteenthMonth() {
         </Grid>
 
         {/* Data Grid */}
-        <Paper elevation={0} sx={{ borderRadius: 3, overflow: "hidden" }}>
+        <Paper elevation={0} sx={{ height: 600, width: '100%', borderRadius: 3, overflow: "hidden" }}>
           {summaryData.length > 0 ? (
             <DataGrid
               rows={summaryData.map(d => ({ ...d, id: d.userId }))}

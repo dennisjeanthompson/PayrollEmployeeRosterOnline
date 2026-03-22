@@ -36,6 +36,7 @@ export default function MobileLoans() {
     loanType: 'SSS',
     referenceNumber: '',
     accountNumber: '',
+    totalAmount: '',
     monthlyAmortization: '',
     deductionStartDate: '',
     proofFileUrl: ''
@@ -67,6 +68,7 @@ export default function MobileLoans() {
       loanType: 'SSS',
       referenceNumber: '',
       accountNumber: '',
+      totalAmount: '',
       monthlyAmortization: '',
       deductionStartDate: '',
       proofFileUrl: ''
@@ -124,6 +126,7 @@ export default function MobileLoans() {
         loanType: formData.loanType,
         referenceNumber: formData.referenceNumber,
         accountNumber: formData.accountNumber,
+        totalAmount: formData.totalAmount,
         monthlyAmortization: formData.monthlyAmortization,
         deductionStartDate: new Date(formData.deductionStartDate).toISOString(),
         proofFileUrl: fileUrl
@@ -195,6 +198,10 @@ export default function MobileLoans() {
                     <Typography variant="body2" fontWeight={500}>{loan.accountNumber}</Typography>
                   </Box>
                   <Box>
+                    <Typography variant="caption" color="text.secondary" display="block">Remaining Bal.</Typography>
+                    <Typography variant="body2" fontWeight={500} color="error.main">₱{Number(loan.remainingBalance).toFixed(2)}</Typography>
+                  </Box>
+                  <Box>
                     <Typography variant="caption" color="text.secondary" display="block">Monthly Amort.</Typography>
                     <Typography variant="body2" fontWeight={500} color="primary.main">₱{Number(loan.monthlyAmortization).toFixed(2)}</Typography>
                   </Box>
@@ -245,6 +252,16 @@ export default function MobileLoans() {
               required
               value={formData.accountNumber}
               onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
+            />
+
+            <TextField
+              label="Total Approved Loan Amount (₱)"
+              type="number"
+              fullWidth
+              required
+              inputProps={{ min: "1", step: "0.01" }}
+              value={formData.totalAmount}
+              onChange={(e) => setFormData({ ...formData, totalAmount: e.target.value })}
             />
 
             <TextField
