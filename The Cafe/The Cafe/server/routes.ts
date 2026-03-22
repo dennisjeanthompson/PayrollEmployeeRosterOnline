@@ -1291,7 +1291,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const log = await storage.createAdjustmentLog({
-        id: crypto.randomUUID(), // Assume there's an import for this or dbStorage handles if we omit
         employeeId: userId,
         branchId: req.user!.branchId!, // Ensure branchId is set
         loggedBy: userId,

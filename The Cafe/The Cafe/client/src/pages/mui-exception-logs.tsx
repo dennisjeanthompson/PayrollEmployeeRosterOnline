@@ -229,7 +229,7 @@ export default function MuiExceptionLogs() {
       width: 160,
       renderCell: (params) => (
         <Chip
-          icon={getStatusIcon(params.value)}
+          icon={getStatusIcon(params.value) || undefined}
           label={getStatusLabel(params.value)}
           color={getStatusColor(params.value)}
           size="small"
