@@ -15,12 +15,12 @@ interface ThemeProviderProps {
   defaultTheme?: Theme;
 }
 
-export function ThemeProvider({ children, defaultTheme = "dark" }: ThemeProviderProps) {
+export function ThemeProvider({ children, defaultTheme = "light" }: ThemeProviderProps) {
   const [theme, setThemeState] = useState<Theme>(() => {
     if (typeof window !== "undefined") {
       const stored = localStorage.getItem("theme");
       if (stored === "light" || stored === "dark") return stored;
-      // Default to dark mode (2025 SaaS standard)
+      // Default to light mode as requested
       return defaultTheme;
     }
     return defaultTheme;
@@ -56,7 +56,7 @@ export function useTheme() {
     // Return a safe fallback - should never happen if properly wrapped
     // This is a static fallback that doesn't violate hooks rules
     return {
-      theme: "dark" as Theme,
+      theme: "light" as Theme,
       setTheme: () => {},
       toggleTheme: () => {},
     };

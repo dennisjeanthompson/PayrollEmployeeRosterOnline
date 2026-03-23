@@ -1273,6 +1273,8 @@ export default function MuiPayrollManagement() {
                               ? `${format(new Date(log.startDate), "MMM d, yy")} - ${format(new Date(log.endDate), "MMM d, yy")}`
                               : log.startDate
                               ? format(new Date(log.startDate), "MMM d, yyyy")
+                              : log.createdAt 
+                              ? format(new Date(log.createdAt), "MMM d, yyyy") 
                               : "—"}
                           </Typography>
                         </TableCell>

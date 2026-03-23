@@ -579,6 +579,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Fetches fresh data from the DB so profile updates (TIN, email, etc.) are always current after refresh
   app.get("/api/auth/status", asyncHandler(async (req: Request, res: Response) => {
     try {
+      const isSetupComplete = await storage.isSetupComplete();
+      
       if (req.session?.user?.id) {
         console.log(`✅ [AUTH STATUS] Session found for user: ${req.session.user.username}`);
         // Fetch fresh data from DB to avoid returning stale session snapshot
@@ -588,21 +590,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
             const { password: _, ...userWithoutPassword } = freshUser;
             res.json({ 
               authenticated: true, 
+              isSetupComplete,
               user: { ...userWithoutPassword, branchId: req.session.user.branchId || userWithoutPassword.branchId }
             });
           } else {
             // User no longer exists in DB — session is stale
-            res.json({ authenticated: false, user: null });
+            res.json({ authenticated: false, isSetupComplete, user: null });
           }
         } catch (dbErr) {
           // DB error: fall back to session data rather than logging user out
           console.warn('[AUTH STATUS] DB fetch failed, falling back to session:', dbErr);
-          res.json({ authenticated: true, user: req.session.user });
+          res.json({ authenticated: true, isSetupComplete, user: req.session.user });
         }
       } else {
         console.log(`⚠️  [AUTH STATUS] No session found`);
         res.json({ 
           authenticated: false, 
+          isSetupComplete,
           user: null 
         });
       }
@@ -610,6 +614,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('❌ [AUTH STATUS] Error:', error);
       res.json({ 
         authenticated: false, 
+        isSetupComplete: false,
         user: null 
       });
     }
@@ -1180,14 +1185,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // ===== ADJUSTMENT LOGS (Manual OT/Lateness/Exception Logging) =====
   
   // Create adjustment log (Manager only)
-  app.post("/api/adjustment-logs", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+  app.post("/api/adjustment-logs", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { employeeId, date, type, value, remarks } = req.body;
-      const branchId = req.user!.branchId;
       const loggedBy = req.user!.id;
 
       if (!employeeId || !date || !type || !value) {
         return res.status(400).json({ message: "Employee, date, type, and value are required" });
+      }
+
+      // Fetch employee to guarantee correct branchId assignment
+      const employee = await storage.getUser(employeeId);
+      if (!employee) {
+        return res.status(404).json({ message: "Employee not found" });
+      }
+      
+      const branchId = employee.branchId;
+      if (!branchId) {
+        return res.status(400).json({ message: "Target employee does not belong to a valid branch" });
       }
 
       // Validate type
@@ -1199,6 +1214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const log = await storage.createAdjustmentLog({
         employeeId,
         loggedBy,
+        branchId, // Guaranteed non-null from employee record
         startDate: new Date(date),
         endDate: new Date(date),
         type,

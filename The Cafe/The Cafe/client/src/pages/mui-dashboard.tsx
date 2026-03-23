@@ -1,6 +1,6 @@
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { isManager, getCurrentUser } from "@/lib/auth";
+import { isManager, isAdmin, getCurrentUser } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
@@ -81,6 +81,7 @@ interface ApprovalsResponse {
 
 export default function MuiDashboard() {
   const isManagerRole = isManager();
+  const isAdminRole = isAdmin();
   const currentUser = getCurrentUser();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -179,7 +180,9 @@ export default function MuiDashboard() {
 
   return (
     <Box sx={{ minHeight: "100vh", bgcolor: "background.default", p: isManagerRole ? 3 : 0 }}>
-      {isManagerRole ? (
+      {isAdminRole ? (
+        <AdminDashboard currentUser={currentUser} teamHours={teamHours} teamHoursLoading={teamHoursLoading} todayShifts={todayShifts} shiftsLoading={shiftsLoading} />
+      ) : isManagerRole ? (
         <ManagerDashboard
           currentUser={currentUser}
           teamHours={teamHours}
@@ -202,6 +205,68 @@ export default function MuiDashboard() {
         />
       )}
     </Box>
+  );
+}
+
+// Admin Dashboard Component
+import MuiBranches from "./mui-branches";
+
+function AdminDashboard({ currentUser }: any) {
+  const theme = useTheme();
+  return (
+    <Stack spacing={3} sx={{ width: "100%", maxWidth: "none" }}>
+      <Paper
+        elevation={0}
+        sx={{
+          position: "relative",
+          overflow: "hidden",
+          borderRadius: 4,
+          background: `linear-gradient(135deg, ${alpha(theme.palette.success.main, 0.1)} 0%, ${alpha(theme.palette.background.paper, 0.4)} 100%)`,
+          backdropFilter: "blur(10px)",
+          border: `1px solid ${alpha(theme.palette.success.main, 0.15)}`,
+          p: { xs: 2.5, md: 3 },
+        }}
+      >
+        <Box sx={{ position: "relative", zIndex: 1 }}>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+            <Chip
+              size="small"
+              icon={<VerifiedIcon sx={{ fontSize: 16 }} />}
+              label="System Administrator"
+              sx={{
+                bgcolor: alpha(theme.palette.success.main, 0.1),
+                color: "success.main",
+                fontWeight: 600,
+              }}
+            />
+          </Stack>
+          <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5, letterSpacing: "-0.02em" }}>
+            Welcome, {currentUser?.firstName || "Admin"}
+          </Typography>
+          <Typography color="text.secondary" sx={{ fontSize: "1rem", maxWidth: 800, mb: 3 }}>
+            As a System Administrator, you have bird's-eye access to all locations. Use the branch switcher in the top navigation menu to view data for specific branches, or access reports below.
+          </Typography>
+
+          <Stack direction="row" spacing={2}>
+            <Link href="/reports">
+              <Button
+                variant="outlined"
+                color="success"
+                startIcon={<AnalyticsIcon />}
+                sx={{ px: 3, py: 1.5, borderRadius: 2, fontWeight: 600, borderWidth: 2, '&:hover': { borderWidth: 2 } }}
+              >
+                Payroll Analytics
+              </Button>
+            </Link>
+          </Stack>
+        </Box>
+      </Paper>
+
+      {/* Embedded Branches Management */}
+      <Box sx={{ mt: 2 }}>
+        <MuiBranches isEmbedded={true} />
+      </Box>
+    </Stack>
   );
 }
 

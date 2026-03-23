@@ -579,27 +579,20 @@ function App() {
   const checkAuth = useCallback(async () => {
     setIsLoading(true);
     try {
-      const setupResponse = await apiRequest("GET", "/api/setup/status");
-      const setupData = await setupResponse.json();
-      setSetupComplete(setupData.isSetupComplete);
+      const authResponse = await apiRequest("GET", "/api/auth/status");
+      const authData = await authResponse.json();
+      
+      setSetupComplete(authData.isSetupComplete);
 
-      if (setupData.isSetupComplete) {
-        try {
-          const authResponse = await apiRequest("GET", "/api/auth/status");
-          const authData = await authResponse.json();
-          if (authData.authenticated && authData.user) {
-            setAuthState({ user: authData.user, isAuthenticated: true });
-          } else {
-            setAuthState({ user: null, isAuthenticated: false });
-          }
-        } catch (error) {
-          console.warn("Auth status check failed:", error);
-          setAuthState({ user: null, isAuthenticated: false });
-        }
+      if (authData.authenticated && authData.user) {
+        setAuthState({ user: authData.user, isAuthenticated: true });
+      } else {
+        setAuthState({ user: null, isAuthenticated: false });
       }
     } catch (error) {
-      console.error("Setup check error:", error);
+      console.warn("Auth & Setup status check failed:", error);
       setSetupComplete(false);
+      setAuthState({ user: null, isAuthenticated: false });
     } finally {
       setIsLoading(false);
     }

@@ -427,49 +427,7 @@ export default function ScheduleV2() {
   const weekEndDate = endOfWeek(weekStart, { weekStartsOn: 1 });
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', bgcolor: isDark ? '#1C1410' : '#FBF8F4' }}>
-      {/* â”€â”€â”€ TOOLBAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <Paper
-        elevation={0}
-        sx={{
-          px: { xs: 2, sm: 3 }, py: 1.5,
-          display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 }, flexWrap: 'wrap',
-          borderBottom: '1px solid',
-          borderColor: isDark ? '#3D3228' : '#E8E0D4',
-          bgcolor: isDark ? '#2A2018' : '#FFFFFF',
-        }}
-      >
-        {/* Title */}
-        <Typography variant="h5" fontWeight={800} sx={{ mr: 'auto', color: isDark ? '#F5EDE4' : '#3C2415', fontSize: { xs: '1.1rem', sm: '1.4rem' } }}>
-          Schedule
-        </Typography>
-
-        {/* Pending requests badge â€” opens drawer */}
-        <Tooltip title={`${pendingCount} pending requests`}>
-          <IconButton onClick={() => setDrawerOpen(true)} sx={{ position: 'relative' }}>
-            <Badge badgeContent={pendingCount} color="warning" max={99}>
-              <InboxIcon />
-            </Badge>
-          </IconButton>
-        </Tooltip>
-
-        {/* Published/Draft for managers */}
-        {isManager && (
-          <Chip
-            icon={isPublished ? <CheckIcon /> : <EditIcon />}
-            label={isPublished ? 'Published' : 'Draft'}
-            onClick={() => setIsPublished(!isPublished)}
-            sx={{
-              fontWeight: 700, cursor: 'pointer',
-              bgcolor: isPublished ? (isDark ? '#064E3B' : '#F0FDF4') : (isDark ? '#451A03' : '#FFFBEB'),
-              color: isPublished ? (isDark ? '#6EE7B7' : '#166534') : (isDark ? '#FBBF24' : '#92400E'),
-              border: '1px solid',
-              borderColor: isPublished ? (isDark ? '#065F46' : '#BBF7D0') : (isDark ? '#78350F' : '#FDE68A'),
-              '& .MuiChip-icon': { color: 'inherit' },
-            }}
-          />
-        )}
-      </Paper>
+    <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: '100%', bgcolor: 'transparent' }}>
 
       {/* â”€â”€â”€ NAVIGATION BAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Box sx={{
@@ -477,7 +435,9 @@ export default function ScheduleV2() {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5,
         borderBottom: '1px solid',
         borderColor: isDark ? '#3D3228' : '#E8E0D4',
-        bgcolor: isDark ? '#2A2018' : '#FFFFFF',
+        bgcolor: isDark ? alpha('#2A2018', 0.9) : alpha('#FFFFFF', 0.9),
+        backdropFilter: 'blur(12px)',
+        position: 'sticky', top: 0, zIndex: 20,
       }}>
         {/* Left side: Navigation and Info */}
         <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
@@ -490,7 +450,7 @@ export default function ScheduleV2() {
           </Box>
 
           <Typography variant="body2" fontWeight={800} sx={{ color: isDark ? '#F5EDE4' : '#3C2415', whiteSpace: 'nowrap', fontSize: { xs: '0.85rem', sm: '1rem' } }}>
-            {format(weekStart, 'MMM d')} â€“ {format(weekEndDate, 'MMM d, yyyy')}
+            {format(weekStart, 'MMM d')} – {format(weekEndDate, 'MMM d, yyyy')}
           </Typography>
 
           <Chip label={`${weeklyTotalHours}h total`} size="small" variant="filled" color="default" sx={{ height: 24, fontSize: '0.7rem', fontWeight: 700, borderRadius: 2 }} />
@@ -498,6 +458,29 @@ export default function ScheduleV2() {
 
         {/* Right side: View Toggles & Actions */}
         <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
+          <Tooltip title={`${pendingCount} pending requests`}>
+            <IconButton onClick={() => setDrawerOpen(true)} sx={{ position: 'relative', mr: 1, bgcolor: alpha(theme.palette.warning.main, 0.1) }}>
+              <Badge badgeContent={pendingCount} color="warning" max={99}>
+                <InboxIcon sx={{ color: 'warning.main', fontSize: 20 }} />
+              </Badge>
+            </IconButton>
+          </Tooltip>
+
+          {isManager && (
+            <Chip
+              icon={isPublished ? <CheckIcon /> : <EditIcon />}
+              label={isPublished ? 'Published' : 'Draft'}
+              onClick={() => setIsPublished(!isPublished)}
+              sx={{
+                fontWeight: 700, cursor: 'pointer', height: 32, mr: 1,
+                bgcolor: isPublished ? (isDark ? '#064E3B' : '#F0FDF4') : (isDark ? '#451A03' : '#FFFBEB'),
+                color: isPublished ? (isDark ? '#6EE7B7' : '#166534') : (isDark ? '#FBBF24' : '#92400E'),
+                border: '1px solid',
+                borderColor: isPublished ? (isDark ? '#065F46' : '#BBF7D0') : (isDark ? '#78350F' : '#FDE68A'),
+                '& .MuiChip-icon': { color: 'inherit' },
+              }}
+            />
+          )}
           <ButtonGroup size="small" variant="outlined" sx={{ height: 32 }}>
             <Button
               variant={viewMode === 'week' ? 'contained' : 'outlined'}
@@ -895,7 +878,7 @@ export default function ScheduleV2() {
                   .filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date())
                   .map(s => (
                     <MenuItem key={s.id} value={s.id}>
-                      {format(new Date(s.startTime), 'MMM d, h:mm a')} â€“ {format(new Date(s.endTime), 'h:mm a')} {s.position && `(${s.position})`}
+                      {format(new Date(s.startTime), 'MMM d, h:mm a')} – {format(new Date(s.endTime), 'h:mm a')} {s.position && `(${s.position})`}
                     </MenuItem>
                   ))}
               </Select>

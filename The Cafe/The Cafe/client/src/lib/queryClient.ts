@@ -172,8 +172,8 @@ export const queryClient = new QueryClient({
       retry: 1,
       // Keep data in cache for 5 minutes
       gcTime: 5 * 60 * 1000,
-      // Don't refetch on mount if data is fresh
-      refetchOnMount: "always",
+      // Refetch on mount only if data is stale (default behavior is 'true' meaning refetch if stale)
+      refetchOnMount: true,
     },
     mutations: {
       retry: false,

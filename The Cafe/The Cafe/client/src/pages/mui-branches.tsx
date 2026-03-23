@@ -122,7 +122,7 @@ interface Employee {
   branchId: string;
 }
 
-export default function MuiBranches() {
+export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boolean }) {
   const theme = useTheme();
   const { user: currentUser, switchBranch } = useAuth();
   const isAdminRole = isAdmin();
@@ -338,7 +338,7 @@ export default function MuiBranches() {
 
   return (
     <>
-      <Box sx={{ p: 3, minHeight: "100vh", bgcolor: "background.default" }}>
+      <Box sx={{ p: isEmbedded ? 0 : 3, pb: 4, minHeight: isEmbedded ? "auto" : "100vh", bgcolor: isEmbedded ? "transparent" : "background.default" }}>
         {/* Header */}
         <Box sx={{ mb: 4, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 2 }}>
           <Box>
@@ -422,54 +422,7 @@ export default function MuiBranches() {
                   </Button>
                 )}
 
-                {/* Branch selector dropdown */}
-                {(canSwitchBranch || (isManagerRole && !isAdminRole && branches.length > 0)) && (
-                  <FormControl size="small" sx={{ minWidth: 200 }}>
-                    <InputLabel>
-                      <Stack direction="row" alignItems="center" spacing={0.5}>
-                        <StoreIcon sx={{ fontSize: 16 }} />
-                        <span>Select Branch</span>
-                      </Stack>
-                    </InputLabel>
-                    <Select
-                      value={selectedBranchId}
-                      label="Select Branch"
-                      onChange={(e) => {
-                        const branchId = e.target.value as string;
-                        setViewMode('single');
-                        handleBranchSwitch(branchId);
-                      }}
-                      disabled={!canSwitchBranch && isManagerRole && !isAdminRole}
-                      sx={{
-                        borderRadius: 2,
-                        '& .MuiSelect-select': { py: 1 },
-                      }}
-                      startAdornment={
-                        !canSwitchBranch && isManagerRole ? (
-                          <LockIcon sx={{ fontSize: 16, mr: 0.5, color: 'text.disabled' }} />
-                        ) : null
-                      }
-                    >
-                      {activeBranches.map((branch: Branch) => (
-                        <MenuItem key={branch.id} value={branch.id}>
-                          <Stack direction="row" alignItems="center" spacing={1}>
-                            <StoreIcon sx={{ fontSize: 16, color: 'primary.main' }} />
-                            <span>{branch.name}</span>
-                            <Chip 
-                              label={`${branch.employeeCount || 0} staff`} 
-                              size="small" 
-                              variant="outlined" 
-                              sx={{ height: 20, fontSize: 10 }} 
-                            />
-                            {branch.id === currentUser?.branchId && (
-                              <Chip label="Your branch" size="small" color="primary" sx={{ height: 20, fontSize: 10 }} />
-                            )}
-                          </Stack>
-                        </MenuItem>
-                      ))}
-                    </Select>
-                  </FormControl>
-                )}
+                {/* Removed redundant duplicate branch selector dropdown to avoid confusion with global top-nav selector */}
 
                 {/* Show lock indicator for branch-specific managers */}
                 {isManagerRole && !isAdminRole && (
@@ -500,12 +453,12 @@ export default function MuiBranches() {
         {isLoading && <LinearProgress sx={{ mb: 3, borderRadius: 1 }} />}
 
         {/* Summary Cards */}
-        <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid container spacing={2} sx={{ mb: 4 }}>
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Paper
               sx={{
-                p: 3,
-                borderRadius: 3,
+                p: 2,
+                borderRadius: 2.5,
                 background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
               }}
             >
@@ -517,7 +470,7 @@ export default function MuiBranches() {
                   <Typography variant="body2" color="text.secondary">
                     {viewMode === 'all' ? 'Total Branches' : 'Viewing'}
                   </Typography>
-                  <Typography variant="h4" fontWeight={700}>
+                  <Typography variant="h5" fontWeight={700}>
                     {displayedBranches.length}
                     {viewMode === 'single' && branches.length > 1 && (
                       <Typography component="span" variant="body2" color="text.secondary" sx={{ ml: 1 }}>
@@ -533,8 +486,8 @@ export default function MuiBranches() {
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Paper
               sx={{
-                p: 3,
-                borderRadius: 3,
+                p: 2,
+                borderRadius: 2.5,
                 background: `linear-gradient(135deg, ${alpha(theme.palette.success.main, 0.1)} 0%, ${alpha(theme.palette.success.main, 0.05)} 100%)`,
               }}
             >
@@ -546,7 +499,7 @@ export default function MuiBranches() {
                   <Typography variant="body2" color="text.secondary">
                     Active
                   </Typography>
-                  <Typography variant="h4" fontWeight={700}>
+                  <Typography variant="h5" fontWeight={700}>
                     {displayedActiveBranches.length}
                   </Typography>
                 </Box>
@@ -557,8 +510,8 @@ export default function MuiBranches() {
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Paper
               sx={{
-                p: 3,
-                borderRadius: 3,
+                p: 2,
+                borderRadius: 2.5,
                 background: `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.1)} 0%, ${alpha(theme.palette.info.main, 0.05)} 100%)`,
               }}
             >
@@ -570,7 +523,7 @@ export default function MuiBranches() {
                   <Typography variant="body2" color="text.secondary">
                     {viewMode === 'all' ? 'Total Staff' : 'Branch Staff'}
                   </Typography>
-                  <Typography variant="h4" fontWeight={700}>
+                  <Typography variant="h5" fontWeight={700}>
                     {displayedTotalEmployees}
                   </Typography>
                 </Box>
@@ -581,8 +534,8 @@ export default function MuiBranches() {
           <Grid size={{ xs: 12, sm: 6, md: 3 }}>
             <Paper
               sx={{
-                p: 3,
-                borderRadius: 3,
+                p: 2,
+                borderRadius: 2.5,
                 background: `linear-gradient(135deg, ${alpha(theme.palette.secondary.main, 0.1)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
               }}
             >
@@ -594,7 +547,7 @@ export default function MuiBranches() {
                   <Typography variant="body2" color="text.secondary">
                     Avg Staff/Branch
                   </Typography>
-                  <Typography variant="h4" fontWeight={700}>
+                  <Typography variant="h5" fontWeight={700}>
                     {displayedBranches.length > 0 ? Math.round(displayedTotalEmployees / displayedBranches.length) : 0}
                   </Typography>
                 </Box>
@@ -772,11 +725,7 @@ export default function MuiBranches() {
                           <EditIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      <Tooltip title="Delete">
-                        <IconButton size="small" onClick={() => handleDelete(branch)} color="error">
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Tooltip>
+                      {/* Removed soft-delete trash icon, as the toggle switch accomplishes deactivation more cleanly */}
                     </Stack>
                   )}
                 </Stack>
