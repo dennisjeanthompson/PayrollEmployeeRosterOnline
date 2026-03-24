@@ -87,8 +87,21 @@ export function serveStatic(app: Express) {
     );
   }
 
-  // Serve static files from dist/public
-  app.use(express.static(distPath));
+  // Serve static files from dist/public with aggressive caching policies
+  app.use(express.static(distPath, {
+    setHeaders: (res, pathStr) => {
+      // Vite puts hashed immutable assets inside the /assets folder
+      if (pathStr.includes('/assets/')) {
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+      } else if (pathStr.endsWith('.html')) {
+        // Never cache HTML so the browser always fetches the latest asset links
+        res.setHeader('Cache-Control', 'no-cache');
+      } else {
+        // Subtle caching for other generic files (favicon, etc)
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+      }
+    }
+  }));
 
   // SPA fallback: serve index.html for all non-API routes
   app.use((req, res, next) => {
@@ -116,7 +129,7 @@ export function serveStatic(app: Express) {
         }
       }
 
-      res.status(200).set({ 'Content-Type': 'text/html' }).end(html);
+      res.status(200).set({ 'Content-Type': 'text/html', 'Cache-Control': 'no-cache' }).end(html);
     } catch (err) {
       next(err);
     }

@@ -281,6 +281,7 @@ function LoansTab({ user, theme }: any) {
     loanType: 'SSS',
     referenceNumber: '',
     accountNumber: '',
+    totalAmount: '',
     monthlyAmortization: '',
     deductionStartDate: '',
     proofFileUrl: ''
@@ -307,7 +308,7 @@ function LoansTab({ user, theme }: any) {
 
   const handleCloseDialog = () => {
     setOpenDialog(false);
-    setFormData({ loanType: 'SSS', referenceNumber: '', accountNumber: '', monthlyAmortization: '', deductionStartDate: '', proofFileUrl: '' });
+    setFormData({ loanType: 'SSS', referenceNumber: '', accountNumber: '', totalAmount: '', monthlyAmortization: '', deductionStartDate: '', proofFileUrl: '' });
     setSelectedFile(null);
   };
 
@@ -352,6 +353,7 @@ function LoansTab({ user, theme }: any) {
         loanType: formData.loanType,
         referenceNumber: formData.referenceNumber,
         accountNumber: formData.accountNumber,
+        totalAmount: formData.totalAmount,
         monthlyAmortization: formData.monthlyAmortization,
         deductionStartDate: new Date(formData.deductionStartDate).toISOString(),
         proofFileUrl: fileUrl
@@ -426,6 +428,21 @@ function LoansTab({ user, theme }: any) {
                     <Typography variant="body2" color="error">{loan.hrApprovalNote}</Typography>
                   </Box>
                 )}
+
+                {loan.proofFileUrl && (
+                  <Button 
+                    variant="outlined" 
+                    size="small" 
+                    sx={{ mt: 2, width: '100%', textTransform: 'none', borderRadius: 2 }}
+                    startIcon={<AssignmentIcon />}
+                    onClick={() => {
+                      const renderUrl = loan.proofFileUrl.replace(/\.pdf$/i, '.jpg');
+                      window.open(renderUrl, '_blank');
+                    }}
+                  >
+                    View Proof Document
+                  </Button>
+                )}
               </CardContent>
             </Card>
           ))}
@@ -461,6 +478,15 @@ function LoansTab({ user, theme }: any) {
               required
               value={formData.accountNumber}
               onChange={(e) => setFormData({ ...formData, accountNumber: e.target.value })}
+            />
+            <TextField
+              label="Total Loan Amount (₱)"
+              type="number"
+              fullWidth
+              required
+              inputProps={{ min: "1", step: "0.01" }}
+              value={formData.totalAmount}
+              onChange={(e) => setFormData({ ...formData, totalAmount: e.target.value })}
             />
             <TextField
               label="Monthly Amortization (₱)"

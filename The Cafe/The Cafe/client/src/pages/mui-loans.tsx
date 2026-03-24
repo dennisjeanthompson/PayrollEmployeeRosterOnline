@@ -88,11 +88,17 @@ export default function MuiLoans() {
     )},
     { field: 'referenceNumber', headerName: 'Ref Number', width: 160 },
     { field: 'accountNumber', headerName: 'Account Num', width: 160 },
-    { field: 'totalAmount', headerName: 'Total Loan', width: 130, valueFormatter: (params: any) => params?.value ? `₱${Number(params.value).toFixed(2)}` : '₱0.00' },
+    { field: 'totalAmount', headerName: 'Total Loan', width: 130, valueFormatter: (value: any) => {
+        const val = value?.value || value;
+        return val ? `₱${Number(val).toFixed(2)}` : '₱0.00';
+    }},
     { field: 'remainingBalance', headerName: 'Remaining Bal.', width: 140, renderCell: (params: GridRenderCellParams) => (
       <Typography variant="body2" color="error.main" sx={{ pt: 1.5 }}>{params.row.remainingBalance ? `₱${Number(params.row.remainingBalance).toFixed(2)}` : '₱0.00'}</Typography>
     )},
-    { field: 'monthlyAmortization', headerName: 'Monthly Amort.', width: 140, valueFormatter: (params: any) => params?.value ? `₱${Number(params.value).toFixed(2)}` : '₱0.00' },
+    { field: 'monthlyAmortization', headerName: 'Monthly Amort.', width: 140, valueFormatter: (value: any) => {
+        const val = value?.value || value;
+        return val ? `₱${Number(val).toFixed(2)}` : '₱0.00';
+    }},
     { field: 'deductionStartDate', headerName: 'Start Cutoff', width: 140, valueFormatter: (params: any) => {
         try { 
           const val = params?.value || params;
@@ -110,7 +116,12 @@ export default function MuiLoans() {
         return (
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             <Tooltip title="Verify Proof Document">
-              <IconButton size="small" color="primary" onClick={() => window.open(params.row.proofFileUrl, '_blank')}>
+              <IconButton size="small" color="primary" onClick={() => {
+                // To avoid 401 Unauthorized from Cloudinary strict PDF delivery policy
+                // we convert .pdf extensions to .jpg which allows the browser to view it as an image
+                const renderUrl = params.row.proofFileUrl?.replace(/\.pdf$/i, '.jpg');
+                window.open(renderUrl || params.row.proofFileUrl, '_blank');
+              }}>
                 <VisibilityIcon />
               </IconButton>
             </Tooltip>
