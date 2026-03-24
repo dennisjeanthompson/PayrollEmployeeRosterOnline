@@ -166,13 +166,13 @@ export const queryClient = new QueryClient({
       refetchInterval: false,
       // Refetch when window regains focus for real-time feel
       refetchOnWindowFocus: false,
-      // PERFORMANCE: Data considered fresh for 30 seconds (was 10s)
-      staleTime: 30000,
+      // PERFORMANCE: Data considered fresh for 60 seconds
+      staleTime: 60000,
       // Retry failed requests once
       retry: 1,
-      // Keep data in cache for 5 minutes
-      gcTime: 5 * 60 * 1000,
-      // Refetch on mount only if data is stale (default behavior is 'true' meaning refetch if stale)
+      // Keep data in cache for 10 minutes
+      gcTime: 10 * 60 * 1000,
+      // Refetch on mount only if data is stale
       refetchOnMount: true,
     },
     mutations: {

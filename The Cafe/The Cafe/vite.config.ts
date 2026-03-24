@@ -46,11 +46,16 @@ export default defineConfig({
         assetFileNames: 'assets/[name]-[hash][extname]',
       },
     },
-    // Terser options for better compression
+    // Terser options for maximum production compression
     terserOptions: {
       compress: {
-        drop_console: false,
+        drop_console: true,   // Strip ALL console.* calls from production
         drop_debugger: true,
+        pure_funcs: ['console.log', 'console.warn', 'console.info', 'console.debug'],
+        passes: 2,            // Two compression passes for smaller output
+      },
+      mangle: {
+        safari10: true,
       },
     },
   },
