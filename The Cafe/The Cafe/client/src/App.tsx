@@ -53,40 +53,68 @@ const MobileMore = lazy(() => import("@/pages/mobile-more"));
 const Setup = lazy(() => import("@/pages/setup"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
-// Loading Screen Component (MUI)
+// ─── PERFORMANCE: Idle-time Route Prefetching ─────────────────────────────────
+// After app boot, silently download the most common page chunks in the background
+// so navigating feels INSTANT (zero loading spinner). Uses requestIdleCallback
+// to avoid blocking the main thread.
+const prefetchRoutes = () => {
+  const idleCallback = typeof requestIdleCallback !== 'undefined' ? requestIdleCallback : setTimeout;
+  
+  // Priority 1: Pages users visit most often (prefetch immediately on idle)
+  idleCallback(() => {
+    import("@/pages/mui-dashboard");
+    import("@/pages/schedule-v2");
+  });
+  
+  // Priority 2: Common management pages (prefetch after a short delay)
+  idleCallback(() => {
+    import("@/pages/mui-employees");
+    import("@/pages/mui-payroll-management");
+    import("@/pages/mui-notifications");
+  });
+  
+  // Priority 3: Less common pages (prefetch when truly idle)
+  idleCallback(() => {
+    import("@/pages/mui-reports");
+    import("@/pages/mui-requests");
+    import("@/pages/mui-profile-settings");
+    import("@/pages/mobile-requests");
+  });
+};
+
+// Ultra-lightweight loading fallback — pure CSS, zero MUI overhead
 function LoadingScreen() {
   return (
-    <Box
-      sx={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        bgcolor: "background.default",
-      }}
-    >
-      <Box sx={{ textAlign: "center" }}>
-        <Box
-          sx={{
-            width: 64,
-            height: 64,
-            borderRadius: 3,
-            background: (theme) =>
-              `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            mx: "auto",
-            mb: 2,
-            boxShadow: (theme) => `0 8px 24px ${alpha(theme.palette.primary.main, 0.3)}`,
-          }}
-        >
-          <CoffeeIcon sx={{ fontSize: 32, color: "white" }} />
-        </Box>
-        <CircularProgress size={24} sx={{ mb: 2 }} />
-        <Typography color="text.secondary">Loading...</Typography>
-      </Box>
-    </Box>
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: '#fafafa',
+    }}>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{
+          width: 48, height: 48, borderRadius: 12,
+          background: 'linear-gradient(135deg, #2e7d32, #1b5e20)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          margin: '0 auto 16px',
+          boxShadow: '0 4px 16px rgba(46,125,50,0.3)',
+          animation: 'pulse 1.5s ease-in-out infinite',
+        }}>
+          <span style={{ fontSize: 24, color: 'white' }}>☕</span>
+        </div>
+        <div style={{
+          width: 24, height: 24, border: '3px solid #e0e0e0',
+          borderTopColor: '#2e7d32', borderRadius: '50%',
+          animation: 'spin 0.6s linear infinite',
+          margin: '0 auto 8px',
+        }} />
+        <style>{`
+          @keyframes spin { to { transform: rotate(360deg) } }
+          @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.7 } }
+        `}</style>
+      </div>
+    </div>
   );
 }
 
@@ -586,6 +614,8 @@ function App() {
 
       if (authData.authenticated && authData.user) {
         setAuthState({ user: authData.user, isAuthenticated: true });
+        // PERFORMANCE: Prefetch all route chunks in the background after login
+        prefetchRoutes();
       } else {
         setAuthState({ user: null, isAuthenticated: false });
       }
