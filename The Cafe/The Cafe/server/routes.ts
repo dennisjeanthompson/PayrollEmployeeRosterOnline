@@ -59,7 +59,15 @@ function asyncHandler(fn: AsyncHandler) {
 
 // Create PostgreSQL pool for session store with proper Neon configuration
 const pgPool = new Pool({ 
-  connectionString: process.env.DATABASE_URL
+  connectionString: process.env.DATABASE_URL,
+  connectionTimeoutMillis: 10000,  // 10s timeout to prevent infinite hangs on cold starts
+  idleTimeoutMillis: 30000,        // Close idle connections after 30s
+  max: 5,                          // Limit pool size for session store
+});
+
+// Prevent unhandled pool errors from crashing the server
+pgPool.on('error', (err) => {
+  console.error('[SESSION POOL] Unexpected error on idle client:', err.message);
 });
 
 // Type for authenticated user
@@ -181,7 +189,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       ttl: 24 * 60 * 60, // 24 hours in seconds
       disableTouch: false, // Allow touch to refresh session
       schemaName: 'public',
-      pruneSessionInterval: 60 * 60, // Prune expired sessions hourly
+      pruneSessionInterval: false, // Disable automatic pruning to avoid stalling on cold connections
     }),
     secret: process.env.SESSION_SECRET || (() => {
       if (process.env.NODE_ENV === 'production') {
