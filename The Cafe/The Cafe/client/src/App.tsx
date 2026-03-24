@@ -628,37 +628,37 @@ function App() {
     }
   }, []);
 
+  // 1. Initial Authentication & Auth State Subscription
   useEffect(() => {
     checkAuth();
     const unsubscribe = subscribeToAuth(setLocalAuthState);
+    return () => unsubscribe();
+  }, [checkAuth]);
 
-    // Auth polling - backup to subscription (reduced to 60s from 5s for performance)
+  // 2. Background Auth Polling
+  useEffect(() => {
+    // Only start polling after setup is complete
+    if (!setupComplete) return;
+
     const authPollInterval = setInterval(async () => {
-      if (setupComplete) {
-        try {
-          // Use status endpoint which is safe for unauthenticated users
-          const authResponse = await apiRequest("GET", "/api/auth/status");
-          const authData = await authResponse.json();
-          if (authData.authenticated && authData.user) {
-            setAuthState({ user: authData.user, isAuthenticated: true });
-          } else {
-            setAuthState({ user: null, isAuthenticated: false });
-          }
-        } catch (err: any) {
-          // Only treat as logged-out if the server explicitly rejected the session (401/403)
-          // Network errors (offline, timeout) should not log the user out
-          if (err?.status === 401 || err?.status === 403) {
-            setAuthState({ user: null, isAuthenticated: false });
-          }
+      try {
+        const authResponse = await apiRequest("GET", "/api/auth/status");
+        const authData = await authResponse.json();
+        
+        if (authData.authenticated && authData.user) {
+          setAuthState({ user: authData.user, isAuthenticated: true });
+        } else {
+          setAuthState({ user: null, isAuthenticated: false });
+        }
+      } catch (err: any) {
+        if (err?.status === 401 || err?.status === 403) {
+          setAuthState({ user: null, isAuthenticated: false });
         }
       }
-    }, 60000); // 60 seconds (was 5 seconds - way too aggressive)
+    }, 60000); // 60 seconds
 
-    return () => {
-      unsubscribe();
-      clearInterval(authPollInterval);
-    };
-  }, [checkAuth, setupComplete]);
+    return () => clearInterval(authPollInterval);
+  }, [setupComplete]);
 
   if (isLoading) {
     return (
