@@ -691,7 +691,7 @@ export default function MuiPayrollManagement() {
             title="Total Disbursed"
             value={`₱${totalPaid.toLocaleString()}`}
             subtitle="Paid to employees"
-            icon={}
+            icon={PesoIcon}
             color={theme.palette.success.main}
           />
         </Grid>
