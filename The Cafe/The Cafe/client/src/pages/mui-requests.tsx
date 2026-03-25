@@ -61,7 +61,7 @@ export default function MuiRequests() {
         <MuiExceptionLogs isManagerView />
       </Box>
       <Box sx={{ 
-        display: tabIndex === 2 ? 'block' : 'none', 
+        ...(tabIndex !== 2 ? { position: 'absolute', visibility: 'hidden', height: 0, overflow: 'hidden', width: '100%' } : {}),
         '& > div': { pt: 2, minHeight: 'auto' },
         '& h4': { display: 'none' } 
       }}>

@@ -113,7 +113,30 @@ export default function MuiLoans() {
         return <Chip label={params.value.toUpperCase()} size="small" color={color} />;
     }},
     { field: 'actions', headerName: 'Verification (DOLE Art.113)', minWidth: 280, flex: 1, renderCell: (params: GridRenderCellParams) => {
-        if (params.row.status !== 'pending') return null;
+        if (params.row.status === 'approved') {
+          return (
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', pt: 1 }}>
+              <CheckCircleIcon color="success" fontSize="small" />
+              <Typography variant="body2" color="success.main" fontWeight={600}>Verified & Approved</Typography>
+            </Box>
+          );
+        }
+        if (params.row.status === 'rejected') {
+          return (
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', pt: 1 }}>
+              <CancelIcon color="error" fontSize="small" />
+              <Typography variant="body2" color="error.main" fontWeight={600}>Rejected</Typography>
+            </Box>
+          );
+        }
+        if (params.row.status === 'completed') {
+          return (
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', pt: 1 }}>
+              <CheckCircleIcon color="info" fontSize="small" />
+              <Typography variant="body2" color="text.secondary" fontWeight={600}>Fully Paid</Typography>
+            </Box>
+          );
+        }
         return (
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             <Tooltip title="Verify Proof Document">
@@ -124,7 +147,7 @@ export default function MuiLoans() {
                 <VisibilityIcon />
               </IconButton>
             </Tooltip>
-            <Tooltip title="Signed Authorization Form (DOLE Art. 113)">
+            <Tooltip title="Download Authorization (DOLE Art. 113)">
               <IconButton size="small" color="info" onClick={() => {
                 window.open(params.row.proofFileUrl, '_blank');
               }}>
