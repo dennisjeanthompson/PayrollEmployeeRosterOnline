@@ -1159,7 +1159,7 @@ export default function MuiPayrollManagement() {
                                   disabled={markPaidMutation.isPending}
                                   onClick={() => markPaidMutation.mutate(entry.id)}
                                 >
-                                  <fontSize="small" />
+                                  <PesoIcon fontSize="small" />
                                 </IconButton>
                               </Tooltip>
                             )}

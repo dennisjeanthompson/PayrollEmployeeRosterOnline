@@ -232,7 +232,7 @@ export default function MuiAdminDeductionRates() {
               boxShadow: `0 4px 16px ${alpha(theme.palette.warning.main, 0.3)}`,
             }}
           >
-            <sx={{ color: "white" }} />
+            <PesoIcon sx={{ color: "white" }} />
           </Box>
           <Box>
             <Typography variant="h5" fontWeight={700}>
