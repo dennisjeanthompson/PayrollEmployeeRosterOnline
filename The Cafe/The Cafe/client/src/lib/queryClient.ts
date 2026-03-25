@@ -236,6 +236,9 @@ export const invalidateQueries = {
     queryClient.invalidateQueries({ queryKey: ['/api/dashboard'] });
     queryClient.invalidateQueries({ queryKey: ['/api/deduction-settings'] });
     queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
+    queryClient.invalidateQueries({ queryKey: ['analytics-trends'] });
+    queryClient.invalidateQueries({ queryKey: ['forecast-labor'] });
+    queryClient.invalidateQueries({ queryKey: ['forecast-payroll'] });
   },
   all: () => {
     queryClient.invalidateQueries();

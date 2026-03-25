@@ -99,7 +99,7 @@ const StyledInputBase = styled(InputBase)(({ theme }) => ({
 
 export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void }) {
   const { user: currentUser, switchBranch, isAuthenticated } = useAuth();
-  const canSwitchBranch = isAdmin() || isManager();
+  const canSwitchBranch = isAdmin();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [location, setLocation] = useLocation();
   const theme = useTheme();
@@ -273,7 +273,6 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
 
         {/* Branch Switcher */}
         {currentBranch && canSwitchBranch && activeBranches.length > 1 ? (
-          <Tooltip title="Switch branch — all pages will update" arrow>
             <FormControl size="small" sx={{ mr: 1.5, minWidth: 140, display: { xs: "none", sm: "flex" } }}>
               <Select
                 value={currentUser?.branchId || ''}
@@ -320,7 +319,6 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
                 ))}
               </Select>
             </FormControl>
-          </Tooltip>
         ) : currentBranch || branchNameFromProfile ? (
           <Chip
             icon={<LocationIcon sx={{ fontSize: 16 }} />}

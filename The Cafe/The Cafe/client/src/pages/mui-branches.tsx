@@ -129,7 +129,7 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
   const isManagerRole = isManager();
   const isEmployeeRole = isEmployee();
   const canManage = isAdminRole || isManagerRole;
-  const canSwitchBranch = isAdminRole || isManagerRole; // Managers and admins can switch branches
+  const canSwitchBranch = isAdminRole; // Only admins can switch branches
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
