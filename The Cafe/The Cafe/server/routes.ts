@@ -526,18 +526,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             res.status(500).json({ message: 'Failed to create session' });
           } else {
             console.log('✅ Session saved for user:', username);
-            
-            // Ensure Set-Cookie header is explicitly sent for clients that may
-            // not automatically receive the cookie from the session middleware
-            // (this is a safe redundancy).
-            try {
-              // sessionConfig is defined above in this scope; use its cookie options
-              // to mirror express-session behavior when setting the cookie explicitly.
-              const cookieName = sessionConfig && sessionConfig.name ? sessionConfig.name : 'cafe-session';
-              res.cookie(cookieName, req.sessionID, sessionConfig.cookie || {});
-            } catch (e) {
-              console.warn('Could not explicitly set session cookie:', e);
-            }
+
 
             // Remove password from response
             const { password: _, ...userWithoutPassword } = user;
