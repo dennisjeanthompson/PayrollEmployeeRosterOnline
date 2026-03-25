@@ -47,6 +47,7 @@ import {
   LocalHospital as HealthIcon,
   BeachAccess as VacationIcon,
   Edit as EditIcon,
+  AutoAwesome as AutoAwesomeIcon,
 } from "@mui/icons-material";
 
 // Components
@@ -138,6 +139,23 @@ export default function MuiLeaveCredits({ hideHeader }: { hideHeader?: boolean }
     },
     onError: (err: any) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
+    },
+  });
+
+  const autoGrantSilMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/leave-credits/auto-grant-sil");
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      queryClient.invalidateQueries({ queryKey: ["leave-credits"] });
+      toast({ 
+        title: "SIL Granted", 
+        description: data.message || `Granted SIL to ${data.grantedCount} eligible employees.`,
+      });
+    },
+    onError: (err: any) => {
+      toast({ title: "Auto-Grant Failed", description: err.message, variant: "destructive" });
     },
   });
 
@@ -310,14 +328,27 @@ export default function MuiLeaveCredits({ hideHeader }: { hideHeader?: boolean }
             </Paper>
 
             {isMgrOptions && (
-              <Button
-                variant="contained"
-                startIcon={<AddIcon />}
-                onClick={handleOpenGrantDialog}
-                sx={{ boxShadow: 2 }}
-              >
-                Grant Leave
-              </Button>
+              <Stack direction="row" spacing={1}>
+                <Tooltip title="Scans all active employees and automatically gives 5 days of SIL to those with 1 year tenure">
+                  <Button
+                    variant="outlined"
+                    startIcon={<AutoAwesomeIcon />}
+                    onClick={() => autoGrantSilMutation.mutate()}
+                    disabled={autoGrantSilMutation.isPending}
+                    sx={{ boxShadow: 1, bgcolor: 'background.paper' }}
+                  >
+                    Auto-Grant 1-Year SIL
+                  </Button>
+                </Tooltip>
+                <Button
+                  variant="contained"
+                  startIcon={<AddIcon />}
+                  onClick={handleOpenGrantDialog}
+                  sx={{ boxShadow: 2 }}
+                >
+                  Grant Leave
+                </Button>
+              </Stack>
             )}
           </Stack>
         </Box>

@@ -241,6 +241,87 @@ router.put('/api/leave-credits/:id', requireAuth, requireRole(['manager', 'admin
   }
 });
 
+// ─── POST /api/leave-credits/auto-grant-sil ──────────────────────────────────
+// Manager: Auto-grant 5 SIL days to all employees who have reached 1 year of service
+router.post('/api/leave-credits/auto-grant-sil', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
+  try {
+    const branchId = req.user!.branchId;
+    const grantedBy = req.user!.id;
+    const currentYear = new Date().getFullYear();
+    const oneYearAgo = new Date();
+    oneYearAgo.setFullYear(currentYear - 1);
+
+    // Get all active employees in this branch who were created >= 1 year ago
+    const eligibleEmployees = await db
+      .select()
+      .from(users)
+      .where(
+        and(
+          eq(users.branchId, branchId),
+          eq(users.isActive, true),
+          eq(users.role, 'employee')
+        )
+      );
+
+    let grantedCount = 0;
+    const skippedUsers = [];
+
+    for (const employee of eligibleEmployees) {
+      // Check if employee has reached 1 year of service
+      if (!employee.createdAt || new Date(employee.createdAt) > oneYearAgo) {
+        skippedUsers.push({ id: employee.id, name: `${employee.firstName} ${employee.lastName}`, reason: '< 1 year tenure' });
+        continue;
+      }
+
+      // Check if SIL already exists for this year
+      const existing = await db
+        .select()
+        .from(leaveCredits)
+        .where(
+          and(
+            eq(leaveCredits.userId, employee.id),
+            eq(leaveCredits.year, currentYear),
+            eq(leaveCredits.leaveType, 'sil')
+          )
+        )
+        .limit(1);
+
+      if (existing.length > 0) {
+        skippedUsers.push({ id: employee.id, name: `${employee.firstName} ${employee.lastName}`, reason: 'Already has SIL for ' + currentYear });
+        continue; // They already have SIL, respect existing values
+      }
+
+      // Grant exactly 5.00 SIL days
+      await db.insert(leaveCredits).values({
+        id: randomUUID(),
+        userId: employee.id,
+        branchId,
+        year: currentYear,
+        leaveType: 'sil',
+        totalCredits: '5.00',
+        usedCredits: '0.00',
+        remainingCredits: '5.00',
+        grantedBy,
+        notes: `Auto-granted: 1-Year Anniversay SIL (${currentYear})`,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+      grantedCount++;
+    }
+
+    res.json({ 
+      message: `Successfully granted 5 SIL days to ${grantedCount} eligible employee(s).`,
+      grantedCount,
+      skippedCount: skippedUsers.length,
+      skippedDetails: skippedUsers 
+    });
+
+  } catch (error: any) {
+    console.error('Error auto-granting SIL:', error);
+    res.status(500).json({ message: error.message || 'Failed to auto-grant SIL' });
+  }
+});
+
 // ─── Internal helper: deduct leave on time-off approval ──────────────────────
 // Called by the time-off approval route (not an HTTP endpoint)
 export async function deductLeaveCredit(
