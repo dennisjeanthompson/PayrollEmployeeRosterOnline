@@ -112,7 +112,7 @@ export default function MuiLoans() {
         if (params.value === 'rejected') color = 'error';
         return <Chip label={params.value.toUpperCase()} size="small" color={color} />;
     }},
-    { field: 'actions', headerName: 'Verification (DOLE Art.113)', width: 200, renderCell: (params: GridRenderCellParams) => {
+    { field: 'actions', headerName: 'Verification (DOLE Art.113)', minWidth: 280, flex: 1, renderCell: (params: GridRenderCellParams) => {
         if (params.row.status !== 'pending') return null;
         return (
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -143,7 +143,7 @@ export default function MuiLoans() {
   ];
 
   return (
-    <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, py: 4, width: '100%', maxWidth: '100%', margin: '0 auto', overflowX: 'hidden' }}>
+    <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, py: 4, width: '100%', maxWidth: '100%', margin: '0 auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', mb: 3 }}>
         <AccountBalanceWalletIcon sx={{ fontSize: 40, color: theme.palette.primary.main, mr: 2 }} />
         <Box>
@@ -154,18 +154,19 @@ export default function MuiLoans() {
         </Box>
       </Box>
 
-      <Paper elevation={0} sx={{ height: 600, width: '100%', border: `1px solid ${theme.palette.divider}` }}>
+      <Paper elevation={0} sx={{ width: '100%', border: `1px solid ${theme.palette.divider}` }}>
         <DataGrid
           rows={loans}
           columns={columns}
           loading={isLoading}
+          autoHeight
           disableRowSelectionOnClick
           initialState={{
             pagination: { paginationModel: { pageSize: 15 } },
             sorting: { sortModel: [{ field: 'createdAt', sort: 'desc' }] }
           }}
           pageSizeOptions={[10, 15, 25, 50]}
-          sx={{ border: 0 }}
+          sx={{ border: 0, minHeight: 300 }}
         />
       </Paper>
 
