@@ -210,9 +210,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? String(process.env.SESSION_COOKIE_SECURE).toLowerCase() === 'true'
         : (process.env.NODE_ENV === 'production'), // HTTPS only in production by default
       httpOnly: true, // Prevent JavaScript access for security
-      // Use 'none' when frontend is on a different domain (Vercel vs Render)
-      // Use 'lax' for same-origin (local dev). 'none' requires secure:true.
-      sameSite: process.env.FRONTEND_URL ? 'none' : 'lax',
+      // Only use 'none' in production if FRONTEND_URL is set, otherwise use 'lax'.
+      // Browsers reject sameSite: 'none' when secure: false.
+      sameSite: (process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL) ? 'none' : 'lax',
       maxAge: 24 * 60 * 60 * 1000, // 24 hours in milliseconds
       path: '/', // Cookie available to entire app
       domain: undefined, // Let browser handle domain
@@ -566,7 +566,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         secure: process.env.SESSION_COOKIE_SECURE
           ? String(process.env.SESSION_COOKIE_SECURE).toLowerCase() === 'true'
           : (process.env.NODE_ENV === 'production'),
-        sameSite: process.env.FRONTEND_URL ? 'none' : 'lax'
+        sameSite: (process.env.NODE_ENV === 'production' && process.env.FRONTEND_URL) ? 'none' : 'lax'
       });
       res.json({ message: "Logged out successfully" });
     });
