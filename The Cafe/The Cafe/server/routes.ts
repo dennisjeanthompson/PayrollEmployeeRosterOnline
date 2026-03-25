@@ -1395,6 +1395,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updated = await storage.updateAdjustmentLog(id, {
         status: 'rejected',
+        rejectionReason: req.body.reason || null,
       });
       
       if (!updated) return res.status(404).json({ message: "Adjustment log not found" });

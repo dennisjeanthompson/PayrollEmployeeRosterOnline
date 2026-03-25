@@ -101,7 +101,7 @@ export default function MuiExceptionLogs({ isManagerView = false }: { isManagerV
     queryFn: async () => {
       const response = await apiRequest("GET", isManagerView ? "/api/adjustment-logs/branch" : "/api/adjustment-logs/mine");
       const data = await response.json();
-      return isManagerView ? data : (data.logs || []);
+      return data.logs || [];
     },
   });
 
