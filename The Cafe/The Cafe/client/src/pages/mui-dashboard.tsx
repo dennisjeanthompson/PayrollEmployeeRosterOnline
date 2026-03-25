@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import React from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager, isAdmin, getCurrentUser } from "@/lib/auth";
@@ -50,7 +51,6 @@ import {
   Check as CheckIcon,
   Close as CloseIcon,
   SwapHoriz as SwapIcon,
-  AttachMoney as DollarIcon,
   AutoAwesome as SparklesIcon,
   Verified as VerifiedIcon,
   Schedule as ScheduleIcon,
@@ -712,7 +712,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
     {
       label: 'Payslips',
       sub: 'Earnings',
-      icon: <DollarIcon sx={{ fontSize: 24 }} />,
+      icon: <PesoIcon sx={{ fontSize: 24 }} />,
       color: theme.palette.success.main,
       bgColor: alpha(theme.palette.success.main, 0.12),
       route: '/employee/payroll',
@@ -820,7 +820,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
               variant="contained"
               onClick={() => setLocation('/employee/payroll')}
               size="small"
-              startIcon={<DollarIcon />}
+              startIcon={<PesoIcon />}
               sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2, py: 1 }}
             >
               View Payslips & History

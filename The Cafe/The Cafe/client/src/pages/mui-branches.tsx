@@ -359,7 +359,7 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
             <IconButton onClick={() => refetch()}>
               <RefreshIcon />
             </IconButton>
-            {canManage && (
+            {isAdminRole && (
               <Button
                 variant="contained"
                 startIcon={<AddIcon />}

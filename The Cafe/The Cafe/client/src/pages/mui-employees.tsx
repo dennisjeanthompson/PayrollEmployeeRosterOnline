@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import { useState, useEffect, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
@@ -68,7 +69,6 @@ import {
   Receipt as ReceiptIcon,
   People as UsersIcon,
   AccessTime as ClockIcon,
-  AttachMoney as DollarIcon,
   TrendingUp as TrendingUpIcon,
   FilterList as FilterIcon,
   MoreVert as MoreVertIcon,

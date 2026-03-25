@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager, getCurrentUser } from "@/lib/auth";
@@ -21,7 +22,6 @@ import {
   Schedule as ScheduleIcon,
   SwapHoriz as SwapIcon,
   EventAvailable as EventIcon,
-  AttachMoney as MoneyIcon,
   CheckCircle as SuccessIcon,
   Error as ErrorIcon,
   Warning as WarningIcon,
@@ -60,7 +60,7 @@ const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; label:
   rejection:         { icon: <ErrorIcon fontSize="small" />,    color: '#EF4444', label: 'Rejected' },
   clock_in:          { icon: <ClockIcon fontSize="small" />,    color: '#10B981', label: 'Clock In' },
   clock_out:         { icon: <ClockIcon fontSize="small" />,    color: '#F59E0B', label: 'Clock Out' },
-  adjustment:        { icon: <MoneyIcon fontSize="small" />,    color: '#06B6D4', label: 'Adjustment' },
+  adjustment:        { icon: <PesoIcon fontSize="small" />,    color: '#06B6D4', label: 'Adjustment' },
   warning:           { icon: <WarningIcon fontSize="small" />,  color: '#F59E0B', label: 'Warning' },
   success:           { icon: <SuccessIcon fontSize="small" />,  color: '#10B981', label: 'Success' },
   error:             { icon: <ErrorIcon fontSize="small" />,    color: '#EF4444', label: 'Error' },

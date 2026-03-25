@@ -3,6 +3,7 @@
  * Predicted labor hours & payroll costs
  */
 
+import PesoIcon from "@/components/PesoIcon";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -27,7 +28,6 @@ import {
   TrendingDown as TrendingDownIcon,
   Analytics as AnalyticsIcon,
   Schedule as ScheduleIcon,
-  AttachMoney as MoneyIcon,
   Refresh as RefreshIcon,
   Info as InfoIcon,
 } from "@mui/icons-material";
@@ -315,7 +315,7 @@ export default function MuiAnalytics() {
               >
                 <CardContent sx={{ py: 2 }}>
                   <Stack direction="row" alignItems="center" spacing={1}>
-                    <MoneyIcon color="success" fontSize="small" />
+                    <PesoIcon color="success" fontSize="small" />
                     <Typography variant="caption" color="text.secondary">
                       Est. Payroll ({forecastDays}d)
                     </Typography>

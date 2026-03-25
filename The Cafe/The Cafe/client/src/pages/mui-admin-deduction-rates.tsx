@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -35,7 +36,6 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   ExpandMore,
-  AttachMoney,
   Security,
   LocalHospital,
   Home,
@@ -232,7 +232,7 @@ export default function MuiAdminDeductionRates() {
               boxShadow: `0 4px 16px ${alpha(theme.palette.warning.main, 0.3)}`,
             }}
           >
-            <AttachMoney sx={{ color: "white" }} />
+            <sx={{ color: "white" }} />
           </Box>
           <Box>
             <Typography variant="h5" fontWeight={700}>

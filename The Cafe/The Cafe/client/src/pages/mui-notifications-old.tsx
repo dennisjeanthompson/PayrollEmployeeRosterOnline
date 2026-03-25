@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager, getCurrentUser } from "@/lib/auth";
@@ -58,7 +59,6 @@ import {
   Schedule as ScheduleIcon,
   SwapHoriz as SwapIcon,
   EventAvailable as EventIcon,
-  AttachMoney as MoneyIcon,
   Person as PersonIcon,
   Warning as WarningIcon,
   Info as InfoIcon,
@@ -235,13 +235,13 @@ export default function MuiNotifications() {
         return <ErrorIcon />;
       case "payroll":
       case "payment":
-        return <MoneyIcon />;
+        return <PesoIcon />;
       case "clock_in":
         return <ScheduleIcon />;
       case "clock_out":
         return <ScheduleIcon />;
       case "adjustment":
-        return <MoneyIcon />;
+        return <PesoIcon />;
       case "warning":
         return <WarningIcon />;
       case "success":
@@ -907,7 +907,7 @@ export default function MuiNotifications() {
                 return (
                   <Button
                     variant="contained"
-                    startIcon={isTrade || isTimeOff ? <ScheduleIcon /> : <MoneyIcon />}
+                    startIcon={isTrade || isTimeOff ? <ScheduleIcon /> : <PesoIcon />}
                     onClick={() => {
                       setDetailDialogOpen(false);
                       if (!selectedNotification.isRead) markAsRead.mutate(selectedNotification.id);

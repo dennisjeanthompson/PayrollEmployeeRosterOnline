@@ -3,6 +3,7 @@
  * Export payroll and employee data as CSV
  */
 
+import PesoIcon from "@/components/PesoIcon";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -33,7 +34,6 @@ import {
   Download as DownloadIcon,
   Assessment as ReportIcon,
   People as PeopleIcon,
-  AttachMoney as MoneyIcon,
   Receipt as ReceiptIcon,
   CalendarMonth as CalendarIcon,
 } from "@mui/icons-material";
@@ -175,7 +175,7 @@ export default function MuiReports() {
           <Card elevation={0} sx={{ flex: 1, borderRadius: 3, bgcolor: alpha(theme.palette.success.main, 0.05) }}>
             <CardContent>
               <Stack direction="row" alignItems="center" spacing={2}>
-                <MoneyIcon color="success" />
+                <PesoIcon color="success" />
                 <Box>
                   <Typography variant="h4" fontWeight={700}>
                     ₱{parseFloat(summary.totalGross || "0").toLocaleString()}
@@ -267,7 +267,7 @@ export default function MuiReports() {
       <Stack spacing={2}>
         <Card elevation={0} sx={{ borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
           <CardHeader
-            avatar={<MoneyIcon color="success" />}
+            avatar={<PesoIcon color="success" />}
             title="Payroll Summary"
             subheader="Export all payroll entries with earnings and deductions"
             action={

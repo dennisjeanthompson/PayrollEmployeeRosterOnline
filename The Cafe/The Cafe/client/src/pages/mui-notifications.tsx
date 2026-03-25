@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager, useAuth } from "@/lib/auth";
@@ -20,7 +21,6 @@ import {
   Schedule as ScheduleIcon,
   SwapHoriz as SwapIcon,
   EventAvailable as EventIcon,
-  AttachMoney as MoneyIcon,
   CheckCircle as SuccessIcon,
   Error as ErrorIcon,
   Warning as WarningIcon,
@@ -59,7 +59,7 @@ const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; bg: st
   payment:           { icon: <PayIcon sx={{ fontSize: 20 }} />,      color: '#06B6D4', bg: '#ECFEFF', label: 'Payment' },
   approval:          { icon: <SuccessIcon sx={{ fontSize: 20 }} />,  color: '#10B981', bg: '#ECFDF5', label: 'Approved' },
   rejection:         { icon: <ErrorIcon sx={{ fontSize: 20 }} />,    color: '#EF4444', bg: '#FEF2F2', label: 'Rejected' },
-  adjustment:        { icon: <MoneyIcon sx={{ fontSize: 20 }} />,    color: '#06B6D4', bg: '#ECFEFF', label: 'Adjustment' },
+  adjustment:        { icon: <PesoIcon sx={{ fontSize: 20 }} />,    color: '#06B6D4', bg: '#ECFEFF', label: 'Adjustment' },
   warning:           { icon: <WarningIcon sx={{ fontSize: 20 }} />,  color: '#F59E0B', bg: '#FFFBEB', label: 'Warning' },
   success:           { icon: <SuccessIcon sx={{ fontSize: 20 }} />,  color: '#10B981', bg: '#ECFDF5', label: 'Success' },
   error:             { icon: <ErrorIcon sx={{ fontSize: 20 }} />,    color: '#EF4444', bg: '#FEF2F2', label: 'Error' },

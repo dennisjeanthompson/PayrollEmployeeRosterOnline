@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -15,7 +16,6 @@ import { Button } from "@/components/ui/button";
 import {
   CalendarMonth as Calendar,
   AccessTime as Clock,
-  AttachMoney as DollarSign,
   SwapHoriz as ArrowRightLeft,
   Notifications as Bell,
   Description as FileText,
@@ -508,7 +508,7 @@ export default function MobileDashboard() {
             delay={0.3}
           />
           <StatCard
-            icon={DollarSign}
+            icon={PesoIcon}
             label="Last Pay"
             value={latestPayroll ? `₱${parseFloat(String(latestPayroll.netPay)).toLocaleString()}` : '₱0'}
             subLabel="Net Pay"
@@ -702,7 +702,7 @@ export default function MobileDashboard() {
                     </h3>
                   </div>
                   <div className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl bg-white/20 flex items-center justify-center flex-shrink-0">
-                    <DollarSign className="w-5 h-5 sm:w-7 sm:h-7" />
+                    <PesoIcon className="w-5 h-5 sm:w-7 sm:h-7" />
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-2 sm:gap-4 mb-3 sm:mb-4">

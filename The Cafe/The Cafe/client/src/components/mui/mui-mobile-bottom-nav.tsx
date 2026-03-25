@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import React from "react";
 import { useLocation } from "wouter";
 import {
@@ -12,7 +13,6 @@ import {
 import {
   Home as HomeIcon,
   CalendarMonth as CalendarIcon,
-  AttachMoney as MoneyIcon,
   MoreHoriz as MoreIcon,
 } from "@mui/icons-material";
 import { getCurrentUser } from "@/lib/auth";
@@ -106,7 +106,7 @@ export default function MuiMobileBottomNav({ notificationCount = 0 }: MuiMobileB
         />
         <BottomNavigationAction 
           label="Pay" 
-          icon={<MoneyIcon />} 
+          icon={<PesoIcon />} 
         />
         <BottomNavigationAction 
           label="Profile" 

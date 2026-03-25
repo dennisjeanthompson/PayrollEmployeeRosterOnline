@@ -22,6 +22,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import CancelIcon from '@mui/icons-material/Cancel';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
+import DownloadIcon from '@mui/icons-material/Download';
 import { format } from 'date-fns';
 
 export default function MuiLoans() {
@@ -95,9 +96,9 @@ export default function MuiLoans() {
     { field: 'remainingBalance', headerName: 'Remaining Bal.', width: 140, renderCell: (params: GridRenderCellParams) => (
       <Typography variant="body2" color="error.main" sx={{ pt: 1.5 }}>{params.row.remainingBalance ? `₱${Number(params.row.remainingBalance).toFixed(2)}` : '₱0.00'}</Typography>
     )},
-    { field: 'monthlyAmortization', headerName: 'Monthly Amort.', width: 140, valueFormatter: (value: any) => {
-        const val = value?.value || value;
-        return val ? `₱${Number(val).toFixed(2)}` : '₱0.00';
+    { field: 'monthlyAmortization', headerName: 'Monthly Amort.', width: 140, renderCell: (params: GridRenderCellParams) => {
+        if (params.row.status === 'completed') return <Typography variant="body2" sx={{ pt: 1.5 }}>₱0.00</Typography>;
+        return <Typography variant="body2" sx={{ pt: 1.5 }}>{params.row.monthlyAmortization ? `₱${Number(params.row.monthlyAmortization).toFixed(2)}` : '₱0.00'}</Typography>;
     }},
     { field: 'deductionStartDate', headerName: 'Start Cutoff', width: 140, valueFormatter: (params: any) => {
         try { 
@@ -117,12 +118,17 @@ export default function MuiLoans() {
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
             <Tooltip title="Verify Proof Document">
               <IconButton size="small" color="primary" onClick={() => {
-                // To avoid 401 Unauthorized from Cloudinary strict PDF delivery policy
-                // we convert .pdf extensions to .jpg which allows the browser to view it as an image
                 const renderUrl = params.row.proofFileUrl?.replace(/\.pdf$/i, '.jpg');
                 window.open(renderUrl || params.row.proofFileUrl, '_blank');
               }}>
                 <VisibilityIcon />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Signed Authorization Form (DOLE Art. 113)">
+              <IconButton size="small" color="info" onClick={() => {
+                window.open(params.row.proofFileUrl, '_blank');
+              }}>
+                <DownloadIcon />
               </IconButton>
             </Tooltip>
             <Button size="small" variant="contained" color="success" onClick={() => handleOpenDialog(params.row, 'approve')}>

@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager } from "@/lib/auth";
@@ -20,7 +21,6 @@ import {
   Schedule as ScheduleIcon,
   SwapHoriz as SwapIcon,
   EventAvailable as EventIcon,
-  AttachMoney as MoneyIcon,
   CheckCircle as SuccessIcon,
   Error as ErrorIcon,
   Warning as WarningIcon,
@@ -60,7 +60,7 @@ const TYPE_CONFIG: Record<string, { icon: React.ReactNode; color: string; gradie
   rejection:         { icon: <ErrorIcon />,    color: '#EF4444', gradient: 'linear-gradient(135deg, #EF4444, #DC2626)', label: 'Rejected' },
   clock_in:          { icon: <ClockIcon />,    color: '#10B981', gradient: 'linear-gradient(135deg, #10B981, #059669)', label: 'Clock In' },
   clock_out:         { icon: <ClockIcon />,    color: '#F59E0B', gradient: 'linear-gradient(135deg, #F59E0B, #D97706)', label: 'Clock Out' },
-  adjustment:        { icon: <MoneyIcon />,    color: '#06B6D4', gradient: 'linear-gradient(135deg, #06B6D4, #0891B2)', label: 'Adjustment' },
+  adjustment:        { icon: <PesoIcon />,    color: '#06B6D4', gradient: 'linear-gradient(135deg, #06B6D4, #0891B2)', label: 'Adjustment' },
   warning:           { icon: <WarningIcon />,  color: '#F59E0B', gradient: 'linear-gradient(135deg, #F59E0B, #D97706)', label: 'Warning' },
   success:           { icon: <SuccessIcon />,  color: '#10B981', gradient: 'linear-gradient(135deg, #10B981, #059669)', label: 'Success' },
   error:             { icon: <ErrorIcon />,    color: '#EF4444', gradient: 'linear-gradient(135deg, #EF4444, #DC2626)', label: 'Error' },

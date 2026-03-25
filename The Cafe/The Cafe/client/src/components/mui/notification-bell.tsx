@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
@@ -18,7 +19,6 @@ import {
   Cancel as RejectedIcon,
   OpenInNew as OpenIcon,
   NotificationsNone as EmptyIcon,
-  AttachMoney as MoneyIcon,
   CalendarMonth as ScheduleIcon,
   EventAvailable as EventIcon,
   EventBusy as TimeOffRejectedIcon,

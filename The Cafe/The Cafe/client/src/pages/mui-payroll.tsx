@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
@@ -42,7 +43,6 @@ import Grid from "@mui/material/Grid";
 
 // MUI Icons
 import {
-  AttachMoney as DollarIcon,
   AccessTime as ClockIcon,
   Receipt as ReceiptIcon,
   Download as DownloadIcon,
@@ -198,7 +198,7 @@ export default function MuiPayroll() {
             >
               <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
                 <Avatar sx={{ width: 32, height: 32, bgcolor: alpha(theme.palette.success.main, 0.2), color: "success.main" }}>
-                  <DollarIcon fontSize="small" />
+                  <PesoIcon fontSize="small" />
                 </Avatar>
                 <Typography variant="body2" color="text.secondary" noWrap>
                   YTD Earnings

@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
@@ -20,7 +21,6 @@ import {
   Dashboard as DashboardIcon,
   Schedule as ScheduleIcon,
   People as PeopleIcon,
-  AttachMoney as MoneyIcon,
   Settings as SettingsIcon,
   NavigateNext as ArrowIcon,
   Event as EventIcon,
@@ -94,7 +94,7 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       id: 'page-payroll',
       title: 'Payroll',
       subtitle: 'Process payments and view history',
-      icon: <MoneyIcon fontSize="small" />,
+      icon: <PesoIcon fontSize="small" />,
       action: () => setLocation('/payroll-management'),
       type: 'page',
     },

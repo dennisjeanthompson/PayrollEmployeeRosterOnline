@@ -1,3 +1,4 @@
+import PesoIcon from "@/components/PesoIcon";
 import { useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -45,7 +46,6 @@ import {
   Add as AddIcon,
   CalendarMonth,
   AccessTime,
-  AttachMoney,
   Visibility,
   Download,
   Send,
@@ -691,7 +691,7 @@ export default function MuiPayrollManagement() {
             title="Total Disbursed"
             value={`₱${totalPaid.toLocaleString()}`}
             subtitle="Paid to employees"
-            icon={AttachMoney}
+            icon={}
             color={theme.palette.success.main}
           />
         </Grid>
@@ -858,7 +858,7 @@ export default function MuiPayrollManagement() {
                               {(() => {
                                 const days = differenceInDays(new Date(period.endDate), new Date(period.startDate)) + 1;
                                 return days <= 16 ? "Semi-Monthly" : days <= 31 ? "Monthly" : `${days}-day period`;
-                              })()}
+                              })()}{" \u2022 Generated: "}{format(new Date(period.createdAt), "MMM d, yyyy h:mm a")}
                             </Typography>
                           </Box>
                         </Box>
@@ -1159,7 +1159,7 @@ export default function MuiPayrollManagement() {
                                   disabled={markPaidMutation.isPending}
                                   onClick={() => markPaidMutation.mutate(entry.id)}
                                 >
-                                  <AttachMoney fontSize="small" />
+                                  <fontSize="small" />
                                 </IconButton>
                               </Tooltip>
                             )}
