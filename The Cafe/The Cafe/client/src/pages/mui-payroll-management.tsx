@@ -858,7 +858,7 @@ export default function MuiPayrollManagement() {
                               {(() => {
                                 const days = differenceInDays(new Date(period.endDate), new Date(period.startDate)) + 1;
                                 return days <= 16 ? "Semi-Monthly" : days <= 31 ? "Monthly" : `${days}-day period`;
-                              })()}{" \u2022 Generated: "}{format(new Date(period.createdAt), "MMM d, yyyy h:mm a")}
+                              })()}{period.createdAt ? ` \u2022 Generated: ${format(new Date(period.createdAt), "MMM d, yyyy h:mm a")}` : ""}
                             </Typography>
                           </Box>
                         </Box>
