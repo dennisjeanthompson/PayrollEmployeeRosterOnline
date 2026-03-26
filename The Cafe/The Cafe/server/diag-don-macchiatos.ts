@@ -1,6 +1,10 @@
 import 'dotenv/config';
 import { db } from './db';
-import { branches, users, timeOffRequests, adjustmentLogs, loanRequests, leaveCredits } from '../shared/schema';
+import { sql } from 'drizzle-orm';
+import { 
+  branches, users, timeOffRequests, adjustmentLogs, loanRequests, leaveCredits,
+  payrollPeriods, payrollEntries
+} from '../shared/schema';
 import { eq } from 'drizzle-orm';
 
 async function diag() {
@@ -37,12 +41,15 @@ async function diag() {
   console.log(`📊 Total Exception Logs: ${logs.length}`);
 
   // 5. Count Loans
-  const loans = await db.select().from(loanRequests).where(eq(loanRequests.branchId, branchId));
-  console.log(`📊 Total Loan Requests: ${loans.length}`);
+  const periods = await db.select().from(payrollPeriods).where(eq(payrollPeriods.branchId, branchId));
+  console.log(`\n📅 Payroll Periods (${periods.length}):`);
+  periods.forEach(p => {
+    console.log(`   - ${p.startDate.toLocaleDateString()} to ${p.endDate.toLocaleDateString()}: ${p.status} | Total Hours: ${p.totalHours} | Total Pay: ${p.totalPay}`);
+  });
 
-  // 6. Count Leave Credits
-  const credits = await db.select().from(leaveCredits).where(eq(leaveCredits.branchId, branchId));
-  console.log(`📊 Total Leave Credits: ${credits.length}`);
+  const entriesCount = await db.select({ count: sql<number>`count(*)` }).from(payrollEntries)
+    .where(sql`payroll_period_id IN (SELECT id FROM ${payrollPeriods} WHERE branch_id = ${branchId})`);
+  console.log(`\n💰 Payroll Entries: ${entriesCount[0].count}`);
 
   console.log('Done.');
 }

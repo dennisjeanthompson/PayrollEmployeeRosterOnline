@@ -229,6 +229,10 @@ async function main() {
 
     const holidays = await storage.getHolidays(startDt, endDt);
 
+    const periodEntries = [];
+    let periodTotalHours = 0;
+    let periodTotalPay = 0;
+
     for (const emp of seededEmployees) {
       if (emp.role === 'admin') continue;
       const empShifts = await storage.getShiftsByUser(emp.id, startDt, endDt);
@@ -247,7 +251,7 @@ async function main() {
       const hdmf = pay.totalGrossPay > 0 ? 100 : 0;
       const totalDed = sss + phic + hdmf;
 
-      await db.insert(payrollEntries).values({
+      const entry = {
         id: uuid(),
         userId: emp.id,
         payrollPeriodId: periodId,
@@ -269,7 +273,12 @@ async function main() {
         netPay: (pay.totalGrossPay - totalDed).toFixed(2),
         status: def.status === 'open' ? 'pending' : 'paid',
         createdAt: new Date(),
-      });
+      };
+
+      await db.insert(payrollEntries).values(entry);
+      periodEntries.push(entry);
+      periodTotalHours += totalHours;
+      periodTotalPay += pay.totalGrossPay;
 
       // 13th Month Ledger
       await db.insert(thirteenthMonthLedger).values({
@@ -283,8 +292,16 @@ async function main() {
         periodEndDate: endDt,
       });
     }
+
+    // Update the period with totals
+    await db.update(payrollPeriods)
+      .set({
+        totalHours: periodTotalHours.toFixed(2),
+        totalPay: periodTotalPay.toFixed(2),
+      })
+      .where(eq(payrollPeriods.id, periodId));
   }
-  console.log('   ✅ Created 4 payroll periods');
+  console.log('   ✅ Created 4 payroll periods with totals');
 
   // 6. Seed Loans
   console.log('🏦 Seeding loan requests...');
