@@ -546,8 +546,8 @@ export default function MobileDashboard() {
               <div className="flex items-center justify-between mb-3 sm:mb-5">
                 <h3 className="text-base sm:text-xl font-bold">Upcoming Shifts</h3>
                 <MuiButton
-                  variant="ghost"
-                  size="sm"
+                  variant="text"
+                  size="small"
                   className="text-primary text-sm sm:text-base h-8 sm:h-10 px-2 sm:px-4 rounded-lg sm:rounded-xl"
                   onClick={() => setLocation('/employee/schedule')}
                 >
@@ -634,8 +634,8 @@ export default function MobileDashboard() {
                   )}
                 </CardTitle>
                 <MuiButton
-                  variant="ghost"
-                  size="sm"
+                  variant="text"
+                  size="small"
                   className="text-sm sm:text-base h-8 sm:h-10 px-2 sm:px-3 rounded-lg sm:rounded-xl"
                   onClick={() => setLocation('/employee/notifications')}
                 >

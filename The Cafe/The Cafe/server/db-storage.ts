@@ -1263,6 +1263,7 @@ export class DatabaseStorage implements IStorage {
       approvedAt: log.approvedAt ?? null,
       payrollPeriodId: log.payrollPeriodId ?? null,
       calculatedAmount: log.calculatedAmount ?? null,
+      rejectionReason: null,
       createdAt: new Date(),
     };
     await db.insert(adjustmentLogs).values(adjustmentLog);

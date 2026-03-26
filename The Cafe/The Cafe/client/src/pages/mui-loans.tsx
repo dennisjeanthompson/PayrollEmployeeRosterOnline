@@ -33,9 +33,10 @@ export default function MuiLoans() {
   const [actionDialog, setActionDialog] = useState<'approve' | 'reject' | null>(null);
   const [hrNote, setHrNote] = useState('');
 
-  const { data: loans = [], isLoading } = useQuery({
+  const { data: loansRaw, isLoading } = useQuery({
     queryKey: ['/api/loans/branch'],
   });
+  const loans = Array.isArray(loansRaw) ? loansRaw : (loansRaw as any)?.loans || [];
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ id, status, hrApprovalNote }: { id: string, status: string, hrApprovalNote: string }) => {

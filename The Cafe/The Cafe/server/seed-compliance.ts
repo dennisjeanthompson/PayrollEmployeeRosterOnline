@@ -188,7 +188,7 @@ async function main() {
         .where(
           and(
             eq(schema.shifts.userId, emp.id),
-            eq(schema.shifts.date, shiftDate),
+            eq(schema.shifts.startTime, startTime),
           )
         );
       if (existing.length > 0) continue;
@@ -197,7 +197,7 @@ async function main() {
         id: randomUUID(),
         userId: emp.id,
         branchId: branchId || '',
-        date: shiftDate,
+        position: 'Barista',
         startTime,
         endTime,
         status: 'scheduled',

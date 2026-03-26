@@ -108,12 +108,12 @@ function TimeOffTab() {
   const { data: requestsData, isLoading } = useQuery({
     queryKey: ['/api/time-off-requests'],
   });
-  const requests = Array.isArray(requestsData) ? requestsData : (requestsData?.requests || []);
+  const requests = Array.isArray(requestsData) ? requestsData : ((requestsData as any)?.requests || []);
 
   const { data: balancesData } = useQuery({
     queryKey: ['/api/leave-credits/my'],
   });
-  const balances = Array.isArray(balancesData) ? balancesData : (balancesData?.credits || []);
+  const balances = Array.isArray(balancesData) ? balancesData : ((balancesData as any)?.credits || []);
 
   const submitMutation = useMutation({
     mutationFn: async (payload: any) => {

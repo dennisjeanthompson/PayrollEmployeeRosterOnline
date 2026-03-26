@@ -17,6 +17,7 @@ import { MuiThemeProvider } from "@/components/mui/mui-theme-provider";
 
 // MUI Components
 import Logo from "@/components/Logo";
+import { Box, alpha } from "@mui/material";
 
 // MUI Layout Components
 import MuiSidebar from "@/components/mui/mui-sidebar";
@@ -92,19 +93,18 @@ function LoadingScreen() {
       background: '#fafafa',
     }}>
       <div style={{ textAlign: 'center' }}>
-          <Logo size={32} />
-        </div>
-        <div style={{
-          width: 24, height: 24, border: '3px solid #e0e0e0',
-          borderTopColor: '#2e7d32', borderRadius: '50%',
-          animation: 'spin 0.6s linear infinite',
-          margin: '0 auto 8px',
-        }} />
-        <style>{`
-          @keyframes spin { to { transform: rotate(360deg) } }
-          @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.7 } }
-        `}</style>
+        <Logo size={32} />
       </div>
+      <div style={{
+        width: 24, height: 24, border: '3px solid #e0e0e0',
+        borderTopColor: '#2e7d32', borderRadius: '50%',
+        animation: 'spin 0.6s linear infinite',
+        margin: '0 auto 8px',
+      }} />
+      <style>{`
+        @keyframes spin { to { transform: rotate(360deg) } }
+        @keyframes pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.7 } }
+      `}</style>
     </div>
   );
 }

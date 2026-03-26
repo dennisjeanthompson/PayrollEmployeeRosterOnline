@@ -181,6 +181,10 @@ export class MemStorage implements IStorage {
   private auditLogs: Map<string, AuditLog> = new Map();
   private adjustmentLogs: Map<string, AdjustmentLog> = new Map();
   private companySettingsStore: Map<string, CompanySettings> = new Map();
+  private loanRequests: Map<string, LoanRequest> = new Map();
+  private timeOffPolicies: Map<string, TimeOffPolicy> = new Map();
+  private archivedPayrollPeriods: Map<string, ArchivedPayrollPeriod> = new Map();
+  private setupComplete: boolean = false;
 
 
 
@@ -197,6 +201,8 @@ export class MemStorage implements IStorage {
       phone: "(555) 123-4567",
       isActive: true,
       createdAt: new Date(),
+      intentHolidayExempt: false,
+      establishmentType: "other",
     };
     this.branches.set(branch.id, branch);
 
@@ -226,6 +232,7 @@ export class MemStorage implements IStorage {
       philhealthNumber: null,
       pagibigNumber: null,
       isMwe: false,
+      dailyRate: "0",
     };
     this.users.set(manager.id, manager);
 
@@ -255,6 +262,7 @@ export class MemStorage implements IStorage {
       philhealthNumber: null,
       pagibigNumber: null,
       isMwe: false,
+      dailyRate: "0",
     };
     this.users.set(employee.id, employee);
 
@@ -343,6 +351,7 @@ export class MemStorage implements IStorage {
       philhealthNumber: insertUser.philhealthNumber ?? null,
       pagibigNumber: insertUser.pagibigNumber ?? null,
       isMwe: insertUser.isMwe ?? false,
+      dailyRate: insertUser.dailyRate ?? "0",
     };
     this.users.set(id, user);
     return user;
@@ -380,7 +389,9 @@ export class MemStorage implements IStorage {
       id,
       createdAt: new Date(),
       phone: insertBranch.phone || null,
-      isActive: insertBranch.isActive ?? true
+      isActive: insertBranch.isActive ?? true,
+      intentHolidayExempt: insertBranch.intentHolidayExempt ?? false,
+      establishmentType: insertBranch.establishmentType ?? "other",
     };
     this.branches.set(id, branch);
     return branch;
@@ -511,7 +522,8 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       status: insertPeriod.status || 'open',
       totalHours: insertPeriod.totalHours || null,
-      totalPay: insertPeriod.totalPay || null
+      totalPay: insertPeriod.totalPay || null,
+      payDate: insertPeriod.payDate || null,
     };
     this.payrollPeriods.set(id, period);
     this.payrollPeriods.set(id, period);
@@ -653,7 +665,8 @@ export class MemStorage implements IStorage {
       approvedAt: null,
       status: insertRequest.status || 'pending',
       approvedBy: insertRequest.approvedBy || null,
-      rejectionReason: insertRequest.rejectionReason ?? null
+      rejectionReason: insertRequest.rejectionReason ?? null,
+      isPaid: false
     };
     this.timeOffRequests.set(id, request);
     return request;
@@ -961,7 +974,8 @@ export class MemStorage implements IStorage {
       employeeId: log.employeeId,
       branchId: log.branchId,
       loggedBy: log.loggedBy,
-      date: new Date(log.date),
+      startDate: new Date(log.startDate),
+      endDate: new Date(log.endDate),
       type: log.type,
       value: log.value,
       remarks: log.remarks ?? null,
@@ -972,6 +986,7 @@ export class MemStorage implements IStorage {
       approvedAt: log.approvedAt ?? null,
       payrollPeriodId: log.payrollPeriodId ?? null,
       calculatedAmount: log.calculatedAmount ?? null,
+      rejectionReason: null,
       createdAt: new Date(),
     };
     this.adjustmentLogs.set(id, adjustmentLog);
@@ -985,25 +1000,25 @@ export class MemStorage implements IStorage {
   async getAdjustmentLogsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<AdjustmentLog[]> {
     return Array.from(this.adjustmentLogs.values()).filter(log => {
       if (log.employeeId !== employeeId) return false;
-      if (startDate && new Date(log.date) < startDate) return false;
-      if (endDate && new Date(log.date) > endDate) return false;
+      if (startDate && log.startDate && new Date(log.startDate) < startDate) return false;
+      if (endDate && log.startDate && new Date(log.startDate) > endDate) return false;
       return true;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }).sort((a, b) => new Date(b.startDate || 0).getTime() - new Date(a.startDate || 0).getTime());
   }
 
   async getAdjustmentLogsByBranch(branchId: string, startDate?: Date, endDate?: Date): Promise<AdjustmentLog[]> {
     return Array.from(this.adjustmentLogs.values()).filter(log => {
       if (log.branchId !== branchId) return false;
-      if (startDate && new Date(log.date) < startDate) return false;
-      if (endDate && new Date(log.date) > endDate) return false;
+      if (startDate && log.startDate && new Date(log.startDate) < startDate) return false;
+      if (endDate && log.startDate && new Date(log.startDate) > endDate) return false;
       return true;
-    }).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    }).sort((a, b) => new Date(b.startDate || 0).getTime() - new Date(a.startDate || 0).getTime());
   }
 
   async getPendingAdjustmentLogs(branchId: string): Promise<AdjustmentLog[]> {
     return Array.from(this.adjustmentLogs.values()).filter(log =>
       log.branchId === branchId && (log.status === 'pending' || log.status === 'employee_verified')
-    ).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    ).sort((a, b) => new Date(b.startDate || 0).getTime() - new Date(a.startDate || 0).getTime());
   }
 
   async updateAdjustmentLog(id: string, log: Partial<InsertAdjustmentLog>): Promise<AdjustmentLog | undefined> {
@@ -1068,8 +1083,6 @@ export class MemStorage implements IStorage {
   }
 
   // Setup Management
-  private setupComplete: boolean = false;
-
   async isSetupComplete(): Promise<boolean> {
     return this.setupComplete;
   }
@@ -1143,8 +1156,6 @@ export class MemStorage implements IStorage {
   }
 
   // Archived Payroll
-  private archivedPayrollPeriods: Map<string, ArchivedPayrollPeriod> = new Map();
-
   async getArchivedPayrollPeriods(branchId: string): Promise<ArchivedPayrollPeriod[]> {
     return Array.from(this.archivedPayrollPeriods.values())
       .filter(a => a.branchId === branchId);
@@ -1214,9 +1225,63 @@ export class MemStorage implements IStorage {
     };
   }
 
-  // Time Off Policy
-  private timeOffPolicies: Map<string, TimeOffPolicy> = new Map();
+  // Government Loans (Art. 113)
+  async createLoanRequest(data: InsertLoanRequest): Promise<LoanRequest> {
+    const id = randomUUID();
+    const loan: LoanRequest = {
+      ...data,
+      id,
+      status: data.status || 'pending',
+      proofFileUrl: data.proofFileUrl || null,
+      hrApprovalNote: data.hrApprovalNote || null,
+      totalAmount: data.totalAmount || "0",
+      remainingBalance: data.remainingBalance || data.totalAmount || "0",
+      approvedBy: data.approvedBy || null,
+      approvedAt: data.approvedAt || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+    this.loanRequests.set(id, loan);
+    return loan;
+  }
 
+  async getLoanRequestsByUser(userId: string): Promise<LoanRequest[]> {
+    return Array.from(this.loanRequests.values()).filter(l => l.userId === userId);
+  }
+
+  async getLoanRequestsByBranch(branchId: string): Promise<LoanRequest[]> {
+    return Array.from(this.loanRequests.values()).filter(l => l.branchId === branchId);
+  }
+
+  async getLoanRequest(id: string): Promise<LoanRequest | undefined> {
+    return this.loanRequests.get(id);
+  }
+
+  async updateLoanRequest(id: string, status: string, hrApprovalNote?: string, approvedBy?: string): Promise<LoanRequest | undefined> {
+    const existing = this.loanRequests.get(id);
+    if (!existing) return undefined;
+    const updated = {
+      ...existing,
+      status,
+      hrApprovalNote: hrApprovalNote ?? existing.hrApprovalNote,
+      approvedBy: approvedBy ?? existing.approvedBy,
+      approvedAt: status === 'approved' ? new Date() : existing.approvedAt,
+      updatedAt: new Date(),
+    };
+    this.loanRequests.set(id, updated);
+    return updated;
+  }
+
+  async getActiveApprovedLoans(userId: string, targetDate: Date): Promise<LoanRequest[]> {
+    return Array.from(this.loanRequests.values()).filter(l =>
+      l.userId === userId &&
+      l.status === 'approved' &&
+      new Date(l.deductionStartDate) <= targetDate &&
+      Number(l.remainingBalance) > 0
+    );
+  }
+
+  // Time Off Policy
   async getTimeOffPolicyByBranch(branchId: string): Promise<TimeOffPolicy[]> {
     return Array.from(this.timeOffPolicies.values()).filter(p => p.branchId === branchId);
   }

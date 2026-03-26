@@ -621,8 +621,23 @@ export type AdjustmentLog = typeof adjustmentLogs.$inferSelect;
 export type CompanySettings = typeof companySettings.$inferSelect;
 export type ThirteenthMonthLedger = typeof thirteenthMonthLedger.$inferSelect;
 export type LeaveCredit = typeof leaveCredits.$inferSelect;
-export type ServiceChargePool = typeof serviceChargePools.$inferSelect;
+export const serviceChargePools = pgTable("service_charge_pools", {
+  id: text("id").primaryKey(),
+  branchId: text("branch_id").references(() => branches.id).notNull(),
+  payrollPeriodId: text("payroll_period_id").references(() => payrollPeriods.id).notNull(),
+  totalCollected: text("total_collected").notNull(),
+  distributedAt: timestamp("distributed_at"),
+  status: text("status").default("pending"), // 'pending', 'distributed'
+  createdAt: timestamp("created_at").defaultNow(),
+});
 
+export const insertServiceChargePoolSchema = createInsertSchema(serviceChargePools).omit({
+  id: true,
+  createdAt: true,
+});
+
+export type LoanRequest = typeof loanRequests.$inferSelect;
+export type ServiceChargePool = typeof serviceChargePools.$inferSelect;
 
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -643,6 +658,7 @@ export type InsertAdjustmentLog = z.infer<typeof insertAdjustmentLogSchema>;
 export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
 export type InsertThirteenthMonthLedger = z.infer<typeof insertThirteenthMonthLedgerSchema>;
 export type InsertLeaveCredit = z.infer<typeof insertLeaveCreditsSchema>;
+export type InsertLoanRequest = z.infer<typeof insertLoanRequestSchema>;
 export type InsertServiceChargePool = z.infer<typeof insertServiceChargePoolSchema>;
 
 // Phase 2 Types

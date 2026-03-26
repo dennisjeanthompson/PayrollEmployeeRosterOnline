@@ -376,8 +376,8 @@ export default function WeeklyGrid({
                             </Typography>
                           </Box>
                         )}
-                        <Avatar src={emp.photoUrl || undefined} sx={{ width: 36, height: 36, bgcolor: rc.bg, color: rc.text, fontSize: '0.75rem', fontWeight: 700 }}>
-                          {!emp.photoUrl && <>{emp?.firstName?.[0]}{emp?.lastName?.[0]}</>}
+                        <Avatar src={emp?.photoUrl || undefined} sx={{ width: 36, height: 36, bgcolor: rc.bg, color: rc.text, fontSize: '0.75rem', fontWeight: 700 }}>
+                          {!emp?.photoUrl && <>{emp?.firstName?.[0]}{emp?.lastName?.[0]}</>}
                         </Avatar>
                         <Box sx={{ flex: 1, minWidth: 0 }}>
                           <Typography variant="body2" fontWeight={700} noWrap>
@@ -536,8 +536,8 @@ export default function WeeklyGrid({
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Avatar src={emp.photoUrl || undefined} sx={{ width: 32, height: 32, bgcolor: rc.bg, color: rc.text, fontSize: '0.72rem', fontWeight: 700 }}>
-                      {!emp.photoUrl && <>{emp.firstName[0]}{emp.lastName[0]}</>}
+                    <Avatar src={emp?.photoUrl || undefined} sx={{ width: 32, height: 32, bgcolor: rc.bg, color: rc.text, fontSize: '0.72rem', fontWeight: 700 }}>
+                      {!emp?.photoUrl && <>{emp?.firstName?.[0]}{emp?.lastName?.[0]}</>}
                     </Avatar>
                     <Box sx={{ minWidth: 0 }}>
                       <Typography variant="body2" fontWeight={600} noWrap sx={{ fontSize: '0.82rem' }}>

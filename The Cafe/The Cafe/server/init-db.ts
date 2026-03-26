@@ -2,7 +2,7 @@ import { db } from './db';
 import { 
   branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, 
   approvals, timeOffRequests, notifications, setupStatus, deductionSettings, 
-  deductionRates, holidays, archivedPayrollPeriods, adjustmentLogs 
+  deductionRates, holidays, archivedPayrollPeriods, adjustmentLogs, sssContributionTable
 } from '@shared/schema';
 import { getPaymentDate } from '@shared/payroll-dates';
 import bcrypt from 'bcrypt';
@@ -35,7 +35,10 @@ export async function resetDatabase() {
     // Fallback: Try dropping tables individually if schema drop fails (e.g. permissions)
     try {
       await db.execute(sql`
-        DROP TABLE IF EXISTS audit_logs, archived_payroll_periods, holidays, deduction_rates, deduction_settings, 
+        DROP TABLE IF EXISTS 
+        employee_tax_ytd, de_minimis_ytd, worker_allowances, allowance_types, wage_orders, sss_contribution_table,
+        loan_requests, leave_credits, thirteenth_month_ledger, service_charge_pools, company_settings,
+        audit_logs, archived_payroll_periods, holidays, deduction_rates, deduction_settings, 
         setup_status, notifications, time_off_requests, approvals, payroll_entries, payroll_periods, 
         shift_trades, shifts, users, branches CASCADE
       `);
@@ -58,6 +61,8 @@ export async function initializeDatabase() {
         name TEXT NOT NULL,
         address TEXT NOT NULL,
         phone TEXT,
+        intent_holiday_exempt BOOLEAN DEFAULT false,
+        establishment_type TEXT DEFAULT 'other',
         is_active BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT NOW()
       )
@@ -74,6 +79,7 @@ export async function initializeDatabase() {
         role TEXT NOT NULL DEFAULT 'employee',
         position TEXT NOT NULL,
         hourly_rate TEXT NOT NULL,
+        daily_rate TEXT DEFAULT '0',
         branch_id TEXT REFERENCES branches(id) NOT NULL,
         is_active BOOLEAN DEFAULT true,
         sss_loan_deduction TEXT DEFAULT '0',
@@ -83,6 +89,11 @@ export async function initializeDatabase() {
         other_deductions TEXT DEFAULT '0',
         photo_url TEXT,
         photo_public_id TEXT,
+        tin TEXT,
+        sss_number TEXT,
+        philhealth_number TEXT,
+        pagibig_number TEXT,
+        is_mwe BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
@@ -137,6 +148,7 @@ export async function initializeDatabase() {
         branch_id TEXT REFERENCES branches(id) NOT NULL,
         start_date TIMESTAMP NOT NULL,
         end_date TIMESTAMP NOT NULL,
+        pay_date TIMESTAMP,
         status TEXT DEFAULT 'open',
         total_hours TEXT,
         total_pay TEXT,
@@ -172,7 +184,9 @@ export async function initializeDatabase() {
         net_pay TEXT NOT NULL,
         pay_breakdown TEXT,
         status TEXT DEFAULT 'pending',
-        created_at TIMESTAMP DEFAULT NOW()
+        service_charge TEXT DEFAULT '0',
+        created_at TIMESTAMP DEFAULT NOW(),
+        paid_at TIMESTAMP
       )
     `);
 
@@ -200,9 +214,11 @@ export async function initializeDatabase() {
         type TEXT NOT NULL,
         reason TEXT NOT NULL,
         status TEXT DEFAULT 'pending',
+        is_paid BOOLEAN DEFAULT false,
         requested_at TIMESTAMP DEFAULT NOW(),
         approved_at TIMESTAMP,
-        approved_by TEXT REFERENCES users(id)
+        approved_by TEXT REFERENCES users(id),
+        rejection_reason TEXT
       )
     `);
 
@@ -210,6 +226,7 @@ export async function initializeDatabase() {
       CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY,
         user_id TEXT REFERENCES users(id) NOT NULL,
+        branch_id TEXT REFERENCES branches(id),
         type TEXT NOT NULL,
         title TEXT NOT NULL,
         message TEXT NOT NULL,
@@ -355,17 +372,185 @@ export async function initializeDatabase() {
         employee_id TEXT REFERENCES users(id) NOT NULL,
         branch_id TEXT REFERENCES branches(id) NOT NULL,
         logged_by TEXT REFERENCES users(id) NOT NULL,
-        date TIMESTAMP NOT NULL,
+        start_date TIMESTAMP,
+        end_date TIMESTAMP,
         type TEXT NOT NULL,
         value TEXT NOT NULL,
         remarks TEXT,
         status TEXT DEFAULT 'pending',
+        rejection_reason TEXT,
         verified_by_employee BOOLEAN DEFAULT false,
         verified_at TIMESTAMP,
         approved_by TEXT REFERENCES users(id),
         approved_at TIMESTAMP,
         payroll_period_id TEXT REFERENCES payroll_periods(id),
         calculated_amount TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS sss_contribution_table (
+        id SERIAL PRIMARY KEY,
+        year INTEGER NOT NULL,
+        min_compensation NUMERIC(12, 4) NOT NULL,
+        max_compensation NUMERIC(12, 4) NOT NULL,
+        monthly_salary_credit NUMERIC(12, 4) NOT NULL,
+        employee_share NUMERIC(12, 4) NOT NULL,
+        employer_share NUMERIC(12, 4) NOT NULL,
+        ec_contribution NUMERIC(12, 4) NOT NULL
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS wage_orders (
+        id SERIAL PRIMARY KEY,
+        region TEXT NOT NULL,
+        effective_date TIMESTAMP NOT NULL,
+        daily_rate NUMERIC(12, 4) NOT NULL,
+        is_active BOOLEAN DEFAULT true
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS allowance_types (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        is_de_minimis BOOLEAN DEFAULT true,
+        ceiling_type TEXT,
+        ceiling_value NUMERIC(12, 4)
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS worker_allowances (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) NOT NULL,
+        allowance_type_id TEXT REFERENCES allowance_types(id) NOT NULL,
+        amount NUMERIC(12, 4) NOT NULL,
+        is_active BOOLEAN DEFAULT true
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS de_minimis_ytd (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) NOT NULL,
+        branch_id TEXT REFERENCES branches(id) NOT NULL,
+        year INTEGER NOT NULL,
+        allowance_type_id TEXT REFERENCES allowance_types(id) NOT NULL,
+        amount_given_ytd NUMERIC(12, 4) DEFAULT '0'
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS employee_tax_ytd (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) NOT NULL,
+        year INTEGER NOT NULL,
+        other_benefits_ytd NUMERIC(12, 4) DEFAULT '0',
+        thirteenth_month_ytd NUMERIC(12, 4) DEFAULT '0',
+        gross_compensation_ytd NUMERIC(12, 4) DEFAULT '0',
+        taxable_compensation_ytd NUMERIC(12, 4) DEFAULT '0',
+        tax_withheld_ytd NUMERIC(12, 4) DEFAULT '0'
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS thirteenth_month_ledger (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) NOT NULL,
+        branch_id TEXT REFERENCES branches(id) NOT NULL,
+        payroll_period_id TEXT REFERENCES payroll_periods(id) NOT NULL,
+        year INTEGER NOT NULL,
+        basic_pay_earned TEXT NOT NULL,
+        period_start_date TIMESTAMP NOT NULL,
+        period_end_date TIMESTAMP NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS leave_credits (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) NOT NULL,
+        branch_id TEXT REFERENCES branches(id) NOT NULL,
+        year INTEGER NOT NULL,
+        leave_type TEXT NOT NULL,
+        total_credits TEXT NOT NULL,
+        used_credits TEXT DEFAULT '0',
+        remaining_credits TEXT NOT NULL,
+        granted_by TEXT REFERENCES users(id),
+        notes TEXT,
+        updated_at TIMESTAMP DEFAULT NOW(),
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS loan_requests (
+        id TEXT PRIMARY KEY,
+        user_id TEXT REFERENCES users(id) NOT NULL,
+        branch_id TEXT REFERENCES branches(id) NOT NULL,
+        loan_type TEXT NOT NULL,
+        reference_number TEXT NOT NULL,
+        account_number TEXT NOT NULL,
+        total_amount TEXT NOT NULL DEFAULT '0',
+        remaining_balance TEXT NOT NULL DEFAULT '0',
+        monthly_amortization TEXT NOT NULL,
+        deduction_start_date TIMESTAMP NOT NULL,
+        status TEXT DEFAULT 'pending',
+        proof_file_url TEXT,
+        hr_approval_note TEXT,
+        approved_by TEXT REFERENCES users(id),
+        approved_at TIMESTAMP,
+        created_at TIMESTAMP DEFAULT NOW(),
+        updated_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS service_charge_pools (
+        id TEXT PRIMARY KEY,
+        branch_id TEXT REFERENCES branches(id) NOT NULL,
+        payroll_period_id TEXT REFERENCES payroll_periods(id) NOT NULL,
+        total_collected TEXT NOT NULL,
+        distributed_at TIMESTAMP,
+        status TEXT DEFAULT 'pending',
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS company_settings (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        trade_name TEXT,
+        address TEXT NOT NULL,
+        city TEXT,
+        province TEXT,
+        zip_code TEXT,
+        country TEXT DEFAULT 'Philippines',
+        tin TEXT NOT NULL,
+        sss_employer_no TEXT,
+        philhealth_no TEXT,
+        pagibig_no TEXT,
+        bir_rdo TEXT,
+        sec_registration TEXT,
+        phone TEXT,
+        email TEXT,
+        website TEXT,
+        logo_url TEXT,
+        logo_public_id TEXT,
+        industry TEXT DEFAULT 'Food & Beverage',
+        payroll_frequency TEXT DEFAULT 'semi-monthly',
+        payment_method TEXT DEFAULT 'Bank Transfer',
+        bank_name TEXT,
+        bank_account_name TEXT,
+        bank_account_no TEXT,
+        is_active BOOLEAN DEFAULT true,
+        updated_by TEXT REFERENCES users(id),
+        updated_at TIMESTAMP DEFAULT NOW(),
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
@@ -477,6 +662,24 @@ export async function seedDeductionRates() {
         employeeContribution: rate.employeeContribution,
         isActive: true,
       });
+    }
+
+    // Also seed the actual SSS Contribution Table (Phase 2 compliance)
+    const existingSSSBrackets = await db.select().from(sssContributionTable).where(eq(sssContributionTable.year, 2026)).limit(1);
+    if (existingSSSBrackets.length === 0) {
+      console.log('📈 Seeding SSS Contribution Table (2026)...');
+      for (const b of sss2026Brackets) {
+        await db.insert(sssContributionTable).values({
+          year: 2026,
+          minCompensation: String(b.minSalary),
+          maxCompensation: b.maxSalary !== null ? String(b.maxSalary) : '999999.99',
+          monthlySalaryCredit: String(b.totalMSC),
+          employeeShare: String(b.totalEE),
+          employerShare: String(b.totalER),
+          ecContribution: String(b.ecER),
+        });
+      }
+      console.log(`✅ Seeded ${sss2026Brackets.length} SSS brackets for 2026`);
     }
 
     // PhilHealth rate (2025: 5% of salary, employee pays half = 2.5%)
@@ -1306,7 +1509,8 @@ export async function seedSampleSchedulesAndPayroll() {
           employeeId: ot.employeeId,
           branchId: branchId,
           loggedBy: manager.id,
-          date: ot.date,
+          startDate: ot.date,
+          endDate: ot.date,
           type: 'overtime',
           value: ot.value,
           remarks: ot.remarks,

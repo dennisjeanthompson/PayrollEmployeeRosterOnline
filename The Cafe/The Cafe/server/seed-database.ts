@@ -326,8 +326,8 @@ async function seedTimeOff(employees: any[], managerId: string) {
       reason: req.reason,
       status: req.status,
       requestedAt: subDays(req.startDate, 3),
-      approvedAt: req.status === 'approved' ? subDays(req.startDate, 1) : null,
       approvedBy: req.status === 'approved' ? managerId : null,
+      approvedAt: req.status === 'approved' ? subDays(req.startDate, 1) : null,
     });
     count++;
   }
@@ -506,7 +506,8 @@ async function seedAdjustmentLogs(branchId: string, employees: any[], managerId:
       employeeId: staff[adj.empIdx].id,
       branchId,
       loggedBy: managerId,
-      date: subDays(now, adj.daysAgo),
+      startDate: subDays(now, adj.daysAgo),
+      endDate: subDays(now, adj.daysAgo),
       type: adj.type,
       value: adj.value,
       remarks: adj.remarks,

@@ -69,8 +69,8 @@ async function main() {
   await db.insert(deductionSettings).values({
     id: uuid(),
     branchId,
-    deductSss: true,
-    deductPhilhealth: true,
+    deductSSS: true,
+    deductPhilHealth: true,
     deductPagibig: true,
     deductWithholdingTax: true,
   }).onConflictDoNothing();
@@ -399,7 +399,7 @@ async function main() {
       status: to.status,
       requestedAt: subDays(startDate, 10),
       approvedBy: to.status === 'approved' ? 'user-don-mgr-lita' : null,
-      approvalDate: to.status === 'approved' ? subDays(startDate, 8) : null,
+      approvedAt: to.status === 'approved' ? subDays(startDate, 8) : null,
     });
   }
 
