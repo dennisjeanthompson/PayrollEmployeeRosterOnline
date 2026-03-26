@@ -240,7 +240,10 @@ export const invalidateQueries = {
     queryClient.invalidateQueries({ queryKey: ['forecast-labor'] });
     queryClient.invalidateQueries({ queryKey: ['forecast-payroll'] });
     queryClient.invalidateQueries({ queryKey: ['/api/adjustment-logs/branch'] });
+    queryClient.invalidateQueries({ queryKey: ['adjustment-logs-branch'] });
     queryClient.invalidateQueries({ queryKey: ['/api/exception-logs'] });
+    queryClient.invalidateQueries({ queryKey: ['/api/loans/branch'] });
+    queryClient.invalidateQueries({ queryKey: ['leave-credits'] });
   },
   all: () => {
     queryClient.invalidateQueries();
