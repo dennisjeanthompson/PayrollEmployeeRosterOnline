@@ -19,10 +19,10 @@ import Grid from "@mui/material/Grid";
 import {
   Visibility,
   VisibilityOff,
-  Coffee,
   ArrowForward,
   CheckCircleOutline,
 } from "@mui/icons-material";
+import Logo from "@/components/Logo";
 import { apiRequest } from "@/lib/queryClient";
 import { setAuthState } from "@/lib/auth";
 import { useLocation } from "wouter";
@@ -161,21 +161,7 @@ export default function MuiLogin() {
         {/* Content */}
         <Box sx={{ position: "relative", zIndex: 10 }}>
           <Box sx={{ mb: 4 }}>
-            <Box
-              sx={{
-                width: 64,
-                height: 64,
-                background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-                borderRadius: 4,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                mb: 3,
-                boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.3)}`,
-              }}
-            >
-              <Coffee sx={{ fontSize: 32, color: "white" }} />
-            </Box>
+              <Logo size={40} />
             <Typography variant="h3" fontWeight={700} color="text.primary" gutterBottom>
               PERO
             </Typography>
@@ -228,21 +214,7 @@ export default function MuiLogin() {
               mb: 4,
             }}
           >
-            <Box
-              sx={{
-                width: 56,
-                height: 56,
-                background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-                borderRadius: 3,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                mb: 2,
-                boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, 0.3)}`,
-              }}
-            >
-              <Coffee sx={{ fontSize: 28, color: "white" }} />
-            </Box>
+              <Logo size={40} />
             <Typography variant="h5" fontWeight={700} color="text.primary">
               PERO
             </Typography>

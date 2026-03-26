@@ -28,6 +28,7 @@ import {
   DarkMode as Moon,
   LocalCafe as Coffee,
 } from "@mui/icons-material";
+import Logo from "@/components/Logo";
 import { format, isToday, isTomorrow, parseISO, differenceInHours } from "date-fns";
 import { motion } from "framer-motion";
 import { apiRequest } from "@/lib/queryClient";
@@ -293,7 +294,7 @@ export default function MobileDashboard() {
             transition={{ duration: 0.5 }}
             className="w-20 h-20 bg-gradient-to-br from-primary to-primary/60 rounded-2xl flex items-center justify-center mx-auto mb-4"
           >
-            <Coffee className="w-10 h-10 text-primary-foreground animate-pulse" />
+            <Logo size={40} />
           </motion.div>
           <p className="text-lg text-muted-foreground">Loading your dashboard...</p>
         </div>
@@ -544,14 +545,14 @@ export default function MobileDashboard() {
             <CardContent className="p-4 sm:p-5">
               <div className="flex items-center justify-between mb-3 sm:mb-5">
                 <h3 className="text-base sm:text-xl font-bold">Upcoming Shifts</h3>
-                <Button
+                <MuiButton
                   variant="ghost"
                   size="sm"
                   className="text-primary text-sm sm:text-base h-8 sm:h-10 px-2 sm:px-4 rounded-lg sm:rounded-xl"
                   onClick={() => setLocation('/employee/schedule')}
                 >
                   View All <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
+                </MuiButton>
               </div>
               <div className="space-y-2 sm:space-y-3">
                 {upcomingShifts.length === 0 ? (
@@ -632,14 +633,14 @@ export default function MobileDashboard() {
                     </Badge>
                   )}
                 </CardTitle>
-                <Button
+                <MuiButton
                   variant="ghost"
                   size="sm"
                   className="text-sm sm:text-base h-8 sm:h-10 px-2 sm:px-3 rounded-lg sm:rounded-xl"
                   onClick={() => setLocation('/employee/notifications')}
                 >
                   All <ChevronRight className="w-4 h-4 ml-1" />
-                </Button>
+                </MuiButton>
               </div>
             </CardHeader>
             <CardContent className="space-y-2 sm:space-y-3 px-4 sm:px-5 pb-4 sm:pb-5">
@@ -730,12 +731,12 @@ export default function MobileDashboard() {
                     {capitalizeFirstLetter(latestPayroll?.status)}
                   </Badge>
                 </div>
-                <Button
+                <MuiButton
                   className="w-full mt-3 sm:mt-5 h-10 sm:h-14 text-sm sm:text-lg font-semibold rounded-lg sm:rounded-xl bg-white/20 hover:bg-white/30 text-white border-0"
                   onClick={() => setLocation('/employee/payroll')}
                 >
                   View History <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 ml-1 sm:ml-2" />
-                </Button>
+                </MuiButton>
               </CardContent>
             </Card>
           </motion.div>

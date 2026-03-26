@@ -4,6 +4,7 @@ import { useAuth, isManager, isAdmin, setAuthState } from "@/lib/auth";
 import { getInitials, capitalizeFirstLetter } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import Logo from "@/components/Logo";
 import React, { useState } from "react";
 
 // MUI Components
@@ -33,11 +34,8 @@ import {
 import {
   Dashboard as DashboardIcon,
   CalendarMonth as CalendarIcon,
-  SwapHoriz as SwapIcon,
-  Event as EventIcon,
   Notifications as NotificationsIcon,
   People as PeopleIcon,
-  Assessment as AssessmentIcon,
   Store as StoreIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon,
@@ -49,7 +47,7 @@ import {
   Verified as VerifiedIcon,
   Download as DownloadIcon,
   TrendingUp as TrendingUpIcon,
-  ManageAccounts as ProfileIcon,  Business as BusinessIcon, AccountBalanceWallet as AccountBalanceWalletIcon, Assignment as AssignmentIcon} from "@mui/icons-material";
+  ManageAccounts as ProfileIcon,  Business as BusinessIcon, AccountBalanceWalletIcon as AccountBalanceWalletIcon, Assignment as AssignmentIcon} from "@mui/icons-material";
 
 const DRAWER_WIDTH = 280;
 const COLLAPSED_WIDTH = 80;
@@ -300,22 +298,7 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
             width: isCollapsed ? "auto" : "100%",
           }}
         >
-          <Box
-            sx={{
-              width: 38,
-              height: 38,
-              borderRadius: 2,
-              background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: 20,
-              boxShadow: `0 4px 12px ${alpha(theme.palette.primary.main, 0.3)}`,
-              flexShrink: 0,
-            }}
-          >
-            <CoffeeIcon sx={{ color: "white", fontSize: 22 }} />
-          </Box>
+          <Logo size={isCollapsed ? 28 : 34} />
           {!isCollapsed && (
             <Box sx={{ overflow: "hidden" }}>
               <Typography

@@ -16,8 +16,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { MuiThemeProvider } from "@/components/mui/mui-theme-provider";
 
 // MUI Components
-import { Box, CircularProgress, Typography, Button, alpha } from "@mui/material";
-import CoffeeIcon from "@mui/icons-material/LocalCafe";
+import Logo from "@/components/Logo";
 
 // MUI Layout Components
 import MuiSidebar from "@/components/mui/mui-sidebar";
@@ -93,15 +92,7 @@ function LoadingScreen() {
       background: '#fafafa',
     }}>
       <div style={{ textAlign: 'center' }}>
-        <div style={{
-          width: 48, height: 48, borderRadius: 12,
-          background: 'linear-gradient(135deg, #2e7d32, #1b5e20)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          margin: '0 auto 16px',
-          boxShadow: '0 4px 16px rgba(46,125,50,0.3)',
-          animation: 'pulse 1.5s ease-in-out infinite',
-        }}>
-          <span style={{ fontSize: 24, color: 'white' }}>☕</span>
+          <Logo size={32} />
         </div>
         <div style={{
           width: 24, height: 24, border: '3px solid #e0e0e0',

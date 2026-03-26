@@ -16,8 +16,8 @@ import {
   PaymentsRounded as PayrollIcon,
   PersonRounded as ProfileIcon,
   MenuRounded as MenuIcon,
-  Coffee
 } from "@mui/icons-material";
+import Logo from "@/components/Logo";
 import { useLocation } from "wouter";
 import { getCurrentUser } from "@/lib/auth";
 import { getInitials } from "@/lib/utils";
@@ -56,19 +56,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
       >
         <Toolbar>
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1, gap: 1 }}>
-            <Box
-              sx={{
-                width: 32,
-                height: 32,
-                background: (theme) => `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
-                borderRadius: 1.5,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <Coffee sx={{ fontSize: 18, color: "white" }} />
-            </Box>
+              <Logo size={24} />
             <Typography variant="subtitle1" fontWeight={700} color="text.primary">
               PERO
             </Typography>
