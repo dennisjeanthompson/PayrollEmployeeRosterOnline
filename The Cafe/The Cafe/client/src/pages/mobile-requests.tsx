@@ -160,22 +160,7 @@ function TimeOffTab() {
       </Box>
 
       {/* Balance Summary */}
-      <Typography variant="subtitle2" color="primary.main" fontWeight="bold" sx={{ mb: 1, mt: -1 }}>Available Leave Balances (Year-End)</Typography>
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, mb: 3 }}>
-        {/* SIL Balance hidden per user request */}
-        <Card variant="outlined" sx={{ textAlign: 'center', p: 1, bgcolor: alpha(theme.palette.success.main, 0.05) }}>
-          <Typography variant="caption" color="text.secondary">Vacation</Typography>
-          <Typography variant="subtitle2" fontWeight="bold">
-            {balances?.find((b: any) => b.leaveType === 'Vacation')?.remainingCredits || 0}
-          </Typography>
-        </Card>
-        <Card variant="outlined" sx={{ textAlign: 'center', p: 1, bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
-          <Typography variant="caption" color="text.secondary">Sick</Typography>
-          <Typography variant="subtitle2" fontWeight="bold">
-            {balances?.find((b: any) => b.leaveType === 'Sick')?.remainingCredits || 0}
-          </Typography>
-        </Card>
-      </Box>
+      {/* Leave Balances hidden per user request */}
 
       {/* List */}
       {isLoading ? (
