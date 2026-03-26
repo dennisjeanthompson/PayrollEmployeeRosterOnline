@@ -48,7 +48,7 @@ export default function MobileMore() {
     {
       icon: <CalendarIcon />,
       label: "Employee Requests",
-      description: "Manage Time Off, SIL, & Loans",
+      description: "Manage Time Off & Loans",
       path: "/employee/requests",
       color: theme.palette.success.main,
     },

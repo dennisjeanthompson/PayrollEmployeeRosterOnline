@@ -75,7 +75,7 @@ export default function MobileRequests() {
 
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs value={tabIndex} onChange={(e, newValue) => setTabIndex(newValue)} aria-label="request tabs">
-          <Tab icon={<CalendarMonthIcon fontSize="small"/>} iconPosition="start" label="Time Off / SIL" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
+          <Tab icon={<CalendarMonthIcon fontSize="small"/>} iconPosition="start" label="Time Off" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
           <Tab icon={<AccountBalanceWalletIcon fontSize="small"/>} iconPosition="start" label="Loans" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
         </Tabs>
       </Box>
@@ -91,7 +91,7 @@ export default function MobileRequests() {
 }
 
 // ==========================================
-// TIME OFF / SIL TAB
+// TIME OFF TAB
 // ==========================================
 function TimeOffTab() {
   const { toast } = useToast();
@@ -162,12 +162,7 @@ function TimeOffTab() {
       {/* Balance Summary */}
       <Typography variant="subtitle2" color="primary.main" fontWeight="bold" sx={{ mb: 1, mt: -1 }}>Available Leave Balances (Year-End)</Typography>
       <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 1, mb: 3 }}>
-        <Card variant="outlined" sx={{ textAlign: 'center', p: 1, bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
-          <Typography variant="caption" color="text.secondary">SIL</Typography>
-          <Typography variant="subtitle2" fontWeight="bold">
-            {balances?.find((b: any) => b.leaveType === 'SIL')?.remainingCredits || 0}
-          </Typography>
-        </Card>
+        {/* SIL Balance hidden per user request */}
         <Card variant="outlined" sx={{ textAlign: 'center', p: 1, bgcolor: alpha(theme.palette.success.main, 0.05) }}>
           <Typography variant="caption" color="text.secondary">Vacation</Typography>
           <Typography variant="subtitle2" fontWeight="bold">

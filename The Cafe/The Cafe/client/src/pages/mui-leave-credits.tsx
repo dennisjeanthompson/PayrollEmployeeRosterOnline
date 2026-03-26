@@ -337,7 +337,7 @@ export default function MuiLeaveCredits({ hideHeader }: { hideHeader?: boolean }
                     disabled={autoGrantSilMutation.isPending}
                     sx={{ boxShadow: 1, bgcolor: 'background.paper' }}
                   >
-                    Auto-Grant 1-Year SIL
+                    {/* Auto-Grant SIL hidden per user request */}
                   </Button>
                 </Tooltip>
                 <Button
@@ -353,10 +353,7 @@ export default function MuiLeaveCredits({ hideHeader }: { hideHeader?: boolean }
           </Stack>
         </Box>
 
-        <Alert severity="info" sx={{ borderRadius: 2 }}>
-          Service Incentive Leave (SIL) of 5 days is mandated by Philippine Labor Code (Art. 95) for employees with at least 1 year of service.
-        </Alert>
-
+          {/* SIL Info Alert hidden per user request */}
         {/* Data Grid */}
         <Paper elevation={0} sx={{ height: 600, width: '100%', borderRadius: 3, overflow: "hidden" }}>
           {credits.length > 0 ? (

@@ -358,6 +358,61 @@ async function main() {
     });
   }
 
+  // 9. Seed Time Off Requests
+  console.log('🏖️ Seeding time off requests...');
+  const timeOffs = [
+    { type: 'vacation', days: 3, offset: -5, reason: 'Family reunion in Batangas', status: 'approved' },
+    { type: 'sick', days: 1, offset: -2, reason: 'Flu and fever', status: 'approved' },
+    { type: 'personal', days: 2, offset: 4, reason: 'Personal errands', status: 'pending' }
+  ];
+
+  for (let i = 0; i < timeOffs.length; i++) {
+    const to = timeOffs[i];
+    const emp = seededEmployees[i + 1];
+    const startDate = addDays(new Date(), to.offset);
+    const endDate = addDays(startDate, to.days - 1);
+
+    await db.insert(timeOffRequests).values({
+      id: uuid(),
+      userId: emp.id,
+      startDate: startDate,
+      endDate: endDate,
+      type: to.type,
+      reason: to.reason,
+      status: to.status,
+      requestedAt: subDays(startDate, 10),
+      approvedBy: to.status === 'approved' ? 'user-don-mgr-lita' : null,
+      approvalDate: to.status === 'approved' ? subDays(startDate, 8) : null,
+    });
+  }
+
+  // 10. Seed Leave Credits
+  console.log('💳 Seeding leave credits...');
+  const currentYear = new Date().getFullYear();
+  for (const emp of seededEmployees) {
+    if (emp.role === 'admin') continue;
+    
+    const leaveTypes = [
+      { type: 'vacation', total: '15' },
+      { type: 'sick', total: '10' },
+      { type: 'personal', total: '5' }
+    ];
+
+    for (const lt of leaveTypes) {
+      await db.insert(leaveCredits).values({
+        id: uuid(),
+        userId: emp.id,
+        branchId,
+        year: currentYear,
+        leaveType: lt.type,
+        totalCredits: lt.total,
+        usedCredits: '0',
+        remainingCredits: lt.total,
+        updatedAt: new Date(),
+      });
+    }
+  }
+
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log('═══════════════════════════════════════════════════════════');
   console.log(`  ✅ Seeding complete in ${elapsed}s`);
