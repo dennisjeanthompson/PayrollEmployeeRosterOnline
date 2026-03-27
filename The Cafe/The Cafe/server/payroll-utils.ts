@@ -137,6 +137,18 @@ export interface PayCalculation {
 }
 
 /**
+ * Format a Date securely as YYYY-MM-DD in the local timezone,
+ * avoiding .toISOString() which converts back to UTC and causes off-by-one errors.
+ */
+export function toLocalDateString(date: Date): string {
+  if (isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+}
+
+/**
  * Check if a given hour falls within night differential window (10PM-6AM)
  */
 export function isNightDiffHour(hour: number): boolean {
@@ -166,10 +178,13 @@ export function calculateNightDiffHours(startTime: Date, endTime: Date): number 
  * Get holiday type for a specific date
  */
 export function getHolidayType(date: Date, holidays: Holiday[]): HolidayType {
-  const dateStr = date.toISOString().split('T')[0];
+  const dateStr = toLocalDateString(date);
 
   for (const holiday of holidays) {
-    const holidayDate = new Date(holiday.date).toISOString().split('T')[0];
+    const holidayDate = typeof holiday.date === 'string' 
+      ? holiday.date.substring(0, 10) 
+      : holiday.date.toISOString().split('T')[0];
+      
     if (dateStr === holidayDate) {
       return holiday.type as HolidayType;
     }
@@ -235,7 +250,7 @@ function buildSegmentBoundaries(segmentStart: Date, segmentEnd: Date): Date[] {
 }
 
 function createDateKey(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return toLocalDateString(date);
 }
 
 function getHolidayRates(holidayType: HolidayType) {
@@ -267,7 +282,9 @@ function createHolidayResolver(
   if (holidays && holidays.length > 0) {
     const map = new Map<string, HolidayLookupResult>();
     for (const holiday of holidays) {
-      const key = createDateKey(new Date(holiday.date));
+      const key = typeof holiday.date === 'string' 
+        ? holiday.date.substring(0, 10) 
+        : holiday.date.toISOString().split('T')[0];
       map.set(key, { type: holiday.type as HolidayType, name: holiday.name });
     }
 
@@ -365,7 +382,7 @@ export function calculateDailyHoursBreakdown(
     const segments = splitCrossMidnightShift(startTime, endTime);
 
     for (const segment of segments) {
-      const dateKey = segment.date.toISOString().split('T')[0];
+      const dateKey = toLocalDateString(segment.date);
       const segmentHours = calculateSegmentHours(segment.start, segment.end);
       const nightDiffHours = calculateNightDiffHours(segment.start, segment.end);
       const holidayType = getHolidayType(segment.date, holidays);
@@ -477,9 +494,12 @@ export function calculatePeriodPay(
         // Note: Only 'regular' mandates 100% unworked pay by default, but keeping flexibility.
         // special_non_working is "no work, no pay".
         if (holiday.type === 'regular') {
-          const holidayDateStr = new Date(holiday.date).toISOString().split('T')[0];
+          const holidayDateStr = typeof holiday.date === 'string' 
+            ? holiday.date.substring(0, 10) 
+            : holiday.date.toISOString().split('T')[0];
+            
           const workedThatDay = Array.from(dailyBreakdown.values()).some((dayData) => {
-            return dayData.date.toISOString().split('T')[0] === holidayDateStr;
+            return toLocalDateString(dayData.date) === holidayDateStr;
           });
 
           if (!workedThatDay) {
