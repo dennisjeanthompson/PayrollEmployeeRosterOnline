@@ -39,7 +39,7 @@ function getWeekDays(weekStart: Date): Date[] {
 function getShiftsForCell(shifts: Shift[], employeeId: string, date: Date): Shift[] {
   const dateStr = format(date, 'yyyy-MM-dd');
   return shifts.filter(
-    s => s.userId === employeeId && s.startTime.startsWith(dateStr)
+    s => s.userId === employeeId && typeof s.startTime === 'string' && s.startTime.startsWith(dateStr)
   );
 }
 
@@ -54,7 +54,7 @@ function getTimeOffForCell(requests: TimeOffRequest[], employeeId: string, date:
   const dateStr = format(date, 'yyyy-MM-dd');
   return requests.filter(r => {
     if (r.userId !== employeeId) return false;
-    return dateStr >= r.startDate.slice(0, 10) && dateStr <= r.endDate.slice(0, 10);
+    return typeof r.startDate === 'string' && typeof r.endDate === 'string' && dateStr >= r.startDate.slice(0, 10) && dateStr <= r.endDate.slice(0, 10);
   });
 }
 
@@ -62,7 +62,7 @@ function getTimeOffForCell(requests: TimeOffRequest[], employeeId: string, date:
 function getTradesForCell(trades: ShiftTrade[], shifts: Shift[], employeeId: string, date: Date): ShiftTrade[] {
   const dateStr = format(date, 'yyyy-MM-dd');
   const shiftIds = shifts
-    .filter(s => s.userId === employeeId && s.startTime.startsWith(dateStr))
+    .filter(s => s.userId === employeeId && typeof s.startTime === 'string' && s.startTime.startsWith(dateStr))
     .map(s => s.id);
   return trades.filter(t =>
     shiftIds.includes(t.shiftId) &&
@@ -267,7 +267,7 @@ export default function WeeklyGrid({
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {weekDays.map(date => {
           const holiday = getHoliday(holidays, date);
-          const dayShifts = shifts.filter(s => s.startTime.startsWith(format(date, 'yyyy-MM-dd')));
+          const dayShifts = shifts.filter(s => typeof s.startTime === 'string' && s.startTime.startsWith(format(date, 'yyyy-MM-dd')));
           const today = isToday(date);
 
           return (

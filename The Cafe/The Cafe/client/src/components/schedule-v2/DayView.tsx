@@ -44,12 +44,12 @@ export function MyDayView({
   const isDark = theme.palette.mode === 'dark';
   const dateStr = format(date, 'yyyy-MM-dd');
   const myShifts = shifts.filter(
-    s => s.userId === currentUserId && s.startTime.startsWith(dateStr)
+    s => s.userId === currentUserId && typeof s.startTime === 'string' && s.startTime.startsWith(dateStr)
   );
 
   // Time-off for this user on this date
   const myTimeOff = timeOffRequests.filter(r =>
-    r.userId === currentUserId && dateStr >= r.startDate.slice(0, 10) && dateStr <= r.endDate.slice(0, 10)
+    r.userId === currentUserId && typeof r.startDate === 'string' && typeof r.endDate === 'string' && dateStr >= r.startDate.slice(0, 10) && dateStr <= r.endDate.slice(0, 10)
     && (r.status === 'pending' || r.status === 'approved' || r.status === 'rejected')
   );
 
@@ -208,12 +208,12 @@ export default function DayView({
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const dateStr = format(date, 'yyyy-MM-dd');
-  const dayShifts = shifts.filter(s => s.startTime.startsWith(dateStr));
+  const dayShifts = shifts.filter(s => typeof s.startTime === 'string' && s.startTime.startsWith(dateStr));
   const holiday = holidays.find(h => format(new Date(h.date), 'yyyy-MM-dd') === dateStr);
 
   // Time-off for today
   const dayTimeOff = timeOffRequests.filter(r =>
-    dateStr >= r.startDate.slice(0, 10) && dateStr <= r.endDate.slice(0, 10) &&
+    typeof r.startDate === 'string' && typeof r.endDate === 'string' && dateStr >= r.startDate.slice(0, 10) && dateStr <= r.endDate.slice(0, 10) &&
     (r.status === 'pending' || r.status === 'approved')
   );
 

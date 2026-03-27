@@ -674,7 +674,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   const primaryColor = theme.palette.primary.main;
 
   // Get latest payslip and current period estimates
-  const records = payrollHistory?.records || payrollHistory?.payroll || [];
+  const records = payrollHistory?.entries || payrollHistory?.records || payrollHistory?.payroll || [];
   const latestPay = records?.[0];
   const currentPeriod = payrollData?.period;
   
