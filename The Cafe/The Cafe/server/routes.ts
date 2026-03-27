@@ -26,7 +26,8 @@ import { leaveCreditsRouter } from "./routes/leave-credits";
 
 import loansRouter from "./routes/loans";
 import { db } from "./db";
-import { thirteenthMonthLedger } from "@shared/schema";
+import { thirteenthMonthLedger, deductionSettings as deductionSettingsTable } from "@shared/schema";
+import { eq } from "drizzle-orm";
 import { randomUUID as _randomUUID } from "crypto";
 import { resetDatabase, initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll, seedSampleShiftTrades, markSetupComplete } from "./init-db";
 import bcrypt from "bcrypt";
@@ -1410,6 +1411,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
+  // ─── Deduction Settings (Per-Branch Toggle) ────────────────────────────────
+  app.get("/api/deduction-settings", requireAuth, asyncHandler(async (req, res) => {
+    try {
+      const branchId = req.user!.branchId;
+      const rows = await db.select().from(deductionSettingsTable).where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
+      if (rows.length === 0) {
+        // Return defaults (all enabled)
+        return res.json({ settings: { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: true } });
+      }
+      res.json({ settings: rows[0] });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to fetch deduction settings" });
+    }
+  }));
+
+  app.put("/api/deduction-settings", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
+    try {
+      const branchId = req.user!.branchId;
+      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax } = req.body;
+
+      const existing = await db.select().from(deductionSettingsTable).where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
+
+      if (existing.length === 0) {
+        // Create new row
+        await db.insert(deductionSettingsTable).values({
+          id: crypto.randomUUID(),
+          branchId,
+          deductSSS: deductSSS ?? true,
+          deductPhilHealth: deductPhilHealth ?? true,
+          deductPagibig: deductPagibig ?? true,
+          deductWithholdingTax: deductWithholdingTax ?? true,
+          updatedAt: new Date(),
+        });
+      } else {
+        // Update existing row
+        await db.update(deductionSettingsTable).set({
+          deductSSS: deductSSS ?? true,
+          deductPhilHealth: deductPhilHealth ?? true,
+          deductPagibig: deductPagibig ?? true,
+          deductWithholdingTax: deductWithholdingTax ?? true,
+          updatedAt: new Date(),
+        }).where(eq(deductionSettingsTable.branchId, branchId));
+      }
+
+      const updated = await db.select().from(deductionSettingsTable).where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
+      res.json({ settings: updated[0] });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to update deduction settings" });
+    }
+  }));
+
   // Payroll routes
   app.get("/api/payroll", requireAuth, asyncHandler(async (req, res) => {
     try {
@@ -1633,14 +1685,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (shifts.length === 0 && approvedLeaves.length === 0) continue;
 
         // --- DOLE COMPLIANCE: Holiday Exemption Gateway (Feature 4) ---
-        // Exemption applies if branch intends it, aligns with retail/service, and active headcount <= 5
+        // Exemption applies globally if company settings "Include Holiday Pay" is turned OFF (which is the default).
+        // If it's turned ON, we still check the specific branch retail/service exemptions, though the global toggle takes precedence as a master switch.
+        const companySettings = await storage.getCompanySettings();
+        const globalHolidayPayEnabled = companySettings ? companySettings.includeHolidayPay : false;
+
         const activeHeadcount = employees.filter(e => e.isActive).length;
         const branchRecord = await storage.getBranch(branchId);
-        const isHolidayExempt = !!(
+        const isBranchExempt = !!(
           branchRecord?.intentHolidayExempt && 
           ['retail', 'service'].includes(branchRecord?.establishmentType || '') && 
           activeHeadcount <= 5
         );
+
+        const isHolidayExempt = !globalHolidayPayEnabled || isBranchExempt;
 
         const hourlyRate = parseFloat(employee.hourlyRate);
         const payCalculation = calculatePeriodPay(shifts, hourlyRate, periodHolidays, 0, isHolidayExempt); // 0 = Sunday as rest day

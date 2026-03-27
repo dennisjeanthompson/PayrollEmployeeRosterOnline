@@ -1,24 +1,12 @@
 /**
  * Seed Kaye Anne Gonzales' actual attendance for March 16-27, 2026.
  *
- * Attendance data (La Union, Philippines — all regular working days):
- *   Mar 16  9:02 AM – 6:56 PM   (raw 9h54m, net 8h54m after 1h break)
- *   Mar 17  9:07 AM – 6:32 PM   (raw 9h25m, net 8h25m)
- *   Mar 18  9:07 AM – 6:50 PM   (raw 9h43m, net 8h43m)
- *   Mar 19  9:21 AM – 6:47 PM   (raw 9h26m, net 8h26m)
- *   Mar 20  9:00 AM – 6:51 PM   (raw 9h51m, net 8h51m)
- *   Mar 23  8:52 AM – 6:14 PM   (raw 9h22m, net 8h22m)
- *   Mar 24  9:00 AM – 6:47 PM   (raw 9h47m, net 8h47m)
- *   Mar 25  9:02 AM – 6:42 PM   (raw 9h40m, net 8h40m)
- *   Mar 26  9:09 AM – 7:05 PM   (raw 9h56m, net 8h56m)
- *   Mar 27  9:20 AM – 6:30 PM   (raw 9h10m, net 8h10m)
- *
- * The system does NOT auto-deduct break. We model the 1-hour break as a gap
- * in the middle of the shift (12:00-13:00) by creating TWO shift records per day:
- *   AM segment: time-in → 12:00
- *   PM segment: 13:00  → time-out
- * This preserves the exact clock-in/clock-out data while ensuring the payroll
- * engine sees the correct net hours.
+ * Creates:
+ *  - ONE shift per day (scheduled 9:00 AM → actual end time)
+ *  - "Late" exception logs for days where clock-in > 9:00 AM
+ *  - "Break" exception logs (1 hour deducted) for each day
+ *  - Payroll with NO overtime, NO holiday pay, NO gov deductions
+ *  - Rate: ₱60/hr
  */
 
 import 'dotenv/config';
@@ -26,15 +14,15 @@ import { db } from './db';
 import { sql, eq, and } from 'drizzle-orm';
 import {
   users, branches, shifts, payrollPeriods, payrollEntries,
-  thirteenthMonthLedger,
+  adjustmentLogs,
 } from '../shared/schema';
 import { dbStorage as storage } from './db-storage';
-import { calculatePeriodPay } from './payroll-utils';
 import crypto from 'crypto';
 
 const uuid = () => crypto.randomUUID();
 
 // ─── Attendance Records (all dates in 2026, PHT = UTC+8) ─────────────────────
+// Scheduled start is always 9:00 AM. actualStartTime is the real clock-in.
 const ATTENDANCE = [
   { date: '2026-03-16', inH: 9, inM: 2,  outH: 18, outM: 56 },
   { date: '2026-03-17', inH: 9, inM: 7,  outH: 18, outM: 32 },
@@ -48,227 +36,233 @@ const ATTENDANCE = [
   { date: '2026-03-27', inH: 9, inM: 20, outH: 18, outM: 30 },
 ];
 
+const SCHEDULED_START_HOUR = 9; // 9:00 AM
+const HOURLY_RATE = 60;
+const BREAK_HOURS = 1;
+
+function phtDate(dateStr: string, hour: number, minute: number): Date {
+  // Create dates in PHT (UTC+8)
+  const d = new Date(`${dateStr}T${String(hour).padStart(2,'0')}:${String(minute).padStart(2,'0')}:00+08:00`);
+  return d;
+}
+
+function formatTime12(h: number, m: number): string {
+  const ampm = h >= 12 ? 'PM' : 'AM';
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
 async function main() {
   const startTime = Date.now();
   console.log('═══════════════════════════════════════════════════════════');
-  console.log('  Kaye Anne Gonzales — Attendance & Payroll Seeder');
+  console.log('  Kaye Anne Gonzales — Attendance & Payroll Seeder v2');
   console.log(`  Time: ${new Date().toLocaleString('en-PH')}`);
   console.log('═══════════════════════════════════════════════════════════');
 
   // 1. Find Kaye
   const kayeRows = await db.select().from(users)
     .where(eq(users.username, 'gonzales.k')).limit(1);
-  if (kayeRows.length === 0) {
-    console.error('❌ User gonzales.k not found. Run seed-don-macchiatos first.');
-    process.exit(1);
-  }
+  if (kayeRows.length === 0) throw new Error('Kaye not found');
   const kaye = kayeRows[0];
-  const branchId = kaye.branchId;
   console.log(`👤 Found Kaye: ${kaye.firstName} ${kaye.lastName} (${kaye.id})`);
-  console.log(`📍 Branch: ${branchId}`);
+  console.log(`📍 Branch: ${kaye.branchId}`);
 
-  // 2. Clear Kaye's existing shifts in the FULL payroll period (Mar 16-31)
-  //    This ensures no leftover schedule-based shifts contaminate the calculation
-  const rangeStart = new Date('2026-03-16T00:00:00');
-  const rangeEnd   = new Date('2026-04-01T00:00:00'); // exclusive upper bound (covers thru Mar 31)
+  const branchId = kaye.branchId;
+
+  // 2. Define the payroll period
+  const periodStart = new Date('2026-03-16T00:00:00+08:00');
+  const periodEnd   = new Date('2026-03-31T23:59:59+08:00');
+
+  // 3. Clear existing Kaye data (shifts, adjustment logs, payroll entries)
+  console.log('🗑️  Clearing existing Kaye shifts + adjustment logs for Mar 16-27...');
   await db.delete(shifts).where(
-    sql`user_id = ${kaye.id} AND start_time >= ${rangeStart} AND start_time < ${rangeEnd}`
+    and(
+      eq(shifts.userId, kaye.id),
+      eq(shifts.branchId, branchId),
+    )
   );
-  console.log('🗑️  Cleared existing Kaye shifts for Mar 16-27');
+  await db.delete(adjustmentLogs).where(
+    eq(adjustmentLogs.employeeId, kaye.id)
+  );
 
-  // 3. Insert real attendance as split AM/PM shifts (break = 12:00-13:00)
-  let shiftCount = 0;
-  const createdShiftIds: string[] = [];
+  // Also clean up existing payroll entries for Kaye
+  const existingPeriods = await db.select().from(payrollPeriods).where(
+    and(eq(payrollPeriods.branchId, branchId))
+  );
+  for (const ep of existingPeriods) {
+    await db.delete(payrollEntries).where(
+      and(eq(payrollEntries.userId, kaye.id), eq(payrollEntries.payrollPeriodId, ep.id))
+    );
+  }
 
-  for (const rec of ATTENDANCE) {
-    const [year, month, day] = rec.date.split('-').map(Number);
+  // 4. Create ONE shift per day (single block)
+  let totalNetMinutes = 0;
+  let lateCount = 0;
 
-    // AM segment: time-in → 12:00
-    const amStart = new Date(year, month - 1, day, rec.inH, rec.inM, 0);
-    const amEnd   = new Date(year, month - 1, day, 12, 0, 0);
+  for (const day of ATTENDANCE) {
+    const scheduledStart = phtDate(day.date, SCHEDULED_START_HOUR, 0); // 9:00 AM
+    const actualStart    = phtDate(day.date, day.inH, day.inM);
+    const actualEnd      = phtDate(day.date, day.outH, day.outM);
 
-    // PM segment: 13:00 → time-out
-    const pmStart = new Date(year, month - 1, day, 13, 0, 0);
-    const pmEnd   = new Date(year, month - 1, day, rec.outH, rec.outM, 0);
+    // Calculate raw hours (actual end - actual start)
+    const rawMinutes = (actualEnd.getTime() - actualStart.getTime()) / 60000;
+    const netMinutes = rawMinutes - (BREAK_HOURS * 60);
+    totalNetMinutes += netMinutes;
 
-    for (const [segStart, segEnd] of [[amStart, amEnd], [pmStart, pmEnd]]) {
-      const id = uuid();
-      await db.insert(shifts).values({
-        id,
-        userId: kaye.id,
+    const netHrs = Math.floor(netMinutes / 60);
+    const netMins = Math.round(netMinutes % 60);
+
+    console.log(`   📅 ${day.date}: ${formatTime12(day.inH, day.inM)} – ${formatTime12(day.outH, day.outM)}  →  ${netHrs}h${netMins}m net`);
+
+    // Insert ONE shift per day (scheduled 9:00 AM → actual end time)
+    await db.insert(shifts).values({
+      id: uuid(),
+      userId: kaye.id,
+      branchId,
+      startTime: scheduledStart,
+      endTime: actualEnd,
+      actualStartTime: actualStart,
+      actualEndTime: actualEnd,
+      position: kaye.position,
+      status: 'completed',
+      createdAt: new Date(),
+    });
+
+    // 5. Seed lateness exception logs
+    const lateMinutes = Math.max(0, (actualStart.getTime() - scheduledStart.getTime()) / 60000);
+    if (lateMinutes > 0) {
+      lateCount++;
+      console.log(`      ⚠️  Late by ${Math.round(lateMinutes)} min`);
+      await db.insert(adjustmentLogs).values({
+        id: uuid(),
+        employeeId: kaye.id,
         branchId,
-        startTime: segStart,
-        endTime: segEnd,
-        position: kaye.position,
-        status: 'completed',
-        actualStartTime: segStart,
-        actualEndTime: segEnd,
+        loggedBy: 'user-don-mgr-lita', // Manager Lita
+        startDate: phtDate(day.date, 0, 0),
+        endDate: phtDate(day.date, 23, 59),
+        type: 'late',
+        value: String(Math.round(lateMinutes)),
+        remarks: `Auto-logged: Clocked in at ${formatTime12(day.inH, day.inM)}, scheduled at ${formatTime12(SCHEDULED_START_HOUR, 0)}. Late by ${Math.round(lateMinutes)} minutes.`,
+        status: 'approved',
         createdAt: new Date(),
       });
-      createdShiftIds.push(id);
-      shiftCount++;
     }
 
-    // Compute net hours for logging
-    const rawMin = (rec.outH * 60 + rec.outM) - (rec.inH * 60 + rec.inM);
-    const netMin = rawMin - 60; // subtract 1hr break
-    const netH = Math.floor(netMin / 60);
-    const netM = netMin % 60;
-    console.log(`   📅 ${rec.date}: ${rec.inH}:${String(rec.inM).padStart(2, '0')} – ${rec.outH}:${String(rec.outM).padStart(2, '0')}  →  ${netH}h${String(netM).padStart(2, '0')}m net`);
-  }
-  console.log(`✅ Created ${shiftCount} shift segments (${ATTENDANCE.length} days × 2 segments)`);
-
-  // 4. Find or create the payroll period for Mar 16-31
-  const periodStart = new Date('2026-03-16');
-  const periodEnd   = new Date('2026-03-31');
-  let periodId: string;
-
-  const existingPeriods = await db.select().from(payrollPeriods)
-    .where(and(
-      eq(payrollPeriods.branchId, branchId),
-      eq(payrollPeriods.status, 'open'),
-    ));
-
-  const matchingPeriod = existingPeriods.find(p => {
-    const ps = new Date(p.startDate);
-    return ps.getFullYear() === 2026 && ps.getMonth() === 2 && ps.getDate() === 16;
-  });
-
-  if (matchingPeriod) {
-    periodId = matchingPeriod.id;
-    console.log(`📋 Using existing open period: ${periodId}`);
-  } else {
-    periodId = `kaye-payroll-${uuid().substring(0, 8)}`;
-    await db.insert(payrollPeriods).values({
-      id: periodId,
+    // 6. Seed break deduction log (1 hour per day)
+    await db.insert(adjustmentLogs).values({
+      id: uuid(),
+      employeeId: kaye.id,
       branchId,
-      startDate: periodStart,
-      endDate: periodEnd,
-      status: 'open',
+      loggedBy: 'user-don-mgr-lita',
+      startDate: phtDate(day.date, 12, 0),
+      endDate: phtDate(day.date, 13, 0),
+      type: 'undertime' as any,  // "break" is stored as undertime deduction
+      value: '60',
+      remarks: `1-hour unpaid lunch break (12:00 PM – 1:00 PM)`,
+      status: 'approved',
+      createdAt: new Date(),
     });
-    console.log(`📋 Created new payroll period: ${periodId}`);
   }
 
-  // 5. Remove any existing payroll entries for Kaye in this period
-  await db.delete(payrollEntries).where(
-    sql`user_id = ${kaye.id} AND payroll_period_id = ${periodId}`
-  );
+  console.log(`✅ Created ${ATTENDANCE.length} shifts (1 per day)`);
+  console.log(`✅ Seeded ${lateCount} Late logs + ${ATTENDANCE.length} Break logs`);
 
-  // 6. Calculate payroll using the system's actual engine
-  const kayeShifts = await storage.getShiftsByUser(kaye.id, periodStart, periodEnd);
-  const holidays = await storage.getHolidays(periodStart, periodEnd);
-  const hourlyRate = parseFloat(kaye.hourlyRate);
+  // 7. Create payroll period
+  const periodId = `kaye-payroll-${uuid().substring(0, 8)}`;
+  await db.insert(payrollPeriods).values({
+    id: periodId,
+    branchId,
+    startDate: periodStart,
+    endDate: periodEnd,
+    status: 'open',
+    createdAt: new Date(),
+  });
+  console.log(`📋 Created payroll period: ${periodId}`);
 
-  const pay = calculatePeriodPay(kayeShifts, hourlyRate, holidays, 0, false);
+  // 8. Calculate payroll — strictly: NO overtime, NO holiday, NO gov deductions
+  const totalNetHours = totalNetMinutes / 60;
+  const basicPay = Math.round(totalNetHours * HOURLY_RATE * 100) / 100;
 
-  const totalHours  = pay.breakdown.reduce((s, d) => s + d.regularHours + d.overtimeHours, 0);
-  const regularHrs  = pay.breakdown.reduce((s, d) => s + d.regularHours, 0);
-  const overtimeHrs = pay.breakdown.reduce((s, d) => s + d.overtimeHours, 0);
-  const nightDiffHrs = pay.breakdown.reduce((s, d) => s + d.nightDiffHours, 0);
-
-  // Deductions (simplified for seed — actual processing uses SSS/PhilHealth/PagIBIG tables)
-  const sss  = pay.totalGrossPay > 0 ? 225 : 0;   // Semi-monthly SSS
-  const phic = pay.totalGrossPay > 0 ? 150 : 0;   // Semi-monthly PhilHealth
-  const hdmf = pay.totalGrossPay > 0 ? 100 : 0;   // Semi-monthly Pag-IBIG
-  const totalDed = sss + phic + hdmf;
-  const netPay = pay.totalGrossPay - totalDed;
-
-  console.log('\n══════════════════════════════════════════════════════════');
-  console.log('  💰 PAYROLL CALCULATION SUMMARY');
-  console.log('══════════════════════════════════════════════════════════');
+  console.log(`\n══════════════════════════════════════════════════════════`);
+  console.log(`  💰 PAYROLL CALCULATION SUMMARY`);
+  console.log(`══════════════════════════════════════════════════════════`);
   console.log(`  Employee:       ${kaye.firstName} ${kaye.lastName}`);
-  console.log(`  Period:         Mar 16 – Mar 31, 2026`);
-  console.log(`  Hourly Rate:    ₱${hourlyRate.toFixed(2)}`);
-  console.log(`  Days Worked:    ${pay.breakdown.length}`);
-  console.log('──────────────────────────────────────────────────────────');
-  console.log(`  Regular Hours:  ${regularHrs.toFixed(2)} hrs`);
-  console.log(`  Overtime Hours: ${overtimeHrs.toFixed(2)} hrs (125% rate)`);
-  console.log(`  Night Diff Hrs: ${nightDiffHrs.toFixed(2)} hrs`);
-  console.log(`  Total Hours:    ${totalHours.toFixed(2)} hrs`);
-  console.log('──────────────────────────────────────────────────────────');
-  console.log(`  Basic Pay:      ₱${pay.basicPay.toFixed(2)}`);
-  console.log(`  Overtime Pay:   ₱${pay.overtimePay.toFixed(2)}`);
-  console.log(`  Holiday Pay:    ₱${pay.holidayPay.toFixed(2)}`);
-  console.log(`  Night Diff Pay: ₱${pay.nightDiffPay.toFixed(2)}`);
-  console.log(`  Gross Pay:      ₱${pay.totalGrossPay.toFixed(2)}`);
-  console.log('──────────────────────────────────────────────────────────');
-  console.log(`  SSS:            -₱${sss.toFixed(2)}`);
-  console.log(`  PhilHealth:     -₱${phic.toFixed(2)}`);
-  console.log(`  Pag-IBIG:       -₱${hdmf.toFixed(2)}`);
-  console.log(`  Total Deduct:   -₱${totalDed.toFixed(2)}`);
-  console.log('──────────────────────────────────────────────────────────');
-  console.log(`  NET PAY:        ₱${netPay.toFixed(2)}`);
-  console.log('══════════════════════════════════════════════════════════');
+  console.log(`  Period:         Mar 16 – Mar 27, 2026`);
+  console.log(`  Hourly Rate:    ₱${HOURLY_RATE.toFixed(2)}`);
+  console.log(`  Days Worked:    ${ATTENDANCE.length}`);
+  console.log(`──────────────────────────────────────────────────────────`);
+  console.log(`  Total Net Hrs:  ${totalNetHours.toFixed(2)} hrs (after 1h break/day)`);
+  console.log(`  Overtime:       DISABLED`);
+  console.log(`  Holiday Pay:    DISABLED`);
+  console.log(`──────────────────────────────────────────────────────────`);
+  console.log(`  Basic Pay:      ₱${basicPay.toFixed(2)}`);
+  console.log(`  Overtime Pay:   ₱0.00 (OFF)`);
+  console.log(`  Holiday Pay:    ₱0.00 (OFF)`);
+  console.log(`  Night Diff Pay: ₱0.00`);
+  console.log(`  Gross Pay:      ₱${basicPay.toFixed(2)}`);
+  console.log(`──────────────────────────────────────────────────────────`);
+  console.log(`  SSS:            ₱0.00 (OFF)`);
+  console.log(`  PhilHealth:     ₱0.00 (OFF)`);
+  console.log(`  Pag-IBIG:       ₱0.00 (OFF)`);
+  console.log(`  Tax:            ₱0.00 (OFF)`);
+  console.log(`  Total Deduct:   ₱0.00`);
+  console.log(`──────────────────────────────────────────────────────────`);
+  console.log(`  NET PAY:        ₱${basicPay.toFixed(2)}`);
+  console.log(`══════════════════════════════════════════════════════════`);
 
   // Daily breakdown
-  console.log('\n  📊 Daily Breakdown:');
-  for (const day of pay.breakdown) {
-    const d = new Date(day.date);
-    const dateStr = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
-    const reg = day.regularHours.toFixed(2);
-    const ot  = day.overtimeHours.toFixed(2);
-    const total = (day.regularHours + day.overtimeHours).toFixed(2);
-    console.log(`     ${dateStr}:  Reg ${reg}h + OT ${ot}h = ${total}h`);
+  console.log(`\n  📊 Daily Breakdown:`);
+  for (const day of ATTENDANCE) {
+    const actualStart = phtDate(day.date, day.inH, day.inM);
+    const actualEnd   = phtDate(day.date, day.outH, day.outM);
+    const rawMin      = (actualEnd.getTime() - actualStart.getTime()) / 60000;
+    const netMin      = rawMin - 60;
+    const hrs         = (netMin / 60).toFixed(2);
+    console.log(`     ${day.date}:  ${formatTime12(day.inH, day.inM)} – ${formatTime12(day.outH, day.outM)}  →  ${hrs}h net`);
   }
 
-  // 7. Insert the payroll entry
+  // 9. Create payroll entry
   const entryId = uuid();
   await db.insert(payrollEntries).values({
     id: entryId,
     userId: kaye.id,
     payrollPeriodId: periodId,
-    totalHours: totalHours.toFixed(2),
-    regularHours: regularHrs.toFixed(2),
-    overtimeHours: overtimeHrs.toFixed(2),
-    nightDiffHours: nightDiffHrs.toFixed(2),
-    grossPay: pay.totalGrossPay.toFixed(2),
-    basicPay: pay.basicPay.toFixed(2),
-    overtimePay: pay.overtimePay.toFixed(2),
-    holidayPay: pay.holidayPay.toFixed(2),
-    nightDiffPay: pay.nightDiffPay.toFixed(2),
-    restDayPay: pay.restDayPay.toFixed(2),
-    sssContribution: sss.toFixed(2),
-    philHealthContribution: phic.toFixed(2),
-    pagibigContribution: hdmf.toFixed(2),
-    totalDeductions: totalDed.toFixed(2),
-    deductions: totalDed.toFixed(2),
-    netPay: netPay.toFixed(2),
-    status: 'paid',
+    totalHours: totalNetHours.toFixed(2),
+    regularHours: totalNetHours.toFixed(2),
+    overtimeHours: '0',
+    holidayHours: '0',
+    nightDiffHours: '0',
+    basicPay: basicPay.toFixed(2),
+    overtimePay: '0',
+    holidayPay: '0',
+    nightDiffPay: '0',
+    grossPay: basicPay.toFixed(2),
+    sssContribution: '0',
+    philHealthContribution: '0',
+    pagibigContribution: '0',
+    withholdingTax: '0',
+    totalDeductions: '0',
+    deductions: '0',
+    netPay: basicPay.toFixed(2),
+    status: 'completed',
     createdAt: new Date(),
-    paidAt: new Date(),
   });
-  console.log(`\n✅ Payroll entry created: ${entryId}`);
 
-  // 8. Update the payroll period with totals
-  await db.update(payrollPeriods)
-    .set({
-      totalHours: totalHours.toFixed(2),
-      totalPay: pay.totalGrossPay.toFixed(2),
-      status: 'closed',
-    })
+  // Close the period
+  await db.update(payrollPeriods).set({ status: 'closed', totalHours: totalNetHours.toFixed(2), totalPay: basicPay.toFixed(2) })
     .where(eq(payrollPeriods.id, periodId));
-  console.log(`✅ Period ${periodId} updated → closed`);
 
-  // 9. 13th Month Ledger
-  await db.insert(thirteenthMonthLedger).values({
-    id: uuid(),
-    userId: kaye.id,
-    branchId,
-    payrollPeriodId: periodId,
-    year: 2026,
-    basicPayEarned: pay.basicPay.toFixed(2),
-    periodStartDate: periodStart,
-    periodEndDate: periodEnd,
-  }).onConflictDoNothing();
+  console.log(`\n✅ Payroll entry created: ${entryId}`);
+  console.log(`✅ Period ${periodId} updated → closed`);
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
   console.log(`\n═══════════════════════════════════════════════════════════`);
   console.log(`  ✅ Kaye attendance + payroll seeded in ${elapsed}s`);
-  console.log(`═══════════════════════════════════════════════════════════\n`);
+  console.log(`═══════════════════════════════════════════════════════════`);
   process.exit(0);
 }
 
 main().catch(err => {
-  console.error('❌ Seeding failed:', err);
+  console.error('❌ Seeder error:', err);
   process.exit(1);
 });

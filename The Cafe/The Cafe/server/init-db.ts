@@ -104,6 +104,7 @@ export async function initializeDatabase() {
       await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS sss_number TEXT`);
       await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS philhealth_number TEXT`);
       await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS pagibig_number TEXT`);
+      await db.execute(sql`ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS include_holiday_pay BOOLEAN DEFAULT false`);
       console.log('✅ User table migrations (government IDs) checked/applied');
     } catch (err) {
       console.log('⚠️ Could not apply some users table migrations:', err);
@@ -548,6 +549,7 @@ export async function initializeDatabase() {
         bank_name TEXT,
         bank_account_name TEXT,
         bank_account_no TEXT,
+        include_holiday_pay BOOLEAN DEFAULT false,
         is_active BOOLEAN DEFAULT true,
         updated_by TEXT REFERENCES users(id),
         updated_at TIMESTAMP DEFAULT NOW(),

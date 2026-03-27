@@ -17,6 +17,8 @@ import {
   useTheme,
   alpha,
   Chip,
+  Switch,
+  FormControlLabel,
 } from "@mui/material";
 import {
   Business as BusinessIcon,
@@ -62,6 +64,7 @@ interface CompanySettings {
   bankName: string | null;
   bankAccountName: string | null;
   bankAccountNo: string | null;
+  includeHolidayPay: boolean;
   isActive: boolean;
   updatedAt: string | null;
   createdAt: string | null;
@@ -167,6 +170,7 @@ const emptyForm = {
   bankName: "",
   bankAccountName: "",
   bankAccountNo: "",
+  includeHolidayPay: false,
 };
 
 export default function MuiCompanySettings() {
@@ -215,6 +219,7 @@ export default function MuiCompanySettings() {
         bankName: normalizeBankName(data.bankName),
         bankAccountName: data.bankAccountName || "",
         bankAccountNo: data.bankAccountNo || "",
+        includeHolidayPay: data.includeHolidayPay || false,
       });
     } else if (!isLoading && !data) {
       setIsEditing(true); // Auto-open edit mode for first-time setup
@@ -657,6 +662,30 @@ export default function MuiCompanySettings() {
                 fullWidth label="Bank Account Number" value={form.bankAccountNo}
                 onChange={handleChange("bankAccountNo")} disabled={!isEditing}
                 helperText="Stored securely. Masked on payslips."
+              />
+            </Grid>
+            <Grid size={{ xs: 12 }}>
+              <Divider sx={{ my: 2 }} />
+              <Typography variant="subtitle2" gutterBottom>
+                Compliance Settings
+              </Typography>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={form.includeHolidayPay}
+                    onChange={(e) => setForm((prev) => ({ ...prev, includeHolidayPay: e.target.checked }))}
+                    disabled={!isEditing}
+                    color="primary"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body1">Include Holiday Pay in Payroll computations</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      When enabled, recognized holidays will automatically trigger 100% unworked pay or 260% worked overtime premiums per DOLE rules. (Retail/Service establishments with &lt;10 workers may be exempt).
+                    </Typography>
+                  </Box>
+                }
               />
             </Grid>
           </Grid>

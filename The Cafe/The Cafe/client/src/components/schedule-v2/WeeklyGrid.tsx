@@ -174,8 +174,8 @@ function ShiftPill({ shift, onClick, trade }: { shift: Shift; onClick: () => voi
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const rc = getRoleColor(shift.position, shift.user?.role);
-  const startStr = format(new Date(shift.startTime), 'h:mma').toLowerCase().replace(':00', '');
-  const endStr = format(new Date(shift.endTime), 'h:mma').toLowerCase().replace(':00', '');
+  const startStr = format(new Date(shift.startTime), 'h:mm A');
+  const endStr = format(new Date(shift.endTime), 'h:mm A');
   const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
   const hasTrade = !!trade;
 
@@ -201,10 +201,10 @@ function ShiftPill({ shift, onClick, trade }: { shift: Shift; onClick: () => voi
           borderLeft: `4px solid ${rc.bg}`,
           color: isDark ? alpha(rc.bgLight, 0.9) : rc.bgDark,
           cursor: 'pointer',
-          fontSize: '0.72rem',
+          fontSize: '0.82rem',
           fontWeight: 600,
           lineHeight: 1.3,
-          minHeight: 28,
+          minHeight: 30,
           transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
           ...(hasTrade && {
             outline: '2px dashed',
@@ -384,7 +384,7 @@ export default function WeeklyGrid({
                             {emp ? `${emp.firstName} ${emp.lastName}` : 'Unknown'}
                           </Typography>
                           <Typography variant="caption" color="text.secondary">
-                            {shift.position || 'Staff'} · {format(new Date(shift.startTime), 'h:mm a')} – {format(new Date(shift.endTime), 'h:mm a')} ({hours}h)
+                            {shift.position || 'Staff'} · {format(new Date(shift.startTime), 'h:mm A')} – {format(new Date(shift.endTime), 'h:mm A')} ({hours}h)
                           </Typography>
                         </Box>
                         {isManager && <EditIcon sx={{ fontSize: 16, color: 'text.secondary' }} />}

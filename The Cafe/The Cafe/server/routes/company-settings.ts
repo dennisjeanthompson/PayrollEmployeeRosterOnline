@@ -97,7 +97,7 @@ router.post('/', requireManagerOrAdmin, async (req: Request, res: Response) => {
       name, tradeName, address, city, province, zipCode, country,
       tin, sssEmployerNo, philhealthNo, pagibigNo, birRdo, secRegistration,
       phone, email, website, logoUrl, logoPublicId, industry,
-      payrollFrequency, paymentMethod, bankName, bankAccountName, bankAccountNo,
+      payrollFrequency, paymentMethod, bankName, bankAccountName, bankAccountNo, includeHolidayPay,
     } = req.body;
 
     if (!name || !address || !tin) {
@@ -116,6 +116,7 @@ router.post('/', requireManagerOrAdmin, async (req: Request, res: Response) => {
       payrollFrequency: payrollFrequency || 'semi-monthly',
       paymentMethod: paymentMethod || 'Bank Transfer',
       bankName, bankAccountName, bankAccountNo,
+      includeHolidayPay: includeHolidayPay ?? false,
       isActive: true,
       updatedBy: req.session.user!.id,
     });
@@ -149,7 +150,7 @@ router.put('/:id', requireManagerOrAdmin, async (req: Request, res: Response) =>
       name, tradeName, address, city, province, zipCode, country,
       tin, sssEmployerNo, philhealthNo, pagibigNo, birRdo, secRegistration,
       phone, email, website, logoUrl, logoPublicId, industry,
-      payrollFrequency, paymentMethod, bankName, bankAccountName, bankAccountNo,
+      payrollFrequency, paymentMethod, bankName, bankAccountName, bankAccountNo, includeHolidayPay,
     } = req.body;
 
     // Only update fields that were provided
@@ -178,6 +179,7 @@ router.put('/:id', requireManagerOrAdmin, async (req: Request, res: Response) =>
     if (bankName !== undefined) updates.bankName = bankName;
     if (bankAccountName !== undefined) updates.bankAccountName = bankAccountName;
     if (bankAccountNo !== undefined) updates.bankAccountNo = bankAccountNo;
+    if (includeHolidayPay !== undefined) updates.includeHolidayPay = includeHolidayPay;
     updates.updatedBy = req.session.user!.id;
 
     const updated = await dbStorage.updateCompanySettings(id, updates);

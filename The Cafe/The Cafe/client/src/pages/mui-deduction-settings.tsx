@@ -1,9 +1,13 @@
 /**
  * Deductions Page (PERO Payroll System)
- * Clean reference view for mandatory Philippine government deductions.
- * No configuration needed — rates are applied automatically.
+ * Interactive toggles for mandatory Philippine government deductions.
+ * Toggles are saved per-branch to the deduction_settings table.
  */
 
+import React, { useState, useEffect } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { apiRequest } from "@/lib/queryClient";
+import { getCurrentUser } from "@/lib/auth";
 import {
   Box,
   Card,
@@ -16,6 +20,9 @@ import {
   Chip,
   Tooltip,
   Button,
+  Switch,
+  FormControlLabel,
+  CircularProgress,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 import {
@@ -27,12 +34,15 @@ import {
   OpenInNew,
   InfoOutlined,
   AutoAwesome,
+  ToggleOn,
+  ToggleOff,
 } from "@mui/icons-material";
 import { useLocation } from "wouter";
 
 const deductions = [
   {
     key: "sss",
+    dbField: "deductSSS",
     label: "SSS",
     fullLabel: "Social Security System",
     rate: "5%",
@@ -48,6 +58,7 @@ const deductions = [
   },
   {
     key: "philhealth",
+    dbField: "deductPhilHealth",
     label: "PhilHealth",
     fullLabel: "Philippine Health Insurance",
     rate: "2.5%",
@@ -63,6 +74,7 @@ const deductions = [
   },
   {
     key: "pagibig",
+    dbField: "deductPagibig",
     label: "Pag-IBIG",
     fullLabel: "Home Development Mutual Fund",
     rate: "2%",
@@ -78,6 +90,7 @@ const deductions = [
   },
   {
     key: "tax",
+    dbField: "deductWithholdingTax",
     label: "Withholding Tax",
     fullLabel: "BIR Withholding Tax (TRAIN Law)",
     rate: "0–35%",
@@ -96,6 +109,69 @@ const deductions = [
 export default function MuiDeductionSettings() {
   const theme = useTheme();
   const [, setLocation] = useLocation();
+  const queryClient = useQueryClient();
+  const currentUser = getCurrentUser();
+  const isManager = currentUser?.role === 'manager' || currentUser?.role === 'admin';
+
+  // State for toggle switches
+  const [toggles, setToggles] = useState<Record<string, boolean>>({
+    deductSSS: true,
+    deductPhilHealth: true,
+    deductPagibig: true,
+    deductWithholdingTax: true,
+  });
+
+  // Fetch existing deduction settings for this branch
+  const { data: settingsData, isLoading: settingsLoading } = useQuery({
+    queryKey: ["deduction-settings"],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest("GET", "/api/deduction-settings");
+        return res.json();
+      } catch {
+        return null;
+      }
+    },
+  });
+
+  // Initialize toggles from fetched data
+  useEffect(() => {
+    if (settingsData?.settings) {
+      const s = settingsData.settings;
+      setToggles({
+        deductSSS: s.deductSSS ?? true,
+        deductPhilHealth: s.deductPhilHealth ?? true,
+        deductPagibig: s.deductPagibig ?? true,
+        deductWithholdingTax: s.deductWithholdingTax ?? true,
+      });
+    }
+  }, [settingsData]);
+
+  // Save mutation
+  const saveMutation = useMutation({
+    mutationFn: async (newToggles: Record<string, boolean>) => {
+      const res = await apiRequest("PUT", "/api/deduction-settings", newToggles);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["deduction-settings"] });
+    },
+  });
+
+  const handleToggle = (field: string) => {
+    if (!isManager) return;
+    const newToggles = { ...toggles, [field]: !toggles[field] };
+    setToggles(newToggles);
+    saveMutation.mutate(newToggles);
+  };
+
+  if (settingsLoading) {
+    return (
+      <Box sx={{ display: "flex", justifyContent: "center", alignItems: "center", height: "60vh" }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
     <Box
@@ -129,15 +205,15 @@ export default function MuiDeductionSettings() {
               Deductions
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Philippine mandatory deductions — auto-applied per 2026 law
+              Philippine mandatory deductions — {isManager ? "toggle on/off per branch" : "auto-applied per 2026 law"}
             </Typography>
           </Box>
         </Box>
 
         <Chip
           icon={<AutoAwesome sx={{ fontSize: 16 }} />}
-          label="Auto-Compliant"
-          color="success"
+          label={isManager ? "Configurable" : "Auto-Compliant"}
+          color={isManager ? "primary" : "success"}
           sx={{ fontWeight: 700, px: 1 }}
         />
       </Box>
@@ -147,39 +223,44 @@ export default function MuiDeductionSettings() {
         elevation={0}
         sx={{
           borderRadius: 3,
-          bgcolor: alpha(theme.palette.success.main, 0.07),
-          border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
+          bgcolor: alpha(theme.palette.info.main, 0.07),
+          border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
         }}
       >
         <CardContent sx={{ py: 2, "&:last-child": { pb: 2 } }}>
           <Stack direction="row" spacing={2} alignItems="flex-start">
-            <CheckCircle color="success" sx={{ mt: 0.25 }} />
+            <InfoOutlined color="info" sx={{ mt: 0.25 }} />
             <Box>
-              <Typography fontWeight={600} color="success.main">
-                Mandatory deductions are calculated automatically
+              <Typography fontWeight={600} color="info.main">
+                {isManager
+                  ? "Toggle deductions on or off for payroll processing"
+                  : "Mandatory deductions are calculated automatically"}
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                SSS, PhilHealth, Pag-IBIG, and BIR withholding tax are applied to every payroll run using the official
-                2026 government rate tables. No manual setup is required.
+                {isManager
+                  ? "Use the switches below to enable or disable specific government deductions for this branch. Changes apply to all future payroll runs."
+                  : "SSS, PhilHealth, Pag-IBIG, and BIR withholding tax are applied to every payroll run using the official 2026 government rate tables."}
               </Typography>
             </Box>
           </Stack>
         </CardContent>
       </Card>
 
-      {/* Deduction Rate Cards */}
+      {/* Deduction Rate Cards with Toggle Switches */}
       <Grid container spacing={3}>
         {deductions.map((item) => {
           const Icon = item.icon;
+          const isEnabled = toggles[item.dbField] ?? true;
           return (
             <Grid key={item.key} size={{ xs: 12, sm: 6, lg: 3 }}>
               <Card
                 elevation={0}
                 sx={{
                   borderRadius: 3,
-                  border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+                  border: `1px solid ${isEnabled ? alpha(item.color, 0.3) : alpha(theme.palette.divider, 0.1)}`,
                   height: "100%",
-                  transition: "box-shadow 0.2s, transform 0.2s",
+                  transition: "box-shadow 0.2s, transform 0.2s, opacity 0.3s",
+                  opacity: isEnabled ? 1 : 0.6,
                   "&:hover": {
                     boxShadow: `0 8px 24px ${alpha(item.color, 0.15)}`,
                     transform: "translateY(-2px)",
@@ -188,7 +269,7 @@ export default function MuiDeductionSettings() {
               >
                 <CardContent sx={{ p: 3, "&:last-child": { pb: 3 } }}>
                   <Stack spacing={2}>
-                    {/* Icon + label */}
+                    {/* Icon + label + toggle */}
                     <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
                       <Box
                         sx={{
@@ -203,16 +284,30 @@ export default function MuiDeductionSettings() {
                       >
                         <Icon sx={{ color: item.color, fontSize: 22 }} />
                       </Box>
-                      <Chip
-                        label={item.rate}
-                        size="small"
-                        sx={{
-                          bgcolor: alpha(item.color, 0.12),
-                          color: item.color,
-                          fontWeight: 700,
-                          fontSize: "0.8rem",
-                        }}
-                      />
+                      
+                      {/* Toggle Switch — only managers can change */}
+                      {isManager ? (
+                        <Tooltip title={isEnabled ? `Disable ${item.label}` : `Enable ${item.label}`}>
+                          <Switch
+                            checked={isEnabled}
+                            onChange={() => handleToggle(item.dbField)}
+                            color="success"
+                            size="small"
+                            disabled={saveMutation.isPending}
+                          />
+                        </Tooltip>
+                      ) : (
+                        <Chip
+                          label={item.rate}
+                          size="small"
+                          sx={{
+                            bgcolor: alpha(item.color, 0.12),
+                            color: item.color,
+                            fontWeight: 700,
+                            fontSize: "0.8rem",
+                          }}
+                        />
+                      )}
                     </Box>
 
                     {/* Name */}
@@ -224,6 +319,21 @@ export default function MuiDeductionSettings() {
                         {item.fullLabel}
                       </Typography>
                     </Box>
+
+                    {/* Rate badge for managers */}
+                    {isManager && (
+                      <Chip
+                        label={item.rate}
+                        size="small"
+                        sx={{
+                          alignSelf: "flex-start",
+                          bgcolor: alpha(item.color, 0.12),
+                          color: item.color,
+                          fontWeight: 700,
+                          fontSize: "0.8rem",
+                        }}
+                      />
+                    )}
 
                     <Divider />
 
@@ -277,12 +387,15 @@ export default function MuiDeductionSettings() {
                       </Box>
                     </Tooltip>
 
-                    {/* Active badge */}
+                    {/* Active/Inactive badge */}
                     <Chip
-                      icon={<CheckCircle sx={{ fontSize: "14px !important" }} />}
-                      label="Active"
+                      icon={isEnabled
+                        ? <CheckCircle sx={{ fontSize: "14px !important" }} />
+                        : <ToggleOff sx={{ fontSize: "14px !important" }} />
+                      }
+                      label={isEnabled ? "Active" : "Disabled"}
                       size="small"
-                      color="success"
+                      color={isEnabled ? "success" : "default"}
                       variant="outlined"
                       sx={{ alignSelf: "flex-start" }}
                     />

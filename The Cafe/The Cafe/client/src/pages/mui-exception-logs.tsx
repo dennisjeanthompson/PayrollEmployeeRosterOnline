@@ -43,6 +43,7 @@ const exceptionTypes = [
   { value: "overtime", label: "Regular Overtime" },
   { value: "late", label: "Tardiness (Late)" },
   { value: "undertime", label: "Undertime" },
+  { value: "break", label: "Break (Unpaid)" },
   { value: "absent", label: "Absent" },
   { value: "rest_day_ot", label: "Rest Day OT" },
   { value: "special_holiday_ot", label: "Special Holiday OT" },

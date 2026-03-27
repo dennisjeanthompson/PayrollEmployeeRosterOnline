@@ -181,9 +181,7 @@ export function getHolidayType(date: Date, holidays: Holiday[]): HolidayType {
   const dateStr = toLocalDateString(date);
 
   for (const holiday of holidays) {
-    const holidayDate = typeof holiday.date === 'string' 
-      ? holiday.date.substring(0, 10) 
-      : holiday.date.toISOString().split('T')[0];
+    const holidayDate = toLocalDateString(new Date(holiday.date));
       
     if (dateStr === holidayDate) {
       return holiday.type as HolidayType;
@@ -282,9 +280,7 @@ function createHolidayResolver(
   if (holidays && holidays.length > 0) {
     const map = new Map<string, HolidayLookupResult>();
     for (const holiday of holidays) {
-      const key = typeof holiday.date === 'string' 
-        ? holiday.date.substring(0, 10) 
-        : holiday.date.toISOString().split('T')[0];
+      const key = toLocalDateString(new Date(holiday.date));
       map.set(key, { type: holiday.type as HolidayType, name: holiday.name });
     }
 
@@ -484,6 +480,7 @@ export function calculatePeriodPay(
 
     overtimePay += otPay;
     nightDiffPay += nightDiff;
+    console.log(`DEBUG: Date=${toLocalDateString(dayData.date)}, HolidayType=${dayData.holidayType}`);
   }
 
   // --- DOLE Art. 94 Unworked Regular Holiday Pay ---
