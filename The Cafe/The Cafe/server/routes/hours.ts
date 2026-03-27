@@ -32,7 +32,7 @@ const requireRole = (roles: string[]) => (req: Request, res: Response, next: Nex
 };
 
 // Helper function to filter only completed/past shifts
-function filterCompletedShifts(shifts: any[]): any[] {
+export function filterCompletedShifts(shifts: any[]): any[] {
   const now = new Date();
   return shifts.filter(shift => {
     const shiftEndTime = shift.actualEndTime || shift.endTime;
@@ -43,7 +43,7 @@ function filterCompletedShifts(shifts: any[]): any[] {
 }
 
 // Helper function to calculate hours from shifts
-function calculateHoursFromShifts(shifts: any[]): number {
+export function calculateHoursFromShifts(shifts: any[]): number {
   let totalHours = 0;
   const completedShifts = filterCompletedShifts(shifts);
 

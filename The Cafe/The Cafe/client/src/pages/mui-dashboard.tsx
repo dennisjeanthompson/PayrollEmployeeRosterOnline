@@ -104,18 +104,8 @@ export default function MuiDashboard() {
   });
 
   // Queries
-  const { data: approvals, isLoading: approvalsLoading } = useQuery<ApprovalsResponse>({
-    queryKey: ["/api/approvals"],
-    enabled: isManagerRole,
-  });
-
-  const { data: timeOffResponse, isLoading: timeOffLoading } = useQuery<TimeOffResponse>({
-    queryKey: ["/api/time-off-requests"],
-    enabled: isManagerRole,
-  });
-
-  const { data: shifts, isLoading: shiftsLoading } = useQuery<ShiftsResponse>({
-    queryKey: ["/api/shifts/branch"],
+  const { data: dashboardStats, isLoading: statsLoading } = useQuery<any>({
+    queryKey: ["/api/dashboard/stats/manager"],
     enabled: isManagerRole,
   });
 
@@ -124,10 +114,15 @@ export default function MuiDashboard() {
     enabled: !isManagerRole,
   });
 
-  const { data: teamHours, isLoading: teamHoursLoading } = useQuery<TeamHoursResponse>({
-    queryKey: ["/api/hours/team-summary"],
-    enabled: isManagerRole,
-  });
+  const approvals = dashboardStats ? { approvals: dashboardStats.approvals || [] } : undefined;
+  const timeOffResponse = dashboardStats ? { requests: dashboardStats.timeOffRequests || [] } : undefined;
+  const shifts = dashboardStats ? { shifts: dashboardStats.shifts || [] } : undefined;
+  const teamHours = dashboardStats?.teamHours || {};
+  
+  const shiftsLoading = isManagerRole ? statsLoading : employeeShiftsLoading;
+  const timeOffLoading = isManagerRole ? statsLoading : false;
+  const approvalsLoading = isManagerRole ? statsLoading : false;
+  const teamHoursLoading = isManagerRole ? statsLoading : false;
 
   // Filter today's shifts using Philippine timezone
   const toDateStringPHT = (d: Date) => d.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' });

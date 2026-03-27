@@ -1411,6 +1411,57 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
+  // ─── Dashboard Stats (Consolidated API to prevent front-end waterfall) ───
+  app.get("/api/dashboard/stats/manager", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+    try {
+      const branchId = req.user!.branchId;
+      const now = new Date();
+      const startTimeMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endTimeMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+      
+      // Parallelize all the DB calls that the dashboard used to make sequentially
+      const [allShifts, allTimeOffRequests, allApprovals, allUsers] = await Promise.all([
+        storage.getShiftsByBranch(branchId, startTimeMonth, endTimeMonth),
+        storage.getTimeOffRequestsEnriched(branchId),
+        storage.getApprovalsByBranch(branchId),
+        storage.getUsersByBranch(branchId)
+      ]);
+
+      // Calculate Team Hours using the previously exported logic
+      // We need to import date-fns manually here for boundary calculation
+      const { startOfWeek, endOfWeek, startOfMonth, endOfMonth } = require('date-fns');
+      const { filterCompletedShifts, calculateHoursFromShifts } = require('./routes/hours');
+      
+      const weekStart = startOfWeek(now, { weekStartsOn: 1 });
+      const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
+      const weekShifts = allShifts.filter((s:any) => new Date(s.startTime) >= weekStart && new Date(s.startTime) <= weekEnd);
+      const weekHours = calculateHoursFromShifts(weekShifts);
+      
+      const monthStart = startOfMonth(now);
+      const monthEnd = endOfMonth(now);
+      const monthShifts = allShifts.filter((s:any) => new Date(s.startTime) >= monthStart && new Date(s.startTime) <= monthEnd);
+      const monthHours = calculateHoursFromShifts(monthShifts);
+      
+      const activeEmployees = allUsers.filter((e:any) => e.isActive && (e.role === 'employee' || e.role === 'manager'));
+
+      res.json({
+        approvals: allApprovals,
+        timeOffRequests: allTimeOffRequests.filter((req: any) => new Date(req.startDate) >= new Date(now.getFullYear(), 0, 1)), // Filter past 1 year to avoid massive payload
+        shifts: allShifts.filter((s: any) => s.user?.isActive !== false),
+        teamHours: {
+          thisWeek: Number(weekHours.toFixed(2)),
+          thisMonth: Number(monthHours.toFixed(2)),
+          employeeCount: activeEmployees.length,
+          weekShifts: filterCompletedShifts(weekShifts).length,
+          monthShifts: filterCompletedShifts(monthShifts).length,
+        }
+      });
+    } catch (error: any) {
+      console.error('Error in /api/dashboard/stats/manager:', error);
+      res.status(500).json({ message: error.message || "Failed to fetch dashboard stats" });
+    }
+  }));
+
   // ─── Deduction Settings (Per-Branch Toggle) ────────────────────────────────
   app.get("/api/deduction-settings", requireAuth, asyncHandler(async (req, res) => {
     try {
