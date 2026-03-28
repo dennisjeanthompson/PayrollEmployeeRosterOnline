@@ -94,10 +94,11 @@ export default function ScheduleV2() {
         event.startsWith('time-off:') || event.startsWith('trade:') || event.startsWith('shift:') ||
         event === 'notification:created' || event === 'notification'
       ) {
-        queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
-        queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
-        queryClient.invalidateQueries({ queryKey: ['shift-trades'] });
-        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
+        // Suppress unhandled promise rejections if the background queries fail (e.g. session expired, network drop)
+        queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] }).catch(console.error);
+        queryClient.invalidateQueries({ queryKey: ['time-off-requests'] }).catch(console.error);
+        queryClient.invalidateQueries({ queryKey: ['shift-trades'] }).catch(console.error);
+        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] }).catch(console.error);
       }
       // Show inline toast for real-time status changes pushed from server
       if ((event === 'notification' || event === 'notification:created') && data) {
