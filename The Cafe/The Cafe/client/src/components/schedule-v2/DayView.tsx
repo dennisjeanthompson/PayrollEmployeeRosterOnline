@@ -13,9 +13,22 @@ import {
   HourglassTop as PendingIcon,
   CheckCircle as ApprovedIcon,
 } from '@mui/icons-material';
-import { format, addDays, subDays, isToday, differenceInHours } from 'date-fns';
+import { format, addDays, subDays, isToday, differenceInHours, isValid } from 'date-fns';
 import { getRoleColor } from '@/lib/schedule-theme';
 import type { Shift, Employee, Holiday, TimeOffRequest, ShiftTrade } from './types';
+
+// Safe date helpers to prevent RangeError crashes
+function toDate(val: any): Date {
+  if (!val) return new Date(0);
+  const d = val instanceof Date ? val : new Date(val);
+  return isValid(d) ? d : new Date(0);
+}
+function toDateStr(val: any): string {
+  return format(toDate(val), 'yyyy-MM-dd');
+}
+function safeFormat(val: any, fmt: string): string {
+  try { return format(toDate(val), fmt); } catch { return '--'; }
+}
 
 interface DayViewProps {
   employees: Employee[];
@@ -44,12 +57,12 @@ export function MyDayView({
   const isDark = theme.palette.mode === 'dark';
   const dateStr = format(date, 'yyyy-MM-dd');
   const myShifts = shifts.filter(
-    s => s.userId === currentUserId && typeof s.startTime === 'string' && s.startTime.startsWith(dateStr)
+    s => s.userId === currentUserId && toDateStr(s.startTime) === dateStr
   );
 
   // Time-off for this user on this date
   const myTimeOff = timeOffRequests.filter(r =>
-    r.userId === currentUserId && typeof r.startDate === 'string' && typeof r.endDate === 'string' && dateStr >= r.startDate.slice(0, 10) && dateStr <= r.endDate.slice(0, 10)
+    r.userId === currentUserId && dateStr >= toDateStr(r.startDate) && dateStr <= toDateStr(r.endDate)
     && (r.status === 'pending' || r.status === 'approved' || r.status === 'rejected')
   );
 
@@ -128,8 +141,8 @@ export function MyDayView({
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {myShifts.map(shift => {
             const rc = getRoleColor(shift.position, shift.user?.role);
-            const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
-            const startHour = new Date(shift.startTime).getHours();
+            const hours = differenceInHours(toDate(shift.endTime), toDate(shift.startTime));
+            const startHour = toDate(shift.startTime).getHours();
             const period = startHour < 12 ? '🌅 Morning' : startHour < 17 ? '☀️ Afternoon' : '🌙 Evening';
             const trade = myTrades.find(t => t.shiftId === shift.id);
 
@@ -171,7 +184,7 @@ export function MyDayView({
                 </Box>
                 <Box sx={{ p: 2 }}>
                   <Typography variant="h5" fontWeight={800} sx={{ mb: 0.5 }}>
-                    {format(new Date(shift.startTime), 'h:mm a')} – {format(new Date(shift.endTime), 'h:mm a')}
+                    {safeFormat(shift.startTime, 'h:mm a')} – {safeFormat(shift.endTime, 'h:mm a')}
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
                     {hours} hours
@@ -208,12 +221,12 @@ export default function DayView({
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const dateStr = format(date, 'yyyy-MM-dd');
-  const dayShifts = shifts.filter(s => typeof s.startTime === 'string' && s.startTime.startsWith(dateStr));
-  const holiday = holidays.find(h => format(new Date(h.date), 'yyyy-MM-dd') === dateStr);
+  const dayShifts = shifts.filter(s => toDateStr(s.startTime) === dateStr);
+  const holiday = holidays.find(h => format(toDate(h.date), 'yyyy-MM-dd') === dateStr);
 
   // Time-off for today
   const dayTimeOff = timeOffRequests.filter(r =>
-    typeof r.startDate === 'string' && typeof r.endDate === 'string' && dateStr >= r.startDate.slice(0, 10) && dateStr <= r.endDate.slice(0, 10) &&
+    dateStr >= toDateStr(r.startDate) && dateStr <= toDateStr(r.endDate) &&
     (r.status === 'pending' || r.status === 'approved')
   );
 
@@ -345,7 +358,7 @@ export default function DayView({
           {sortedShifts.map(shift => {
             const emp = employees.find(e => e.id === shift.userId);
             const rc = getRoleColor(shift.position, emp?.role);
-            const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+            const hours = differenceInHours(toDate(shift.endTime), toDate(shift.startTime));
             const trade = activeTrades.find(t => t.shiftId === shift.id);
 
             return (
@@ -382,7 +395,7 @@ export default function DayView({
                       bgcolor: isDark ? rc.bgDark : rc.bgLight, color: isDark ? rc.text : rc.bg,
                     }} />
                     <Typography variant="caption" color="text.secondary">
-                      {format(new Date(shift.startTime), 'h:mm a')} – {format(new Date(shift.endTime), 'h:mm a')} · {hours}h
+                      {safeFormat(shift.startTime, 'h:mm a')} – {safeFormat(shift.endTime, 'h:mm a')} · {hours}h
                     </Typography>
                     {trade && (
                       <Chip

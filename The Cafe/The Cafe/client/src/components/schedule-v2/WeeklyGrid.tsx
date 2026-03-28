@@ -12,9 +12,25 @@ import {
   CheckCircle as ApprovedIcon,
   Cancel as RejectedIcon,
 } from '@mui/icons-material';
-import { format, addDays, isSameDay, isToday, differenceInHours, isWithinInterval, parseISO } from 'date-fns';
+import { format, addDays, isSameDay, isToday, differenceInHours, isWithinInterval, parseISO, isValid } from 'date-fns';
 import { getRoleColor } from '@/lib/schedule-theme';
 import type { Shift, Employee, Holiday, TimeOffRequest, ShiftTrade } from './types';
+
+// Safe date helpers to prevent RangeError crashes
+function toDate(val: any): Date {
+  if (!val) return new Date(0);
+  const d = val instanceof Date ? val : new Date(val);
+  return isValid(d) ? d : new Date(0);
+}
+function toDateStr(val: any): string {
+  return format(toDate(val), 'yyyy-MM-dd');
+}
+function safeFormat(val: any, fmt: string): string {
+  try {
+    const d = toDate(val);
+    return format(d, fmt);
+  } catch { return '--'; }
+}
 
 interface WeeklyGridProps {
   employees: Employee[];
@@ -39,7 +55,7 @@ function getWeekDays(weekStart: Date): Date[] {
 function getShiftsForCell(shifts: Shift[], employeeId: string, date: Date): Shift[] {
   const dateStr = format(date, 'yyyy-MM-dd');
   return shifts.filter(
-    s => s.userId === employeeId && typeof s.startTime === 'string' && s.startTime.startsWith(dateStr)
+    s => s.userId === employeeId && toDateStr(s.startTime) === dateStr
   );
 }
 
@@ -54,7 +70,9 @@ function getTimeOffForCell(requests: TimeOffRequest[], employeeId: string, date:
   const dateStr = format(date, 'yyyy-MM-dd');
   return requests.filter(r => {
     if (r.userId !== employeeId) return false;
-    return typeof r.startDate === 'string' && typeof r.endDate === 'string' && dateStr >= r.startDate.slice(0, 10) && dateStr <= r.endDate.slice(0, 10);
+    const start = toDateStr(r.startDate);
+    const end = toDateStr(r.endDate);
+    return dateStr >= start && dateStr <= end;
   });
 }
 
@@ -62,7 +80,7 @@ function getTimeOffForCell(requests: TimeOffRequest[], employeeId: string, date:
 function getTradesForCell(trades: ShiftTrade[], shifts: Shift[], employeeId: string, date: Date): ShiftTrade[] {
   const dateStr = format(date, 'yyyy-MM-dd');
   const shiftIds = shifts
-    .filter(s => s.userId === employeeId && typeof s.startTime === 'string' && s.startTime.startsWith(dateStr))
+    .filter(s => s.userId === employeeId && toDateStr(s.startTime) === dateStr)
     .map(s => s.id);
   return trades.filter(t =>
     shiftIds.includes(t.shiftId) &&
@@ -174,14 +192,14 @@ function ShiftPill({ shift, onClick, trade }: { shift: Shift; onClick: () => voi
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const rc = getRoleColor(shift.position, shift.user?.role);
-  const startStr = format(new Date(shift.startTime), 'h:mm A');
-  const endStr = format(new Date(shift.endTime), 'h:mm A');
-  const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+  const startStr = safeFormat(shift.startTime, 'h:mm A');
+  const endStr = safeFormat(shift.endTime, 'h:mm A');
+  const hours = differenceInHours(toDate(shift.endTime), toDate(shift.startTime));
   const hasTrade = !!trade;
 
   return (
     <Tooltip
-      title={`${shift.position || 'Staff'} · ${format(new Date(shift.startTime), 'h:mm a')} – ${format(new Date(shift.endTime), 'h:mm a')} (${hours}h)${shift.notes ? `\n${shift.notes}` : ''}${hasTrade ? `\n⇄ Trade ${trade.status}` : ''}`}
+      title={`${shift.position || 'Staff'} · ${safeFormat(shift.startTime, 'h:mm a')} – ${safeFormat(shift.endTime, 'h:mm a')} (${hours}h)${shift.notes ? `\n${shift.notes}` : ''}${hasTrade ? `\n⇄ Trade ${trade.status}` : ''}`}
       arrow
       placement="top"
     >
@@ -267,7 +285,7 @@ export default function WeeklyGrid({
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {weekDays.map(date => {
           const holiday = getHoliday(holidays, date);
-          const dayShifts = shifts.filter(s => typeof s.startTime === 'string' && s.startTime.startsWith(format(date, 'yyyy-MM-dd')));
+          const dayShifts = shifts.filter(s => toDateStr(s.startTime) === format(date, 'yyyy-MM-dd'));
           const today = isToday(date);
 
           return (

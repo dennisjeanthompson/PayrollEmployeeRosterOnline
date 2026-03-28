@@ -5,7 +5,7 @@ import { isManager, isAdmin, getCurrentUser } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
-import { format } from "date-fns";
+import { format, isValid } from "date-fns";
 import { Link, useLocation } from "wouter";
 import { getInitials } from "@/lib/utils";
 import { StatCard, InfoCard, UserCard, EmptyState, ActionButtons } from "@/components/mui/cards";
@@ -631,6 +631,16 @@ function ManagerDashboard({
 }
 
 
+// Safe date formatter to prevent RangeError crashes on employee views
+function sfmt(val: any, fmt: string): string {
+  try {
+    if (!val) return '--';
+    const d = val instanceof Date ? val : new Date(val);
+    if (!isValid(d)) return '--';
+    return format(d, fmt);
+  } catch { return '--'; }
+}
+
 // Employee Dashboard Component
 function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoading }: any) {
   const theme = useTheme();
@@ -906,7 +916,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                 <Box sx={{ flex: 1 }}>
                   <Typography variant="body2" sx={{ fontWeight: 700 }}>{shift.position || 'Shift'}</Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {format(new Date(shift.startTime), 'h:mm a')} – {format(new Date(shift.endTime), 'h:mm a')}
+                    {sfmt(shift.startTime, 'h:mm a')} – {sfmt(shift.endTime, 'h:mm a')}
                   </Typography>
                 </Box>
                 <Chip size="small" label={shift.status === 'completed' ? 'Done' : 'Today'} color={shift.status === 'completed' ? 'success' : 'primary'} sx={{ fontSize: '0.6rem', height: 22, fontWeight: 700 }} />
@@ -942,16 +952,16 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
               >
                 <Box sx={{ width: 44, height: 44, borderRadius: 2, bgcolor: alpha(primaryColor, 0.08), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   <Typography variant="caption" sx={{ fontSize: '0.55rem', fontWeight: 800, color: 'primary.main', lineHeight: 1 }}>
-                    {format(new Date(shift.startTime), 'MMM').toUpperCase()}
+                    {sfmt(shift.startTime, 'MMM').toUpperCase()}
                   </Typography>
                   <Typography variant="subtitle2" sx={{ fontWeight: 900, color: 'primary.main', lineHeight: 1.2 }}>
-                    {format(new Date(shift.startTime), 'd')}
+                    {sfmt(shift.startTime, 'd')}
                   </Typography>
                 </Box>
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{shift.position || 'Shift'}</Typography>
                   <Typography variant="caption" color="text.secondary" noWrap>
-                    {format(new Date(shift.startTime), 'EEE')} · {format(new Date(shift.startTime), 'h:mm a')} – {format(new Date(shift.endTime), 'h:mm a')}
+                    {sfmt(shift.startTime, 'EEE')} · {sfmt(shift.startTime, 'h:mm a')} – {sfmt(shift.endTime, 'h:mm a')}
                   </Typography>
                 </Box>
                 <ArrowRightIcon sx={{ color: 'text.disabled', fontSize: 18 }} />

@@ -14,8 +14,18 @@ import {
   Delete as DeleteIcon,
   Block as BlockIcon,
 } from '@mui/icons-material';
-import { format } from 'date-fns';
+import { format, isValid } from 'date-fns';
 import type { TimeOffRequest, ShiftTrade, Employee } from './types';
+
+// Safe date helpers
+function toDate(val: any): Date {
+  if (!val) return new Date(0);
+  const d = val instanceof Date ? val : new Date(val);
+  return isValid(d) ? d : new Date(0);
+}
+function safeFormat(val: any, fmt: string): string {
+  try { return format(toDate(val), fmt); } catch { return '--'; }
+}
 
 interface RequestsPanelProps {
   timeOffRequests: TimeOffRequest[];
@@ -153,7 +163,7 @@ export default function RequestsPanel({
                       <StatusChip status={req.status} />
                     </Box>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-                      <strong>{req.type}</strong> · {format(new Date(req.startDate), 'MMM d')} – {format(new Date(req.endDate), 'MMM d, yyyy')}
+                      <strong>{req.type}</strong> · {safeFormat(req.startDate, 'MMM d')} – {safeFormat(req.endDate, 'MMM d, yyyy')}
                     </Typography>
                     {req.reason && (
                       <Typography variant="caption" color="text.secondary" sx={{ fontStyle: 'italic', display: 'block', mb: 0.5 }}>
@@ -247,9 +257,9 @@ export default function RequestsPanel({
                       {trade.shift && (
                         <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                           <ClockIcon sx={{ fontSize: 12, verticalAlign: 'middle', mr: 0.5 }} />
-                          {trade.shift.date && format(new Date(trade.shift.date), 'MMM d')}
-                          {trade.shift.startTime && ` · ${format(new Date(trade.shift.startTime), 'h:mm a')}`}
-                          {trade.shift.endTime && ` – ${format(new Date(trade.shift.endTime), 'h:mm a')}`}
+                          {trade.shift.date && safeFormat(trade.shift.date, 'MMM d')}
+                          {trade.shift.startTime && ` · ${safeFormat(trade.shift.startTime, 'h:mm a')}`}
+                          {trade.shift.endTime && ` – ${safeFormat(trade.shift.endTime, 'h:mm a')}`}
                         </Typography>
                       )}
 
