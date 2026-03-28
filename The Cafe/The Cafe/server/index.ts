@@ -152,11 +152,7 @@ if (process.env.NODE_ENV === 'production') {
   // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
 
-  server.listen({
-    port,
-    host: "0.0.0.0",  // Bind to all interfaces for Codespaces/Docker
-    //reusePort: true,
-  }, () => {
+  server.listen(port, () => {
     const localIP = getLocalNetworkIP();
 
     console.log('\n' + '='.repeat(70));

@@ -1420,12 +1420,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const endTimeMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
       
       // Parallelize all the DB calls that the dashboard used to make sequentially
-      const [allShifts, allTimeOffRequests, allApprovals, allUsers] = await Promise.all([
+      const [allShifts, allApprovals, allUsers] = await Promise.all([
         storage.getShiftsByBranch(branchId, startTimeMonth, endTimeMonth),
-        storage.getTimeOffRequestsEnriched(branchId),
-        storage.getApprovalsByBranch(branchId),
+        storage.getPendingApprovals(branchId),
         storage.getUsersByBranch(branchId)
       ]);
+
+      // Aggregate time-off requests for all branch users
+      const allTimeOffRequests: any[] = [];
+      for (const user of allUsers) {
+        const userRequests = await storage.getTimeOffRequestsByUser(user.id);
+        allTimeOffRequests.push(...userRequests.map(r => ({ ...r, employeeName: `${user.firstName} ${user.lastName}` })));
+      }
 
       // Calculate Team Hours using the previously exported logic
       // We need to import date-fns manually here for boundary calculation
@@ -4379,8 +4385,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Time off request not found" });
       }
 
-      // Only allow deleting own requests or if manager
-      if (existingRequest.userId !== userId && req.user!.role !== 'manager') {
+      // Only allow deleting own requests or if manager/admin
+      if (existingRequest.userId !== userId && req.user!.role !== 'manager' && req.user!.role !== 'admin') {
         return res.status(403).json({ message: "Unauthorized" });
       }
 

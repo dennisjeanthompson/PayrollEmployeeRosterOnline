@@ -27,10 +27,16 @@ class RealTimeManager {
   constructor(httpServer: HTTPServer) {
     this.io = new SocketIOServer(httpServer, {
       cors: {
-        origin: process.env.VITE_API_URL || "http://localhost:5173",
+        origin: [
+          "http://localhost:5000",
+          "http://localhost:5173",
+          "http://localhost:3000",
+          process.env.VITE_API_URL || "",
+          process.env.FRONTEND_URL || "",
+        ].filter(Boolean),
         credentials: true,
       },
-      transports: ["websocket", "polling"],
+      transports: ["polling", "websocket"],
       pingInterval: 25000,
       pingTimeout: 60000,
     });
