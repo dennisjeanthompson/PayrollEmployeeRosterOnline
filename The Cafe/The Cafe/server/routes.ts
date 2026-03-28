@@ -1429,8 +1429,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Calculate Team Hours using the previously exported logic
       // We need to import date-fns manually here for boundary calculation
-      const { startOfWeek, endOfWeek, startOfMonth, endOfMonth } = require('date-fns');
-      const { filterCompletedShifts, calculateHoursFromShifts } = require('./routes/hours');
+      const { startOfWeek, endOfWeek, startOfMonth, endOfMonth } = await import('date-fns');
+      const { filterCompletedShifts, calculateHoursFromShifts } = await import('./routes/hours');
       
       const weekStart = startOfWeek(now, { weekStartsOn: 1 });
       const weekEnd = endOfWeek(now, { weekStartsOn: 1 });
