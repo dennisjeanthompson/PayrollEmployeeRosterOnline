@@ -107,7 +107,7 @@ function TimeOffIndicator({ request, compact = false, onDelete }: { request: Tim
   const typeLabel = request.type.charAt(0).toUpperCase() + request.type.slice(1);
 
   const handleClick = (e: React.MouseEvent) => {
-    if (onDelete && window.confirm('Are you sure you want to delete this time-off request?')) {
+    if (onDelete) {
       e.stopPropagation();
       onDelete(request.id);
     }

@@ -76,6 +76,7 @@ export default function ScheduleV2() {
   const [timeOffModalOpen, setTimeOffModalOpen] = useState(false);
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
+  const [timeOffToDelete, setTimeOffToDelete] = useState<string | null>(null);
 
   // Form data
   const [newShift, setNewShift] = useState({ employeeId: '', startTime: null as Date | null, endTime: null as Date | null, notes: '' });
@@ -272,6 +273,7 @@ export default function ScheduleV2() {
       queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
       toast.success('Time-off request deleted');
+      setTimeOffToDelete(null);
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -582,7 +584,7 @@ export default function ScheduleV2() {
               onCreateShift={handleCreateShift}
               onEditShift={handleEditShift}
               onOpenRequests={() => setDrawerOpen(true)}
-              onDeleteTimeOff={(id) => deleteTimeOffMutation.mutate(id)}
+              onDeleteTimeOff={(id) => setTimeOffToDelete(id)}
             />
           ) : (
             /* Employee week view: show their shifts only, as vertical cards */
@@ -614,7 +616,7 @@ export default function ScheduleV2() {
               onDateChange={setSelectedDay}
               onCreateShift={handleCreateShift}
               onEditShift={handleEditShift}
-              onDeleteTimeOff={(id) => deleteTimeOffMutation.mutate(id)}
+              onDeleteTimeOff={(id) => setTimeOffToDelete(id)}
             />
           ) : (
             <MyDayView
@@ -854,6 +856,18 @@ export default function ScheduleV2() {
           <Button variant="contained" color="error" disabled={deleteShiftMutation.isPending}
             onClick={() => selectedShift && deleteShiftMutation.mutate(selectedShift.id)}>
             {deleteShiftMutation.isPending ? 'Deleting...' : 'Delete'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={!!timeOffToDelete} onClose={() => setTimeOffToDelete(null)} maxWidth="xs" fullWidth>
+        <DialogTitle>Delete Time-Off Request?</DialogTitle>
+        <DialogContent><Typography>This action cannot be undone and will restore the original schedule block.</Typography></DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTimeOffToDelete(null)}>Cancel</Button>
+          <Button variant="contained" color="error" disabled={deleteTimeOffMutation.isPending}
+            onClick={() => timeOffToDelete && deleteTimeOffMutation.mutate(timeOffToDelete)}>
+            {deleteTimeOffMutation.isPending ? 'Deleting...' : 'Delete Request'}
           </Button>
         </DialogActions>
       </Dialog>

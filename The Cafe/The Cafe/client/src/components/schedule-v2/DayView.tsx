@@ -315,7 +315,7 @@ export default function DayView({
               <Box
                 key={`to-${req.id}`}
                 onClick={() => {
-                  if (isManager && onDeleteTimeOff && window.confirm('Are you sure you want to delete this time-off request?')) {
+                  if (isManager && onDeleteTimeOff) {
                     onDeleteTimeOff(req.id);
                   }
                 }}
