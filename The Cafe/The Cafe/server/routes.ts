@@ -4384,9 +4384,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Unauthorized" });
       }
 
-      // Don't allow deleting approved/rejected requests
-      if (existingRequest.status !== 'pending') {
-        return res.status(400).json({ message: "Cannot delete approved or rejected requests" });
+      // Employees cannot delete approved/rejected requests. Managers can override.
+      if (existingRequest.status !== 'pending' && req.user!.role !== 'manager' && req.user!.role !== 'admin') {
+        return res.status(400).json({ message: "Only managers can delete approved or rejected requests" });
+      }
+
+      // If the request was approved and PAID, restore the leave credits
+      if (existingRequest.status === 'approved' && existingRequest.isPaid) {
+        try {
+          const { restoreLeaveCredit } = await import('./routes/leave-credits');
+          const startD = new Date(existingRequest.startDate);
+          const endD = new Date(existingRequest.endDate);
+          const daysToRestore = Math.max(1, Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+          
+          await restoreLeaveCredit(existingRequest.userId, existingRequest.type, daysToRestore, startD.getFullYear());
+          console.log(`Restored ${daysToRestore} ${existingRequest.type} days for user ${existingRequest.userId}`);
+        } catch (restoreErr) {
+          console.error("Failed to restore leave credits during time-off deletion:", restoreErr);
+        }
       }
 
       await storage.deleteTimeOffRequest(id);

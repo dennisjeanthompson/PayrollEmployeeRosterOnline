@@ -24,124 +24,21 @@ export interface RoleColor {
   label: string;
 }
 
-export const ROLE_COLORS: Record<string, RoleColor> = {
-  // Barista / Senior Barista → soft teal
-  barista: {
-    bg: '#14B8A6',
-    bgLight: '#CCFBF1',
-    bgDark: '#115E59',
-    text: '#FFFFFF',
-    border: '#0D9488',
-    label: 'Barista',
-  },
-  'senior barista': {
-    bg: '#0891B2',
-    bgLight: '#CFFAFE',
-    bgDark: '#155E75',
-    text: '#FFFFFF',
-    border: '#0E7490',
-    label: 'Senior Barista',
-  },
-
-  // Branch Manager → warm coffee brown
-  'branch manager': {
-    bg: '#92400E',
-    bgLight: '#FEF3C7',
-    bgDark: '#78350F',
-    text: '#FFFFFF',
-    border: '#78350F',
-    label: 'Branch Manager',
-  },
-  manager: {
-    bg: '#92400E',
-    bgLight: '#FEF3C7',
-    bgDark: '#78350F',
-    text: '#FFFFFF',
-    border: '#78350F',
-    label: 'Manager',
-  },
-  'store manager': {
-    bg: '#92400E',
-    bgLight: '#FEF3C7',
-    bgDark: '#78350F',
-    text: '#FFFFFF',
-    border: '#78350F',
-    label: 'Store Manager',
-  },
-  administrator: {
-    bg: '#78350F',
-    bgLight: '#FEF3C7',
-    bgDark: '#451A03',
-    text: '#FFFFFF',
-    border: '#451A03',
-    label: 'Administrator',
-  },
-
-  // Cashier → soft amber
-  cashier: {
-    bg: '#D97706',
-    bgLight: '#FEF9C3',
-    bgDark: '#92400E',
-    text: '#FFFFFF',
-    border: '#B45309',
-    label: 'Cashier',
-  },
-
-  // Kitchen Staff / Server → soft olive
-  'kitchen staff': {
-    bg: '#4D7C0F',
-    bgLight: '#ECFCCB',
-    bgDark: '#365314',
-    text: '#FFFFFF',
-    border: '#3F6212',
-    label: 'Kitchen Staff',
-  },
-  server: {
-    bg: '#7C3AED',
-    bgLight: '#EDE9FE',
-    bgDark: '#4C1D95',
-    text: '#FFFFFF',
-    border: '#6D28D9',
-    label: 'Server',
-  },
-
-  // Shift Lead → deep green
-  'shift lead': {
-    bg: '#166534',
-    bgLight: '#DCFCE7',
-    bgDark: '#14532D',
-    text: '#FFFFFF',
-    border: '#15803D',
-    label: 'Shift Lead',
-  },
-};
-
-// Fallback for unknown roles
-const DEFAULT_ROLE_COLOR: RoleColor = {
-  bg: '#6B7280',
-  bgLight: '#F3F4F6',
-  bgDark: '#374151',
-  text: '#FFFFFF',
-  border: '#4B5563',
-  label: 'Staff',
+const PROFESSIONAL_SHIFT_COLOR: RoleColor = {
+  bg: '#3B82F6',       // Modern Professional Blue (Blue 500)
+  bgLight: '#EFF6FF',  // Pale blue background (Blue 50)
+  bgDark: '#1E40AF',   // Deep blue for dark mode (Blue 800)
+  text: '#FFFFFF',     // White text
+  border: '#93C5FD',   // Soft blue border (Blue 300)
+  label: 'Shift',
 };
 
 /**
- * Get role color by position/role string. Case-insensitive match.
+ * Enforces a single unified professional shift color 
+ * regardless of the employee's role/position.
  */
 export function getRoleColor(position?: string | null, role?: string | null): RoleColor {
-  const key = (position || role || '').toLowerCase().trim();
-  if (!key) return DEFAULT_ROLE_COLOR;
-
-  // Direct match
-  if (ROLE_COLORS[key]) return ROLE_COLORS[key];
-
-  // Partial match (e.g. "Senior Barista" contains "barista")
-  for (const [roleKey, color] of Object.entries(ROLE_COLORS)) {
-    if (key.includes(roleKey) || roleKey.includes(key)) return color;
-  }
-
-  return DEFAULT_ROLE_COLOR;
+  return PROFESSIONAL_SHIFT_COLOR;
 }
 
 // ─── CAFÉ PALETTE ────────────────────────────────────────────────────
@@ -204,17 +101,6 @@ export const SHIFT_TEMPLATES = {
 
 // ─── UNIQUE ROLE LIST (for legend) ──────────────────────────────────
 export function getUniqueRoleColors(employees: Array<{ position?: string; role?: string }>): RoleColor[] {
-  const seenLabels = new Set<string>();
-  const colors: RoleColor[] = [];
-
-  for (const emp of employees) {
-    const key = (emp.position || emp.role || '').toLowerCase().trim();
-    if (!key) continue;
-    const rc = getRoleColor(emp.position, emp.role);
-    if (seenLabels.has(rc.label)) continue;
-    seenLabels.add(rc.label);
-    colors.push(rc);
-  }
-
-  return colors;
+  // Rainbow legend removed to match professional UI standards.
+  return [];
 }

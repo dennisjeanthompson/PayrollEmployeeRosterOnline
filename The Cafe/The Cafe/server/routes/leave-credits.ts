@@ -389,4 +389,57 @@ export async function deductLeaveCredit(
   }
 }
 
+// ─── Internal helper: restore leave on time-off cancellation ───────────────────
+export async function restoreLeaveCredit(
+  userId: string,
+  leaveType: string,
+  daysToRestore: number,
+  year: number
+): Promise<{ success: boolean; warning?: string }> {
+  try {
+    const typeMap: Record<string, string> = {
+      vacation: 'vacation', sick: 'sick', sil: 'sil',
+      solo_parent: 'solo_parent', vawc: 'vawc',
+      other: 'other', emergency: 'other', personal: 'other',
+    };
+    const creditType = typeMap[leaveType] || 'other';
+
+    const existing = await db
+      .select()
+      .from(leaveCredits)
+      .where(
+        and(
+          eq(leaveCredits.userId, userId),
+          eq(leaveCredits.year, year),
+          eq(leaveCredits.leaveType, creditType)
+        )
+      )
+      .limit(1);
+
+    if (!existing[0]) {
+      return { success: true, warning: `No ${creditType} balance found to restore for ${year}.` };
+    }
+
+    const current = existing[0];
+    const used = parseFloat(current.usedCredits || '0');
+    let remaining = parseFloat(current.remainingCredits);
+
+    const newUsed = Math.max(0, used - daysToRestore);
+    // If we exceed totalCredits, we just restore up to totalCredits mathematically, 
+    // but the simplest safe way is strictly adding back to remaining.
+    const newRemaining = remaining + daysToRestore;
+
+    await db.update(leaveCredits).set({
+      usedCredits: newUsed.toFixed(2),
+      remainingCredits: newRemaining.toFixed(2),
+      updatedAt: new Date(),
+    }).where(eq(leaveCredits.id, current.id));
+
+    return { success: true };
+  } catch (error) {
+    console.error('Leave credit restoration failed:', error);
+    return { success: true, warning: 'Leave credit restoration could not be recorded.' };
+  }
+}
+
 export { router as leaveCreditsRouter };
