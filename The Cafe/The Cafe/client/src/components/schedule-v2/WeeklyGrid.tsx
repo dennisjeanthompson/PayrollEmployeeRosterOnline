@@ -44,6 +44,7 @@ interface WeeklyGridProps {
   onCreateShift: (employeeId: string, date: Date) => void;
   onEditShift: (shift: Shift) => void;
   onOpenRequests?: () => void;
+  onDeleteTimeOff?: (id: string) => void;
 }
 
 /** Generate array of 7 days: Mon–Sun */
@@ -100,15 +101,24 @@ const TIME_OFF_STATUS_CONFIG = {
 } as const;
 
 /** Compact time-off indicator for calendar cells */
-function TimeOffIndicator({ request, compact = false }: { request: TimeOffRequest; compact?: boolean }) {
+function TimeOffIndicator({ request, compact = false, onDelete }: { request: TimeOffRequest; compact?: boolean; onDelete?: (id: string) => void }) {
   const config = TIME_OFF_STATUS_CONFIG[request.status as keyof typeof TIME_OFF_STATUS_CONFIG] || TIME_OFF_STATUS_CONFIG.pending;
   const Icon = config.icon;
   const typeLabel = request.type.charAt(0).toUpperCase() + request.type.slice(1);
 
+  const handleClick = (e: React.MouseEvent) => {
+    if (onDelete && window.confirm('Are you sure you want to delete this time-off request?')) {
+      e.stopPropagation();
+      onDelete(request.id);
+    }
+  };
+
   if (compact) {
     return (
-      <Tooltip title={`${typeLabel} Leave · ${config.label}`} arrow placement="top">
-        <Box sx={{
+      <Tooltip title={`${typeLabel} Leave · ${config.label}${onDelete ? ' (Click to delete)' : ''}`} arrow placement="top">
+        <Box 
+          onClick={onDelete ? handleClick : undefined}
+          sx={{
           display: 'flex', alignItems: 'center', gap: 0.25,
           px: 0.5, py: 0.25, borderRadius: 1,
           bgcolor: config.bgColor,
@@ -116,10 +126,11 @@ function TimeOffIndicator({ request, compact = false }: { request: TimeOffReques
           borderColor: config.borderColor,
           fontSize: '0.58rem', fontWeight: 600,
           color: config.color,
-          cursor: 'default',
+          cursor: onDelete ? 'pointer' : 'default',
           lineHeight: 1.3,
           maxWidth: '100%',
           overflow: 'hidden',
+          '&:hover': onDelete ? { filter: 'brightness(0.95)', transform: 'scale(0.98)' } : {},
         }}>
           <Icon sx={{ fontSize: 10 }} />
           <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -131,8 +142,10 @@ function TimeOffIndicator({ request, compact = false }: { request: TimeOffReques
   }
 
   return (
-    <Tooltip title={`${typeLabel} Leave · ${config.label}${request.reason ? `\n"${request.reason}"` : ''}`} arrow placement="top">
-      <Box sx={{
+    <Tooltip title={`${typeLabel} Leave · ${config.label}${request.reason ? `\n"${request.reason}"` : ''}${onDelete ? '\n(Click to delete)' : ''}`} arrow placement="top">
+      <Box 
+        onClick={onDelete ? handleClick : undefined}
+        sx={{
         display: 'flex', alignItems: 'center', gap: 0.5,
         px: 0.75, py: 0.4, borderRadius: 1.5,
         bgcolor: config.bgColor,
@@ -140,10 +153,11 @@ function TimeOffIndicator({ request, compact = false }: { request: TimeOffReques
         borderColor: config.borderColor,
         fontSize: '0.65rem', fontWeight: 600,
         color: config.color,
-        cursor: 'default',
+        cursor: onDelete ? 'pointer' : 'default',
         lineHeight: 1.3,
         minHeight: 24,
         transition: 'all 0.15s ease',
+        '&:hover': onDelete ? { filter: 'brightness(0.95)', transform: 'scale(0.98)' } : {},
       }}>
         <Icon sx={{ fontSize: 12 }} />
         <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -258,6 +272,7 @@ export default function WeeklyGrid({
   onCreateShift,
   onEditShift,
   onOpenRequests,
+  onDeleteTimeOff,
 }: WeeklyGridProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -620,10 +635,23 @@ export default function WeeklyGrid({
                               : 'transparent',
                       }}
                     >
-                      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minHeight: 40 }}>
+                      <Box sx={{ 
+                        display: 'flex', flexDirection: 'column', gap: 0.5, minHeight: 40,
+                        maxHeight: 120, // Prevent ultra-tall cells
+                        overflowY: 'auto', // Scroll when cramped
+                        pr: 0.5, // Padding for scrollbar
+                        '&::-webkit-scrollbar': { width: '4px' },
+                        '&::-webkit-scrollbar-thumb': { backgroundColor: alpha('#000', 0.1), borderRadius: '4px' },
+                        '&::-webkit-scrollbar-thumb:hover': { backgroundColor: alpha('#000', 0.2) },
+                      }}>
                         {/* Time-off indicators — compact to avoid cramping */}
                         {cellTimeOff.map(req => (
-                          <TimeOffIndicator key={`to-${req.id}`} request={req} compact={cellShifts.length > 0} />
+                          <TimeOffIndicator 
+                            key={`to-${req.id}`} 
+                            request={req} 
+                            compact={cellShifts.length > 0} 
+                            onDelete={isManager ? onDeleteTimeOff : undefined}
+                          />
                         ))}
 
                         {/* Shift pills with trade badge overlay */}

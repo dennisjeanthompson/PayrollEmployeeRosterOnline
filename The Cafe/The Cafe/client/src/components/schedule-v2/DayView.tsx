@@ -42,6 +42,7 @@ interface DayViewProps {
   onDateChange: (date: Date) => void;
   onCreateShift: (employeeId: string, date: Date) => void;
   onEditShift: (shift: Shift) => void;
+  onDeleteTimeOff?: (id: string) => void;
 }
 
 /** Employee's personal day view — shows only their shifts + their requests */
@@ -217,6 +218,7 @@ export default function DayView({
   onDateChange,
   onCreateShift,
   onEditShift,
+  onDeleteTimeOff,
 }: DayViewProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -312,12 +314,22 @@ export default function DayView({
             return (
               <Box
                 key={`to-${req.id}`}
+                onClick={() => {
+                  if (isManager && onDeleteTimeOff && window.confirm('Are you sure you want to delete this time-off request?')) {
+                    onDeleteTimeOff(req.id);
+                  }
+                }}
                 sx={{
                   display: 'flex', alignItems: 'center', gap: 1.5,
                   p: 1.5, borderRadius: 2,
                   border: `1px ${isPending ? 'dashed' : 'solid'}`,
                   borderColor: isPending ? '#FDE68A' : '#A7F3D0',
                   bgcolor: isPending ? (isDark ? alpha('#F59E0B', 0.08) : '#FFFBEB') : (isDark ? alpha('#10B981', 0.08) : '#F0FDF4'),
+                  ...(isManager && onDeleteTimeOff && {
+                    cursor: 'pointer',
+                    transition: 'all 0.1s ease',
+                    '&:hover': { filter: 'brightness(0.95)', transform: 'translateY(-1px)' }
+                  }),
                 }}
               >
                 {isPending ? <PendingIcon sx={{ fontSize: 18, color: '#F59E0B' }} /> : <ApprovedIcon sx={{ fontSize: 18, color: '#10B981' }} />}
@@ -327,6 +339,7 @@ export default function DayView({
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {req.type.charAt(0).toUpperCase() + req.type.slice(1)} Leave · {isPending ? 'Pending' : 'Approved'}
+                    {isManager && onDeleteTimeOff && ' · (Click to delete)'}
                   </Typography>
                 </Box>
                 <Chip

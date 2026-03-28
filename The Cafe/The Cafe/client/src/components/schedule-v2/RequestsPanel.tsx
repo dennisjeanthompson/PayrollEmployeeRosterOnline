@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Box, Typography, Avatar, Chip, Button, Card, CardContent,
   Divider, useTheme, Stack, IconButton, Dialog, DialogTitle,
-  DialogContent, DialogActions, TextField,
+  DialogContent, DialogActions, TextField, Menu, MenuItem,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -33,7 +33,7 @@ interface RequestsPanelProps {
   employees: Employee[];
   isManager: boolean;
   currentUserId: string;
-  onApproveTimeOff: (id: string) => void;
+  onApproveTimeOff: (id: string, useSil?: boolean) => void;
   onRejectTimeOff: (id: string, reason: string) => void;
   onApproveTrade: (id: string) => void;
   onRejectTrade: (id: string) => void;
@@ -92,6 +92,27 @@ export default function RequestsPanel({
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+
+  // Approve Menu state
+  const [approveAnchorEl, setApproveAnchorEl] = useState<null | HTMLElement>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+
+  const handleOpenApproveMenu = (event: React.MouseEvent<HTMLElement>, id: string) => {
+    setApproveAnchorEl(event.currentTarget);
+    setApprovingId(id);
+  };
+
+  const handleCloseApproveMenu = () => {
+    setApproveAnchorEl(null);
+    setApprovingId(null);
+  };
+
+  const handleConfirmApprove = (useSil: boolean) => {
+    if (approvingId) {
+      onApproveTimeOff(approvingId, useSil);
+    }
+    handleCloseApproveMenu();
+  };
 
   const handleOpenRejectDialog = (id: string) => {
     setRejectingId(id);
@@ -177,7 +198,7 @@ export default function RequestsPanel({
                           variant="contained"
                           color="success"
                           startIcon={<CheckIcon />}
-                          onClick={() => onApproveTimeOff(req.id)}
+                          onClick={(e) => handleOpenApproveMenu(e, req.id)}
                           sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
                         >
                           Approve
@@ -420,6 +441,24 @@ export default function RequestsPanel({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Approve Time Off Details Menu */}
+      <Menu
+        anchorEl={approveAnchorEl}
+        open={Boolean(approveAnchorEl)}
+        onClose={handleCloseApproveMenu}
+        PaperProps={{ sx: { mt: 1, borderRadius: 2, minWidth: 240 } }}
+      >
+        <MenuItem onClick={() => handleConfirmApprove(true)} sx={{ py: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <Typography variant="body2" fontWeight={700} color="success.main">Approve as Paid Leave</Typography>
+          <Typography variant="caption" color="text.secondary">Deducts from Leave Balance (SIL/Vacation)</Typography>
+        </MenuItem>
+        <Divider sx={{ my: 0.5 }} />
+        <MenuItem onClick={() => handleConfirmApprove(false)} sx={{ py: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <Typography variant="body2" fontWeight={700}>Approve as Unpaid</Typography>
+          <Typography variant="caption" color="text.secondary">Leave Without Pay (LWOP)</Typography>
+        </MenuItem>
+      </Menu>
     </>
   );
 }

@@ -37,7 +37,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { getCurrentUser, isManager as checkIsManager } from '@/lib/auth';
-import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, setHours, setMinutes, differenceInHours, isValid } from 'date-fns';
+import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, setHours, setMinutes, differenceInHours, isValid, areIntervalsOverlapping } from 'date-fns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DateTimePicker, DatePicker } from '@mui/x-date-pickers';
@@ -262,13 +262,27 @@ export default function ScheduleV2() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const deleteTimeOffMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('DELETE', `/api/time-off-requests/${id}`);
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to delete'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
+      toast.success('Time-off request deleted');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const approveTimeOffMutation = useMutation({
-    mutationFn: async ({ id, status, rejectionReason }: { id: string; status: string; rejectionReason?: string }) => {
+    mutationFn: async ({ id, status, rejectionReason, useSil }: { id: string; status: string; rejectionReason?: string; useSil?: boolean }) => {
       // Server has separate /approve and /reject endpoints
       const endpoint = status === 'approved'
         ? `/api/time-off-requests/${id}/approve`
         : `/api/time-off-requests/${id}/reject`;
-      const body = status === 'rejected' ? { status, rejectionReason } : { status };
+      const body = status === 'rejected' ? { status, rejectionReason } : { status, useSil };
       const res = await apiRequest('PUT', endpoint, body);
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
       return res.json();
@@ -568,6 +582,7 @@ export default function ScheduleV2() {
               onCreateShift={handleCreateShift}
               onEditShift={handleEditShift}
               onOpenRequests={() => setDrawerOpen(true)}
+              onDeleteTimeOff={(id) => deleteTimeOffMutation.mutate(id)}
             />
           ) : (
             /* Employee week view: show their shifts only, as vertical cards */
@@ -599,6 +614,7 @@ export default function ScheduleV2() {
               onDateChange={setSelectedDay}
               onCreateShift={handleCreateShift}
               onEditShift={handleEditShift}
+              onDeleteTimeOff={(id) => deleteTimeOffMutation.mutate(id)}
             />
           ) : (
             <MyDayView
@@ -676,7 +692,7 @@ export default function ScheduleV2() {
           employees={employees}
           isManager={isManager}
           currentUserId={currentUser?.id || ''}
-          onApproveTimeOff={(id) => approveTimeOffMutation.mutate({ id, status: 'approved' })}
+          onApproveTimeOff={(id, useSil) => approveTimeOffMutation.mutate({ id, status: 'approved', useSil })}
           onRejectTimeOff={(id, reason) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason })}
           onApproveTrade={(id) => approveTradeMutation.mutate({ id, status: 'approved' })}
           onRejectTrade={(id) => approveTradeMutation.mutate({ id, status: 'rejected' })}
@@ -728,6 +744,19 @@ export default function ScheduleV2() {
             onClick={() => {
               if (!newShift.startTime || !newShift.endTime || !isValid(newShift.startTime) || !isValid(newShift.endTime)) { toast.error('Please select valid start and end times'); return; }
               if (newShift.startTime.getDay() === 0) { toast.warning('Sunday is a Rest Day'); return; }
+              
+              const hasOverlap = shifts.some(s => 
+                s.userId === newShift.employeeId && 
+                areIntervalsOverlapping(
+                  { start: new Date(s.startTime), end: new Date(s.endTime) },
+                  { start: newShift.startTime!, end: newShift.endTime! }
+                )
+              );
+              if (hasOverlap) {
+                toast.error('This employee already has an overlapping shift on this day.');
+                return;
+              }
+
               const emp = employees.find(e => e.id === newShift.employeeId);
               createShiftMutation.mutate({
                 userId: newShift.employeeId,
@@ -794,6 +823,19 @@ export default function ScheduleV2() {
             disabled={updateShiftMutation.isPending || !editForm.startTime || !editForm.endTime}
             onClick={() => {
               if (selectedShift && editForm.startTime && editForm.endTime && isValid(editForm.startTime) && isValid(editForm.endTime)) {
+                const hasOverlap = shifts.some(s => 
+                  s.userId === selectedShift.userId &&
+                  s.id !== selectedShift.id &&
+                  areIntervalsOverlapping(
+                    { start: new Date(s.startTime), end: new Date(s.endTime) },
+                    { start: editForm.startTime!, end: editForm.endTime! }
+                  )
+                );
+                if (hasOverlap) {
+                  toast.error('This edit would overlap with an existing shift.');
+                  return;
+                }
+
                 updateShiftMutation.mutate({ id: selectedShift.id, startTime: editForm.startTime.toISOString(), endTime: editForm.endTime.toISOString(), notes: editForm.notes });
               }
             }}
