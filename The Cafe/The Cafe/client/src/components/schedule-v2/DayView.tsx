@@ -16,6 +16,7 @@ import {
 import { format, addDays, subDays, isToday, differenceInHours, isValid } from 'date-fns';
 import { getRoleColor } from '@/lib/schedule-theme';
 import type { Shift, Employee, Holiday, TimeOffRequest, ShiftTrade } from './types';
+import { getAdjustmentsForCell, AdjustmentBadge } from './WeeklyGrid';
 
 // Safe date helpers to prevent RangeError crashes
 function toDate(val: any): Date {
@@ -39,6 +40,7 @@ interface DayViewProps {
   currentUserId: string;
   timeOffRequests?: TimeOffRequest[];
   shiftTrades?: ShiftTrade[];
+  adjustmentLogs?: any[];
   onDateChange: (date: Date) => void;
   onCreateShift: (employeeId: string, date: Date) => void;
   onEditShift: (shift: Shift) => void;
@@ -215,6 +217,7 @@ export default function DayView({
   currentUserId,
   timeOffRequests = [],
   shiftTrades = [],
+  adjustmentLogs = [],
   onDateChange,
   onCreateShift,
   onEditShift,
@@ -373,6 +376,7 @@ export default function DayView({
             const rc = getRoleColor(shift.position, emp?.role);
             const hours = differenceInHours(toDate(shift.endTime), toDate(shift.startTime));
             const trade = activeTrades.find(t => t.shiftId === shift.id);
+            const adjustments = getAdjustmentsForCell(adjustmentLogs, shift.userId, date);
 
             return (
               <Box
@@ -423,6 +427,9 @@ export default function DayView({
                         }}
                       />
                     )}
+                    {adjustments.map(log => (
+                      <AdjustmentBadge key={`adj-${log.id}`} log={log} />
+                    ))}
                   </Box>
                 </Box>
                 {isManager && <EditIcon sx={{ fontSize: 18, color: 'text.disabled' }} />}

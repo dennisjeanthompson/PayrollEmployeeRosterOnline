@@ -40,6 +40,7 @@ interface WeeklyGridProps {
   isManager: boolean;
   timeOffRequests?: TimeOffRequest[];
   shiftTrades?: ShiftTrade[];
+  adjustmentLogs?: any[];
   currentUserId?: string;
   onCreateShift: (employeeId: string, date: Date) => void;
   onEditShift: (shift: Shift) => void;
@@ -260,6 +261,52 @@ function ShiftPill({ shift, onClick, trade }: { shift: Shift; onClick: () => voi
   );
 }
 
+/** Get adjustment logs for an employee on a specific date */
+export function getAdjustmentsForCell(logs: any[], employeeId: string, date: Date): any[] {
+  const dateStr = format(date, 'yyyy-MM-dd');
+  return logs.filter(
+    l => l.employeeId === employeeId && toDateStr(l.date) === dateStr && l.status !== 'rejected'
+  );
+}
+
+const ADJ_TYPE_CONFIG: Record<string, { label: string, color: string, bgColor: string }> = {
+  late: { label: 'Late', color: '#c2410c', bgColor: '#ffedd5' }, // orange
+  overtime: { label: 'OT', color: '#15803d', bgColor: '#dcfce7' }, // green
+  rest_day_ot: { label: 'RD OT', color: '#1d4ed8', bgColor: '#dbeafe' }, // blue
+  special_holiday_ot: { label: 'SH OT', color: '#b45309', bgColor: '#fef3c7' }, // amber
+  regular_holiday_ot: { label: 'RH OT', color: '#b91c1c', bgColor: '#fee2e2' }, // red
+  night_diff: { label: 'ND', color: '#6d28d9', bgColor: '#ede9fe' }, // violet
+  undertime: { label: 'UT', color: '#be185d', bgColor: '#fce7f3' }, // pink
+  absent: { label: 'Absent', color: '#991b1b', bgColor: '#fee2e2' } // red
+};
+
+/** Compact pill for exception logs (OT/Late) */
+export function AdjustmentBadge({ log }: { log: any }) {
+  const isTime = log.type === 'late' || log.type === 'undertime';
+  const unit = isTime ? 'm' : log.type === 'absent' ? 'd' : 'h';
+  const config = ADJ_TYPE_CONFIG[log.type] || { label: log.type, color: '#444', bgColor: '#eee' };
+  
+  return (
+    <Tooltip title={`${log.value}${unit} ${config.label}${log.remarks ? `\n"${log.remarks}"` : ''}`} arrow placement="top">
+      <Box sx={{
+        display: 'inline-flex', alignItems: 'center', gap: 0.25,
+        px: 0.5, py: 0.25, borderRadius: 1,
+        bgcolor: config.bgColor,
+        border: '1px solid',
+        borderColor: alpha(config.color, 0.2),
+        fontSize: '0.62rem', fontWeight: 700,
+        color: config.color,
+        lineHeight: 1.1,
+        mt: 0.25,
+        cursor: 'default',
+        '&:hover': { filter: 'brightness(0.95)' }
+      }}>
+        {log.value}{unit} {config.label}
+      </Box>
+    </Tooltip>
+  );
+}
+
 export default function WeeklyGrid({
   employees,
   shifts,
@@ -268,6 +315,7 @@ export default function WeeklyGrid({
   isManager,
   timeOffRequests = [],
   shiftTrades = [],
+  adjustmentLogs = [],
   currentUserId,
   onCreateShift,
   onEditShift,
@@ -354,15 +402,29 @@ export default function WeeklyGrid({
                 {/* Time-off indicators for this day (mobile: show all employees) */}
                 {employees.map(emp => {
                   const dayTimeOff = getTimeOffForCell(allVisibleTimeOff, emp.id, date);
-                  if (dayTimeOff.length === 0) return null;
-                  return dayTimeOff.map(req => (
-                    <Box key={`to-${req.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5 }}>
-                      <Typography variant="caption" fontWeight={600} sx={{ fontSize: '0.65rem', minWidth: 60 }}>
-                        {emp.firstName} {emp.lastName?.[0]}.
-                      </Typography>
-                      <TimeOffIndicator request={req} />
+                  const dayAdjustments = getAdjustmentsForCell(adjustmentLogs, emp.id, date);
+                  if (dayTimeOff.length === 0 && dayAdjustments.length === 0) return null;
+                  
+                  return (
+                    <Box key={`emp-status-${emp.id}`} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                      {dayTimeOff.map(req => (
+                        <Box key={`to-${req.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5 }}>
+                          <Typography variant="caption" fontWeight={600} sx={{ fontSize: '0.65rem', minWidth: 60 }}>
+                            {emp.firstName} {emp.lastName?.[0]}.
+                          </Typography>
+                          <TimeOffIndicator request={req} />
+                        </Box>
+                      ))}
+                      {dayAdjustments.map(log => (
+                        <Box key={`adj-${log.id}`} sx={{ display: 'flex', alignItems: 'center', gap: 1, px: 0.5 }}>
+                          <Typography variant="caption" fontWeight={600} sx={{ fontSize: '0.65rem', minWidth: 60 }}>
+                            {emp.firstName} {emp.lastName?.[0]}.
+                          </Typography>
+                          <AdjustmentBadge log={log} />
+                        </Box>
+                      ))}
                     </Box>
-                  ));
+                  );
                 })}
 
                 {dayShifts.length === 0 && employees.every(emp => getTimeOffForCell(allVisibleTimeOff, emp.id, date).length === 0) ? (
@@ -612,6 +674,7 @@ export default function WeeklyGrid({
                   const holiday = getHoliday(holidays, date);
                   const isBlocked = holiday && !holiday.workAllowed;
                   const cellTimeOff = getTimeOffForCell(allVisibleTimeOff, emp.id, date);
+                  const cellAdjustments = getAdjustmentsForCell(adjustmentLogs, emp.id, date);
                   const hasTimeOff = cellTimeOff.length > 0;
                   const hasApprovedTimeOff = cellTimeOff.some(r => r.status === 'approved');
 
@@ -653,6 +716,15 @@ export default function WeeklyGrid({
                             onDelete={isManager ? onDeleteTimeOff : undefined}
                           />
                         ))}
+
+                        {/* Adjustment badges */}
+                        {cellAdjustments.length > 0 && (
+                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                            {cellAdjustments.map(log => (
+                              <AdjustmentBadge key={`adj-${log.id}`} log={log} />
+                            ))}
+                          </Box>
+                        )}
 
                         {/* Shift pills with trade badge overlay */}
                         {cellShifts.map(shift => {

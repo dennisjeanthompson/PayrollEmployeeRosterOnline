@@ -16,6 +16,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   FormControl, InputLabel, Select, MenuItem, Stack, Tooltip, Avatar,
   CircularProgress, useTheme, useMediaQuery, Divider, ButtonGroup,
+  Switch, FormControlLabel, InputAdornment
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -33,11 +34,12 @@ import {
   Check as CheckIcon,
   Edit as EditIcon,
   Print as PrintIcon,
+  NoteAdd as NoteAddIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { getCurrentUser, isManager as checkIsManager } from '@/lib/auth';
-import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, setHours, setMinutes, differenceInHours, isValid, areIntervalsOverlapping } from 'date-fns';
+import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, setHours, setMinutes, differenceInHours, isValid, areIntervalsOverlapping, eachDayOfInterval } from 'date-fns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DateTimePicker, DatePicker } from '@mui/x-date-pickers';
@@ -66,8 +68,8 @@ export default function ScheduleV2() {
   const [viewMode, setViewMode] = useState<ViewMode>(isMobile ? 'day' : 'week');
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  // Published/Draft toggle (managers)
-  const [isPublished, setIsPublished] = useState(true);
+  // Edit Mode toggle
+  const [isEditMode, setIsEditMode] = useState(false);
 
   // Modal state
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -77,6 +79,27 @@ export default function ScheduleV2() {
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [timeOffToDelete, setTimeOffToDelete] = useState<string | null>(null);
+
+  // Exception Log Dialog State
+  const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
+  const [adjEmployeeId, setAdjEmployeeId] = useState("");
+  const [adjDate, setAdjDate] = useState<Date | null>(new Date());
+  const [adjEndDate, setAdjEndDate] = useState<Date | null>(null);
+  const [adjIsRange, setAdjIsRange] = useState(false);
+  const [adjType, setAdjType] = useState("late");
+  const [adjValue, setAdjValue] = useState("");
+  const [adjRemarks, setAdjRemarks] = useState("");
+
+  const adjustmentTypeOptions = [
+    { value: "overtime", label: "Regular OT (125%)", color: "#10b981" },
+    { value: "rest_day_ot", label: "Rest Day OT (169%)", color: "#3b82f6" },
+    { value: "special_holiday_ot", label: "Special Holiday OT (169%)", color: "#f59e0b" },
+    { value: "regular_holiday_ot", label: "Regular Holiday OT (260%)", color: "#ef4444" },
+    { value: "night_diff", label: "Night Differential (+10%)", color: "#8b5cf6" },
+    { value: "late", label: "Tardiness (minutes)", color: "#f97316" },
+    { value: "undertime", label: "Undertime (minutes)", color: "#ec4899" },
+    { value: "absent", label: "Absent (days)", color: "#dc2626" },
+  ];
 
   // Form data
   const [newShift, setNewShift] = useState({ employeeId: '', startTime: null as Date | null, endTime: null as Date | null, notes: '' });
@@ -169,6 +192,16 @@ export default function ScheduleV2() {
     },
   });
 
+  const { data: adjustmentLogsData } = useQuery<{ logs: any[] }>({
+    queryKey: [isManager ? "adjustment-logs-branch" : "adjustment-logs-mine"],
+    queryFn: async () => {
+      const endpoint = isManager ? "/api/adjustment-logs/branch" : "/api/adjustment-logs/mine";
+      const res = await apiRequest("GET", endpoint);
+      return res.json();
+    },
+    refetchOnWindowFocus: true,
+  });
+
   // Normalize data
   const shifts = useMemo(() => Array.isArray(shiftsData) ? shiftsData : (shiftsData?.shifts || []), [shiftsData]);
   const employees = useMemo(() => {
@@ -178,6 +211,7 @@ export default function ScheduleV2() {
   const holidays = holidaysData?.holidays || [];
   const timeOffRequests = timeOffData?.requests || [];
   const shiftTrades = tradesData?.trades || [];
+  const adjustmentLogs = adjustmentLogsData?.logs || [];
 
   // Pending counts for badge
   const pendingCount = useMemo(() => {
@@ -354,6 +388,25 @@ export default function ScheduleV2() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const createAdjustmentMutation = useMutation({
+    mutationFn: async (data: any) => {
+      const res = await apiRequest("POST", "/api/adjustment-logs", data);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to log exception");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/adjustment-logs/branch"] });
+      toast.success("Exception logged successfully");
+      setIsAdjustmentDialogOpen(false);
+      setAdjValue("");
+      setAdjRemarks("");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const deleteTradeMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest('DELETE', `/api/shift-trades/${id}`);
@@ -432,6 +485,26 @@ export default function ScheduleV2() {
     }
   }, []);
 
+  const handleCreateAdjustment = async () => {
+    if (!adjEmployeeId || (!adjDate && !adjIsRange) || !adjType || !adjValue) return;
+
+    let datesToLog: Date[] = [adjDate!];
+    if (adjIsRange && adjEndDate && adjEndDate > adjDate!) {
+      datesToLog = eachDayOfInterval({ start: adjDate!, end: adjEndDate });
+    }
+
+    for (const d of datesToLog) {
+      if (!d) continue;
+      await createAdjustmentMutation.mutateAsync({
+        employeeId: adjEmployeeId,
+        date: format(d, "yyyy-MM-dd"),
+        type: adjType,
+        value: adjValue,
+        remarks: adjRemarks,
+      });
+    }
+  };
+
   // â”€â”€â”€ LOADING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   if (shiftsLoading || employeesLoading) {
     return (
@@ -484,18 +557,33 @@ export default function ScheduleV2() {
           </Tooltip>
 
           {isManager && (
-            <Chip
-              icon={isPublished ? <CheckIcon /> : <EditIcon />}
-              label={isPublished ? 'Published' : 'Draft'}
-              onClick={() => setIsPublished(!isPublished)}
-              sx={{
-                fontWeight: 700, cursor: 'pointer', height: 32, mr: 1,
-                bgcolor: isPublished ? (isDark ? '#064E3B' : '#F0FDF4') : (isDark ? '#451A03' : '#FFFBEB'),
-                color: isPublished ? (isDark ? '#6EE7B7' : '#166534') : (isDark ? '#FBBF24' : '#92400E'),
-                border: '1px solid',
-                borderColor: isPublished ? (isDark ? '#065F46' : '#BBF7D0') : (isDark ? '#78350F' : '#FDE68A'),
-                '& .MuiChip-icon': { color: 'inherit' },
-              }}
+            <Tooltip title="Log Late, OT, or Exception">
+              <Button
+                size="small" variant="outlined" color="warning" startIcon={<NoteAddIcon />}
+                onClick={() => setIsAdjustmentDialogOpen(true)}
+                sx={{ textTransform: 'none', fontWeight: 700, height: 32, mr: 1, display: { xs: 'none', sm: 'flex' } }}
+              >
+                Log Exception
+              </Button>
+            </Tooltip>
+          )}
+
+          {isManager && (
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={isEditMode}
+                  onChange={(e) => setIsEditMode(e.target.checked)}
+                  color="warning"
+                  size="small"
+                />
+              }
+              label={
+                <Typography variant="body2" fontWeight={800} sx={{ color: isEditMode ? 'warning.main' : 'text.secondary', ml: -0.5 }}>
+                  Edit Mode
+                </Typography>
+              }
+              sx={{ mr: 1, ml: 0.5, margin: 0 }}
             />
           )}
           <ButtonGroup size="small" variant="outlined" sx={{ height: 32 }}>
@@ -578,9 +666,10 @@ export default function ScheduleV2() {
               shifts={shifts}
               weekStart={weekStart}
               holidays={holidays}
-              isManager={isManager && !isPublished}
+              isManager={isManager && isEditMode}
               timeOffRequests={timeOffRequests}
               shiftTrades={shiftTrades}
+              adjustmentLogs={adjustmentLogs}
               currentUserId={currentUser?.id || ''}
               onCreateShift={handleCreateShift}
               onEditShift={handleEditShift}
@@ -597,6 +686,7 @@ export default function ScheduleV2() {
               isManager={false}
               timeOffRequests={timeOffRequests.filter(r => r.userId === currentUser?.id)}
               shiftTrades={shiftTrades.filter(t => t.requesterId === currentUser?.id || t.fromUserId === currentUser?.id)}
+              adjustmentLogs={adjustmentLogs}
               currentUserId={currentUser?.id || ''}
               onCreateShift={() => {}}
               onEditShift={() => {}}
@@ -610,10 +700,11 @@ export default function ScheduleV2() {
               shifts={shifts}
               date={selectedDay}
               holidays={holidays}
-              isManager={isManager && !isPublished}
+              isManager={isManager && isEditMode}
               currentUserId={currentUser?.id || ''}
               timeOffRequests={timeOffRequests}
               shiftTrades={shiftTrades}
+              adjustmentLogs={adjustmentLogs}
               onDateChange={setSelectedDay}
               onCreateShift={handleCreateShift}
               onEditShift={handleEditShift}
@@ -959,6 +1050,129 @@ export default function ScheduleV2() {
           <Button variant="contained" disabled={!tradeForm.shiftId || !tradeForm.reason.trim() || createTradeMutation.isPending}
             onClick={() => createTradeMutation.mutate(tradeForm)}>
             {createTradeMutation.isPending ? 'Submitting...' : 'Request Trade'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ─── EXCEPTION LOG MODAL ─────────────────────────────────────────────────── */}
+      <Dialog
+        open={isAdjustmentDialogOpen}
+        onClose={() => setIsAdjustmentDialogOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{
+          sx: {
+            borderRadius: 4,
+            background: isDark ? '#1C1410' : '#FFFFFF',
+          },
+        }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Stack direction="row" alignItems="center" spacing={1}>
+            <NoteAddIcon color="warning" />
+            <Typography variant="h6" fontWeight={800}>
+              Log Exception
+            </Typography>
+          </Stack>
+          <Typography variant="caption" color="text.secondary">
+            Log overtime, tardiness, or adjustments directly to payroll.
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2.5} sx={{ mt: 1 }}>
+            <FormControl fullWidth size="small">
+              <InputLabel>Employee</InputLabel>
+              <Select
+                value={adjEmployeeId}
+                label="Employee"
+                onChange={(e) => setAdjEmployeeId(e.target.value as string)}
+              >
+                {employees.map((emp) => (
+                  <MenuItem key={emp.id} value={emp.id}>
+                    {emp.firstName} {emp.lastName} {emp.position && `· ${emp.position}`}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <DatePicker
+                  label={adjIsRange ? "Start Date" : "Date"}
+                  value={adjDate}
+                  onChange={(val: Date | null) => setAdjDate(val)}
+                  slotProps={{ textField: { size: "small", fullWidth: true } }}
+                />
+                {adjIsRange && (
+                  <DatePicker
+                    label="End Date"
+                    value={adjEndDate}
+                    onChange={(val: Date | null) => setAdjEndDate(val)}
+                    minDate={adjDate || undefined}
+                    slotProps={{ textField: { size: "small", fullWidth: true } }}
+                  />
+                )}
+              </Stack>
+              <Button
+                size="small"
+                variant="text"
+                onClick={() => { setAdjIsRange(!adjIsRange); setAdjEndDate(null); }}
+                sx={{ textTransform: 'none', alignSelf: 'flex-start', mt: -1 }}
+              >
+                {adjIsRange ? '← Log for single day' : '📅 Log for multiple days'}
+              </Button>
+            </LocalizationProvider>
+
+            <FormControl fullWidth size="small">
+              <InputLabel>Type</InputLabel>
+              <Select
+                value={adjType}
+                label="Type"
+                onChange={(e) => setAdjType(e.target.value as string)}
+              >
+                {adjustmentTypeOptions.map((opt) => (
+                  <MenuItem key={opt.value} value={opt.value}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Box sx={{ width: 8, height: 8, borderRadius: "50%", bgcolor: opt.color }} />
+                      <span>{opt.label}</span>
+                    </Stack>
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            <TextField
+              label={
+                adjType === 'late' || adjType === 'undertime' ? "Minutes" : adjType === 'absent' ? "Days" : "Hours"
+              }
+              type="number" size="small" fullWidth value={adjValue}
+              onChange={(e) => setAdjValue(e.target.value)}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    {adjType === 'late' || adjType === 'undertime' ? 'mins' : adjType === 'absent' ? 'days' : 'hrs'}
+                  </InputAdornment>
+                ),
+              }}
+            />
+
+            <TextField
+              label="Remarks (DOLE compliance)" size="small" fullWidth multiline rows={2}
+              value={adjRemarks} onChange={(e) => setAdjRemarks(e.target.value)}
+              placeholder="e.g., Late due to heavy traffic, overtime approved by manager"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setIsAdjustmentDialogOpen(false)} sx={{ borderRadius: 2, textTransform: "none" }}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="warning"
+            onClick={handleCreateAdjustment}
+            disabled={!adjEmployeeId || (!adjDate && !adjIsRange) || !adjType || !adjValue || createAdjustmentMutation.isPending}
+            sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800, px: 3 }}
+          >
+            {createAdjustmentMutation.isPending ? "Logging..." : "Log Exception"}
           </Button>
         </DialogActions>
       </Dialog>
