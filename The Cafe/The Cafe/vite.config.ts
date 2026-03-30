@@ -9,6 +9,12 @@ export default defineConfig({
   plugins: [
     react(),
   ],
+  // ESBuild options for maximum production compression
+  esbuild: {
+    drop: ['console', 'debugger'],
+    legalComments: 'none',
+    treeShaking: true,
+  },
   resolve: {
     alias: {
       "@": path.resolve(__dirname, "client", "src"),
@@ -21,12 +27,15 @@ export default defineConfig({
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
     sourcemap: false,
-    minify: 'terser',
+    minify: 'esbuild',
     target: 'esnext',
     chunkSizeWarningLimit: 1000,
     cssCodeSplit: true,
     reportCompressedSize: false,
     rollupOptions: {
+      treeshake: {
+        moduleSideEffects: false,
+      },
       input: {
         main: path.resolve(__dirname, "client", "index.html"),
       },
@@ -47,7 +56,10 @@ export default defineConfig({
               return 'vendor-charts';
             }
             if (id.includes('@fullcalendar')) {
-              return 'vendor-calendar';
+              // Exclude premium plugins not used
+              if (!id.includes('resource')) {
+                return 'vendor-calendar';
+              }
             }
             if (id.includes('react') || id.includes('react-dom') || id.includes('wouter')) {
               return 'vendor-react-core';
@@ -64,24 +76,6 @@ export default defineConfig({
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
-      },
-    },
-    // Terser options for maximum production compression
-    terserOptions: {
-      compress: {
-        drop_console: true,
-        drop_debugger: true,
-        pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.trace'],
-        passes: 3,
-        global_defs: {
-          'process.env.NODE_ENV': JSON.stringify('production'),
-        },
-      },
-      mangle: {
-        safari10: true,
-      },
-      format: {
-        comments: false,
       },
     },
   },

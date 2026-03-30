@@ -27,6 +27,12 @@ if (process.env.NODE_ENV === 'production') {
   app.set('trust proxy', 1);
 }
 
+// Keep-alive health check endpoint (must be before any DB/auth logic to return instantly)
+app.get('/api/health', (req, res) => {
+  res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+
 // ... (omitted)
 
 (async () => {

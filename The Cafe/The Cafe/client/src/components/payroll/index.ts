@@ -14,5 +14,5 @@ export { default as DigitalPayslip } from './payslip-preview';
 export { default as PayslipViewer } from './payslip-viewer';
 
 // PDF generation component using @react-pdf/renderer
-export { default as PayslipPDF } from './PayslipPDF';
+// export { default as PayslipPDF } from './PayslipPDF';
 

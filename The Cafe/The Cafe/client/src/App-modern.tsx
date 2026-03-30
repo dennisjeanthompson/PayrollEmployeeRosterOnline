@@ -5,7 +5,6 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { useEffect, useState, useCallback, Suspense, lazy } from "react";
 import { getAuthState, setAuthState, subscribeToAuth } from "./lib/auth";
 import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
 
 // Theme Providers
 import { ThemeProvider } from "@/components/theme-provider";
@@ -245,10 +244,10 @@ export default function App() {
     <ThemeProvider>
       <MuiThemeProvider>
         <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
+
             <Toaster />
             <AppRoutes />
-          </TooltipProvider>
+
         </QueryClientProvider>
       </MuiThemeProvider>
     </ThemeProvider>

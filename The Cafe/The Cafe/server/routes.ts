@@ -12,6 +12,7 @@ import { registerBranchesRoutes } from "./routes/branches";
 
 import { createEmployeeRouter } from "./routes/employees";
 import { deductLeaveCredit } from './routes/leave-credits';
+import { apiCache } from "./middleware/api-cache";
 import { router as hoursRoutes } from "./routes/hours";
 import payslipsRouter from "./routes/payslips";
 import companySettingsRouter from "./routes/company-settings";
@@ -1412,7 +1413,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
 
   // ─── Dashboard Stats (Consolidated API to prevent front-end waterfall) ───
-  app.get("/api/dashboard/stats/manager", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+  app.get("/api/dashboard/stats/manager", requireAuth, requireRole(["manager"]), apiCache(60), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
       const now = new Date();
@@ -3661,7 +3662,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
 
   // Dashboard stats routes
-  app.get("/api/dashboard/stats", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+  app.get("/api/dashboard/stats", requireAuth, requireRole(["manager"]), apiCache(60), asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     // Use Philippine time (UTC+8) for "today" boundaries
     const now = new Date();

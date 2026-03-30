@@ -162,27 +162,20 @@ export const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),
-      // PERFORMANCE: Disabled global refetch interval - individual queries set if needed
       refetchInterval: false,
-      // Refetch when window regains focus for real-time feel
       refetchOnWindowFocus: false,
-      // PERFORMANCE: Data considered fresh for 60 seconds
-      staleTime: 60000,
-      // Retry failed requests once
-      retry: 1,
-      // Keep data in cache for 10 minutes
-      gcTime: 10 * 60 * 1000,
-      // Refetch on mount only if data is stale
+      staleTime: 5 * 60 * 1000,
+      retry: 2,
+      retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
+      gcTime: 30 * 60 * 1000,
       refetchOnMount: true,
     },
     mutations: {
       retry: false,
-      // PERFORMANCE: Removed global invalidation - individual mutations handle this
     },
   },
 });
 
-// Helper to invalidate specific query groups for real-time sync
 export const invalidateQueries = {
   payroll: () => {
     queryClient.invalidateQueries({ queryKey: ['/api/payroll'] });
@@ -194,10 +187,10 @@ export const invalidateQueries = {
     queryClient.invalidateQueries({ queryKey: ['/api/shifts/branch'] });
   },
   employees: () => {
-    queryClient.invalidateQueries({ queryKey: ['employees'] }); // Used by schedule page
+    queryClient.invalidateQueries({ queryKey: ['employees'] });
     queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
     queryClient.invalidateQueries({ queryKey: ['/api/employees/stats'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/hours/all-employees'] }); // Used by employees page
+    queryClient.invalidateQueries({ queryKey: ['/api/hours/all-employees'] });
   },
   notifications: () => {
     queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
@@ -206,31 +199,9 @@ export const invalidateQueries = {
     queryClient.invalidateQueries({ queryKey: ['/api/time-off-requests'] });
     queryClient.invalidateQueries({ queryKey: ['/api/approvals'] });
   },
-  /** Invalidate ALL branch-dependent queries after a branch switch */
   branchSwitch: () => {
-    // Clear the entire cache so every page refetches for the new branch
     queryClient.invalidateQueries({ queryKey: ['/api/shifts'] });
     queryClient.invalidateQueries({ queryKey: ['/api/shifts/branch'] });
-    queryClient.invalidateQueries({ queryKey: ['shifts'] });
-    queryClient.invalidateQueries({ queryKey: ['my-shifts'] });
-    queryClient.invalidateQueries({ queryKey: ['employees'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/employees'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/employees/stats'] });
-    queryClient.invalidateQueries({ queryKey: ['employees-all-branches'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/hours/all-employees'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/hours/team-summary'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/payroll'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/payroll/periods'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/payroll/entries'] });
-    queryClient.invalidateQueries({ queryKey: ['payroll-entries'] });
-    queryClient.invalidateQueries({ queryKey: ['payroll-periods'] });
-    queryClient.invalidateQueries({ queryKey: ['payroll-entries-branch'] });
-    queryClient.invalidateQueries({ queryKey: ['current-payroll-period'] });
-    queryClient.invalidateQueries({ queryKey: ['shift-trades'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/shift-trades'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/approvals'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/time-off-requests'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
     queryClient.invalidateQueries({ queryKey: ['branches'] });
     queryClient.invalidateQueries({ queryKey: ['/api/branches'] });
     queryClient.invalidateQueries({ queryKey: ['/api/dashboard'] });

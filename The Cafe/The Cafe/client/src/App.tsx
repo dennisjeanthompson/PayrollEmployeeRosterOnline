@@ -5,7 +5,6 @@ import { queryClient, apiRequest } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { getAuthState, setAuthState, subscribeToAuth } from "./lib/auth";
 import { Toaster } from "@/components/ui/toaster";
-import { TooltipProvider } from "@/components/ui/tooltip";
 
 // React-Toastify for modern toast notifications
 import { ToastContainer } from 'react-toastify';
@@ -682,7 +681,7 @@ function App() {
     <ThemeProvider>
       <MuiThemeProvider>
         <QueryClientProvider client={queryClient}>
-          <TooltipProvider>
+
             <Toaster />
             <Switch>
               {/* Login page - always accessible, redirects to home if already logged in */}
@@ -737,7 +736,7 @@ function App() {
                 <DesktopRouter authState={authState} />
               </Route>
             </Switch>
-          </TooltipProvider>
+
         </QueryClientProvider>
       </MuiThemeProvider>
       

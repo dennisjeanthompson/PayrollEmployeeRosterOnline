@@ -1,14 +1,11 @@
 import React, { useState } from 'react';
 import { Box, Tabs, Tab, useTheme, Typography } from '@mui/material';
 import MuiTimeOff from './mui-time-off';
-import MuiLoans from './mui-loans';
-import MuiLeaveCredits from './mui-leave-credits';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
 import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import AssessmentIcon from '@mui/icons-material/Assessment';
 import GavelIcon from '@mui/icons-material/Gavel';
-import MuiExceptionLogs from './mui-exception-logs';
 
 export default function MuiRequests() {
   const [tabIndex, setTabIndex] = useState(0);
@@ -34,8 +31,6 @@ export default function MuiRequests() {
           scrollButtons="auto"
         >
           <Tab icon={<CalendarMonthIcon fontSize="small"/>} iconPosition="start" label="Time Off" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
-          <Tab icon={<GavelIcon fontSize="small"/>} iconPosition="start" label="Exception Logs" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
-          <Tab icon={<AccountBalanceWalletIcon fontSize="small"/>} iconPosition="start" label="Government Loans" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
         </Tabs>
       </Box>
 
@@ -51,20 +46,6 @@ export default function MuiRequests() {
         '& h1': { display: 'none' } 
       }}>
         <MuiTimeOff />
-      </Box>
-      <Box sx={{ 
-        display: tabIndex === 1 ? 'block' : 'none', 
-        '& > div': { pt: 2, minHeight: 'auto', bgcolor: 'transparent' },
-        '& > div > .MuiBox-root > h6': { display: 'none' } 
-      }}>
-        <MuiExceptionLogs isManagerView />
-      </Box>
-      <Box sx={{ 
-        ...(tabIndex !== 2 ? { position: 'absolute', visibility: 'hidden', height: 0, overflow: 'hidden', width: '100%' } : {}),
-        '& > div': { pt: 2, minHeight: 'auto' },
-        '& h4': { display: 'none' } 
-      }}>
-        <MuiLoans />
       </Box>
     </Box>
   );
