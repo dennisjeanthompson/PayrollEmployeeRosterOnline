@@ -69,25 +69,45 @@ export default function MuiReports() {
   const periods = periodsData?.periods || [];
   const summary = summaryData?.summary;
 
-  const handleExport = (type: "payroll" | "employees" | "deductions") => {
+  const handleExport = async (type: "payroll" | "employees" | "deductions") => {
     setExporting(type);
-    const url = type === "employees"
-      ? "/api/reports/employees/export"
-      : type === "deductions" && periods[0]
-        ? `/api/reports/deductions/export?periodId=${periods[0].id}`
-        : "/api/reports/payroll/export";
+    try {
+      const url = type === "employees"
+        ? "/api/reports/employees/export"
+        : type === "deductions" && periods[0]
+          ? `/api/reports/deductions/export?periodId=${periods[0].id}`
+          : "/api/reports/payroll/export";
 
-    const now = new Date();
-    const ts = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
-    const filename = `${type}_export_${ts}.csv`;
+      const res = await fetch(apiUrl(url), { credentials: "include" });
 
-    const a = document.createElement("a");
-    a.href = apiUrl(url);
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(() => setExporting(null), 1000);
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Download failed" }));
+        alert(err.message || "Failed to download CSV");
+        return;
+      }
+
+      const blob = await res.blob();
+      const disposition = res.headers.get("Content-Disposition");
+      let filename = `${type}_export_${format(new Date(), "yyyy-MM-dd_HHmmss")}.csv`;
+      if (disposition) {
+        const match = disposition.match(/filename="?([^";\n]+)"?/);
+        if (match?.[1]) filename = match[1];
+      }
+
+      const blobUrl = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error("Export error:", error);
+      alert("Failed to download CSV. Please try again.");
+    } finally {
+      setExporting(null);
+    }
   };
 
   // Generate last 12 months for dropdown

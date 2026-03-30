@@ -13,7 +13,14 @@ const app = express();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
-app.use(compression());
+app.use(compression({
+  level: 6, // Balanced compression vs CPU usage
+  threshold: 1024, // Only compress files larger than 1KB
+  filter: (req, res) => {
+    if (req.headers['x-no-compression']) return false;
+    return compression.filter(req, res);
+  }
+}));
 
 // Trust proxy FIRST - required for Render.com
 if (process.env.NODE_ENV === 'production') {

@@ -104,11 +104,14 @@ export async function initializeDatabase() {
       await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS sss_number TEXT`);
       await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS philhealth_number TEXT`);
       await db.execute(sql`ALTER TABLE users ADD COLUMN IF NOT EXISTS pagibig_number TEXT`);
-      await db.execute(sql`ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS include_holiday_pay BOOLEAN DEFAULT false`);
       console.log('✅ User table migrations (government IDs) checked/applied');
     } catch (err) {
       console.log('⚠️ Could not apply some users table migrations:', err);
     }
+    // company_settings migration runs separately (table created later in init)
+    try {
+      await db.execute(sql`ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS include_holiday_pay BOOLEAN DEFAULT false`);
+    } catch (_) { /* table may not exist yet — will be created below */ }
 
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS shifts (
@@ -1078,18 +1081,19 @@ export async function seedSampleSchedulesAndPayroll() {
       }
     }
 
-    // Get branch and employees
-    const branch = await db.select().from(branches).limit(1);
+    // Get ALL branches and users
+    const allBranches = await db.select().from(branches);
     const allUsers = await db.select().from(users);
     const employees = allUsers.filter(u => u.role === 'employee');
     const manager = allUsers.find(u => u.role === 'manager');
 
-    if (branch.length === 0 || employees.length === 0) {
+    if (allBranches.length === 0 || employees.length === 0) {
       console.log('⚠️ No branch or employees found, skipping schedules');
       return;
     }
 
-    const branchId = branch[0].id;
+    // Use each user's own branch for their shifts/payroll
+    const branchId = allBranches[0].id; // fallback for period-level records
 
     // ═══════════════════════════════════════════════════════════════
     // CREATE SHIFTS (January–March 2026 Schedule)
@@ -1142,8 +1146,9 @@ export async function seedSampleSchedulesAndPayroll() {
       { periodId: 'period-2026-03-16', days: mar16_31 },
     ];
 
-    // All staff including manager get shifts
-    const allStaff = [...employees, manager].filter(Boolean) as typeof employees;
+    // All staff including ALL managers get shifts
+    const managers = allUsers.filter(u => u.role === 'manager');
+    const allStaff = [...employees, ...managers].filter(Boolean) as typeof employees;
 
     for (const { periodId, days } of allPeriodDays) {
       for (const shiftDate of days) {
@@ -1160,7 +1165,7 @@ export async function seedSampleSchedulesAndPayroll() {
           await db.insert(shifts).values({
             id: randomUUID(),
             userId: emp.id,
-            branchId: branchId,
+            branchId: emp.branchId,
             startTime: startTime,
             endTime: endTime,
             position: emp.position,
@@ -1169,7 +1174,7 @@ export async function seedSampleSchedulesAndPayroll() {
         }
       }
     }
-    console.log('   ✅ Created shifts for Jan–Mar 2026 (PHT-aware UTC timestamps)');
+    console.log('   ✅ Created shifts for Jan–Mar 2026 (all branches, PHT-aware UTC timestamps)');
 
     // ── HOLIDAY SHIFTS — skeleton crew works on holidays ─────────
     // In a real café, some staff work on holidays for premium pay.
@@ -1566,72 +1571,76 @@ export async function seedSampleShiftTrades() {
       return;
     }
 
-    // Get shifts and employees
-    const upcomingShifts = await db.select().from(shifts).where(eq(shifts.status, 'scheduled'));
-    const allUsers = await db.select().from(users).where(eq(users.role, 'employee'));
+    const allEmps = await db.select().from(users).where(eq(users.role, 'employee'));
+    const allBranches = await db.select().from(branches);
 
-    if (upcomingShifts.length < 2 || allUsers.length < 2) {
-      console.log('⚠️ Not enough shifts or employees for trades');
+    if (allEmps.length < 4) {
+      console.log('⚠️ Not enough employees for trades');
       return;
     }
 
-    // Trade 1: Pending Trade (User 1 -> User 2)
-    // Find a shift for User 1
-    const shift1 = upcomingShifts.find(s => s.userId === allUsers[0].id);
-    if (shift1) {
-      await db.insert(shiftTrades).values({
-        id: randomUUID(),
-        shiftId: shift1.id,
-        fromUserId: allUsers[0].id,
-        toUserId: allUsers[1].id,
-        reason: 'Personal duplicate appointment',
-        status: 'pending',
-        urgency: 'normal',
-        requestedAt: new Date(),
+    // Create upcoming scheduled shifts specifically for trades (April 2026)
+    const tradeShiftIds: string[] = [];
+    const tradeShiftUsers = [allEmps[0], allEmps[2], allEmps[3]];
+    for (let i = 0; i < tradeShiftUsers.length; i++) {
+      const emp = tradeShiftUsers[i];
+      const shiftId = `trade-shift-${i + 1}`;
+      const day = 6 + i * 2; // April 6, 8, 10
+      await db.insert(shifts).values({
+        id: shiftId,
+        userId: emp.id,
+        branchId: emp.branchId,
+        startTime: new Date(Date.UTC(2026, 3, day, 0, 0, 0)),  // 8AM PHT
+        endTime: new Date(Date.UTC(2026, 3, day, 8, 0, 0)),    // 4PM PHT
+        position: emp.position,
+        status: 'scheduled',
       });
+      tradeShiftIds.push(shiftId);
     }
 
-    // Trade 2: Open Trade (User 3 offers shift to anyone)
-    const shift2 = upcomingShifts.find(s => s.userId === allUsers[2].id);
-    if (shift2) {
-      await db.insert(shiftTrades).values({
-        id: randomUUID(),
-        shiftId: shift2.id,
-        fromUserId: allUsers[2].id,
-        toUserId: null, // Open to anyone
-        reason: 'Emergency family matter',
-        status: 'pending',
-        urgency: 'urgent',
-        requestedAt: new Date(),
-      });
-    }
+    // Trade 1: Pending Trade (Santos → Garcia, same branch)
+    await db.insert(shiftTrades).values({
+      id: randomUUID(),
+      shiftId: tradeShiftIds[0],
+      fromUserId: allEmps[0].id,
+      toUserId: allEmps[1].id,
+      reason: 'Personal appointment conflict',
+      status: 'pending',
+      urgency: 'normal',
+      requestedAt: new Date(),
+    });
 
-    // Trade 3: Approved Trade (User 4 -> User 5)
-    const shift3 = upcomingShifts.find(s => s.userId === allUsers[3].id);
-    if (shift3 && allUsers.length > 4) {
-      const tradeId = randomUUID();
-      const approvedTime = new Date();
-      approvedTime.setHours(approvedTime.getHours() - 2);
+    // Trade 2: Open Trade (Dela Cruz offers to anyone – urgent)
+    await db.insert(shiftTrades).values({
+      id: randomUUID(),
+      shiftId: tradeShiftIds[1],
+      fromUserId: allEmps[2].id,
+      toUserId: null,
+      reason: 'Emergency family matter',
+      status: 'pending',
+      urgency: 'urgent',
+      requestedAt: new Date(),
+    });
 
-      await db.insert(shiftTrades).values({
-        id: tradeId,
-        shiftId: shift3.id,
-        fromUserId: allUsers[3].id,
-        toUserId: allUsers[4].id,
-        reason: 'Swapping shifts for study time',
-        status: 'approved',
-        urgency: 'normal',
-        requestedAt: approvedTime,
-        approvedAt: new Date(),
-      });
-      
-      // Update the shift owner effectively
-      await db.update(shifts).set({ userId: allUsers[4].id }).where(eq(shifts.id, shift3.id));
-    }
+    // Trade 3: Approved Trade (Mendoza → Torres)
+    const approvedTime = new Date();
+    approvedTime.setHours(approvedTime.getHours() - 2);
+    await db.insert(shiftTrades).values({
+      id: randomUUID(),
+      shiftId: tradeShiftIds[2],
+      fromUserId: allEmps[3].id,
+      toUserId: allEmps[4].id,
+      reason: 'Swapping shifts for study time',
+      status: 'approved',
+      urgency: 'normal',
+      requestedAt: approvedTime,
+      approvedAt: new Date(),
+    });
+    // Update shift owner for the approved trade
+    await db.update(shifts).set({ userId: allEmps[4].id }).where(eq(shifts.id, tradeShiftIds[2]));
 
-    console.log('   ✅ Created sample shift trades (Pending, Open, Approved)');
+    console.log('   ✅ Created 3 sample shift trades (Pending, Open/Urgent, Approved)');
   } catch (error) {
     console.error('❌ Error seeding shift trades:', error);
-    // Don't throw, just log - we don't want to break the whole init flow for sample data
   }
 }

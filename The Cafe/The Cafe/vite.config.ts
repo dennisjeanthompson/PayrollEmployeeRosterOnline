@@ -23,23 +23,43 @@ export default defineConfig({
     sourcemap: false,
     minify: 'terser',
     target: 'esnext',
-    chunkSizeWarningLimit: 800,
+    chunkSizeWarningLimit: 1000,
+    cssCodeSplit: true,
+    reportCompressedSize: false,
     rollupOptions: {
       input: {
         main: path.resolve(__dirname, "client", "index.html"),
       },
       output: {
-        // Manual chunks for better code splitting and caching
-        manualChunks: {
-          // Vendor chunks - separate large libraries for better caching
-          'vendor-react': ['react', 'react-dom'],
-          'vendor-mui-core': ['@mui/material', '@mui/system'],
-          'vendor-mui-icons': ['@mui/icons-material'],
-          'vendor-mui-x': ['@mui/x-data-grid', '@mui/x-date-pickers'],
-          'vendor-query': ['@tanstack/react-query'],
-          'vendor-charts': ['recharts'],
-          'vendor-calendar': ['@fullcalendar/core', '@fullcalendar/react', '@fullcalendar/daygrid', '@fullcalendar/timegrid', '@fullcalendar/interaction'],
-          'vendor-utils': ['date-fns', 'zod', 'react-hook-form'],
+        // Optimized manual chunks: isolate large dependencies for better caching
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('@mui/material') || id.includes('@mui/system') || id.includes('@emotion')) {
+              return 'vendor-mui';
+            }
+            if (id.includes('@mui/icons-material')) {
+              return 'vendor-mui-icons';
+            }
+            if (id.includes('@mui/x-data-grid') || id.includes('@mui/x-date-pickers')) {
+              return 'vendor-mui-x';
+            }
+            if (id.includes('recharts') || id.includes('d3')) {
+              return 'vendor-charts';
+            }
+            if (id.includes('@fullcalendar')) {
+              return 'vendor-calendar';
+            }
+            if (id.includes('react') || id.includes('react-dom') || id.includes('wouter')) {
+              return 'vendor-react-core';
+            }
+            if (id.includes('@tanstack')) {
+              return 'vendor-query';
+            }
+            if (id.includes('date-fns') || id.includes('lodash') || id.includes('zod')) {
+              return 'vendor-utils';
+            }
+            return 'vendor-others';
+          }
         },
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
@@ -49,13 +69,19 @@ export default defineConfig({
     // Terser options for maximum production compression
     terserOptions: {
       compress: {
-        drop_console: true,   // Strip ALL console.* calls from production
+        drop_console: true,
         drop_debugger: true,
-        pure_funcs: ['console.log', 'console.warn', 'console.info', 'console.debug'],
-        passes: 2,            // Two compression passes for smaller output
+        pure_funcs: ['console.log', 'console.info', 'console.debug', 'console.trace'],
+        passes: 3,
+        global_defs: {
+          'process.env.NODE_ENV': JSON.stringify('production'),
+        },
       },
       mangle: {
         safari10: true,
+      },
+      format: {
+        comments: false,
       },
     },
   },

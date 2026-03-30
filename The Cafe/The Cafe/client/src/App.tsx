@@ -19,10 +19,10 @@ import { MuiThemeProvider } from "@/components/mui/mui-theme-provider";
 import Logo from "@/components/Logo";
 import { Box, alpha } from "@mui/material";
 
-// MUI Layout Components
-import MuiSidebar from "@/components/mui/mui-sidebar";
-import MuiHeader from "@/components/mui/mui-header";
-import MobileLayout from "@/components/layout/mobile-layout";
+// MUI Layout Components - Lazy loaded to keep initial bundle small
+const MuiSidebar = lazy(() => import("@/components/mui/mui-sidebar"));
+const MuiHeader = lazy(() => import("@/components/mui/mui-header"));
+const MobileLayout = lazy(() => import("@/components/layout/mobile-layout"));
 
 // MUI-based Pages - Lazy loaded for code splitting
 const MuiDashboard = lazy(() => import("@/pages/mui-dashboard"));
@@ -129,6 +129,7 @@ function DesktopLayout({ children }: { children: React.ReactNode }) {
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
       <Box sx={{ position: "fixed", inset: 0, pointerEvents: "none", overflow: "hidden", zIndex: 0 }}>
+        {/* Decorative background elements */}
         <Box
           sx={{
             position: "absolute",
@@ -167,16 +168,18 @@ function DesktopLayout({ children }: { children: React.ReactNode }) {
         />
       </Box>
 
-      <MuiSidebar
-        mobileOpen={mobileOpen}
-        onMobileClose={() => setMobileOpen(false)}
-      />
-      <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
-        <MuiHeader onMenuClick={handleDrawerToggle} />
-        <Box component="main" sx={{ flex: 1, overflow: "auto", minWidth: 0 }}>
-          {children}
+      <Suspense fallback={null}>
+        <MuiSidebar
+          mobileOpen={mobileOpen}
+          onMobileClose={() => setMobileOpen(false)}
+        />
+        <Box sx={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0 }}>
+          <MuiHeader onMenuClick={handleDrawerToggle} />
+          <Box component="main" sx={{ flex: 1, overflow: "auto", minWidth: 0 }}>
+            {children}
+          </Box>
         </Box>
-      </Box>
+      </Suspense>
     </Box>
   );
 }
