@@ -47,69 +47,20 @@ export default defineConfig({
         // (the "Cannot access 'Dn' before initialization" class of bugs).
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            // ── 1. React core (must be checked FIRST so that
-            //       node_modules/react inside MUI sub-deps isn't
-            //       accidentally captured by a later MUI rule) ──
-            if (
-              id.includes('node_modules/react/') ||
-              id.includes('node_modules/react-dom/') ||
-              id.includes('node_modules/scheduler/')
-            ) {
-              return 'vendor-react-core';
-            }
-
-            // ── 2. Emotion (separated from MUI so there is no
-            //       circular init between emotion ↔ MUI ↔ react) ──
-            if (id.includes('@emotion')) {
-              return 'vendor-react-core';  // lives with react to avoid cross-chunk circular refs
-            }
-
-            // ── 3. MUI core (material + system + base + icons).
-            //       Icons are merged here to prevent the icons chunk
-            //       from referencing an uninitialised MUI binding. ──
-            if (
-              id.includes('@mui/material') ||
-              id.includes('@mui/system') ||
-              id.includes('@mui/icons-material') ||
-              id.includes('@mui/base') ||
-              id.includes('@mui/utils') ||
-              id.includes('@mui/styled-engine')
-            ) {
-              return 'vendor-mui';
-            }
-
-            // ── 4. MUI X (data-grid, date-pickers) ──
-            if (id.includes('@mui/x-data-grid') || id.includes('@mui/x-date-pickers')) {
-              return 'vendor-mui-x';
-            }
-
-            // ── 5. Charts ──
-            if (id.includes('recharts') || id.includes('d3')) {
-              return 'vendor-charts';
-            }
-
-            // ── 6. FullCalendar ──
+            // Keep huge standalone libraries in their own chunks
             if (id.includes('@fullcalendar')) {
               if (!id.includes('resource')) {
                 return 'vendor-calendar';
               }
             }
-
-            // ── 7. Routing / state (wouter, tanstack, etc.) ──
-            if (id.includes('wouter')) {
-              return 'vendor-react-core';
+            if (id.includes('recharts') || id.includes('d3')) {
+              return 'vendor-charts';
             }
-            if (id.includes('@tanstack')) {
-              return 'vendor-query';
-            }
-
-            // ── 8. Utility libs ──
-            if (id.includes('date-fns') || id.includes('lodash') || id.includes('zod')) {
-              return 'vendor-utils';
-            }
-
-            // ── 9. Everything else ──
-            return 'vendor-others';
+            
+            // Unify React, Emotion, MUI, and other foundational libs
+            // into a single vendor chunk to completely eliminate 
+            // circular dependency initialization bugs
+            return 'vendor';
           }
         },
         entryFileNames: 'assets/[name]-[hash].js',
