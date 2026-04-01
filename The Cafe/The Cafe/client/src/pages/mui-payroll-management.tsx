@@ -105,6 +105,7 @@ interface PayrollEntry {
     lastName: string;
     position: string;
     email: string;
+    photoUrl?: string | null;
   };
 }
 
@@ -1089,6 +1090,7 @@ export default function MuiPayrollManagement() {
                         <TableCell>
                           <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
                             <Avatar
+                              src={entry.employee?.photoUrl || undefined}
                               sx={{
                                 width: 36,
                                 height: 36,
@@ -1115,7 +1117,7 @@ export default function MuiPayrollManagement() {
                           ₱{parseFloat(String(entry.grossPay)).toLocaleString()}
                         </TableCell>
                         <TableCell align="right" sx={{ color: "error.main" }}>
-                          -₱{parseFloat(String(entry.deductions)).toLocaleString()}
+                          -₱{parseFloat(String((entry as any).totalDeductions || entry.deductions || 0)).toLocaleString()}
                         </TableCell>
                         <TableCell align="right" sx={{ fontWeight: 600, color: "success.main" }}>
                           ₱{parseFloat(String(entry.netPay)).toLocaleString()}

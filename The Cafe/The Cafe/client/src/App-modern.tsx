@@ -44,12 +44,12 @@ const Setup = lazy(() => import("@/pages/setup"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 // Mobile Pages - Lazy loaded for code splitting
-const MobileDashboard = lazy(() => import("@/pages/mobile-dashboard"));
-const MobileSchedule = lazy(() => import("@/pages/mobile-schedule"));
-const MobilePayroll = lazy(() => import("@/pages/mobile-payroll"));
-const MobileNotifications = lazy(() => import("@/pages/mobile-notifications"));
-const MobileTimeOff = lazy(() => import("@/pages/mobile-time-off"));
-const MobileProfile = lazy(() => import("@/pages/mobile-profile"));
+const MobileDashboard = lazy(() => import("@/pages/mui-dashboard"));
+const MobileSchedule = lazy(() => import("@/pages/schedule-v2"));
+const MobilePayroll = lazy(() => import("@/pages/mui-payroll"));
+const MobileNotifications = lazy(() => import("@/pages/mui-notifications"));
+const MobileTimeOff = lazy(() => import("@/pages/mui-time-off"));
+const MobileProfile = lazy(() => import("@/pages/mui-profile-settings"));
 const MobileMore = lazy(() => import("@/pages/mobile-more"));
 
 function LoadingFallback() {

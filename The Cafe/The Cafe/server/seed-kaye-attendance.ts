@@ -230,7 +230,6 @@ async function main() {
     totalHours: totalNetHours.toFixed(2),
     regularHours: totalNetHours.toFixed(2),
     overtimeHours: '0',
-    holidayHours: '0',
     nightDiffHours: '0',
     basicPay: basicPay.toFixed(2),
     overtimePay: '0',

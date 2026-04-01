@@ -491,9 +491,7 @@ export function calculatePeriodPay(
         // Note: Only 'regular' mandates 100% unworked pay by default, but keeping flexibility.
         // special_non_working is "no work, no pay".
         if (holiday.type === 'regular') {
-          const holidayDateStr = typeof holiday.date === 'string' 
-            ? holiday.date.substring(0, 10) 
-            : holiday.date.toISOString().split('T')[0];
+          const holidayDateStr = toLocalDateString(new Date(holiday.date as any));
             
           const workedThatDay = Array.from(dailyBreakdown.values()).some((dayData) => {
             return toLocalDateString(dayData.date) === holidayDateStr;

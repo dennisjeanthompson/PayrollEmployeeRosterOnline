@@ -727,6 +727,7 @@ export default function MuiCompanySettings() {
                     bankName: normalizeBankName(data.bankName),
                     bankAccountName: data.bankAccountName || "",
                     bankAccountNo: data.bankAccountNo || "",
+                    includeHolidayPay: data.includeHolidayPay || false,
                   });
                 }
               }}

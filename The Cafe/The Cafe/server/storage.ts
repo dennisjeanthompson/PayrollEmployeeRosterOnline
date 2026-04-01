@@ -1066,6 +1066,7 @@ export class MemStorage implements IStorage {
       bankName: settings.bankName ?? null,
       bankAccountName: settings.bankAccountName ?? null,
       bankAccountNo: settings.bankAccountNo ?? null,
+      includeHolidayPay: settings.includeHolidayPay ?? null,
       updatedBy: settings.updatedBy ?? null,
       updatedAt: new Date(),
       createdAt: new Date(),

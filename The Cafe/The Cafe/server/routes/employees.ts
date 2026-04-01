@@ -42,8 +42,8 @@ export function createEmployeeRouter(realTimeManager: RealTimeManager) {
       const branchId = req.session.user?.branchId;
       if (!branchId) return res.status(400).json({ message: 'Branch ID not found in session' });
 
-      // Return only employee role users from the same branch (for shift trading purposes)
-      const employees = await storage.getEmployees(branchId);
+      // Return all users from the same branch (for scheduling and shift trading purposes)
+      const employees = await storage.getUsersByBranch(branchId);
       
       // Return ALL employees from the same branch with isActive status
       // Let the frontend handle filtering/display of inactive employees
