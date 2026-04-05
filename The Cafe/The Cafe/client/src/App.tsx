@@ -23,6 +23,39 @@ const MuiSidebar = lazy(() => import("@/components/mui/mui-sidebar"));
 const MuiHeader = lazy(() => import("@/components/mui/mui-header"));
 const MobileLayout = lazy(() => import("@/components/layout/mobile-layout"));
 
+// Ultimatum Fix for Phantom MUI Backdrops
+function UltimatumRouteCleanup() {
+  const [location] = useLocation();
+
+  useEffect(() => {
+    // 1. Force remove any sticky pointer-events or overflow locks from the body
+    document.body.style.pointerEvents = 'auto';
+    document.body.style.overflow = '';
+
+    // 2. Remove orphaned MUI overlays that stay behind after rapid unmounting/navigation
+    const cleanupBackdrops = () => {
+      const overlays = document.querySelectorAll('.MuiBackdrop-root, .MuiDialog-root, .MuiPopover-root, .MuiModal-root');
+      overlays.forEach(el => {
+        // If it's a lingering portal without a parent transitioning correctly, remove it.
+        // We only forcefully clean them on route changes to ensure no navigation freezes.
+        if (el.parentElement === document.body || el.closest('[role="presentation"]')) {
+           // Skip if it belongs to an active Drawer (Sidebar). Drawers have root classes we can ignore.
+           if (!el.closest('.MuiDrawer-root')) {
+             el.remove();
+           }
+        }
+      });
+    };
+
+    // Run cleanup immediately and slightly delayed to handle MUI's exit animations
+    cleanupBackdrops();
+    setTimeout(cleanupBackdrops, 300);
+
+  }, [location]);
+
+  return null;
+}
+
 // MUI-based Pages - Lazy loaded for code splitting
 const MuiDashboard = lazy(() => import("@/pages/mui-dashboard"));
 const MuiEmployees = lazy(() => import("@/pages/mui-employees"));
@@ -681,7 +714,7 @@ function App() {
     <ThemeProvider>
       <MuiThemeProvider>
         <QueryClientProvider client={queryClient}>
-
+            <UltimatumRouteCleanup />
             <Toaster />
             <Switch>
               {/* Login page - always accessible, redirects to home if already logged in */}
