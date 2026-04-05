@@ -116,6 +116,9 @@ export interface CalculateShiftPayParams {
 
 // Daily overtime threshold (DOLE compliance)
 export const DAILY_REGULAR_HOURS = 8;
+export const MONTHLY_WORKING_DAYS = 22;
+export const MONTHLY_WORKING_HOURS = DAILY_REGULAR_HOURS * MONTHLY_WORKING_DAYS; // 176
+export const MINS_PER_HOUR = 60;
 
 export interface ShiftHourBreakdown {
   regularHours: number;

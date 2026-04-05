@@ -16,6 +16,15 @@ import { db } from '../db';
 import { sssContributionTable } from '../../shared/schema';
 import { eq } from 'drizzle-orm';
 
+// --- Constants for 2026 Philippine Deductions ---
+export const PHILHEALTH_EMPLOYEE_RATE = 0.025;
+export const PHILHEALTH_FLOOR = 10000;
+export const PHILHEALTH_CEILING = 100000;
+
+export const PAGIBIG_RATE = 0.02;
+export const PAGIBIG_MFS_CAP = 10000;
+// ------------------------------------------------
+
 export interface DeductionBreakdown {
   sssContribution: number;
   philHealthContribution: number;
@@ -61,9 +70,6 @@ export async function calculatePhilHealth(monthlyBasicSalary: number): Promise<n
   try {
     // 2026 Rate: 2.5% employee share (5% total)
     // Floor: 10,000, Ceiling: 100,000
-    const PHILHEALTH_EMPLOYEE_RATE = 0.025;
-    const PHILHEALTH_FLOOR = 10000;
-    const PHILHEALTH_CEILING = 100000;
     
     let baseSalary = monthlyBasicSalary;
     if (baseSalary < PHILHEALTH_FLOOR) baseSalary = PHILHEALTH_FLOOR;
@@ -86,8 +92,6 @@ export async function calculatePagibig(monthlyBasicSalary: number): Promise<numb
   try {
     // 2026 Rate: 2% employee share
     // MFS Cap: 10,000 max basic salary for computation -> Max Contribution = 200
-    const PAGIBIG_RATE = 0.02;
-    const PAGIBIG_MFS_CAP = 10000;
     
     let baseSalary = monthlyBasicSalary;
     if (baseSalary > PAGIBIG_MFS_CAP) baseSalary = PAGIBIG_MFS_CAP;

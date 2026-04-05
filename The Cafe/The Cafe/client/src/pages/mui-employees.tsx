@@ -1620,7 +1620,7 @@ export default function MuiEmployees() {
                 {/* Calculate estimated monthly salary for preview */}
                 {(() => {
                   const hourlyRate = parseFloat(currentEmployee?.hourlyRate || '0');
-                  const estimatedMonthly = hourlyRate * 176; // ~22 days × 8 hours
+                  const estimatedMonthly = hourlyRate * 176; // DOLE standard ~22 days × 8 hours
                   
                   // SSS: 5% of MSC (floor ₱5k, ceiling ₱35k)
                   const msc = Math.min(Math.max(estimatedMonthly, 5000), 35000);

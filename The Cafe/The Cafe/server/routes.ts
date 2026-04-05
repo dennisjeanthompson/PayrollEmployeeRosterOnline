@@ -34,7 +34,7 @@ import { resetDatabase, initializeDatabase, createAdminAccount, seedDeductionRat
 import bcrypt from "bcrypt";
 import { format } from "date-fns";
 import crypto from "crypto";
-import { validateShiftTimes, calculatePeriodPay, calculateShiftPay, buildPayrollEntryBreakdownPayload } from "./payroll-utils";
+import { validateShiftTimes, calculatePeriodPay, calculateShiftPay, buildPayrollEntryBreakdownPayload, HOLIDAY_RATES, NIGHT_DIFF_RATE, MONTHLY_WORKING_HOURS, DAILY_REGULAR_HOURS, MINS_PER_HOUR } from "./payroll-utils";
 import { getPaymentDateString } from "@shared/payroll-dates";
 import { Pool, neonConfig } from "@neondatabase/serverless";
 import ws from "ws";
@@ -1822,11 +1822,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Add paid leave to basic pay (Counts toward 13th month computation)
-        const basicPay = payCalculation.basicPay + paidLeavePay;
-        const overtimePay = payCalculation.overtimePay;
-        const holidayPay = payCalculation.holidayPay;
-        const nightDiffPay = payCalculation.nightDiffPay;
-        const restDayPay = payCalculation.restDayPay;
+        let basicPay = payCalculation.basicPay + paidLeavePay;
+        let overtimePay = payCalculation.overtimePay;
+        let holidayPay = payCalculation.holidayPay;
+        let nightDiffPay = payCalculation.nightDiffPay;
+        let restDayPay = payCalculation.restDayPay;
         let grossPay = payCalculation.totalGrossPay + paidLeavePay;
 
         // ===== MANUAL ADJUSTMENT LOGS (OT/Lateness from Manager input) =====
@@ -1837,8 +1837,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           new Date(period.endDate)
         );
 
-        let manualOtPay = 0;
-        let manualOtHours = 0;
         let lateDeduction = 0;
         let totalLateMinutes = 0;
         let undertimeDeduction = 0;
@@ -1858,47 +1856,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
           switch (adj.type) {
             case 'overtime':
               // Regular Day OT: Hourly Rate × 125% (DOLE standard)
-              calcAmount = hourlyRate * 1.25 * adjValue;
-              manualOtPay += calcAmount;
-              manualOtHours += adjValue;
+              calcAmount = hourlyRate * HOLIDAY_RATES.normal.overtime * adjValue;
+              overtimePay += calcAmount;
+              overtimeHours += adjValue;
               break;
             case 'rest_day_ot':
               // Rest Day OT: Hourly Rate × 130% × 130% = 169%
-              calcAmount = hourlyRate * 1.69 * adjValue;
-              manualOtPay += calcAmount;
-              manualOtHours += adjValue;
+              calcAmount = hourlyRate * HOLIDAY_RATES.normal.restDayOT * adjValue;
+              overtimePay += calcAmount;
+              overtimeHours += adjValue;
               break;
             case 'special_holiday_ot':
               // Special Holiday OT: Hourly Rate × 130% × 130% = 169%
-              calcAmount = hourlyRate * 1.69 * adjValue;
-              manualOtPay += calcAmount;
-              manualOtHours += adjValue;
+              calcAmount = hourlyRate * HOLIDAY_RATES.special_non_working.overtime * adjValue;
+              overtimePay += calcAmount;
+              overtimeHours += adjValue;
               break;
             case 'regular_holiday_ot':
               // Regular Holiday OT: Hourly Rate × 200% × 130% = 260%
-              calcAmount = hourlyRate * 2.6 * adjValue;
-              manualOtPay += calcAmount;
-              manualOtHours += adjValue;
+              calcAmount = hourlyRate * HOLIDAY_RATES.regular.overtime * adjValue;
+              overtimePay += calcAmount;
+              overtimeHours += adjValue;
               break;
             case 'night_diff':
               // Night Differential: Hourly Rate × 10% premium per hour
-              calcAmount = hourlyRate * 0.10 * adjValue;
-              manualOtPay += calcAmount;
+              calcAmount = hourlyRate * NIGHT_DIFF_RATE * adjValue;
+              nightDiffPay += calcAmount;
+              nightDiffHours += adjValue;
               break;
             case 'late':
               // Tardiness: (Hourly Rate / 60 mins) × minutes late
-              calcAmount = (hourlyRate / 60) * adjValue;
+              calcAmount = (hourlyRate / MINS_PER_HOUR) * adjValue;
               lateDeduction += calcAmount;
               totalLateMinutes += adjValue;
               break;
             case 'undertime':
               // Undertime: (Hourly Rate / 60 mins) × minutes undertime
-              calcAmount = (hourlyRate / 60) * adjValue;
+              calcAmount = (hourlyRate / MINS_PER_HOUR) * adjValue;
               undertimeDeduction += calcAmount;
               break;
             case 'absent':
               // Absent: Full day deduction (8 hours × hourly rate)
-              calcAmount = hourlyRate * 8 * adjValue;
+              calcAmount = hourlyRate * DAILY_REGULAR_HOURS * adjValue;
               lateDeduction += calcAmount;
               break;
           }
@@ -1909,20 +1908,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
             calculatedAmount: (isDeduction ? -calcAmount : calcAmount).toFixed(2),
             payrollPeriodId: id,
           });
-        }
 
-        // Apply manual adjustments to gross pay
-        grossPay = grossPay + manualOtPay - lateDeduction - undertimeDeduction;
-        overtimeHours += manualOtHours;
+          // DO NOT silently reduce grossPay by deductions, this hides them from the payslip.
+          // Instead, add them to otherDeductions below.
+          if (!isDeduction) {
+            grossPay += calcAmount;
+          }
+        }
 
         const periodStartDate = new Date(period.startDate);
         const periodEndDate = new Date(period.endDate);
         const daysInPeriod = Math.ceil((periodEndDate.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
         
-        // DOLE Standard: Estimate monthly salary based on hourly rate * 176 hours
+        // DOLE Standard: Estimate monthly salary based on hourly rate * MONTHLY_WORKING_HOURS
         // (average 22 working days * 8 hours), which aligns exactly with the 
         // Employee Deductions UI estimates and ensures MSC brackets don't drop during absences.
-        const monthlyBasicSalary = hourlyRate * 176;
+        const monthlyBasicSalary = hourlyRate * MONTHLY_WORKING_HOURS;
 
         // Import deduction calculator
         const { calculateAllDeductions, calculateWithholdingTax } = await import('./utils/deductions');
@@ -1988,7 +1989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const monthlyMandatory = mandatoryBreakdown.sssContribution + mandatoryBreakdown.philHealthContribution + mandatoryBreakdown.pagibigContribution;
         
         // Ensure ALL taxable earnings are included (OT, holiday, night diff, manual adjustments)
-        const periodTaxableEarnings = basicPay + overtimePay + holidayPay + nightDiffPay + restDayPay + manualOtPay - lateDeduction - undertimeDeduction;
+        const periodTaxableEarnings = basicPay + overtimePay + holidayPay + nightDiffPay + restDayPay - lateDeduction - undertimeDeduction;
         
         // Base taxable income (converting the actual gross pay + premiums to monthly equivalent)
         let monthlyTaxableIncome = Math.max(0, (periodTaxableEarnings / periodFraction) - monthlyMandatory);
@@ -2041,7 +2042,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         const advances = parseFloat(employee.cashAdvanceDeduction || '0');
-        const otherDeductions = parseFloat(employee.otherDeductions || '0');
+        
+        // Include lateness, absences (stored in lateDeduction), and undertime in otherDeductions
+        // so they are explicitly visible as deductions on the payslip.
+        const otherDeductions = parseFloat(employee.otherDeductions || '0') + lateDeduction + undertimeDeduction;
 
         // ─── Feature 1: MWE Exemption (BIR TRAIN Law) ─────────────────────────
         // If employee is flagged as Minimum Wage Earner, withholding tax is 0.
@@ -4729,16 +4733,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (totalMinutes === 0) {
           // Simulate 8-10 days of work, 8 hours each
           const daysWorked = 8 + Math.floor(Math.random() * 3);
-          totalMinutes = daysWorked * 8 * 60;
+          totalMinutes = daysWorked * DAILY_REGULAR_HOURS * MINS_PER_HOUR;
         }
 
-        const totalHours = totalMinutes / 60;
+        const totalHours = totalMinutes / MINS_PER_HOUR;
         const regularHours = Math.min(totalHours, 88); // 88 hours = 11 days × 8 hours
         const overtimeHours = Math.max(0, totalHours - 88);
 
         const hourlyRate = parseFloat(emp.hourlyRate);
         const basicPay = regularHours * hourlyRate;
-        const overtimePay = overtimeHours * hourlyRate * 1.25;
+        const overtimePay = overtimeHours * hourlyRate * HOLIDAY_RATES.normal.overtime;
         const grossPay = basicPay + overtimePay;
 
         // Use proper 2026 deduction calculator (SSS, PhilHealth, Pag-IBIG, withholding tax)

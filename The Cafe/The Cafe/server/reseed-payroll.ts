@@ -8,6 +8,7 @@ import { db } from "./db";
 import { payrollEntries, payrollPeriods, users } from "../shared/schema";
 import { eq } from "drizzle-orm";
 import { calculateSSS, calculatePhilHealth, calculatePagibig, calculateWithholdingTax } from "./utils/deductions";
+import { MONTHLY_WORKING_HOURS } from "./payroll-utils";
 
 async function reseedPayrollDeductions() {
   console.log("🔄 Reseeding payroll deductions for ALL existing entries...\n");
@@ -38,7 +39,7 @@ async function reseedPayrollDeductions() {
       }
 
       const hourlyRate = parseFloat(employee.hourlyRate);
-      const monthlyBasicSalary = hourlyRate * 176; // Contractual basis
+      const monthlyBasicSalary = hourlyRate * MONTHLY_WORKING_HOURS; // Contractual basis
 
       const periodStartDate = new Date(period.startDate);
       const periodEndDate = new Date(period.endDate);
