@@ -389,9 +389,15 @@ export async function initializeDatabase() {
         approved_at TIMESTAMP,
         payroll_period_id TEXT REFERENCES payroll_periods(id),
         calculated_amount TEXT,
+        is_included BOOLEAN DEFAULT true,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
+
+    // Migration: Add is_included column to adjustment_logs for existing databases
+    await db.execute(sql`
+      ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS is_included BOOLEAN DEFAULT true
+    `).catch(() => {});
 
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS sss_contribution_table (

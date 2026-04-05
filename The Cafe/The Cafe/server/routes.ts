@@ -1412,6 +1412,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
+  // Toggle adjustment log inclusion in payroll (Manager)
+  app.put("/api/adjustment-logs/:id/toggle-included", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+    try {
+      const { id } = req.params;
+      const log = await storage.getAdjustmentLog(id);
+      if (!log) return res.status(404).json({ message: "Adjustment log not found" });
+      if (log.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+
+      const newValue = !(log.isIncluded ?? true);
+      const updated = await storage.updateAdjustmentLog(id, {
+        isIncluded: newValue,
+      });
+
+      res.json({ log: updated });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to toggle adjustment log inclusion" });
+    }
+  }));
+
   // ─── Dashboard Stats (Consolidated API to prevent front-end waterfall) ───
   app.get("/api/dashboard/stats/manager", requireAuth, requireRole(["manager"]), apiCache(60), asyncHandler(async (req, res) => {
     try {
@@ -1713,6 +1734,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         new Date(period.endDate)
       );
 
+      // ─── READ BRANCH DEDUCTION SETTINGS FROM DB (not hardcoded!) ───
+      const dsRows = await db.select().from(deductionSettingsTable)
+        .where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
+      const branchDeductionSettings = dsRows[0] || {
+        deductSSS: true, deductPhilHealth: true,
+        deductPagibig: true, deductWithholdingTax: true
+      };
+      console.log(`[PAYROLL] Branch deduction settings: SSS=${branchDeductionSettings.deductSSS}, PhilHealth=${branchDeductionSettings.deductPhilHealth}, PagIBIG=${branchDeductionSettings.deductPagibig}, Tax=${branchDeductionSettings.deductWithholdingTax}`);
+
       for (const employee of employees) {
         if (!employee.isActive) continue;
 
@@ -1817,6 +1847,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Only process approved or employee-verified adjustments
           if (adj.status !== 'approved' && adj.status !== 'employee_verified') continue;
 
+          // Skip logs explicitly excluded from payroll via toggle
+          if (adj.isIncluded === false) continue;
+
           const adjValue = parseFloat(adj.value);
           if (isNaN(adjValue) || adjValue <= 0) continue;
 
@@ -1901,11 +1934,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const isSemiMonthly = daysInPeriod < 28; // 15-day period = semi-monthly
 
         // Step 1: Calculate SSS, PhilHealth, Pag-IBIG on monthly basis
+        // Uses actual branch deduction settings from DB (loaded above the loop)
         const mandatorySettings = {
-          deductSSS: true,
-          deductPhilHealth: true,
-          deductPagibig: true,
-          deductWithholdingTax: false, // Tax computed separately on taxable income
+          deductSSS: branchDeductionSettings.deductSSS ?? true,
+          deductPhilHealth: branchDeductionSettings.deductPhilHealth ?? true,
+          deductPagibig: branchDeductionSettings.deductPagibig ?? true,
+          deductWithholdingTax: false, // Tax computed separately below using branchDeductionSettings
         };
         const mandatoryBreakdown = await calculateAllDeductions(monthlyBasicSalary, mandatorySettings);
 
@@ -2012,7 +2046,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // ─── Feature 1: MWE Exemption (BIR TRAIN Law) ─────────────────────────
         // If employee is flagged as Minimum Wage Earner, withholding tax is 0.
         // MWE holiday pay, OT, and night diff are also exempt under BIR rulings.
-        const mweWithholdingTax = (employee as any).isMwe ? 0 : withholdingTax;
+        const mweWithholdingTax = (!branchDeductionSettings.deductWithholdingTax || (employee as any).isMwe) ? 0 : withholdingTax;
 
         const totalDeductions =
           sssContribution +
@@ -4372,6 +4406,71 @@ export async function registerRoutes(app: Express): Promise<Server> {
       reason,
     });
 
+    res.json({ request: updated });
+  }));
+
+  // Toggle paid status for approved time-off request (Manager)
+  app.put("/api/time-off-requests/:id/toggle-paid", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const { isPaid } = req.body;
+
+    const existing = await storage.getTimeOffRequest(id);
+    if (!existing) {
+      return res.status(404).json({ message: "Time off request not found" });
+    }
+
+    if (existing.status !== 'approved') {
+      return res.status(400).json({ message: "Can only toggle paid status on approved requests" });
+    }
+
+    const employee = await storage.getUser(existing.userId);
+    if (!employee || employee.branchId !== req.user!.branchId) {
+      return res.status(403).json({ message: "Not authorized for this branch" });
+    }
+
+    // Logic for deducting or restoring SIL credits based on the toggle direction
+    const startD = new Date(existing.startDate);
+    const endD = new Date(existing.endDate);
+    const daysToAdjust = Math.max(1, Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) + 1);
+
+    if (isPaid && !existing.isPaid) {
+      // Toggle to PAID: Attempt to deduct credit
+      try {
+        const { db } = await import('./db');
+        const { leaveCredits } = await import('@shared/schema');
+        const { eq, and } = await import('drizzle-orm');
+        const specificBalance = await db.select().from(leaveCredits).where(
+          and(eq(leaveCredits.userId, existing.userId), eq(leaveCredits.year, startD.getFullYear()), eq(leaveCredits.leaveType, existing.type))
+        ).limit(1);
+
+        let deductedFrom: string | null = null;
+        if (specificBalance[0] && parseFloat(specificBalance[0].remainingCredits) > 0) {
+          deductedFrom = existing.type;
+        } else {
+          const silBalance = await db.select().from(leaveCredits).where(
+            and(eq(leaveCredits.userId, existing.userId), eq(leaveCredits.year, startD.getFullYear()), eq(leaveCredits.leaveType, 'sil'))
+          ).limit(1);
+          if (silBalance[0] && parseFloat(silBalance[0].remainingCredits) > 0) {
+            deductedFrom = 'sil';
+          }
+        }
+        if (deductedFrom) {
+          await deductLeaveCredit(existing.userId, employee.branchId, deductedFrom, daysToAdjust, startD.getFullYear());
+        }
+      } catch (e) {
+        console.error('Adjustment deduction error:', e);
+      }
+    } else if (!isPaid && existing.isPaid) {
+      // Toggle to UNPAID: Restore credit
+      try {
+        const { restoreLeaveCredit } = await import('./routes/leave-credits');
+        await restoreLeaveCredit(existing.userId, existing.type, daysToAdjust, startD.getFullYear());
+      } catch (e) {
+        console.error('Adjustment restore error:', e);
+      }
+    }
+
+    const updated = await storage.updateTimeOffRequest(id, { isPaid });
     res.json({ request: updated });
   }));
 

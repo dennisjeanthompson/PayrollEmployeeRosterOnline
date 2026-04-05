@@ -321,6 +321,7 @@ export const adjustmentLogs = pgTable("adjustment_logs", {
   payrollPeriodId: text("payroll_period_id").references(() => payrollPeriods.id), // Linked when processed
   // Calculated amount (filled when payroll is processed)
   calculatedAmount: text("calculated_amount"), // Positive for OT, negative for late deduction
+  isIncluded: boolean("is_included").default(true), // Toggle on/off for payroll inclusion
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -504,7 +505,6 @@ export const insertTimeOffRequestSchema = createInsertSchema(timeOffRequests).om
   id: true,
   requestedAt: true,
   approvedAt: true,
-  isPaid: true,
 }).extend({
   startDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
   endDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),

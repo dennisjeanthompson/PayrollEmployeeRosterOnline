@@ -12,6 +12,7 @@ import {
   BeachAccess as TimeOffIcon,
   HourglassTop as PendingIcon,
   CheckCircle as ApprovedIcon,
+  Check as CheckIcon,
 } from '@mui/icons-material';
 import { format, addDays, subDays, isToday, differenceInHours, isValid } from 'date-fns';
 import { getRoleColor } from '@/lib/schedule-theme';
@@ -41,10 +42,16 @@ interface DayViewProps {
   timeOffRequests?: TimeOffRequest[];
   shiftTrades?: ShiftTrade[];
   adjustmentLogs?: any[];
+  isSelectionMode?: boolean;
+  selectedShifts?: Set<string>;
+  selectedLogs?: Set<string>;
+  onToggleShiftSelection?: (id: string) => void;
+  onToggleLogSelection?: (id: string) => void;
   onDateChange: (date: Date) => void;
   onCreateShift: (employeeId: string, date: Date) => void;
   onEditShift: (shift: Shift) => void;
   onDeleteTimeOff?: (id: string) => void;
+  onAddHolidayPay?: (userId: string, date: Date) => void;
 }
 
 /** Employee's personal day view — shows only their shifts + their requests */
@@ -218,10 +225,16 @@ export default function DayView({
   timeOffRequests = [],
   shiftTrades = [],
   adjustmentLogs = [],
+  isSelectionMode,
+  selectedShifts,
+  selectedLogs,
+  onToggleShiftSelection,
+  onToggleLogSelection,
   onDateChange,
   onCreateShift,
   onEditShift,
   onDeleteTimeOff,
+  onAddHolidayPay,
 }: DayViewProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -342,16 +355,16 @@ export default function DayView({
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
                     {req.type.charAt(0).toUpperCase() + req.type.slice(1)} Leave · {isPending ? 'Pending' : 'Approved'}
-                    {isManager && onDeleteTimeOff && ' · (Click to delete)'}
+                    {isManager && onDeleteTimeOff && ' · (Click to view/edit)'}
                   </Typography>
                 </Box>
                 <Chip
-                  label={isPending ? 'Pending' : 'Approved'}
+                  label={isPending ? 'Pending' : (req.isPaid ? 'Approved (Paid)' : 'Approved (Unpaid)')}
                   size="small"
                   sx={{
                     height: 20, fontSize: '0.6rem', fontWeight: 700,
-                    bgcolor: isPending ? '#FEF3C7' : '#DCFCE7',
-                    color: isPending ? '#92400E' : '#166534',
+                    bgcolor: isPending ? '#FEF3C7' : (req.isPaid ? '#059669' : '#DCFCE7'),
+                    color: isPending ? '#92400E' : (req.isPaid ? '#FFFFFF' : '#166534'),
                   }}
                 />
               </Box>
@@ -378,27 +391,43 @@ export default function DayView({
             const trade = activeTrades.find(t => t.shiftId === shift.id);
             const adjustments = getAdjustmentsForCell(adjustmentLogs, shift.userId, date);
 
+            const isSelected = isSelectionMode && selectedShifts?.has(shift.id);
+
             return (
               <Box
                 key={shift.id}
-                onClick={() => onEditShift(shift)}
+                onClick={() => {
+                  if (isSelectionMode && onToggleShiftSelection) {
+                    onToggleShiftSelection(shift.id);
+                  } else {
+                    onEditShift(shift);
+                  }
+                }}
                 sx={{
                   display: 'flex', alignItems: 'center', gap: 2,
                   p: 2, borderRadius: 2.5,
                   border: trade ? '2px dashed' : '1px solid',
-                  borderColor: trade
+                  borderColor: isSelected ? '#3B82F6' : (trade
                     ? (trade.status === 'accepted' ? '#93C5FD' : '#C4B5FD')
-                    : (isDark ? '#3D3228' : '#E8E0D4'),
+                    : (isDark ? '#3D3228' : '#E8E0D4')),
                   borderLeft: `5px solid ${rc.bg}`,
-                  bgcolor: isDark ? '#2A2018' : '#FFFFFF',
+                  bgcolor: isSelected ? alpha('#3B82F6', 0.1) : (isDark ? '#2A2018' : '#FFFFFF'),
                   cursor: 'pointer',
                   transition: 'all 0.15s ease',
+                  boxShadow: isSelected ? '0 0 0 2px #3B82F6, 0 4px 12px rgba(59, 130, 246, 0.4)' : undefined,
+                  transform: isSelected ? 'scale(1.01)' : 'none',
+                  position: 'relative',
                   '&:hover': {
-                    bgcolor: isDark ? '#342A1E' : '#FBF8F4',
-                    transform: 'translateX(4px)',
+                    bgcolor: isSelected ? alpha('#3B82F6', 0.15) : (isDark ? '#342A1E' : '#FBF8F4'),
+                    transform: isSelected ? 'scale(1.01)' : 'translateX(4px)',
                   },
                 }}
               >
+                {isSelected && (
+                  <Box sx={{ position: 'absolute', top: -5, right: -5, bgcolor: '#3B82F6', color: '#fff', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 2, zIndex: 12 }}>
+                    <CheckIcon sx={{ fontSize: 13, fontWeight: 900 }} />
+                  </Box>
+                )}
                 <Avatar sx={{ width: 44, height: 44, bgcolor: rc.bg, color: rc.text, fontWeight: 700, fontSize: '0.85rem' }}>
                   {emp?.firstName?.[0]}{emp?.lastName?.[0]}
                 </Avatar>
@@ -428,7 +457,17 @@ export default function DayView({
                       />
                     )}
                     {adjustments.map(log => (
-                      <AdjustmentBadge key={`adj-${log.id}`} log={log} />
+                      <AdjustmentBadge 
+                        key={`adj-${log.id}`} 
+                        log={log} 
+                        isSelected={isSelectionMode && selectedLogs?.has(log.id)}
+                        onClick={(e) => {
+                          if (isSelectionMode && onToggleLogSelection) {
+                            e.stopPropagation();
+                            onToggleLogSelection(log.id);
+                          }
+                        }}
+                      />
                     ))}
                   </Box>
                 </Box>
@@ -440,7 +479,7 @@ export default function DayView({
       )}
 
       {/* Add shift button for managers */}
-      {isManager && (
+      {isManager && !isSelectionMode && (
         <Box
           onClick={() => onCreateShift('', date)}
           sx={{

@@ -406,15 +406,28 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']),
 
     // Whitelist allowed fields to prevent mass assignment
     const updates: Record<string, any> = {};
-    const allowedFields = ['firstName', 'lastName', 'email', 'position', 'hourlyRate', 'role', 'isActive', 'tin', 'sssNumber', 'philhealthNumber', 'pagibigNumber', 'isMwe'];
+    const allowedFields = ['username', 'password', 'firstName', 'lastName', 'email', 'position', 'hourlyRate', 'role', 'isActive', 'tin', 'sssNumber', 'philhealthNumber', 'pagibigNumber', 'isMwe'];
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
-        // Treat empty strings as null for government IDs
-        if (['tin', 'sssNumber', 'philhealthNumber', 'pagibigNumber'].includes(field) && body[field] === '') {
+        if (field === 'password') {
+          // Only update password if one is provided
+          if (body[field] !== '') {
+            updates[field] = body[field];
+          }
+        } else if (['tin', 'sssNumber', 'philhealthNumber', 'pagibigNumber'].includes(field) && body[field] === '') {
+          // Treat empty strings as null for government IDs
           updates[field] = null;
         } else {
           updates[field] = body[field];
         }
+      }
+    }
+
+    // Check if new username conflicts with another user
+    if (updates.username && updates.username !== existingEmployee.username) {
+      const existingUserWithUsername = await storage.getUserByUsername(updates.username);
+      if (existingUserWithUsername && existingUserWithUsername.id !== id) {
+        return res.status(400).json({ message: 'Username already exists' });
       }
     }
 

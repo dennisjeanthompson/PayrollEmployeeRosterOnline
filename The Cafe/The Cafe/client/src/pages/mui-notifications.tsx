@@ -1,5 +1,5 @@
 import PesoIcon from "@/components/PesoIcon";
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, startTransition } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager, useAuth } from "@/lib/auth";
 import { format, parseISO, formatDistanceToNow, isToday, isYesterday, isThisWeek } from "date-fns";
@@ -170,7 +170,7 @@ export default function MuiNotifications() {
   const handleNav = useCallback((n: Notification) => {
     if (!n.isRead) markRead.mutate(n.id);
     const path = getNavigatePath(n.type);
-    if (path) setLocation(path);
+    if (path) startTransition(() => setLocation(path));
   }, [markRead, setLocation]);
 
   const filterBtns: { id: FilterType; label: string; count: number; icon?: React.ReactNode }[] = [
@@ -221,8 +221,8 @@ export default function MuiNotifications() {
             </Stack>
             <Typography sx={{ color: txt2, fontSize: '0.82rem', fontWeight: 500, mt: 0.25 }}>
               {all.length === 0 ? 'No notifications yet' :
-                unread.length > 0 ? `${unread.length} unread of ${all.length} total` : `${all.length} notifications Â· All read`}
-              {isManagerRole && actionRequired.length > 0 && ` Â· ${actionRequired.length} need review`}
+                unread.length > 0 ? `${unread.length} unread of ${all.length} total` : `${all.length} notifications \u00B7 All read`}
+              {isManagerRole && actionRequired.length > 0 && ` \u00B7 ${actionRequired.length} need review`}
             </Typography>
           </Box>
 

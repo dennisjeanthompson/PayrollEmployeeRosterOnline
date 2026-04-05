@@ -3,6 +3,7 @@ import {
   Box, Typography, Avatar, Chip, Button, Card, CardContent,
   Divider, useTheme, Stack, IconButton, Dialog, DialogTitle,
   DialogContent, DialogActions, TextField, Menu, MenuItem,
+  Accordion, AccordionSummary, AccordionDetails,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -13,6 +14,9 @@ import {
   Schedule as ClockIcon,
   Delete as DeleteIcon,
   Block as BlockIcon,
+  ExpandMore as ExpandMoreIcon,
+  EventBusy as EventBusyIcon,
+  AssignmentLate as AssignmentLateIcon,
 } from '@mui/icons-material';
 import { format, isValid } from 'date-fns';
 import type { TimeOffRequest, ShiftTrade, Employee } from './types';
@@ -33,6 +37,7 @@ interface RequestsPanelProps {
   employees: Employee[];
   isManager: boolean;
   currentUserId: string;
+  adjustmentLogs?: any[];
   onApproveTimeOff: (id: string, useSil?: boolean) => void;
   onRejectTimeOff: (id: string, reason: string) => void;
   onApproveTrade: (id: string) => void;
@@ -66,7 +71,7 @@ function StatusChip({ status }: { status: string }) {
 }
 
 function getEmployeeName(employees: Employee[], userId: string): string {
-  const emp = employees.find(e => e.id === userId);
+  const emp = employees.find(e => String(e.id) === String(userId));
   return emp ? `${emp.firstName} ${emp.lastName}` : 'Unknown';
 }
 
@@ -76,6 +81,7 @@ export default function RequestsPanel({
   employees,
   isManager,
   currentUserId,
+  adjustmentLogs = [],
   onApproveTimeOff,
   onRejectTimeOff,
   onApproveTrade,
@@ -140,30 +146,52 @@ export default function RequestsPanel({
   const recentResolved = [
     ...timeOffRequests.filter(r => r.status !== 'pending'),
     ...shiftTrades.filter(t => t.status !== 'pending' && t.status !== 'accepted'),
+    ...adjustmentLogs,
   ]
-    .sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt || b.requestedAt || 0).getTime()
-                             - new Date(a.updatedAt || a.createdAt || a.requestedAt || 0).getTime())
-    .slice(0, 5);
+    .sort((a: any, b: any) => new Date(b.updatedAt || b.createdAt || b.requestedAt || b.date || 0).getTime()
+                             - new Date(a.updatedAt || a.createdAt || a.requestedAt || a.date || 0).getTime())
+    .slice(0, 10);
 
   return (
     <>
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
         {/* Pending Time-Off Requests */}
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-            <TimeOffIcon sx={{ fontSize: 20, color: '#F59E0B' }} />
-            <Typography variant="subtitle1" fontWeight={700}>
-              Time-Off Requests
-            </Typography>
-            {pendingTimeOff.length > 0 && (
-              <Chip label={pendingTimeOff.length} size="small" color="warning" sx={{ height: 22, fontWeight: 700 }} />
-            )}
-          </Box>
-
-          {pendingTimeOff.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', py: 2, textAlign: 'center' }}>
-              No pending time-off requests
-            </Typography>
+        <Accordion 
+          defaultExpanded 
+          disableGutters 
+          elevation={0}
+          sx={{ 
+            bgcolor: 'transparent',
+            '&:before': { display: 'none' },
+          }}
+        >
+          <AccordionSummary 
+            expandIcon={<ExpandMoreIcon />}
+            sx={{ px: 0, minHeight: 48, '& .MuiAccordionSummary-content': { my: 0 } }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <TimeOffIcon sx={{ fontSize: 20, color: '#F59E0B' }} />
+              <Typography variant="subtitle1" fontWeight={700}>
+                Time-Off Requests
+              </Typography>
+              {pendingTimeOff.length > 0 && (
+                <Chip label={pendingTimeOff.length} size="small" color="warning" sx={{ height: 22, fontWeight: 700 }} />
+              )}
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails sx={{ px: 0, pt: 0, pb: 2 }}>
+            {pendingTimeOff.length === 0 ? (
+            <Box sx={{ 
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              py: 3, gap: 1, 
+              bgcolor: isDark ? alpha('#F59E0B', 0.03) : alpha('#F59E0B', 0.04),
+              borderRadius: 2,
+            }}>
+              <EventBusyIcon sx={{ fontSize: 28, color: isDark ? alpha('#F59E0B', 0.25) : alpha('#92400E', 0.15) }} />
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem', fontWeight: 500 }}>
+                No pending requests
+              </Typography>
+            </Box>
           ) : (
             <Stack spacing={1.5}>
               {pendingTimeOff.map(req => (
@@ -220,26 +248,47 @@ export default function RequestsPanel({
               ))}
             </Stack>
           )}
-        </Box>
+          </AccordionDetails>
+        </Accordion>
 
         <Divider sx={{ borderColor: isDark ? '#3D3228' : '#E8E0D4' }} />
 
         {/* Pending Shift Trades */}
-        <Box>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5 }}>
-            <SwapIcon sx={{ fontSize: 20, color: '#8B5CF6' }} />
-            <Typography variant="subtitle1" fontWeight={700}>
-              Shift Trades
-            </Typography>
-            {pendingTrades.length > 0 && (
-              <Chip label={pendingTrades.length} size="small" color="secondary" sx={{ height: 22, fontWeight: 700 }} />
-            )}
-          </Box>
-
-          {pendingTrades.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', py: 2, textAlign: 'center' }}>
-              No pending shift trades
-            </Typography>
+        <Accordion 
+          defaultExpanded 
+          disableGutters 
+          elevation={0}
+          sx={{ 
+            bgcolor: 'transparent',
+            '&:before': { display: 'none' },
+          }}
+        >
+          <AccordionSummary 
+            expandIcon={<ExpandMoreIcon />}
+            sx={{ px: 0, minHeight: 48, '& .MuiAccordionSummary-content': { my: 0 } }}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              <SwapIcon sx={{ fontSize: 20, color: '#8B5CF6' }} />
+              <Typography variant="subtitle1" fontWeight={700}>
+                Shift Trades
+              </Typography>
+              {pendingTrades.length > 0 && (
+                <Chip label={pendingTrades.length} size="small" color="secondary" sx={{ height: 22, fontWeight: 700 }} />
+              )}
+            </Box>
+          </AccordionSummary>
+          <AccordionDetails sx={{ px: 0, pt: 0, pb: 2 }}>          {pendingTrades.length === 0 ? (
+            <Box sx={{ 
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              py: 3, gap: 1,
+              bgcolor: isDark ? alpha('#8B5CF6', 0.03) : alpha('#8B5CF6', 0.04),
+              borderRadius: 2,
+            }}>
+              <SwapIcon sx={{ fontSize: 28, color: isDark ? alpha('#8B5CF6', 0.25) : alpha('#5B21B6', 0.15) }} />
+              <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.8rem', fontWeight: 500 }}>
+                No pending shift trades
+              </Typography>
+            </Box>
           ) : (
             <Stack spacing={1.5}>
               {pendingTrades.map(trade => {
@@ -342,35 +391,62 @@ export default function RequestsPanel({
               })}
             </Stack>
           )}
-        </Box>
+          </AccordionDetails>
+        </Accordion>
 
         {/* Recently resolved (collapsed) */}
         {recentResolved.length > 0 && (
           <>
             <Divider sx={{ borderColor: isDark ? '#3D3228' : '#E8E0D4' }} />
-            <Box>
-              <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                Recent Activity
-              </Typography>
-              <Stack spacing={0.5} sx={{ mt: 1 }}>
+            <Accordion 
+              disableGutters 
+              elevation={0}
+              sx={{ 
+                bgcolor: 'transparent',
+                '&:before': { display: 'none' },
+              }}
+            >
+              <AccordionSummary 
+                expandIcon={<ExpandMoreIcon />}
+                sx={{ px: 0, minHeight: 40, '& .MuiAccordionSummary-content': { my: 0 } }}
+              >
+                <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                  Recent Activity
+                </Typography>
+              </AccordionSummary>
+              <AccordionDetails sx={{ px: 0, pt: 0, pb: 2 }}>
+                <Stack spacing={0.25}>
                 {recentResolved.map((item: any, i) => {
-                  const name = item.userName
-                    || (item.requester ? `${item.requester.firstName} ${item.requester.lastName || ''}`.trim() : null)
-                    || (item.fromUser ? `${item.fromUser.firstName} ${item.fromUser.lastName || ''}`.trim() : null)
-                    || getEmployeeName(employees, item.userId || item.requesterId || item.fromUserId || '');
-                  const isTimeOff = 'startDate' in item || (item.type && !['pending','accepted','approved','rejected'].includes(item.type) && item.type !== 'open' && item.type !== 'direct');
+                  const isAdjustmentLog = 'employeeId' in item && 'value' in item;
+                  const name = isAdjustmentLog
+                    ? getEmployeeName(employees, item.employeeId)
+                    : (item.userName
+                      || (item.requester ? `${item.requester.firstName} ${item.requester.lastName || ''}`.trim() : null)
+                      || (item.fromUser ? `${item.fromUser.firstName} ${item.fromUser.lastName || ''}`.trim() : null)
+                      || getEmployeeName(employees, item.userId || item.requesterId || item.fromUserId || ''));
+                  const isTimeOff = !isAdjustmentLog && ('startDate' in item || (item.type && !['pending','accepted','approved','rejected'].includes(item.type) && item.type !== 'open' && item.type !== 'direct'));
                   return (
-                    <Box key={item.id || i} sx={{ py: 0.5 }}>
+                    <Box key={item.id || i} sx={{ 
+                      py: 0.75, px: 1, borderRadius: 1.5,
+                      transition: 'background-color 0.15s',
+                      '&:hover': { bgcolor: isDark ? alpha('#FFF', 0.03) : alpha('#000', 0.02) },
+                    }}>
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {isTimeOff ? (
+                        {isAdjustmentLog ? (
+                          <AssignmentLateIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                        ) : isTimeOff ? (
                           <TimeOffIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
                         ) : (
                           <SwapIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
                         )}
-                        <Typography variant="caption" color="text.secondary" sx={{ flex: 1 }}>
+                        <Typography variant="caption" color="text.secondary" sx={{ flex: 1, fontSize: '0.7rem' }}>
                           {name} — {item.type || 'trade'}
                         </Typography>
-                        <StatusChip status={item.status} />
+                        {isAdjustmentLog ? (
+                          <Chip label={`${item.value}${item.type === 'late' || item.type === 'undertime' ? 'm' : item.type === 'absent' ? 'd' : 'h'}`} size="small" sx={{ height: 20, fontSize: '0.6rem', fontWeight: 700, bgcolor: alpha('#F59E0B', 0.12), color: '#92400E' }} />
+                        ) : (
+                          <StatusChip status={item.status} />
+                        )}
                       </Box>
                       {/* Show rejection reason to employees for their own rejected requests */}
                       {item.status === 'rejected' && item.rejectionReason && (
@@ -392,7 +468,8 @@ export default function RequestsPanel({
                   );
                 })}
               </Stack>
-            </Box>
+              </AccordionDetails>
+            </Accordion>
           </>
         )}
       </Box>

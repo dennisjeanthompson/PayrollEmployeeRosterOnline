@@ -4,6 +4,7 @@ import {
   useTheme, useMediaQuery,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
+import { motion } from 'framer-motion';
 import {
   Add as AddIcon, Edit as EditIcon,
   SwapHoriz as SwapIcon,
@@ -11,6 +12,8 @@ import {
   HourglassTop as PendingIcon,
   CheckCircle as ApprovedIcon,
   Cancel as RejectedIcon,
+  Check as CheckIcon,
+  AttachMoney as AttachMoneyIcon,
 } from '@mui/icons-material';
 import { format, addDays, isSameDay, isToday, differenceInHours, isWithinInterval, parseISO, isValid } from 'date-fns';
 import { getRoleColor } from '@/lib/schedule-theme';
@@ -42,10 +45,16 @@ interface WeeklyGridProps {
   shiftTrades?: ShiftTrade[];
   adjustmentLogs?: any[];
   currentUserId?: string;
+  isSelectionMode?: boolean;
+  selectedShifts?: Set<string>;
+  selectedLogs?: Set<string>;
+  onToggleShiftSelection?: (id: string) => void;
+  onToggleLogSelection?: (id: string) => void;
   onCreateShift: (employeeId: string, date: Date) => void;
   onEditShift: (shift: Shift) => void;
   onOpenRequests?: () => void;
   onDeleteTimeOff?: (id: string) => void;
+  onAddHolidayPay?: (userId: string, date: Date) => void;
 }
 
 /** Generate array of 7 days: Mon–Sun */
@@ -57,7 +66,7 @@ function getWeekDays(weekStart: Date): Date[] {
 function getShiftsForCell(shifts: Shift[], employeeId: string, date: Date): Shift[] {
   const dateStr = format(date, 'yyyy-MM-dd');
   return shifts.filter(
-    s => s.userId === employeeId && toDateStr(s.startTime) === dateStr
+    s => String(s.userId) === String(employeeId) && toDateStr(s.startTime) === dateStr
   );
 }
 
@@ -71,7 +80,7 @@ function getHoliday(holidays: Holiday[], date: Date): Holiday | undefined {
 function getTimeOffForCell(requests: TimeOffRequest[], employeeId: string, date: Date): TimeOffRequest[] {
   const dateStr = format(date, 'yyyy-MM-dd');
   return requests.filter(r => {
-    if (r.userId !== employeeId) return false;
+    if (String(r.userId) !== String(employeeId)) return false;
     const start = toDateStr(r.startDate);
     const end = toDateStr(r.endDate);
     return dateStr >= start && dateStr <= end;
@@ -82,7 +91,7 @@ function getTimeOffForCell(requests: TimeOffRequest[], employeeId: string, date:
 function getTradesForCell(trades: ShiftTrade[], shifts: Shift[], employeeId: string, date: Date): ShiftTrade[] {
   const dateStr = format(date, 'yyyy-MM-dd');
   const shiftIds = shifts
-    .filter(s => s.userId === employeeId && toDateStr(s.startTime) === dateStr)
+    .filter(s => String(s.userId) === String(employeeId) && toDateStr(s.startTime) === dateStr)
     .map(s => s.id);
   return trades.filter(t =>
     shiftIds.includes(t.shiftId) &&
@@ -101,114 +110,94 @@ const TIME_OFF_STATUS_CONFIG = {
   rejected: { color: '#EF4444', bgColor: '#FEE2E2', borderColor: '#FECACA', icon: RejectedIcon, label: 'Rejected' },
 } as const;
 
-/** Compact time-off indicator for calendar cells */
+/** Full-width time-off event banner for calendar cells */
 function TimeOffIndicator({ request, compact = false, onDelete }: { request: TimeOffRequest; compact?: boolean; onDelete?: (id: string) => void }) {
   const config = TIME_OFF_STATUS_CONFIG[request.status as keyof typeof TIME_OFF_STATUS_CONFIG] || TIME_OFF_STATUS_CONFIG.pending;
-  const Icon = config.icon;
+  const StatusIcon = config.icon;
   const typeLabel = request.type.charAt(0).toUpperCase() + request.type.slice(1);
+  
+  const isApproved = request.status === 'approved';
+  const isPaid = request.isPaid;
+  const paidLabel = isApproved ? (isPaid ? 'PAID' : 'UNPAID') : config.label;
 
-  const handleClick = (e: React.MouseEvent) => {
-    if (onDelete) {
-      e.stopPropagation();
-      onDelete(request.id);
-    }
-  };
-
-  if (compact) {
-    return (
-      <Tooltip title={`${typeLabel} Leave · ${config.label}${onDelete ? ' (Click to delete)' : ''}`} arrow placement="top">
-        <Box 
-          onClick={onDelete ? handleClick : undefined}
-          sx={{
-          display: 'flex', alignItems: 'center', gap: 0.25,
-          px: 0.5, py: 0.25, borderRadius: 1,
-          bgcolor: config.bgColor,
-          border: '1px dashed',
-          borderColor: config.borderColor,
-          fontSize: '0.58rem', fontWeight: 600,
-          color: config.color,
-          cursor: onDelete ? 'pointer' : 'default',
-          lineHeight: 1.3,
-          maxWidth: '100%',
-          overflow: 'hidden',
-          '&:hover': onDelete ? { filter: 'brightness(0.95)', transform: 'scale(0.98)' } : {},
-        }}>
-          <Icon sx={{ fontSize: 10 }} />
-          <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {typeLabel}
-          </Box>
-        </Box>
-      </Tooltip>
-    );
-  }
-
+  const dynamicBg = isApproved ? (isPaid ? '#059669' : config.bgColor) : config.bgColor;
+  const dynamicColor = isApproved ? (isPaid ? '#FFFFFF' : config.color) : config.color;
+  
   return (
-    <Tooltip title={`${typeLabel} Leave · ${config.label}${request.reason ? `\n"${request.reason}"` : ''}${onDelete ? '\n(Click to delete)' : ''}`} arrow placement="top">
+    <Tooltip title={`${typeLabel} Leave · ${paidLabel}${request.reason ? `\n"${request.reason}"` : ''}${onDelete ? '\n(Click to view/edit)' : ''}`} arrow placement="top">
       <Box 
-        onClick={onDelete ? handleClick : undefined}
+        component={motion.div}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        whileHover={onDelete ? { scale: 1.02, y: -2 } : { scale: 1.02 }}
+        whileTap={onDelete ? { scale: 0.98 } : {}}
+        onClick={onDelete ? (e: any) => { e.stopPropagation(); onDelete(request.id); } : undefined}
         sx={{
-        display: 'flex', alignItems: 'center', gap: 0.5,
-        px: 0.75, py: 0.4, borderRadius: 1.5,
-        bgcolor: config.bgColor,
-        border: `1px ${request.status === 'pending' ? 'dashed' : 'solid'}`,
-        borderColor: config.borderColor,
-        fontSize: '0.65rem', fontWeight: 600,
-        color: config.color,
-        cursor: onDelete ? 'pointer' : 'default',
-        lineHeight: 1.3,
-        minHeight: 24,
-        transition: 'all 0.15s ease',
-        '&:hover': onDelete ? { filter: 'brightness(0.95)', transform: 'scale(0.98)' } : {},
-      }}>
-        <Icon sx={{ fontSize: 12 }} />
-        <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          {typeLabel}
+          display: 'flex', alignItems: 'center', gap: 0.5,
+          width: '100%', minHeight: 28, px: 1, py: 0.4, borderRadius: 1.5,
+          bgcolor: dynamicBg,
+          color: dynamicColor,
+          cursor: onDelete ? 'pointer' : 'default',
+          border: request.status === 'pending' ? '1.5px dashed' : '1.5px solid',
+          borderColor: isPaid ? '#047857' : config.borderColor,
+          fontSize: '0.72rem', fontWeight: 700,
+          boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+          transition: 'box-shadow 0.2s',
+          overflow: 'hidden',
+          '&:hover': onDelete ? { filter: 'brightness(0.92)', boxShadow: '0 6px 14px rgba(0,0,0,0.12)' } : {}
+        }}>
+        <StatusIcon sx={{ fontSize: 14, flexShrink: 0 }} />
+        <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+          {compact ? typeLabel : `${typeLabel} Leave`}
         </Box>
-        <Box component="span" sx={{ opacity: 0.7, fontSize: '0.55rem', ml: 'auto', flexShrink: 0 }}>
-          {config.label}
+        <Box component="span" sx={{ 
+          fontSize: '0.58rem', fontWeight: 800, opacity: 0.8, flexShrink: 0,
+          bgcolor: isPaid ? alpha('#FFFFFF', 0.2) : alpha(config.color, 0.12), px: 0.5, py: 0.1, borderRadius: 1,
+        }}>
+          {isPaid ? '₱' : paidLabel}
         </Box>
       </Box>
     </Tooltip>
   );
 }
 
-/** Small trade badge overlay on shift pills */
+/** Prominent trade badge pill on shift pills */
 function TradeBadge({ trade }: { trade: ShiftTrade }) {
   const isAccepted = trade.status === 'accepted';
   const targetName = trade.targetUser?.firstName || trade.toUser?.firstName || '';
   const label = isAccepted
-    ? `Trade accepted${targetName ? ` by ${targetName}` : ''} · Awaiting approval`
+    ? `Trade accepted${targetName ? ` by ${targetName}` : ''} · Awaiting manager approval`
     : `Trade requested${targetName ? ` → ${targetName}` : ' (open)'}`;
 
   return (
     <Tooltip title={label} arrow placement="top">
       <Box sx={{
-        position: 'absolute', top: -4, right: -4,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        width: 18, height: 18, borderRadius: '50%',
+        position: 'absolute', top: -8, right: -4,
+        display: 'flex', alignItems: 'center', gap: 0.3,
+        px: 0.6, py: 0.15, borderRadius: 1,
         bgcolor: isAccepted ? '#3B82F6' : '#8B5CF6',
         color: '#FFFFFF',
-        boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
-        zIndex: 1,
-        animation: 'pulse 2s infinite',
-        '@keyframes pulse': {
-          '0%, 100%': { boxShadow: `0 0 0 0 ${alpha(isAccepted ? '#3B82F6' : '#8B5CF6', 0.4)}` },
-          '50%': { boxShadow: `0 0 0 4px ${alpha(isAccepted ? '#3B82F6' : '#8B5CF6', 0)}` },
-        },
+        boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
+        zIndex: 2,
+        fontSize: '0.52rem',
+        fontWeight: 800,
+        letterSpacing: '0.02em',
+        whiteSpace: 'nowrap',
       }}>
-        <SwapIcon sx={{ fontSize: 11 }} />
+        <SwapIcon sx={{ fontSize: 10 }} />
+        {isAccepted ? 'Traded' : 'Trading'}
       </Box>
     </Tooltip>
   );
 }
 
 // Shift pill — the colored chip inside each cell
-function ShiftPill({ shift, onClick, trade }: { shift: Shift; onClick: () => void; trade?: ShiftTrade }) {
+function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected }: { shift: Shift; onClick?: () => void; trade?: ShiftTrade; isSelectionMode?: boolean; isSelected?: boolean }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const rc = getRoleColor(shift.position, shift.user?.role);
-  const startStr = safeFormat(shift.startTime, 'h:mm a');
-  const endStr = safeFormat(shift.endTime, 'h:mm a');
+  const startStr = safeFormat(shift.startTime, 'h:mm a').toLowerCase();
+  const endStr = safeFormat(shift.endTime, 'h:mm a').toLowerCase();
   const hours = differenceInHours(toDate(shift.endTime), toDate(shift.startTime));
   const hasTrade = !!trade;
 
@@ -219,43 +208,61 @@ function ShiftPill({ shift, onClick, trade }: { shift: Shift; onClick: () => voi
       placement="top"
     >
       <Box
+        component={motion.div}
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        whileHover={{ scale: 1.04, y: -2 }}
+        whileTap={{ scale: 0.98 }}
         onClick={onClick}
         sx={{
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          gap: 0.5,
-          px: 1,
-          py: 0.5,
+          justifyContent: 'center',
+          px: 0.75,
+          py: 0.6,
           borderRadius: 1.5,
-          bgcolor: hasTrade ? alpha(rc.bg, 0.25) : alpha(rc.bg, 0.15),
+          bgcolor: hasTrade ? alpha(rc.bg, 0.4) : alpha(rc.bg, 0.25),
           border: '1px solid',
-          borderColor: alpha(rc.border, 0.3),
+          borderColor: alpha(rc.border, 0.5),
           borderLeft: `4px solid ${rc.bg}`,
-          color: isDark ? alpha(rc.bgLight, 0.9) : rc.bgDark,
+          color: isDark ? alpha(rc.bgLight, 1) : rc.bgDark,
           cursor: 'pointer',
-          fontSize: '0.82rem',
-          fontWeight: 600,
-          lineHeight: 1.3,
-          minHeight: 30,
-          transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+          fontSize: '0.68rem',
+          fontWeight: 800,
+          lineHeight: 1.2,
+          letterSpacing: '-0.01em',
+          transition: 'box-shadow 0.2s',
+          whiteSpace: 'nowrap',
+          overflow: 'visible',
           ...(hasTrade && {
             outline: '2px dashed',
             outlineColor: trade.status === 'accepted' ? '#3B82F6' : '#8B5CF6',
             outlineOffset: 1,
           }),
-          '&:hover': {
-            transform: 'translateY(-1px)',
-            bgcolor: alpha(rc.bg, 0.25),
-            boxShadow: `0 4px 12px ${alpha(rc.bg, 0.15)}`,
-            borderColor: alpha(rc.border, 0.5),
-          },
+          '&:hover': onClick ? {
+            filter: 'brightness(0.92)',
+            boxShadow: isSelected ? undefined : `0 6px 16px ${alpha(rc.bg, 0.3)}`,
+          } : {},
         }}
       >
+        {isSelectionMode && (
+          <Box sx={{
+            position: 'absolute', top: -6, right: -6,
+            bgcolor: isSelected ? 'primary.main' : 'background.paper',
+            color: isSelected ? '#fff' : 'transparent',
+            border: '2px solid',
+            borderColor: isSelected ? 'primary.main' : 'text.disabled',
+            borderRadius: '50%', width: 18, height: 18,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: isSelected ? 2 : 1, zIndex: 12,
+            transition: 'all 0.2s'
+          }}>
+            {isSelected && <CheckIcon sx={{ fontSize: 12, fontWeight: 900 }} />}
+          </Box>
+        )}
         {hasTrade && <TradeBadge trade={trade} />}
-        <Box component="span" sx={{ fontWeight: 700 }}>{startStr}</Box>
-        <Box component="span" sx={{ opacity: 0.7 }}>–</Box>
-        <Box component="span" sx={{ fontWeight: 700 }}>{endStr}</Box>
+        {startStr}-{endStr}
       </Box>
     </Tooltip>
   );
@@ -265,7 +272,7 @@ function ShiftPill({ shift, onClick, trade }: { shift: Shift; onClick: () => voi
 export function getAdjustmentsForCell(logs: any[], employeeId: string, date: Date): any[] {
   const dateStr = format(date, 'yyyy-MM-dd');
   return logs.filter(
-    l => l.employeeId === employeeId && toDateStr(l.date) === dateStr && l.status !== 'rejected'
+    l => String(l.employeeId) === String(employeeId) && toDateStr(l.startDate || l.date) === dateStr && l.status !== 'rejected'
   );
 }
 
@@ -277,31 +284,71 @@ const ADJ_TYPE_CONFIG: Record<string, { label: string, color: string, bgColor: s
   regular_holiday_ot: { label: 'RH OT', color: '#b91c1c', bgColor: '#fee2e2' }, // red
   night_diff: { label: 'ND', color: '#6d28d9', bgColor: '#ede9fe' }, // violet
   undertime: { label: 'UT', color: '#be185d', bgColor: '#fce7f3' }, // pink
-  absent: { label: 'Absent', color: '#991b1b', bgColor: '#fee2e2' } // red
+  absent: { label: 'Absent', color: '#991b1b', bgColor: '#fee2e2' }, // red
+  holiday_pay: { label: 'Holiday Pay', color: '#047857', bgColor: '#10b98122' } // emerald
 };
 
-/** Compact pill for exception logs (OT/Late) */
-export function AdjustmentBadge({ log }: { log: any }) {
+/** Prominent pill for exception logs (OT/Late) */
+export function AdjustmentBadge({ log, isSelectionMode, isSelected, onClick }: { log: any; isSelectionMode?: boolean; isSelected?: boolean; onClick?: (e: any) => void }) {
   const isTime = log.type === 'late' || log.type === 'undertime';
-  const unit = isTime ? 'm' : log.type === 'absent' ? 'd' : 'h';
+  const unit = log.type === 'holiday_pay' ? '' : isTime ? 'm' : log.type === 'absent' ? 'd' : 'h';
   const config = ADJ_TYPE_CONFIG[log.type] || { label: log.type, color: '#444', bgColor: '#eee' };
+  const isExcluded = log.isIncluded === false;
   
+  const iconMap: Record<string, string> = { late: '⏰', undertime: '📉', absent: '❌', holiday_pay: '💰' };
+  const icon = iconMap[log.type] || '⚡';
+
   return (
-    <Tooltip title={`${log.value}${unit} ${config.label}${log.remarks ? `\n"${log.remarks}"` : ''}`} arrow placement="top">
-      <Box sx={{
-        display: 'inline-flex', alignItems: 'center', gap: 0.25,
-        px: 0.5, py: 0.25, borderRadius: 1,
-        bgcolor: config.bgColor,
+    <Tooltip title={`${config.label}: ${log.value}${unit}${isExcluded ? ' (Excluded from payroll)' : ''}${log.remarks ? `\n"${log.remarks}"` : ''}`} arrow placement="top">
+      <Box
+        onClick={onClick}
+        sx={{
+        display: 'flex', alignItems: 'center', gap: 0.5,
+        position: 'relative',
+        width: '100%', minHeight: 28, px: 1, py: 0.4, borderRadius: 1.5,
+        bgcolor: isExcluded ? alpha(config.bgColor, 0.4) : config.bgColor,
+        borderLeft: `3px solid ${isExcluded ? alpha(config.color, 0.3) : config.color}`,
         border: '1px solid',
-        borderColor: alpha(config.color, 0.2),
-        fontSize: '0.62rem', fontWeight: 700,
-        color: config.color,
-        lineHeight: 1.1,
-        mt: 0.25,
-        cursor: 'default',
-        '&:hover': { filter: 'brightness(0.95)' }
+        borderColor: isSelected ? '#3B82F6' : alpha(config.color, isExcluded ? 0.1 : 0.25),
+        fontSize: '0.72rem', fontWeight: 700,
+        color: isExcluded ? alpha(config.color, 0.4) : config.color,
+        cursor: onClick ? 'pointer' : 'default',
+        opacity: isExcluded ? 0.55 : 1,
+        boxShadow: isSelected ? '0 0 0 2px #3B82F6, 0 4px 12px rgba(59, 130, 246, 0.4)' : '0 1px 3px rgba(0,0,0,0.08)',
+        transform: isSelected ? 'scale(1.02)' : 'none',
+        transition: 'all 0.2s ease',
+        overflow: 'hidden',
+        '&:hover': onClick ? { filter: 'brightness(0.92)', transform: isSelected ? 'scale(1.02)' : 'translateY(-1px)', boxShadow: isSelected ? undefined : '0 3px 8px rgba(0,0,0,0.1)' } : {}
       }}>
-        {log.value}{unit} {config.label}
+        {isSelectionMode && (
+          <Box sx={{
+            position: 'absolute', top: -6, right: -6,
+            bgcolor: isSelected ? 'primary.main' : 'background.paper',
+            color: isSelected ? '#fff' : 'transparent',
+            border: '2px solid',
+            borderColor: isSelected ? 'primary.main' : 'text.disabled',
+            borderRadius: '50%', width: 18, height: 18,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: isSelected ? 2 : 1, zIndex: 12,
+            transition: 'all 0.2s'
+          }}>
+            {isSelected && <CheckIcon sx={{ fontSize: 12, fontWeight: 900 }} />}
+          </Box>
+        )}
+        <Box component="span" sx={{ flexShrink: 0 }}>{icon}</Box>
+        <Box component="span" sx={{ 
+          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
+          textDecoration: isExcluded ? 'line-through' : 'none',
+        }}>
+          {config.label}
+        </Box>
+        <Box component="span" sx={{ 
+          fontSize: '0.62rem', fontWeight: 800, flexShrink: 0,
+          bgcolor: alpha(config.color, isExcluded ? 0.08 : 0.15), px: 0.5, py: 0.1, borderRadius: 1,
+          textDecoration: isExcluded ? 'line-through' : 'none',
+        }}>
+          {log.value}{unit}
+        </Box>
       </Box>
     </Tooltip>
   );
@@ -321,6 +368,12 @@ export default function WeeklyGrid({
   onEditShift,
   onOpenRequests,
   onDeleteTimeOff,
+  onAddHolidayPay,
+  isSelectionMode,
+  selectedShifts,
+  selectedLogs,
+  onToggleShiftSelection,
+  onToggleLogSelection,
 }: WeeklyGridProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -517,9 +570,13 @@ export default function WeeklyGrid({
       width: '100%',
       overflow: 'auto',
       bgcolor: isDark ? '#2A2018' : '#FFFFFF',
+      borderRadius: 3,
+      border: '1px solid',
+      borderColor: isDark ? '#3D3228' : '#E8E0D4',
+      boxShadow: isDark ? '0 2px 12px rgba(0,0,0,0.3)' : '0 2px 12px rgba(92,64,51,0.06)',
     }}>
       {/* Table */}
-      <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+      <Box component="table" sx={{ width: '100%', minWidth: 800, borderCollapse: 'collapse' }}>
         {/* Header row: blank + days */}
         <Box component="thead">
           <Box component="tr">
@@ -527,7 +584,7 @@ export default function WeeklyGrid({
             <Box
               component="th"
               sx={{
-                width: 200, minWidth: 200, p: 1.5,
+                width: 'auto', minWidth: 160, maxWidth: 220, p: 1.5,
                 textAlign: 'left',
                 borderBottom: '2px solid',
                 borderColor: isDark ? '#3D3228' : '#E8E0D4',
@@ -548,7 +605,9 @@ export default function WeeklyGrid({
                   key={date.toISOString()}
                   component="th"
                   sx={{
-                    p: 1.5, textAlign: 'center',
+                    p: 0,
+                    minWidth: 120,
+                    textAlign: 'center',
                     borderBottom: '2px solid',
                     borderColor: isDark ? '#3D3228' : '#E8E0D4',
                     bgcolor: today
@@ -558,35 +617,41 @@ export default function WeeklyGrid({
                     borderLeftColor: isDark ? '#3D3228' : '#E8E0D4',
                   }}
                 >
-                  <Typography
-                    variant="caption"
-                    fontWeight={700}
-                    sx={{
-                      textTransform: 'uppercase', letterSpacing: '0.03em',
-                      color: today ? 'primary.main' : (isDark ? '#C4AA88' : '#5C4033'),
-                      display: 'block',
-                    }}
-                  >
-                    {format(date, 'EEE')}
-                  </Typography>
-                  <Typography variant="caption" sx={{ color: today ? 'primary.main' : 'text.secondary', fontWeight: today ? 700 : 500 }}>
-                    {format(date, 'MMM d')}
-                  </Typography>
-                  {holiday && (
-                    <Chip
-                      label={holiday.name}
-                      size="small"
+                  <Box sx={{ p: 1.5, pb: holiday ? 0.5 : 1.5 }}>
+                    <Typography
+                      variant="caption"
+                      fontWeight={700}
                       sx={{
-                        mt: 0.5, height: 18, fontSize: '0.58rem', fontWeight: 600,
-                        display: 'block', mx: 'auto',
-                        bgcolor: holiday.workAllowed
-                          ? (isDark ? '#064E3B' : '#DCFCE7')
-                          : (isDark ? '#7F1D1D' : '#FEF2F2'),
-                        color: holiday.workAllowed
-                          ? (isDark ? '#6EE7B7' : '#166534')
-                          : (isDark ? '#FCA5A5' : '#DC2626'),
+                        textTransform: 'uppercase', letterSpacing: '0.03em',
+                        color: today ? 'primary.main' : (isDark ? '#C4AA88' : '#5C4033'),
+                        display: 'block',
                       }}
-                    />
+                    >
+                      {format(date, 'EEE')}
+                    </Typography>
+                    <Typography variant="caption" sx={{ color: today ? 'primary.main' : 'text.secondary', fontWeight: today ? 700 : 500 }}>
+                      {format(date, 'MMM d')}
+                    </Typography>
+                  </Box>
+                  {holiday && (
+                    <Tooltip title={holiday.name} arrow placement="bottom">
+                      <Box sx={{ 
+                        width: '100%', 
+                        bgcolor: holiday.workAllowed ? (isDark ? '#064E3B' : '#DCFCE7') : (isDark ? '#7F1D1D' : '#FEF2F2'),
+                        color: holiday.workAllowed ? (isDark ? '#6EE7B7' : '#166534') : (isDark ? '#FCA5A5' : '#DC2626'),
+                        py: 0.4, px: 0.75,
+                        fontSize: '0.6rem', fontWeight: 700,
+                        borderTop: '1px solid',
+                        borderColor: holiday.workAllowed ? (isDark ? '#047857' : '#BBF7D0') : (isDark ? '#991B1B' : '#FECACA'),
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        lineHeight: 1.4,
+                        textAlign: 'center',
+                      }}>
+                        {holiday.name}
+                      </Box>
+                    </Tooltip>
                   )}
                 </Box>
               );
@@ -631,37 +696,30 @@ export default function WeeklyGrid({
                   }}
                 >
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Avatar src={emp?.photoUrl || undefined} sx={{ width: 32, height: 32, bgcolor: rc.bg, color: rc.text, fontSize: '0.72rem', fontWeight: 700 }}>
+                    <Avatar src={emp?.photoUrl || undefined} sx={{ width: 28, height: 28, bgcolor: rc.bg, color: rc.text, fontSize: '0.65rem', fontWeight: 700 }}>
                       {!emp?.photoUrl && <>{emp?.firstName?.[0]}{emp?.lastName?.[0]}</>}
                     </Avatar>
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography variant="body2" fontWeight={600} noWrap sx={{ fontSize: '0.82rem' }}>
-                        {emp.firstName} {emp.lastName}
-                        {isInactive && <Box component="span" sx={{ color: 'text.disabled' }}> (Inactive)</Box>}
+                    <Box sx={{ minWidth: 0, flex: 1 }}>
+                      <Typography variant="body2" fontWeight={700} noWrap sx={{ fontSize: '0.75rem', lineHeight: 1.3 }}>
+                        {emp.firstName} {emp.lastName?.[0]}.
+                        {isInactive && <Box component="span" sx={{ color: 'text.disabled', fontSize: '0.6rem' }}> (Off)</Box>}
                       </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
                         <Chip
                           size="small"
                           label={emp.position || emp.role || 'Staff'}
                           sx={{
-                            height: 18, fontSize: '0.6rem', fontWeight: 600,
+                            height: 16, fontSize: '0.55rem', fontWeight: 600,
                             bgcolor: isDark ? rc.bgDark : rc.bgLight,
                             color: isDark ? rc.text : rc.bg,
                           }}
                         />
-                        <Chip
-                          size="small"
-                          label={`${weekHours}h`}
-                          sx={{
-                            height: 18, fontSize: '0.6rem', fontWeight: 700,
-                            bgcolor: weekHours > 44
-                              ? (isDark ? '#7F1D1D' : '#FEF2F2')
-                              : (isDark ? '#064E3B' : '#F0FDF4'),
-                            color: weekHours > 44
-                              ? (isDark ? '#FCA5A5' : '#DC2626')
-                              : (isDark ? '#6EE7B7' : '#166534'),
-                          }}
-                        />
+                        <Typography variant="caption" sx={{
+                          fontSize: '0.55rem', fontWeight: 700,
+                          color: weekHours > 44 ? '#DC2626' : '#166534',
+                        }}>
+                          {weekHours}h
+                        </Typography>
                       </Box>
                     </Box>
                   </Box>
@@ -683,45 +741,53 @@ export default function WeeklyGrid({
                       key={date.toISOString()}
                       component="td"
                       sx={{
-                        p: 0.75,
+                        p: 1,
                         borderBottom: '1px solid',
                         borderLeft: '1px solid',
                         borderColor: isDark ? '#3D3228' : '#E8E0D4',
                         verticalAlign: 'top',
-                        minHeight: 60,
                         bgcolor: isBlocked
                           ? alpha(theme.palette.error.main, isDark ? 0.06 : 0.04)
                           : hasApprovedTimeOff
                             ? alpha('#F59E0B', isDark ? 0.06 : 0.06)
                             : today
-                              ? alpha(theme.palette.warning.light, isDark ? 0.04 : 0.08)
+                              ? alpha(theme.palette.primary.main, isDark ? 0.06 : 0.06)
                               : 'transparent',
+                        overflow: 'visible',
+                        transition: 'background-color 0.2s',
+                        '&:hover .add-shift-btn': {
+                          opacity: 1,
+                          transform: 'scale(1)',
+                        }
                       }}
                     >
                       <Box sx={{ 
-                        display: 'flex', flexDirection: 'column', gap: 0.5, minHeight: 40,
-                        maxHeight: 120, // Prevent ultra-tall cells
-                        overflowY: 'auto', // Scroll when cramped
-                        pr: 0.5, // Padding for scrollbar
-                        '&::-webkit-scrollbar': { width: '4px' },
-                        '&::-webkit-scrollbar-thumb': { backgroundColor: alpha('#000', 0.1), borderRadius: '4px' },
-                        '&::-webkit-scrollbar-thumb:hover': { backgroundColor: alpha('#000', 0.2) },
+                        display: 'flex', flexDirection: 'column', gap: 0.5, minHeight: 44,
+                        overflow: 'visible',
                       }}>
-                        {/* Time-off indicators — compact to avoid cramping */}
-                        {cellTimeOff.map(req => (
-                          <TimeOffIndicator 
-                            key={`to-${req.id}`} 
-                            request={req} 
-                            compact={cellShifts.length > 0} 
-                            onDelete={isManager ? onDeleteTimeOff : undefined}
-                          />
-                        ))}
-
-                        {/* Adjustment badges */}
-                        {cellAdjustments.length > 0 && (
-                          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {/* Upper row for compact badges */}
+                        {(cellTimeOff.length > 0 || cellAdjustments.length > 0) && (
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            {cellTimeOff.map(req => (
+                              <TimeOffIndicator 
+                                key={`to-${req.id}`} 
+                                request={req} 
+                                compact
+                                onDelete={isManager ? onDeleteTimeOff : undefined}
+                              />
+                            ))}
                             {cellAdjustments.map(log => (
-                              <AdjustmentBadge key={`adj-${log.id}`} log={log} />
+                              <AdjustmentBadge 
+                                key={`adj-${log.id}`} 
+                                log={log} 
+                                isSelectionMode={isSelectionMode}
+                                isSelected={isSelectionMode && selectedLogs?.has(log.id)}
+                                onClick={() => {
+                                  if (isSelectionMode && onToggleLogSelection) {
+                                    onToggleLogSelection(log.id);
+                                  }
+                                }}
+                              />
                             ))}
                           </Box>
                         )}
@@ -730,30 +796,63 @@ export default function WeeklyGrid({
                         {cellShifts.map(shift => {
                           const trade = getTradeForShift(activeTrades, shift.id);
                           return (
-                            <ShiftPill key={shift.id} shift={shift} onClick={() => onEditShift(shift)} trade={trade} />
+                            <ShiftPill 
+                              key={shift.id} 
+                              shift={shift} 
+                              trade={trade}
+                              isSelectionMode={isSelectionMode}
+                              isSelected={isSelectionMode && selectedShifts?.has(shift.id)}
+                              onClick={() => {
+                                if (isSelectionMode && onToggleShiftSelection) {
+                                  onToggleShiftSelection(shift.id);
+                                } else {
+                                  onEditShift(shift);
+                                }
+                              }} 
+                            />
                           );
                         })}
-                        {cellShifts.length === 0 && !isBlocked && !hasApprovedTimeOff && isManager && (
-                          <Tooltip title="Add shift" placement="top">
-                            <IconButton
-                              size="small"
-                              onClick={() => onCreateShift(emp.id, date)}
-                              sx={{
-                                width: '100%', height: 28,
-                                borderRadius: 1.5, border: '1px dashed',
-                                borderColor: 'transparent',
-                                color: 'text.disabled',
-                                '&:hover': { borderColor: 'primary.main', color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.04) },
-                              }}
-                            >
-                              <AddIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
-                          </Tooltip>
+                        {cellShifts.length === 0 && !hasApprovedTimeOff && isManager && !isSelectionMode && (
+                          <Box className="add-shift-btn" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, opacity: 0, transform: 'scale(0.95)', transition: 'all 0.2s ease', '&:hover': { opacity: 1, transform: 'scale(1)' } }}>
+                            {!isBlocked && (
+                              <Tooltip title="Add shift" placement="top">
+                                <IconButton
+                                  size="small"
+                                  onClick={() => onCreateShift(emp.id, date)}
+                                  sx={{
+                                    width: '100%', height: 28,
+                                    borderRadius: 1.5, border: '1px dashed',
+                                    borderColor: isDark ? alpha('#C4AA88', 0.2) : alpha('#5C4033', 0.1),
+                                    color: isDark ? alpha('#C4AA88', 0.3) : alpha('#5C4033', 0.2),
+                                    '&:hover': { borderColor: 'primary.main', color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.04) },
+                                  }}
+                                >
+                                  <AddIcon sx={{ fontSize: 14 }} />
+                                </IconButton>
+                              </Tooltip>
+                            )}
+                            {holiday && onAddHolidayPay && !cellAdjustments.some(a => a.type === 'holiday_pay') && (
+                              <Tooltip title="Grant Holiday Pay (No work performed)" placement="top">
+                                <Box
+                                  onClick={() => onAddHolidayPay(emp.id, date)}
+                                  sx={{ width: '100%', height: 28, borderRadius: 1.5, border: '1px dashed', borderColor: '#10B981', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 800, '&:hover': { bgcolor: alpha('#10B981', 0.1) } }}
+                                >
+                                  + Holiday Pay
+                                </Box>
+                              </Tooltip>
+                            )}
+                          </Box>
                         )}
+                        {/* Empty cells left cleanly blank */}
                         {isBlocked && cellShifts.length === 0 && !hasTimeOff && (
-                          <Typography variant="caption" sx={{ color: 'text.disabled', textAlign: 'center', py: 0.5, fontStyle: 'italic', fontSize: '0.6rem' }}>
-                            Closed
-                          </Typography>
+                          <Box sx={{ 
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            minHeight: 32,
+                            color: isDark ? alpha('#FCA5A5', 0.4) : alpha('#DC2626', 0.3),
+                            fontSize: '0.6rem', fontWeight: 700, fontStyle: 'italic',
+                          }}>
+                            Blocked
+                          </Box>
                         )}
                       </Box>
                     </Box>

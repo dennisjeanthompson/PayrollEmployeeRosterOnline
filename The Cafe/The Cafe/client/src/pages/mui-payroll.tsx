@@ -7,6 +7,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getCurrentUser } from "@/lib/auth";
 import { useRealtime } from "@/hooks/use-realtime";
 import { PayslipPreview as DigitalPayslip } from "@/components/payroll/payslip-preview";
+import { motion, AnimatePresence } from "framer-motion";
 
 // MUI Components
 import {
@@ -158,131 +159,129 @@ export default function MuiPayroll() {
   return (
     <>
       <Box sx={{ p: 3, minHeight: "100vh", bgcolor: "background.default" }}>
-        {/* Header */}
-        <Box sx={{ mb: 4 }}>
-          <Stack direction="row" alignItems="center" justifyContent="space-between">
-            <Box>
-              <Typography variant="h4" fontWeight={700} gutterBottom>
-                My Payroll
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                View your earnings, payslips, and payment history • Updates in real-time
-              </Typography>
-            </Box>
-            <Tooltip title="Refresh data">
-              <IconButton 
-                onClick={() => { refetchPayroll(); refetchPeriod(); }}
-                sx={{ 
-                  bgcolor: alpha(theme.palette.primary.main, 0.1),
-                  '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) }
-                }}
-              >
-                <RefreshIcon />
-              </IconButton>
-            </Tooltip>
-          </Stack>
-        </Box>
+        {/* Animated Header */}
+        <motion.div
+          initial={{ opacity: 0, y: -30 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+        >
+          <Box
+            sx={{
+              mb: 4,
+              p: 3,
+              borderRadius: 4,
+              position: 'relative',
+              overflow: 'hidden',
+              background: theme.palette.mode === 'dark'
+                ? `linear-gradient(135deg, ${alpha(theme.palette.primary.dark, 0.15)} 0%, ${alpha('#111', 0.9)} 50%, ${alpha(theme.palette.success.dark, 0.1)} 100%)`
+                : `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.06)} 0%, #fff 50%, ${alpha(theme.palette.success.main, 0.04)} 100%)`,
+              backdropFilter: 'blur(20px)',
+              border: `1px solid ${alpha(theme.palette.divider, 0.08)}`,
+            }}
+          >
+            {/* Decorative orbs */}
+            <Box sx={{ position: 'absolute', top: -60, right: -40, width: 200, height: 200, borderRadius: '50%', background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.08)} 0%, transparent 70%)`, pointerEvents: 'none' }} />
+            <Box sx={{ position: 'absolute', bottom: -80, left: -20, width: 180, height: 180, borderRadius: '50%', background: `radial-gradient(circle, ${alpha(theme.palette.success.main, 0.06)} 0%, transparent 70%)`, pointerEvents: 'none' }} />
+
+            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ position: 'relative', zIndex: 1 }}>
+              <Box>
+                <Typography variant="h4" fontWeight={800} gutterBottom sx={{ letterSpacing: -0.5 }}>
+                  My Payroll
+                </Typography>
+                <Typography variant="body2" color="text.secondary" sx={{ opacity: 0.8 }}>
+                  View your earnings, payslips, and payment history • Updates in real-time
+                </Typography>
+              </Box>
+              <motion.div whileHover={{ rotate: 180 }} transition={{ duration: 0.4 }}>
+                <Tooltip title="Refresh data">
+                  <IconButton 
+                    onClick={() => { refetchPayroll(); refetchPeriod(); }}
+                    sx={{ 
+                      bgcolor: alpha(theme.palette.primary.main, 0.1),
+                      backdropFilter: 'blur(10px)',
+                      border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+                      '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) }
+                    }}
+                  >
+                    <RefreshIcon />
+                  </IconButton>
+                </Tooltip>
+              </motion.div>
+            </Stack>
+          </Box>
+        </motion.div>
 
         {payrollLoading && <LinearProgress sx={{ mb: 3, borderRadius: 1 }} />}
 
         {/* Summary Cards */}
         <Grid container spacing={2} sx={{ mb: 3 }}>
-          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
-            <Paper
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                background: `linear-gradient(135deg, ${alpha(theme.palette.success.main, 0.1)} 0%, ${alpha(theme.palette.success.main, 0.05)} 100%)`,
-                border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
-              }}
-            >
-              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
-                <Avatar sx={{ width: 32, height: 32, bgcolor: alpha(theme.palette.success.main, 0.2), color: "success.main" }}>
-                  <PesoIcon fontSize="small" />
-                </Avatar>
-                <Typography variant="body2" color="text.secondary" noWrap>
-                  YTD Earnings
-                </Typography>
-              </Stack>
-              <Typography variant="h6" fontWeight={700} noWrap>
-                {formatCurrency(totalEarningsYTD)}
-              </Typography>
-            </Paper>
-          </Grid>
-
-          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
-            <Paper
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                background: `linear-gradient(135deg, ${alpha(theme.palette.primary.main, 0.1)} 0%, ${alpha(theme.palette.primary.main, 0.05)} 100%)`,
-                border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-              }}
-            >
-              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
-                <Avatar sx={{ width: 32, height: 32, bgcolor: alpha(theme.palette.primary.main, 0.2), color: "primary.main" }}>
-                  <ClockIcon fontSize="small" />
-                </Avatar>
-                <Typography variant="body2" color="text.secondary" noWrap>
-                  Total Hours
-                </Typography>
-              </Stack>
-              <Typography variant="h6" fontWeight={700} noWrap>
-                {totalHoursYTD.toFixed(1)}h
-              </Typography>
-            </Paper>
-          </Grid>
-
-          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
-            <Paper
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                background: `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.1)} 0%, ${alpha(theme.palette.info.main, 0.05)} 100%)`,
-                border: `1px solid ${alpha(theme.palette.info.main, 0.2)}`,
-              }}
-            >
-              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
-                <Avatar sx={{ width: 32, height: 32, bgcolor: alpha(theme.palette.info.main, 0.2), color: "info.main" }}>
-                  <TrendingUpIcon fontSize="small" />
-                </Avatar>
-                <Typography variant="body2" color="text.secondary" noWrap>
-                  Average Pay
-                </Typography>
-              </Stack>
-              <Typography variant="h6" fontWeight={700} noWrap>
-                {formatCurrency(averagePay)}
-              </Typography>
-            </Paper>
-          </Grid>
-
-          <Grid size={{ xs: 6, sm: 6, md: 3 }}>
-            <Paper
-              sx={{
-                p: 2,
-                borderRadius: 2,
-                background: `linear-gradient(135deg, ${alpha(theme.palette.secondary.main, 0.1)} 0%, ${alpha(theme.palette.secondary.main, 0.05)} 100%)`,
-                border: `1px solid ${alpha(theme.palette.secondary.main, 0.2)}`,
-              }}
-            >
-              <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1 }}>
-                <Avatar sx={{ width: 32, height: 32, bgcolor: alpha(theme.palette.secondary.main, 0.2), color: "secondary.main" }}>
-                  <ReceiptIcon fontSize="small" />
-                </Avatar>
-                <Typography variant="body2" color="text.secondary" noWrap>
-                  Pay Periods
-                </Typography>
-              </Stack>
-              <Typography variant="h6" fontWeight={700} noWrap>
-                {paidEntries.length}
-              </Typography>
-            </Paper>
-          </Grid>
+          {[
+            { label: 'YTD Earnings', value: formatCurrency(totalEarningsYTD), icon: <PesoIcon fontSize="small" />, color: theme.palette.success.main },
+            { label: 'Total Hours', value: `${totalHoursYTD.toFixed(1)}h`, icon: <ClockIcon fontSize="small" />, color: theme.palette.primary.main },
+            { label: 'Average Pay', value: formatCurrency(averagePay), icon: <TrendingUpIcon fontSize="small" />, color: theme.palette.info.main },
+            { label: 'Pay Periods', value: String(paidEntries.length), icon: <ReceiptIcon fontSize="small" />, color: theme.palette.secondary.main },
+          ].map((stat, idx) => (
+            <Grid size={{ xs: 6, sm: 6, md: 3 }} key={stat.label}>
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
+                whileHover={{ y: -4, scale: 1.02 }}
+              >
+                <Paper
+                  elevation={0}
+                  sx={{
+                    p: 2.5,
+                    borderRadius: 3,
+                    position: 'relative',
+                    overflow: 'hidden',
+                    bgcolor: alpha(theme.palette.background.paper, 0.7),
+                    backdropFilter: 'blur(20px)',
+                    WebkitBackdropFilter: 'blur(20px)',
+                    border: `1px solid ${alpha(stat.color, 0.15)}`,
+                    boxShadow: `0 4px 20px ${alpha(stat.color, 0.08)}`,
+                    transition: 'border-color 0.3s, box-shadow 0.3s',
+                    '&:hover': {
+                      borderColor: alpha(stat.color, 0.35),
+                      boxShadow: `0 8px 30px ${alpha(stat.color, 0.15)}`,
+                    },
+                  }}
+                >
+                  <Box sx={{ position: 'absolute', top: -20, right: -20, width: 70, height: 70, borderRadius: '50%', background: `radial-gradient(circle, ${alpha(stat.color, 0.1)} 0%, transparent 70%)`, pointerEvents: 'none' }} />
+                  <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb: 1.5, position: 'relative', zIndex: 1 }}>
+                    <Avatar sx={{ width: 36, height: 36, bgcolor: alpha(stat.color, 0.12), color: stat.color }}>
+                      {stat.icon}
+                    </Avatar>
+                    <Typography variant="body2" color="text.secondary" noWrap sx={{ fontWeight: 600, letterSpacing: 0.3 }}>
+                      {stat.label}
+                    </Typography>
+                  </Stack>
+                  <Typography variant="h5" fontWeight={800} noWrap sx={{ position: 'relative', zIndex: 1, letterSpacing: -0.3 }}>
+                    {stat.value}
+                  </Typography>
+                </Paper>
+              </motion.div>
+            </Grid>
+          ))}
         </Grid>
 
         {/* Current Period Card */}
         {currentEntry && (
-          <Paper sx={{ p: 3, mb: 4, borderRadius: 3 }}>
+          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
+            <Paper 
+              elevation={theme.palette.mode === 'dark' ? 0 : 8}
+              sx={{ 
+                p: 3, mb: 4, borderRadius: 4,
+                position: 'relative', overflow: 'hidden',
+                background: theme.palette.mode === 'dark' 
+                  ? `linear-gradient(135deg, ${alpha(theme.palette.primary.dark, 0.2)} 0%, #111 100%)` 
+                  : `linear-gradient(135deg, #ffffff 0%, ${alpha(theme.palette.primary.light, 0.1)} 100%)`,
+                backdropFilter: 'blur(20px)',
+                border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                boxShadow: theme.palette.mode === 'dark' ? '0 16px 40px rgba(0,0,0,0.4)' : `0 16px 40px ${alpha(theme.palette.primary.main, 0.08)}`,
+              }}
+            >
+              <Box sx={{ position: 'absolute', top: -100, right: -50, width: 250, height: 250, borderRadius: '50%', background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.1)} 0%, transparent 70%)` }} />
             <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
               <Typography variant="h6" fontWeight={600}>
                 Current Pay Period
@@ -337,11 +336,48 @@ export default function MuiPayroll() {
               </Grid>
             </Grid>
           </Paper>
+          </motion.div>
         )}
 
         {/* Tabs */}
-        <Paper sx={{ borderRadius: 3 }}>
-          <Tabs value={activeTab} onChange={(_, v) => setActiveTab(v)} sx={{ borderBottom: 1, borderColor: "divider", px: 2 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, delay: 0.5 }}
+        >
+        <Paper
+          elevation={0}
+          sx={{
+            borderRadius: 4,
+            bgcolor: alpha(theme.palette.background.paper, 0.8),
+            backdropFilter: 'blur(20px)',
+            WebkitBackdropFilter: 'blur(20px)',
+            border: `1px solid ${alpha(theme.palette.divider, 0.1)}`,
+            boxShadow: `0 8px 32px ${alpha(theme.palette.common.black, 0.06)}`,
+          }}
+        >
+          <Tabs
+            value={activeTab}
+            onChange={(_, v) => setActiveTab(v)}
+            sx={{
+              borderBottom: 1,
+              borderColor: alpha(theme.palette.divider, 0.1),
+              px: 2,
+              '& .MuiTab-root': {
+                fontWeight: 700,
+                textTransform: 'none',
+                fontSize: '0.9rem',
+                minHeight: 56,
+              },
+              '& .Mui-selected': {
+                color: 'primary.main',
+              },
+              '& .MuiTabs-indicator': {
+                height: 3,
+                borderRadius: '3px 3px 0 0',
+              },
+            }}
+          >
             <Tab icon={<HistoryIcon />} iconPosition="start" label="Payment History" />
             <Tab icon={<ReceiptIcon />} iconPosition="start" label="Payslips" />
           </Tabs>
@@ -512,47 +548,74 @@ export default function MuiPayroll() {
           <TabPanel value={activeTab} index={1}>
             <Box sx={{ px: 3 }}>
               <Grid container spacing={2}>
-                {paidEntries.map((entry) => (
+                {paidEntries.map((entry, idx) => (
                   <Grid size={{ xs: 12, sm: 6, md: 4 }} key={entry.id}>
-                    <Paper
-                      variant="outlined"
-                      sx={{
-                        p: 2,
-                        borderRadius: 2,
-                        cursor: "pointer",
-                        transition: "all 0.2s",
-                        "&:hover": {
-                          borderColor: "primary.main",
-                          transform: "translateY(-2px)",
-                          boxShadow: 2,
-                        },
-                      }}
-                      onClick={() => handleViewPayslip(entry)}
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.4, delay: idx * 0.1 }}
+                      whileHover={{ scale: 1.03, y: -4 }}
+                      whileTap={{ scale: 0.97 }}
                     >
-                      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-                        <Avatar sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1) }}>
-                          <ReceiptIcon color="primary" />
-                        </Avatar>
-                      </Stack>
-                      <Typography variant="subtitle2" fontWeight={600}>
-                        Pay Period
-                      </Typography>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                        {entry.periodStartDate && entry.periodEndDate
-                          ? `${format(new Date(entry.periodStartDate), "MMM d")} – ${format(new Date(entry.periodEndDate), "MMM d, yyyy")}`
-                          : format(parseISO(entry.createdAt), "MMMM d, yyyy")}
-                      </Typography>
-                      <Divider sx={{ my: 1 }} />
-                      <Typography variant="h6" fontWeight={700} color="success.main">
-                        {formatCurrency(entry.netPay)}
-                      </Typography>
-                    </Paper>
+                      <Paper
+                        elevation={0}
+                        sx={{
+                          p: 2.5,
+                          borderRadius: 4,
+                          cursor: "pointer",
+                          bgcolor: alpha(theme.palette.background.paper, 0.8),
+                          backdropFilter: 'blur(20px)',
+                          WebkitBackdropFilter: 'blur(20px)',
+                          border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
+                          boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, 0.08)}`,
+                          position: "relative",
+                          overflow: "hidden",
+                          transition: "border-color 0.3s, box-shadow 0.3s",
+                          "&:hover": {
+                            borderColor: alpha(theme.palette.primary.main, 0.4),
+                            boxShadow: `0 12px 32px ${alpha(theme.palette.primary.main, 0.15)}`,
+                          },
+                        }}
+                        onClick={() => handleViewPayslip(entry)}
+                      >
+                        <Box sx={{ position: 'absolute', top: 0, right: 0, width: 80, height: 80, background: `radial-gradient(circle at top right, ${alpha(theme.palette.primary.main, 0.1)} 0%, transparent 70%)` }} />
+                        <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2, position: 'relative', zIndex: 1 }}>
+                          <Avatar sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1), color: 'primary.main', width: 44, height: 44 }}>
+                            <ReceiptIcon />
+                          </Avatar>
+                          <Chip 
+                            label="Paid" 
+                            size="small" 
+                            color="success" 
+                            sx={{ fontWeight: 800, fontSize: '0.65rem', borderRadius: 1.5 }} 
+                          />
+                        </Stack>
+                        <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: 0.5, display: 'block', position: 'relative', zIndex: 1 }}>
+                          Pay Period
+                        </Typography>
+                        <Typography variant="body1" sx={{ fontWeight: 700, mb: 1.5, color: 'text.primary', position: 'relative', zIndex: 1 }}>
+                          {entry.periodStartDate && entry.periodEndDate
+                            ? `${format(new Date(entry.periodStartDate), "MMM d")} – ${format(new Date(entry.periodEndDate), "MMM d, yyyy")}`
+                            : format(parseISO(entry.createdAt), "MMMM d, yyyy")}
+                        </Typography>
+                        <Divider sx={{ my: 2, opacity: 0.6 }} />
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', position: 'relative', zIndex: 1 }}>
+                          <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700 }}>
+                            Net Pay
+                          </Typography>
+                          <Typography variant="h5" fontWeight={900} color="success.main" lineHeight={1}>
+                            {formatCurrency(entry.netPay)}
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    </motion.div>
                   </Grid>
                 ))}
               </Grid>
             </Box>
           </TabPanel>
         </Paper>
+        </motion.div>
 
         {/* Digital Payslip Viewer (PH-Compliant 2025) */}
         {selectedPayslip && (

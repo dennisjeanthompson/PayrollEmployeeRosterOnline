@@ -9,6 +9,7 @@ import { format, isValid } from "date-fns";
 import { Link, useLocation } from "wouter";
 import { getInitials } from "@/lib/utils";
 import { StatCard, InfoCard, UserCard, EmptyState, ActionButtons } from "@/components/mui/cards";
+import { motion, AnimatePresence } from "framer-motion";
 
 import {
   Box,
@@ -685,17 +686,17 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
 
   // Get latest payslip and current period estimates
   const records = payrollHistory?.entries || payrollHistory?.records || payrollHistory?.payroll || [];
-  const latestPay = records?.[0];
+  const activeEntry = records.find((r: any) => r.status === 'draft' || r.status === 'pending');
   const currentPeriod = payrollData?.period;
   
   // Hours worked this period. Fallback to this week\'s scheduled hours.
-  const hoursWorked = payrollData?.totalHours ?? totalHoursThisWeek;
+  const hoursWorked = activeEntry ? Number(activeEntry.totalHours || 0) : (payrollData?.totalHours ?? totalHoursThisWeek);
   
   // Calculate Estimated Net Pay
   // If there's already a payroll record for the current period, use its netPay.
   // Otherwise, estimate it based on hours * hourlyRate
   const hourlyRate = Number(currentUser?.hourlyRate || 0);
-  const estNetPay = payrollData?.payrollRecord?.netPay ?? (hoursWorked * hourlyRate);
+  const estNetPay = activeEntry ? Number(activeEntry.netPay || 0) : (hoursWorked * hourlyRate);
 
   const quickActions = [
     {
@@ -737,235 +738,295 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
 
       {/* â”€â”€ GREETING + PAYROLL CARD (top of page, no overlap) â”€â”€â”€ */}
       <Box sx={{ px: 2, pt: 2 }}>
-        <Paper
-          elevation={3}
-          sx={{
-            borderRadius: 3,
-            overflow: 'hidden',
-            border: `1px solid ${alpha(primaryColor, 0.2)}`,
-          }}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5, ease: "easeOut" }}
         >
-          {/* Greeting header with gradient */}
-          <Box
+          <Paper
+            elevation={isDark ? 0 : 8}
             sx={{
-              background: isDark
-                ? `linear-gradient(135deg, #3B1F0A 0%, #2A1608 100%)`
-                : `linear-gradient(135deg, ${primaryColor} 0%, ${theme.palette.primary.dark} 100%)`,
-              px: 2.5,
-              pt: 2,
-              pb: 2,
-              position: 'relative',
+              borderRadius: 4,
               overflow: 'hidden',
+              border: `1px solid ${alpha('#ffffff', isDark ? 0.05 : 0.4)}`,
+              boxShadow: isDark ? '0 16px 40px rgba(0,0,0,0.4)' : '0 16px 40px rgba(0,0,0,0.08)',
+              background: 'transparent',
+              position: 'relative',
             }}
           >
-            <Box sx={{ position: 'absolute', top: -30, right: -30, width: 100, height: 100, borderRadius: '50%', bgcolor: alpha('#fff', 0.05) }} />
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Box>
-                <Typography variant="caption" sx={{ color: alpha('#fff', 0.7), fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                  {format(new Date(), 'EEEE, MMM d')}
-                </Typography>
-                <Typography variant="subtitle1" sx={{ fontWeight: 800, color: '#fff', lineHeight: 1.3 }}>
-                  Hi, {currentUser?.firstName || 'Employee'} 👋
-                </Typography>
-                <Typography variant="caption" sx={{ color: alpha('#fff', 0.7) }}>
-                  {currentUser?.position || currentUser?.role || 'Team Member'}
-                </Typography>
-              </Box>
-              <Chip
-                size="small"
-                label="● Online"
-                sx={{ bgcolor: alpha('#4ade80', 0.2), color: '#4ade80', fontWeight: 700, fontSize: '0.6rem', border: '1px solid rgba(74,222,128,0.3)' }}
-              />
-            </Stack>
-          </Box>
-
-          {/* Pay period label */}
-          <Box sx={{ px: 2.5, pt: 1.5, pb: 1, borderBottom: `1px solid ${theme.palette.divider}` }}>
-            <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Box>
-                <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 600, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Current Pay Period
-                </Typography>
-                <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                  {currentPeriod
-                    ? `${format(new Date(currentPeriod.startDate), 'MMM d')} – ${format(new Date(currentPeriod.endDate), 'MMM d, yyyy')}`
-                    : 'This Pay Period'}
-                </Typography>
-              </Box>
-              <Chip size="small" label="Active" color="primary" variant="outlined" sx={{ fontWeight: 700, fontSize: '0.6rem', height: 20 }} />
-            </Stack>
-          </Box>
-
-          {/* Stats row */}
-          <Stack direction="row" divider={<Divider orientation="vertical" flexItem />}>
-            <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
-              <Typography variant="body2" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>Hours</Typography>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: 'primary.main', lineHeight: 1.3, mt: 0.5 }}>
-                {hoursWorked ? `${Number(hoursWorked).toFixed(0)}h` : `${totalHoursThisWeek.toFixed(0)}h`}
-              </Typography>
-            </Box>
-            <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
-              <Typography variant="body2" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>Est. Net Pay</Typography>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: 'success.main', lineHeight: 1.3, mt: 0.5 }}>
-                {estNetPay > 0 ? `₱${Number(estNetPay).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : '--'}
-              </Typography>
-            </Box>
-            <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
-              <Typography variant="body2" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>Shifts</Typography>
-              <Typography variant="h5" sx={{ fontWeight: 800, color: 'info.main', lineHeight: 1.3, mt: 0.5 }}>
-                {employeeShifts?.shifts?.length || 0}
-              </Typography>
-            </Box>
-          </Stack>
-
-          {/* View payslip button */}
-          <Box sx={{ px: 2, pb: 2, pt: 0.5 }}>
-            <Button
-              fullWidth
-              variant="contained"
-              onClick={() => setLocation('/employee/payroll')}
-              size="small"
-              startIcon={<PesoIcon />}
-              sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2, py: 1 }}
+            {/* Animated Mesh Gradient Background Layer */}
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0, left: 0, right: 0, bottom: 0,
+                zIndex: 0,
+                background: isDark
+                  ? `linear-gradient(135deg, #2A1608 0%, #1C0F05 100%)`
+                  : `linear-gradient(135deg, ${theme.palette.primary.light} 0%, ${theme.palette.primary.main} 100%)`,
+                overflow: 'hidden',
+              }}
             >
-              View Payslips & History
-            </Button>
-          </Box>
-        </Paper>
-      </Box>
+              <motion.div
+                animate={{ 
+                  scale: [1, 1.2, 1],
+                  opacity: [0.3, 0.5, 0.3],
+                  rotate: [0, 90, 0]
+                }}
+                transition={{ duration: 15, repeat: Infinity, ease: "linear" }}
+                style={{
+                  position: 'absolute', top: '-20%', right: '-10%', width: '60%', height: '60%',
+                  background: 'radial-gradient(circle, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0) 70%)',
+                  borderRadius: '50%',
+                }}
+              />
+              <motion.div
+                animate={{ 
+                  scale: [1, 1.5, 1],
+                  opacity: [0.2, 0.4, 0.2],
+                  rotate: [0, -90, 0]
+                }}
+                transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
+                style={{
+                  position: 'absolute', bottom: '-10%', left: '-10%', width: '70%', height: '70%',
+                  background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 70%)',
+                  borderRadius: '50%',
+                }}
+              />
+            </Box>
 
+            {/* Content Layer (Glass) */}
+            <Box sx={{ position: 'relative', zIndex: 1, px: 2.5, pt: 3, pb: 4 }}>
+              <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 3 }}>
+                <Box>
+                  <Typography variant="caption" sx={{ color: alpha('#fff', 0.8), fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.2 }}>
+                    {format(new Date(), 'EEEE, MMM d')}
+                  </Typography>
+                  <Typography variant="h5" sx={{ fontWeight: 800, color: '#fff', lineHeight: 1.2, mt: 0.5, textShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+                    Hi, {currentUser?.firstName || 'Employee'} 👋
+                  </Typography>
+                  <Typography variant="caption" sx={{ color: alpha('#fff', 0.7), fontWeight: 500 }}>
+                    {currentUser?.position || currentUser?.role || 'Team Member'}
+                  </Typography>
+                </Box>
+                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                  <Chip
+                    size="small"
+                    label="● Online"
+                    sx={{ 
+                      bgcolor: alpha('#4ade80', 0.15), 
+                      color: '#4ade80', 
+                      fontWeight: 800, 
+                      fontSize: '0.65rem', 
+                      backdropFilter: 'blur(8px)',
+                      border: '1px solid rgba(74,222,128,0.3)',
+                      boxShadow: '0 0 12px rgba(74,222,128,0.2)' 
+                    }}
+                  />
+                </motion.div>
+              </Stack>
+            </Box>
 
-      {/* — QUICK ACTIONS —————————————————————————————————— */}
-      <Box sx={{ px: 2, mt: 3, mb: 1 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1 }}>
-          Quick Access
-        </Typography>
-        <Paper elevation={2} sx={{ borderRadius: 3, overflow: 'hidden' }}>
-          <Stack direction="row" divider={<Divider orientation="vertical" flexItem />}>
-            {quickActions.map((action) => (
-              <Box
-                key={action.label}
-                onClick={() => setLocation(action.route)}
+            {/* Overlapping Glass Stats Card */}
+            <Box sx={{ position: 'relative', zIndex: 2, px: 1.5, pb: 2, mt: -3 }}>
+              <Paper
+                elevation={isDark ? 0 : 4}
                 sx={{
-                  flex: 1,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  py: 1.5,
-                  cursor: 'pointer',
-                  userSelect: 'none',
-                  WebkitTapHighlightColor: 'transparent',
-                  transition: 'background 0.15s',
-                  '&:active': { bgcolor: alpha(action.color, 0.08) },
+                  borderRadius: 3,
+                  background: isDark ? alpha('#111', 0.8) : alpha('#ffffff', 0.9),
+                  backdropFilter: 'blur(20px)',
+                  WebkitBackdropFilter: 'blur(20px)',
+                  border: `1px solid ${alpha(isDark ? '#fff' : '#000', 0.05)}`,
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.08)',
+                  overflow: 'hidden'
                 }}
               >
-                <Box
-                  sx={{
-                    width: 38,
-                    height: 38,
-                    borderRadius: 2,
-                    bgcolor: action.bgColor,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: action.color,
-                    mb: 0.5,
-                  }}
-                >
-                  {action.icon}
+                <Box sx={{ px: 2, py: 1.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
+                  <Stack direction="row" justifyContent="space-between" alignItems="center">
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>
+                      Current Pay Period
+                    </Typography>
+                    <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main' }}>
+                      {currentPeriod
+                        ? `${format(new Date(currentPeriod.startDate), 'MMM d')} – ${format(new Date(currentPeriod.endDate), 'MMM d, yyyy')}`
+                        : 'This Pay Period'}
+                    </Typography>
+                  </Stack>
                 </Box>
-                <Typography variant="caption" sx={{ fontWeight: 700, fontSize: '0.6rem', lineHeight: 1.2, textAlign: 'center' }}>
-                  {action.label}
-                </Typography>
-              </Box>
-            ))}
-          </Stack>
-        </Paper>
+
+                <Stack direction="row" divider={<Divider orientation="vertical" flexItem sx={{ opacity: 0.6 }} />}>
+                  <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>Hours</Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 900, color: isDark ? '#fff' : 'text.primary', lineHeight: 1.2, mt: 0.5 }}>
+                      {hoursWorked ? `${Number(hoursWorked).toFixed(0)}` : `${totalHoursThisWeek.toFixed(0)}`}<Typography component="span" variant="body2" sx={{ color: 'text.secondary', fontWeight: 600 }}>h</Typography>
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>Net Pay</Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 900, color: 'success.main', lineHeight: 1.2, mt: 0.5 }}>
+                      {estNetPay > 0 ? `₱${Number(estNetPay).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : '--'}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>Shifts</Typography>
+                    <Typography variant="h5" sx={{ fontWeight: 900, color: 'info.main', lineHeight: 1.2, mt: 0.5 }}>
+                      {employeeShifts?.shifts?.length || 0}
+                    </Typography>
+                  </Box>
+                </Stack>
+
+                <Box sx={{ px: 1.5, pb: 1.5, pt: 0 }}>
+                  <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+                    <Button
+                      fullWidth
+                      variant="contained"
+                      onClick={() => setLocation('/employee/payroll')}
+                      size="small"
+                      startIcon={<PesoIcon />}
+                      sx={{ 
+                        textTransform: 'none', 
+                        fontWeight: 700, 
+                        borderRadius: 2, 
+                        py: 1,
+                        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.primary.dark} 100%)`,
+                        boxShadow: `0 4px 14px ${alpha(theme.palette.primary.main, 0.4)}`
+                      }}
+                    >
+                      View Payslips
+                    </Button>
+                  </motion.div>
+                </Box>
+              </Paper>
+            </Box>
+          </Paper>
+        </motion.div>
       </Box>
 
+
+
       {/* — TODAY'S SHIFT —————————————————————————————————— */}
-      <Box sx={{ px: 2, mt: 2.5 }}>
-        <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', mb: 1.5 }}>
+      <Box sx={{ px: 2, mt: 4 }}>
+        <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: 1.5, display: 'block', mb: 2 }}>
           Today's Schedule
         </Typography>
         {shiftsLoading ? (
-          <Skeleton variant="rounded" height={80} sx={{ borderRadius: 2.5 }} />
+          <Skeleton variant="rounded" height={80} sx={{ borderRadius: 3 }} />
         ) : todayShifts.length > 0 ? (
-          <Stack spacing={1.5}>
-            {todayShifts.map((shift: any) => (
-              <Paper
+          <Stack spacing={2}>
+            {todayShifts.map((shift: any, i: number) => (
+              <motion.div
                 key={shift.id}
-                variant="outlined"
-                onClick={() => setLocation('/employee/schedule')}
-                sx={{
-                  p: 2,
-                  borderRadius: 2.5,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 1.5,
-                  cursor: 'pointer',
-                  borderColor: alpha(primaryColor, 0.3),
-                  bgcolor: alpha(primaryColor, 0.03),
-                }}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.4, delay: i * 0.1 }}
+                whileHover={{ scale: 1.02, y: -2 }}
+                whileTap={{ scale: 0.98 }}
               >
-                <Box sx={{ width: 44, height: 44, borderRadius: 2, bgcolor: alpha(primaryColor, 0.1), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Typography variant="caption" sx={{ fontSize: '0.55rem', fontWeight: 700, color: 'primary.main', lineHeight: 1 }}>
-                    TODAY
-                  </Typography>
-                </Box>
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }}>{shift.position || 'Shift'}</Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {sfmt(shift.startTime, 'h:mm a')} – {sfmt(shift.endTime, 'h:mm a')}
-                  </Typography>
-                </Box>
-                <Chip size="small" label={shift.status === 'completed' ? 'Done' : 'Today'} color={shift.status === 'completed' ? 'success' : 'primary'} sx={{ fontSize: '0.6rem', height: 22, fontWeight: 700 }} />
-              </Paper>
+                <Paper
+                  elevation={isDark ? 0 : 2}
+                  onClick={() => setLocation('/employee/schedule')}
+                  sx={{
+                    p: 2.5,
+                    borderRadius: 4,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 2,
+                    cursor: 'pointer',
+                    background: isDark ? alpha(primaryColor, 0.05) : '#fff',
+                    border: `1px solid ${shift.status === 'completed' ? alpha(theme.palette.success.main, 0.3) : alpha(primaryColor, 0.2)}`,
+                    boxShadow: `0 8px 24px ${alpha(primaryColor, 0.08)}`,
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <Box sx={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, bgcolor: shift.status === 'completed' ? 'success.main' : 'primary.main' }} />
+                  <Box sx={{ width: 50, height: 50, borderRadius: 3, bgcolor: alpha(primaryColor, 0.1), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Typography variant="caption" sx={{ fontSize: '0.6rem', fontWeight: 800, color: 'primary.main', lineHeight: 1 }}>
+                      TODAY
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flex: 1 }}>
+                    <Typography variant="body1" sx={{ fontWeight: 800, color: 'text.primary' }}>{shift.position || 'Shift'}</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary', fontWeight: 500, mt: 0.5 }}>
+                      {sfmt(shift.startTime, 'h:mm a')} – {sfmt(shift.endTime, 'h:mm a')}
+                    </Typography>
+                  </Box>
+                  <Chip 
+                    size="small" 
+                    label={shift.status === 'completed' ? 'Done' : 'Active'} 
+                    color={shift.status === 'completed' ? 'success' : 'primary'} 
+                    sx={{ fontWeight: 800, borderRadius: 1.5 }} 
+                  />
+                </Paper>
+              </motion.div>
             ))}
           </Stack>
         ) : (
-          <Paper variant="outlined" sx={{ borderRadius: 2.5, py: 3, textAlign: 'center' }}>
-            <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 600 }}>No shifts today</Typography>
-            <Typography variant="caption" color="text.disabled">Enjoy your day off! 🎉</Typography>
-          </Paper>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
+            <Paper variant="outlined" sx={{ borderRadius: 4, py: 4, textAlign: 'center', borderStyle: 'dashed', bgcolor: 'transparent' }}>
+              <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 700 }}>No shifts today</Typography>
+              <Typography variant="body2" color="text.disabled" sx={{ mt: 1 }}>Enjoy your day off! 🎉</Typography>
+            </Paper>
+          </motion.div>
         )}
       </Box>
 
       {/* — UPCOMING SHIFTS —————————————————————————————————— */}
       {upcomingShifts.length > 0 && (
-        <Box sx={{ px: 2, mt: 2.5 }}>
-          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 1.5 }}>
-            <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        <Box sx={{ px: 2, mt: 4 }}>
+          <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
+            <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: 1.5 }}>
               Upcoming Shifts
             </Typography>
-            <Button size="small" endIcon={<ArrowRightIcon />} onClick={() => setLocation('/employee/schedule')} sx={{ textTransform: 'none', fontWeight: 700, fontSize: '0.75rem', color: 'primary.main', p: 0, minWidth: 0 }}>
+            <Button size="small" endIcon={<ArrowRightIcon />} onClick={() => setLocation('/employee/schedule')} sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
               View All
             </Button>
           </Stack>
-          <Stack spacing={1.5}>
-            {upcomingShifts.map((shift: any) => (
-              <Paper
+          <Stack spacing={2}>
+            {upcomingShifts.map((shift: any, i: number) => (
+              <motion.div
                 key={shift.id}
-                variant="outlined"
-                onClick={() => setLocation('/employee/schedule')}
-                sx={{ p: 2, borderRadius: 2.5, display: 'flex', alignItems: 'center', gap: 1.5, cursor: 'pointer', '&:active': { bgcolor: alpha(primaryColor, 0.04) } }}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.2 + (i * 0.1) }}
+                whileHover={{ scale: 1.02 }}
+                whileTap={{ scale: 0.98 }}
               >
-                <Box sx={{ width: 44, height: 44, borderRadius: 2, bgcolor: alpha(primaryColor, 0.08), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <Typography variant="caption" sx={{ fontSize: '0.55rem', fontWeight: 800, color: 'primary.main', lineHeight: 1 }}>
-                    {sfmt(shift.startTime, 'MMM').toUpperCase()}
-                  </Typography>
-                  <Typography variant="subtitle2" sx={{ fontWeight: 900, color: 'primary.main', lineHeight: 1.2 }}>
-                    {sfmt(shift.startTime, 'd')}
-                  </Typography>
-                </Box>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 700 }} noWrap>{shift.position || 'Shift'}</Typography>
-                  <Typography variant="caption" color="text.secondary" noWrap>
-                    {sfmt(shift.startTime, 'EEE')} · {sfmt(shift.startTime, 'h:mm a')} – {sfmt(shift.endTime, 'h:mm a')}
-                  </Typography>
-                </Box>
-                <ArrowRightIcon sx={{ color: 'text.disabled', fontSize: 18 }} />
-              </Paper>
+                <Paper
+                  elevation={0}
+                  onClick={() => setLocation('/employee/schedule')}
+                  sx={{ 
+                    p: 2, 
+                    borderRadius: 3, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    gap: 2, 
+                    cursor: 'pointer', 
+                    border: `1px solid ${theme.palette.divider}`,
+                    background: isDark ? alpha('#000', 0.2) : alpha('#fff', 0.5),
+                    backdropFilter: 'blur(10px)',
+                    '&:hover': {
+                      borderColor: alpha(primaryColor, 0.3),
+                      background: isDark ? alpha(primaryColor, 0.05) : '#fff'
+                    }
+                  }}
+                >
+                  <Box sx={{ width: 44, height: 44, borderRadius: 2.5, bgcolor: alpha(primaryColor, 0.08), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    <Typography variant="caption" sx={{ fontSize: '0.6rem', fontWeight: 800, color: 'primary.main', lineHeight: 1 }}>
+                      {sfmt(shift.startTime, 'MMM').toUpperCase()}
+                    </Typography>
+                    <Typography variant="subtitle2" sx={{ fontWeight: 900, color: 'primary.main', lineHeight: 1.2 }}>
+                      {sfmt(shift.startTime, 'd')}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Typography variant="body2" sx={{ fontWeight: 800 }} noWrap>{shift.position || 'Shift'}</Typography>
+                    <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 500 }} noWrap>
+                      {sfmt(shift.startTime, 'EEE')} · {sfmt(shift.startTime, 'h:mm a')} – {sfmt(shift.endTime, 'h:mm a')}
+                    </Typography>
+                  </Box>
+                  <ArrowRightIcon sx={{ color: 'text.disabled', fontSize: 20 }} />
+                </Paper>
+              </motion.div>
             ))}
           </Stack>
         </Box>

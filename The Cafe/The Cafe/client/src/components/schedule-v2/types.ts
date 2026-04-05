@@ -42,6 +42,7 @@ export interface TimeOffRequest {
   type: string;
   reason: string;
   status: string;
+  isPaid?: boolean;
   requestedAt: string;
   approvedBy?: string;
   approvalDate?: string;

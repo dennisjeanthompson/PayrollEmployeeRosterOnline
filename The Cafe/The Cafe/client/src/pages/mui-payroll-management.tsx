@@ -1,5 +1,6 @@
 import PesoIcon from "@/components/PesoIcon";
 import { useState, useMemo } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -41,6 +42,7 @@ import {
   Menu,
   ListItemIcon,
   ListItemText,
+  Switch as MuiSwitch,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -64,6 +66,9 @@ import {
   Cancel,
   Delete as DeleteIcon,
   FileDownload as ExportIcon,
+  Settings as SettingsIcon,
+  ToggleOn as ToggleOnIcon,
+  ToggleOff as ToggleOffIcon,
 } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
@@ -134,6 +139,7 @@ export default function MuiPayrollManagement() {
   const theme = useTheme();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [, setLocation] = useLocation();
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<PayrollPeriod | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -442,6 +448,43 @@ export default function MuiPayrollManagement() {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
+
+  // Fetch branch deduction settings for the info bar
+  const { data: deductionSettingsData } = useQuery({
+    queryKey: ["deduction-settings"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/deduction-settings");
+      return res.json();
+    },
+  });
+
+  // Fetch company settings for holiday pay status
+  const { data: companySettingsData } = useQuery({
+    queryKey: ["company-settings"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/company-settings");
+      return res.json();
+    },
+  });
+
+  // Toggle exception log inclusion in payroll
+  const toggleIncludedMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("PUT", `/api/adjustment-logs/${id}/toggle-included`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      const included = data?.log?.isIncluded;
+      toast({ title: included ? "✓ Included in Payroll" : "Excluded from Payroll", description: included ? "This log will affect the next payroll run" : "This log will be skipped during payroll" });
+      queryClient.invalidateQueries({ queryKey: ["adjustment-logs-branch"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deductionProfile = deductionSettingsData?.settings;
+  const companySettings = companySettingsData?.settings || companySettingsData;
 
   const handleCreateAdjustment = async () => {
     if (!adjEmployeeId || !adjDate || !adjValue) {
@@ -994,6 +1037,71 @@ export default function MuiPayrollManagement() {
         </Grid>
       ) : activeTab === 1 ? (
         /* Entries Tab */
+        <>
+        {/* Deduction Profile Info Bar */}
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: `1px solid ${alpha(theme.palette.info.main, 0.15)}`,
+            mb: 2,
+            background: `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.04)} 0%, ${alpha(theme.palette.info.main, 0.01)} 100%)`,
+          }}
+        >
+          <CardContent sx={{ py: 1.5, px: 2.5, '&:last-child': { pb: 1.5 } }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ mr: 0.5 }}>
+                  Deduction Profile:
+                </Typography>
+                {[
+                  { key: 'deductSSS', label: 'SSS' },
+                  { key: 'deductPhilHealth', label: 'PhilHealth' },
+                  { key: 'deductPagibig', label: 'Pag-IBIG' },
+                  { key: 'deductWithholdingTax', label: 'Tax' },
+                ].map(item => {
+                  const isActive = deductionProfile ? (deductionProfile as any)[item.key] : true;
+                  return (
+                    <Chip
+                      key={item.key}
+                      icon={isActive ? <CheckCircle sx={{ fontSize: 16 }} /> : <Cancel sx={{ fontSize: 16 }} />}
+                      label={item.label}
+                      size="small"
+                      color={isActive ? 'success' : 'default'}
+                      variant={isActive ? 'filled' : 'outlined'}
+                      sx={{
+                        fontWeight: 700,
+                        fontSize: '0.75rem',
+                        opacity: isActive ? 1 : 0.6,
+                      }}
+                    />
+                  );
+                })}
+                <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+                <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ mr: 0.5 }}>
+                  Holiday Pay:
+                </Typography>
+                <Chip
+                  icon={companySettings?.includeHolidayPay ? <CheckCircle sx={{ fontSize: 16 }} /> : <Cancel sx={{ fontSize: 16 }} />}
+                  label={companySettings?.includeHolidayPay ? 'Enabled' : 'Disabled'}
+                  size="small"
+                  color={companySettings?.includeHolidayPay ? 'success' : 'default'}
+                  variant={companySettings?.includeHolidayPay ? 'filled' : 'outlined'}
+                  sx={{ fontWeight: 700, fontSize: '0.75rem', opacity: companySettings?.includeHolidayPay ? 1 : 0.6 }}
+                />
+              </Box>
+              <Button
+                size="small"
+                startIcon={<SettingsIcon sx={{ fontSize: 16 }} />}
+                onClick={() => setLocation('/deduction-settings')}
+                sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
+              >
+                Configure
+              </Button>
+            </Box>
+          </CardContent>
+        </Card>
+
         <Card
           elevation={0}
           sx={{
@@ -1184,6 +1292,7 @@ export default function MuiPayrollManagement() {
             </>
           )}
         </Card>
+        </>
       ) : activeTab === 2 ? (
         /* Exception Logs Tab — Manager OT/Lateness Logging */
         <Card
@@ -1252,6 +1361,11 @@ export default function MuiPayrollManagement() {
                     <TableCell align="right">Value</TableCell>
                     <TableCell>Remarks</TableCell>
                     <TableCell>Status</TableCell>
+                    <TableCell align="center">
+                      <Tooltip title="Include/exclude from payroll run" arrow>
+                        <Typography variant="caption" fontWeight={700}>Payroll</Typography>
+                      </Tooltip>
+                    </TableCell>
                     <TableCell align="right">Amount</TableCell>
                     <TableCell align="right">Actions</TableCell>
                   </TableRow>
@@ -1261,9 +1375,13 @@ export default function MuiPayrollManagement() {
                     const typeConfig = adjustmentTypeOptions.find(t => t.value === log.type);
                     const isDeduction = ['late', 'undertime', 'absent'].includes(log.type);
                     const valueUnit = log.type === 'late' || log.type === 'undertime' ? 'mins' : log.type === 'absent' ? 'days' : 'hrs';
+                    const logIncluded = log.isIncluded !== false; // default true
                     
                     return (
-                      <TableRow key={log.id} hover>
+                      <TableRow key={log.id} hover sx={{
+                        opacity: logIncluded ? 1 : 0.5,
+                        transition: 'opacity 0.2s ease',
+                      }}>
                         <TableCell>
                           <Typography variant="body2" fontWeight={600}>
                             {log.employeeName || 'Unknown'}
@@ -1314,12 +1432,24 @@ export default function MuiPayrollManagement() {
                             sx={{ fontWeight: 600, textTransform: "capitalize" }}
                           />
                         </TableCell>
+                        <TableCell align="center">
+                          <Tooltip title={logIncluded ? 'Included — will affect next payroll run' : 'Excluded — will be skipped during payroll'} arrow>
+                            <MuiSwitch
+                              size="small"
+                              checked={logIncluded}
+                              onChange={() => toggleIncludedMutation.mutate(log.id)}
+                              disabled={toggleIncludedMutation.isPending}
+                              color="success"
+                            />
+                          </Tooltip>
+                        </TableCell>
                         <TableCell align="right">
                           {log.calculatedAmount ? (
                             <Typography
                               variant="body2"
                               fontWeight={600}
                               color={isDeduction ? "error.main" : "success.main"}
+                              sx={{ textDecoration: logIncluded ? 'none' : 'line-through' }}
                             >
                               {isDeduction ? '-' : '+'}₱{Math.abs(parseFloat(log.calculatedAmount)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </Typography>

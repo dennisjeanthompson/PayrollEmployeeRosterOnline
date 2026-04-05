@@ -16,7 +16,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   FormControl, InputLabel, Select, MenuItem, Stack, Tooltip, Avatar,
   CircularProgress, useTheme, useMediaQuery, Divider, ButtonGroup,
-  Switch, FormControlLabel, InputAdornment
+  InputAdornment
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -35,6 +35,9 @@ import {
   Edit as EditIcon,
   Print as PrintIcon,
   NoteAdd as NoteAddIcon,
+  ContentCopy as ContentCopyIcon,
+  ChecklistRtl as ChecklistIcon,
+  ClearAll as ClearAllIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
@@ -67,9 +70,9 @@ export default function ScheduleV2() {
   const [selectedDay, setSelectedDay] = useState(new Date());
   const [viewMode, setViewMode] = useState<ViewMode>(isMobile ? 'day' : 'week');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(isManager);
 
-  // Edit Mode toggle
-  const [isEditMode, setIsEditMode] = useState(false);
+  // Edit Mode has been removed; managers are always in edit mode natively.
 
   // Modal state
   const [createModalOpen, setCreateModalOpen] = useState(false);
@@ -78,7 +81,7 @@ export default function ScheduleV2() {
   const [timeOffModalOpen, setTimeOffModalOpen] = useState(false);
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
-  const [timeOffToDelete, setTimeOffToDelete] = useState<string | null>(null);
+  const [selectedTimeOffId, setSelectedTimeOffId] = useState<string | null>(null);
 
   // Exception Log Dialog State
   const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
@@ -106,6 +109,30 @@ export default function ScheduleV2() {
   const [editForm, setEditForm] = useState({ startTime: null as Date | null, endTime: null as Date | null, notes: '' });
   const [timeOffForm, setTimeOffForm] = useState({ type: 'vacation', startDate: new Date() as Date | null, endDate: new Date() as Date | null, reason: '' });
   const [tradeForm, setTradeForm] = useState({ shiftId: '', targetUserId: '', reason: '' });
+
+  // Bulk Edit / Selection State
+  const [isSelectionMode, setIsSelectionMode] = useState(false);
+  const [selectedShifts, setSelectedShifts] = useState<Set<string>>(new Set());
+  const [selectedLogs, setSelectedLogs] = useState<Set<string>>(new Set());
+
+  // Toggle Selection handlers
+  const toggleShiftSelection = useCallback((id: string) => {
+    setSelectedShifts(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleLogSelection = useCallback((id: string) => {
+    setSelectedLogs(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   // Real-time updates â€” refresh calendar data on any schedule/request event
   useRealtime({
@@ -277,6 +304,105 @@ export default function ScheduleV2() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const bulkDeleteMutation = useMutation({
+    mutationFn: async () => {
+      const promises: Promise<Response>[] = [];
+      selectedShifts.forEach(id => {
+        promises.push(apiRequest('DELETE', `/api/shifts/${id}`));
+      });
+      selectedLogs.forEach(id => {
+        promises.push(apiRequest('DELETE', `/api/adjustment-logs/${id}`));
+      });
+      
+      const results = await Promise.all(promises);
+      const failed = results.filter(r => !r.ok);
+      if (failed.length > 0) {
+        throw new Error(`Failed to delete ${failed.length} items`);
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
+      queryClient.invalidateQueries({ queryKey: [isManager ? "adjustment-logs-branch" : "adjustment-logs-mine"] });
+      toast.success(`Deleted ${selectedShifts.size + selectedLogs.size} items successfully`);
+      setSelectedShifts(new Set());
+      setSelectedLogs(new Set());
+      setIsSelectionMode(false);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const copyWeekMutation = useMutation({
+    mutationFn: async () => {
+      if (!currentUser?.branchId) throw new Error("Branch ID missing");
+      const lastWeekStart = subWeeks(weekStart, 1);
+      const lastWeekEnd = endOfWeek(lastWeekStart, { weekStartsOn: 1 });
+      
+      const lastWeekShifts = shifts.filter(s => {
+        const d = new Date(s.startTime);
+        return d >= lastWeekStart && d <= lastWeekEnd && s.user?.isActive !== false;
+      });
+
+      const thisWeekStart = weekStart;
+      const thisWeekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+      const currentWeekShifts = shifts.filter(s => {
+        const d = new Date(s.startTime);
+        return d >= thisWeekStart && d <= thisWeekEnd;
+      });
+
+      const shiftsToCopy = lastWeekShifts.filter(s => {
+        const newStart = addWeeks(new Date(s.startTime), 1);
+        const newEnd = addWeeks(new Date(s.endTime), 1);
+        const isOverlapping = currentWeekShifts.some(cws => 
+          cws.userId === s.userId && 
+          areIntervalsOverlapping(
+            { start: newStart, end: newEnd },
+            { start: new Date(cws.startTime), end: new Date(cws.endTime) }
+          )
+        );
+        return !isOverlapping;
+      });
+
+      if (shiftsToCopy.length === 0) {
+        if (lastWeekShifts.length > 0) {
+          throw new Error("All shifts from the previous week already exist or overlap with the current week.");
+        }
+        throw new Error("No shifts found in the previous week to copy.");
+      }
+
+      const newShiftsPromises = shiftsToCopy.map(s => {
+        return apiRequest('POST', '/api/shifts', {
+          userId: s.userId,
+          branchId: s.branchId,
+          position: s.position,
+          startTime: addWeeks(new Date(s.startTime), 1).toISOString(),
+          endTime: addWeeks(new Date(s.endTime), 1).toISOString(),
+          notes: s.notes
+        });
+      });
+
+      const chunkSize = 5;
+      let failed = 0;
+      for (let i = 0; i < newShiftsPromises.length; i += chunkSize) {
+        const chunk = newShiftsPromises.slice(i, i + chunkSize);
+        const results = await Promise.all(chunk);
+        failed += results.filter(r => !r.ok).length;
+      }
+
+      const skippedCount = lastWeekShifts.length - shiftsToCopy.length;
+      if (failed > 0) {
+        throw new Error(`Copied ${shiftsToCopy.length - failed} shifts. Failed to copy ${failed} shifts. Skipped ${skippedCount} overlaps.`);
+      }
+      return { copiedCount: shiftsToCopy.length, skippedCount };
+    },
+    onSuccess: ({ copiedCount, skippedCount }) => {
+      queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
+      let msg = `Successfully copied ${copiedCount} shifts.`;
+      if (skippedCount > 0) msg += ` Skipped ${skippedCount} overlapping shifts.`;
+      toast.success(msg);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const createTimeOffMutation = useMutation({
     mutationFn: async (data: typeof timeOffForm) => {
       const payload = {
@@ -308,7 +434,7 @@ export default function ScheduleV2() {
       queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
       toast.success('Time-off request deleted');
-      setTimeOffToDelete(null);
+      setSelectedTimeOffId(null);
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -333,6 +459,41 @@ export default function ScheduleV2() {
       } else {
         toast.info('Time-off rejected â€” employee notified');
       }
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const togglePaidMutation = useMutation({
+    mutationFn: async ({ id, isPaid }: { id: string; isPaid: boolean }) => {
+      const res = await apiRequest('PUT', `/api/time-off-requests/${id}/toggle-paid`, { isPaid });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to toggle paid status'); }
+      return res.json();
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
+      toast.success(variables.isPaid ? 'Marked as Paid' : 'Marked as Unpaid');
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const addHolidayPayMutation = useMutation({
+    mutationFn: async ({ userId, branchId, date }: { userId: string, branchId: string, date: Date }) => {
+      const payload = {
+        startDate: format(date, 'yyyy-MM-dd'),
+        endDate: format(date, 'yyyy-MM-dd'),
+        type: 'holiday_pay',
+        value: '1',
+        remarks: 'Holiday Pay',
+      };
+      // Send as POST to /api/adjustment-logs/request (Wait, managers usually create verified exceptions differently)
+      // Actually, let's use the standard POST /api/adjustment-logs
+      const res = await apiRequest('POST', '/api/adjustment-logs', { ...payload, employeeId: userId, branchId });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to apply holiday pay'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['adjustment-logs', 'branch'] });
+      toast.success('Holiday Pay added');
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -398,7 +559,7 @@ export default function ScheduleV2() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/adjustment-logs/branch"] });
+      queryClient.invalidateQueries({ queryKey: [isManager ? "adjustment-logs-branch" : "adjustment-logs-mine"] });
       toast.success("Exception logged successfully");
       setIsAdjustmentDialogOpen(false);
       setAdjValue("");
@@ -548,44 +709,37 @@ export default function ScheduleV2() {
 
         {/* Right side: View Toggles & Actions */}
         <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-          <Tooltip title={`${pendingCount} pending requests`}>
-            <IconButton onClick={() => setDrawerOpen(true)} sx={{ position: 'relative', mr: 1, bgcolor: alpha(theme.palette.warning.main, 0.1) }}>
-              <Badge badgeContent={pendingCount} color="warning" max={99}>
-                <InboxIcon sx={{ color: 'warning.main', fontSize: 20 }} />
-              </Badge>
-            </IconButton>
-          </Tooltip>
+          {isManager && (
+            <Tooltip title={`${pendingCount} pending requests`}>
+              <IconButton onClick={() => isMobile ? setDrawerOpen(true) : setIsSidebarOpen(!isSidebarOpen)} sx={{ position: 'relative', mr: 1, bgcolor: alpha(theme.palette.warning.main, 0.1) }}>
+                <Badge badgeContent={pendingCount} color="warning" max={99}>
+                  <InboxIcon sx={{ color: 'warning.main', fontSize: 20 }} />
+                </Badge>
+              </IconButton>
+            </Tooltip>
+          )}
 
           {isManager && (
             <Tooltip title="Log Late, OT, or Exception">
               <Button
-                size="small" variant="outlined" color="warning" startIcon={<NoteAddIcon />}
+                size="small" variant="text" startIcon={<NoteAddIcon />}
                 onClick={() => setIsAdjustmentDialogOpen(true)}
-                sx={{ textTransform: 'none', fontWeight: 700, height: 32, mr: 1, display: { xs: 'none', sm: 'flex' } }}
+                sx={{ 
+                  textTransform: 'none', fontWeight: 700, height: 32, mr: 0.5, 
+                  display: { xs: 'none', sm: 'flex' },
+                  color: isDark ? '#F59E0B' : '#92400E',
+                  bgcolor: alpha('#F59E0B', 0.08),
+                  borderRadius: 2,
+                  '&:hover': { bgcolor: alpha('#F59E0B', 0.15) },
+                }}
               >
                 Log Exception
               </Button>
             </Tooltip>
           )}
 
-          {isManager && (
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={isEditMode}
-                  onChange={(e) => setIsEditMode(e.target.checked)}
-                  color="warning"
-                  size="small"
-                />
-              }
-              label={
-                <Typography variant="body2" fontWeight={800} sx={{ color: isEditMode ? 'warning.main' : 'text.secondary', ml: -0.5 }}>
-                  Edit Mode
-                </Typography>
-              }
-              sx={{ mr: 1, ml: 0.5, margin: 0 }}
-            />
-          )}
+
+
           <ButtonGroup size="small" variant="outlined" sx={{ height: 32 }}>
             <Button
               variant={viewMode === 'week' ? 'contained' : 'outlined'}
@@ -605,38 +759,107 @@ export default function ScheduleV2() {
             </Button>
           </ButtonGroup>
 
-          <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' }, mx: 0.5 }} />
+          {isManager && (
+            <>
+              <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' }, mx: 0.5 }} />
 
-          <Tooltip title="Request Time Off">
-            <Button
-              size="small" variant="outlined" startIcon={<TimeOffIcon />}
-              onClick={() => setTimeOffModalOpen(true)}
-              sx={{ textTransform: 'none', fontWeight: 700, display: { xs: 'none', sm: 'flex' }, height: 32 }}
-            >
-              Time Off
-            </Button>
-          </Tooltip>
+              <Tooltip title="Request Time Off">
+                <Button
+                  size="small" variant="text" startIcon={<TimeOffIcon />}
+                  onClick={() => setTimeOffModalOpen(true)}
+                  sx={{ 
+                    textTransform: 'none', fontWeight: 700, 
+                    display: { xs: 'none', sm: 'flex' }, height: 32,
+                    color: isDark ? '#FBBF24' : '#92400E',
+                    bgcolor: alpha('#F59E0B', 0.06),
+                    borderRadius: 2,
+                    '&:hover': { bgcolor: alpha('#F59E0B', 0.12) },
+                  }}
+                >
+                  Time Off
+                </Button>
+              </Tooltip>
 
-          <Tooltip title="Trade a Shift">
-            <Button
-              size="small" variant="outlined" startIcon={<SwapIcon />}
-              onClick={() => {
-                const myFutureShifts = shifts.filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date());
-                if (myFutureShifts.length === 0) { toast.info('No future shifts to trade'); return; }
-                setTradeModalOpen(true);
-              }}
-              sx={{ textTransform: 'none', fontWeight: 700, display: { xs: 'none', sm: 'flex' }, height: 32 }}
-            >
-              Trade
-            </Button>
-          </Tooltip>
+              <Tooltip title="Trade a Shift">
+                <Button
+                  size="small" variant="text" startIcon={<SwapIcon />}
+                  onClick={() => {
+                    const myFutureShifts = shifts.filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date());
+                    if (myFutureShifts.length === 0) { toast.info('No future shifts to trade'); return; }
+                    setTradeModalOpen(true);
+                  }}
+                  sx={{ 
+                    textTransform: 'none', fontWeight: 700, 
+                    display: { xs: 'none', sm: 'flex' }, height: 32,
+                    color: isDark ? '#A78BFA' : '#5B21B6',
+                    bgcolor: alpha('#8B5CF6', 0.06),
+                    borderRadius: 2,
+                    '&:hover': { bgcolor: alpha('#8B5CF6', 0.12) },
+                  }}
+                >
+                  Trade
+                </Button>
+              </Tooltip>
+
+              <Tooltip title="Toggle Bulk Edit Mode">
+                <Button
+                  size="small" variant={isSelectionMode ? "contained" : "outlined"} startIcon={<ChecklistIcon />}
+                  onClick={() => {
+                    if (isSelectionMode) {
+                      setSelectedShifts(new Set());
+                      setSelectedLogs(new Set());
+                    }
+                    setIsSelectionMode(!isSelectionMode);
+                  }}
+                  color="primary"
+                  sx={{ 
+                    textTransform: 'none', fontWeight: 800, 
+                    display: { xs: 'none', sm: 'flex' }, height: 32,
+                    borderWidth: isSelectionMode ? undefined : 2,
+                    '&:hover': { borderWidth: isSelectionMode ? undefined : 2 },
+                  }}
+                >
+                  {isSelectionMode ? 'Editing...' : 'Bulk Edit'}
+                </Button>
+              </Tooltip>
+            </>
+          )}
+
+          {isManager && (
+            <Tooltip title="Copy Previous Week's Shifts">
+              <Button
+                size="small" variant="text" startIcon={<ContentCopyIcon />}
+                disabled={copyWeekMutation.isPending}
+                onClick={() => {
+                  if (confirm("Copy all shifts from the previous week into this week?")) {
+                    copyWeekMutation.mutate();
+                  }
+                }}
+                sx={{ 
+                  textTransform: 'none', fontWeight: 700, height: 32, 
+                  display: { xs: 'none', md: 'flex' },
+                  color: isDark ? '#14B8A6' : '#0F766E',
+                  bgcolor: alpha('#14B8A6', 0.06),
+                  borderRadius: 2,
+                  '&:hover': { bgcolor: alpha('#14B8A6', 0.12) },
+                }}
+              >
+                Copy Week
+              </Button>
+            </Tooltip>
+          )}
 
           {isManager && (
             <Tooltip title="Create Shift">
               <Button
                 size="small" variant="contained" startIcon={<AddIcon />}
                 onClick={() => { setNewShift({ employeeId: '', startTime: null, endTime: null, notes: '' }); setCreateModalOpen(true); }}
-                sx={{ textTransform: 'none', fontWeight: 800, height: 32 }}
+                sx={{ 
+                  textTransform: 'none', fontWeight: 800, height: 32, 
+                  borderRadius: 2,
+                  boxShadow: '0 2px 8px rgba(92,64,51,0.15)',
+                  '&:hover': { boxShadow: '0 4px 12px rgba(92,64,51,0.2)' },
+                }}
               >
                 {isMobile ? '' : 'Shift'}
               </Button>
@@ -645,85 +868,160 @@ export default function ScheduleV2() {
         </Box>
       </Box>
 
-      {/* â”€â”€â”€ ROLE COLOR LEGEND â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      {isManager && (
-        <Box sx={{ px: { xs: 2, sm: 3 }, py: 0.75, display: 'flex', gap: 0.5, flexWrap: 'wrap', borderBottom: '1px solid', borderColor: isDark ? '#3D3228' : '#E8E0D4' }}>
-          {getUniqueRoleColors(employees).map(rc => (
+      {/* \u2500\u2500\u2500 ROLE COLORS & ICON LEGEND \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */}
+      <Box sx={{ 
+        px: { xs: 1.5, sm: 2 }, py: 0.5, 
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
+        flexWrap: 'wrap', gap: 0.5,
+        borderBottom: '1px solid', borderColor: isDark ? '#3D3228' : '#E8E0D4',
+        bgcolor: isDark ? alpha('#342A1E', 0.5) : alpha('#F5F0E8', 0.5),
+      }}>
+        <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', alignItems: 'center' }}>
+          {isManager && getUniqueRoleColors(employees).map(rc => (
             <Chip
               key={rc.label} size="small" label={rc.label}
-              sx={{ height: 22, fontSize: '0.62rem', fontWeight: 700, bgcolor: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
+              sx={{ height: 20, fontSize: '0.58rem', fontWeight: 700, bgcolor: rc.bg, color: rc.text, border: `1px solid ${rc.border}` }}
             />
           ))}
         </Box>
-      )}
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontWeight: 600, color: 'text.secondary', fontSize: '0.65rem' }}>
+            <Box component="span" sx={{ fontSize: '0.75rem' }}>{'\ud83c\udf34'}</Box> Time Off
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontWeight: 600, color: 'text.secondary', fontSize: '0.65rem' }}>
+            <Box component="span" sx={{ fontSize: '0.75rem' }}>{'\u23f0'}</Box> Exception
+          </Typography>
+          <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontWeight: 600, color: 'text.secondary', fontSize: '0.65rem' }}>
+            <Box component="span" sx={{ fontSize: '0.75rem' }}>{'\ud83d\udd04'}</Box> Trade
+          </Typography>
+        </Box>
+      </Box>
 
-      {/* â”€â”€â”€ MAIN CONTENT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
-      <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1.5, sm: 3 } }}>
-        {viewMode === 'week' ? (
-          isManager ? (
-            <WeeklyGrid
-              employees={employees}
-              shifts={shifts}
-              weekStart={weekStart}
-              holidays={holidays}
-              isManager={isManager && isEditMode}
+      {/* ——— MAIN CONTENT ─────────────────────────────────────── */}
+      <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: { xs: 'column', lg: 'row' } }}>
+
+        {/* LEFT: Grid Area */}
+        <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1, sm: 2 }, minHeight: 400 }}>
+          {viewMode === 'week' ? (
+            isManager ? (
+              <WeeklyGrid
+                employees={employees}
+                shifts={shifts}
+                weekStart={weekStart}
+                holidays={holidays}
+                isManager={isManager}
+                timeOffRequests={timeOffRequests}
+                shiftTrades={shiftTrades}
+                adjustmentLogs={adjustmentLogs}
+                currentUserId={currentUser?.id || ''}
+                isSelectionMode={isSelectionMode}
+                selectedShifts={selectedShifts}
+                selectedLogs={selectedLogs}
+                onToggleShiftSelection={toggleShiftSelection}
+                onToggleLogSelection={toggleLogSelection}
+                onCreateShift={handleCreateShift}
+                onEditShift={!isSelectionMode ? handleEditShift : () => {}}
+                onOpenRequests={() => setDrawerOpen(true)}
+                onDeleteTimeOff={(id) => setSelectedTimeOffId(id)}
+                onAddHolidayPay={(userId, date) => addHolidayPayMutation.mutate({ userId, branchId: currentUser?.branchId!, date })}
+              />
+            ) : (
+              /* Employee week view: show their shifts only, as vertical cards */
+              <WeeklyGrid
+                employees={employees.filter(e => e.id === currentUser?.id)}
+                shifts={shifts.filter(s => s.userId === currentUser?.id)}
+                weekStart={weekStart}
+                holidays={holidays}
+                isManager={false}
+                timeOffRequests={timeOffRequests.filter(r => r.userId === currentUser?.id)}
+                shiftTrades={shiftTrades.filter(t => t.requesterId === currentUser?.id || t.fromUserId === currentUser?.id)}
+                adjustmentLogs={adjustmentLogs}
+                currentUserId={currentUser?.id || ''}
+                onCreateShift={() => {}}
+                onEditShift={() => {}}
+                onOpenRequests={() => setDrawerOpen(true)}
+              />
+            )
+          ) : (
+            isManager ? (
+              <DayView
+                employees={employees}
+                shifts={shifts}
+                date={selectedDay}
+                holidays={holidays}
+                isManager={isManager}
+                currentUserId={currentUser?.id || ''}
+                timeOffRequests={timeOffRequests}
+                shiftTrades={shiftTrades}
+                adjustmentLogs={adjustmentLogs}
+                isSelectionMode={isSelectionMode}
+                selectedShifts={selectedShifts}
+                selectedLogs={selectedLogs}
+                onToggleShiftSelection={toggleShiftSelection}
+                onToggleLogSelection={toggleLogSelection}
+                onDateChange={setSelectedDay}
+                onCreateShift={handleCreateShift}
+                onEditShift={!isSelectionMode ? handleEditShift : () => {}}
+                onDeleteTimeOff={(id) => setSelectedTimeOffId(id)}
+                onAddHolidayPay={(userId, date) => addHolidayPayMutation.mutate({ userId, branchId: currentUser?.branchId!, date })}
+              />
+            ) : (
+              <MyDayView
+                shifts={shifts}
+                date={selectedDay}
+                currentUserId={currentUser?.id || ''}
+                timeOffRequests={timeOffRequests.filter(r => r.userId === currentUser?.id)}
+                shiftTrades={shiftTrades.filter(t => t.requesterId === currentUser?.id || t.fromUserId === currentUser?.id)}
+                onDateChange={setSelectedDay}
+              />
+            )
+          )}
+        </Box>
+
+        {/* RIGHT: PENDING ACTIVITY PANEL (DESKTOP) */}
+        {!isMobile && (
+          <Box sx={{ 
+            width: isSidebarOpen ? 340 : 0, 
+            opacity: isSidebarOpen ? 1 : 0,
+            visibility: isSidebarOpen ? 'visible' : 'hidden',
+            flexShrink: 0, 
+            display: { xs: 'none', lg: 'block' },
+            borderLeft: isSidebarOpen ? '1px solid' : 'none', 
+            borderColor: isDark ? '#3D3228' : '#E8E0D4',
+            bgcolor: isDark ? '#1C1410' : '#FBF8F4',
+            overflowY: 'auto', 
+            p: isSidebarOpen ? 2.5 : 0,
+            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+          }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 2 }}>
+              <Typography variant="subtitle1" fontWeight={800} sx={{ color: isDark ? '#F5EDE4' : '#3C2415' }}>
+                Requests & Trades
+              </Typography>
+              <IconButton onClick={() => setIsSidebarOpen(false)} size="small" sx={{ mr: -1 }}>
+                <CloseIcon fontSize="small" />
+              </IconButton>
+            </Box>
+            <RequestsPanel
               timeOffRequests={timeOffRequests}
               shiftTrades={shiftTrades}
-              adjustmentLogs={adjustmentLogs}
-              currentUserId={currentUser?.id || ''}
-              onCreateShift={handleCreateShift}
-              onEditShift={handleEditShift}
-              onOpenRequests={() => setDrawerOpen(true)}
-              onDeleteTimeOff={(id) => setTimeOffToDelete(id)}
-            />
-          ) : (
-            /* Employee week view: show their shifts only, as vertical cards */
-            <WeeklyGrid
-              employees={employees.filter(e => e.id === currentUser?.id)}
-              shifts={shifts.filter(s => s.userId === currentUser?.id)}
-              weekStart={weekStart}
-              holidays={holidays}
-              isManager={false}
-              timeOffRequests={timeOffRequests.filter(r => r.userId === currentUser?.id)}
-              shiftTrades={shiftTrades.filter(t => t.requesterId === currentUser?.id || t.fromUserId === currentUser?.id)}
-              adjustmentLogs={adjustmentLogs}
-              currentUserId={currentUser?.id || ''}
-              onCreateShift={() => {}}
-              onEditShift={() => {}}
-              onOpenRequests={() => setDrawerOpen(true)}
-            />
-          )
-        ) : (
-          isManager ? (
-            <DayView
               employees={employees}
-              shifts={shifts}
-              date={selectedDay}
-              holidays={holidays}
-              isManager={isManager && isEditMode}
+              isManager={isManager}
               currentUserId={currentUser?.id || ''}
-              timeOffRequests={timeOffRequests}
-              shiftTrades={shiftTrades}
               adjustmentLogs={adjustmentLogs}
-              onDateChange={setSelectedDay}
-              onCreateShift={handleCreateShift}
-              onEditShift={handleEditShift}
-              onDeleteTimeOff={(id) => setTimeOffToDelete(id)}
+              onApproveTimeOff={(id, useSil) => approveTimeOffMutation.mutate({ id, status: 'approved', useSil })}
+              onRejectTimeOff={(id, reason) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason })}
+              onApproveTrade={(id) => approveTradeMutation.mutate({ id, status: 'approved' })}
+              onRejectTrade={(id) => approveTradeMutation.mutate({ id, status: 'rejected' })}
+              onAcceptTrade={(id) => respondTradeMutation.mutate({ id, status: 'accepted' })}
+              onDeclineTrade={(id) => respondTradeMutation.mutate({ id, status: 'rejected' })}
+              onCancelTrade={(id) => deleteTradeMutation.mutate(id)}
+              onTakeOpenTrade={(id) => takeOpenTradeMutation.mutate(id)}
             />
-          ) : (
-            <MyDayView
-              shifts={shifts}
-              date={selectedDay}
-              currentUserId={currentUser?.id || ''}
-              timeOffRequests={timeOffRequests.filter(r => r.userId === currentUser?.id)}
-              shiftTrades={shiftTrades.filter(t => t.requesterId === currentUser?.id || t.fromUserId === currentUser?.id)}
-              onDateChange={setSelectedDay}
-            />
-          )
+          </Box>
         )}
       </Box>
 
-      {/* â”€â”€â”€ MOBILE FAB: Quick Actions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ——— MOBILE FAB: Quick Actions ——————————————————————————————————————————— */}
       {isMobile && (
         <Box sx={{
           position: 'fixed', bottom: 80, right: 16, display: 'flex', flexDirection: 'column', gap: 1, zIndex: 1200,
@@ -761,11 +1059,12 @@ export default function ScheduleV2() {
         </Box>
       )}
 
-      {/* â”€â”€â”€ REQUESTS DRAWER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ——— REQUESTS DRAWER (MOBILE) ────────────────────────────── */}
       <Drawer
         anchor="right"
         open={drawerOpen}
         onClose={() => setDrawerOpen(false)}
+        sx={{ display: { lg: 'none' } }}
         PaperProps={{
           sx: {
             width: { xs: '100%', sm: 420 },
@@ -786,6 +1085,7 @@ export default function ScheduleV2() {
           employees={employees}
           isManager={isManager}
           currentUserId={currentUser?.id || ''}
+          adjustmentLogs={adjustmentLogs}
           onApproveTimeOff={(id, useSil) => approveTimeOffMutation.mutate({ id, status: 'approved', useSil })}
           onRejectTimeOff={(id, reason) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason })}
           onApproveTrade={(id) => approveTradeMutation.mutate({ id, status: 'approved' })}
@@ -807,7 +1107,7 @@ export default function ScheduleV2() {
               <Select value={newShift.employeeId} label="Employee" onChange={e => setNewShift(p => ({ ...p, employeeId: e.target.value }))}>
                 {employees.map(emp => (
                   <MenuItem key={emp.id} value={emp.id}>
-                    {emp.firstName} {emp.lastName} {emp.position && `Â· ${emp.position}`}
+                    {emp.firstName} {emp.lastName} {emp.position && ` \u00B7 ${emp.position}`}
                   </MenuItem>
                 ))}
               </Select>
@@ -881,24 +1181,50 @@ export default function ScheduleV2() {
                   <Typography fontWeight={600}>
                     {selectedShift.user ? `${selectedShift.user.firstName} ${selectedShift.user.lastName}` : (() => { const e = employees.find(x => x.id === selectedShift.userId); return e ? `${e.firstName} ${e.lastName}` : 'Unknown'; })()}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary">{selectedShift.position || 'Staff'}</Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {selectedShift.position || 'Staff'} · {editForm.startTime ? format(editForm.startTime, 'EEEE, MMM d, yyyy') : ''}
+                  </Typography>
                 </Box>
               </Box>
-              <LocalizationProvider dateAdapter={AdapterDateFns}>
-                <DateTimePicker
+              <Box sx={{ display: 'flex', gap: 2 }}>
+                <TextField
                   label="Start Time"
-                  value={editForm.startTime}
-                  onChange={(val) => setEditForm(p => ({ ...p, startTime: val }))}
-                  slotProps={{ textField: { fullWidth: true } }}
+                  type="time"
+                  fullWidth
+                  value={editForm.startTime ? format(editForm.startTime, 'HH:mm') : ''}
+                  onChange={(e) => {
+                    if (editForm.startTime && e.target.value) {
+                      const [h, m] = e.target.value.split(':').map(Number);
+                      const newDate = new Date(editForm.startTime);
+                      newDate.setHours(h, m, 0, 0);
+                      setEditForm(p => ({ ...p, startTime: newDate }));
+                    }
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                  inputProps={{ step: 900 }}
                 />
-                <DateTimePicker
+                <TextField
                   label="End Time"
-                  value={editForm.endTime}
-                  onChange={(val) => setEditForm(p => ({ ...p, endTime: val }))}
-                  slotProps={{ textField: { fullWidth: true } }}
-                  minDateTime={editForm.startTime || undefined}
+                  type="time"
+                  fullWidth
+                  value={editForm.endTime ? format(editForm.endTime, 'HH:mm') : ''}
+                  onChange={(e) => {
+                    if (editForm.endTime && e.target.value) {
+                      const [h, m] = e.target.value.split(':').map(Number);
+                      const newDate = new Date(editForm.endTime);
+                      newDate.setHours(h, m, 0, 0);
+                      setEditForm(p => ({ ...p, endTime: newDate }));
+                    }
+                  }}
+                  InputLabelProps={{ shrink: true }}
+                  inputProps={{ step: 900 }}
                 />
-              </LocalizationProvider>
+              </Box>
+              {editForm.startTime && editForm.endTime && (
+                <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
+                  Duration: {differenceInHours(editForm.endTime, editForm.startTime)}h
+                </Typography>
+              )}
               <TextField
                 label="Notes" multiline rows={2}
                 value={editForm.notes}
@@ -952,17 +1278,63 @@ export default function ScheduleV2() {
         </DialogActions>
       </Dialog>
 
-      <Dialog open={!!timeOffToDelete} onClose={() => setTimeOffToDelete(null)} maxWidth="xs" fullWidth>
-        <DialogTitle>Delete Time-Off Request?</DialogTitle>
-        <DialogContent><Typography>This action cannot be undone and will restore the original schedule block.</Typography></DialogContent>
-        <DialogActions>
-          <Button onClick={() => setTimeOffToDelete(null)}>Cancel</Button>
-          <Button variant="contained" color="error" disabled={deleteTimeOffMutation.isPending}
-            onClick={() => timeOffToDelete && deleteTimeOffMutation.mutate(timeOffToDelete)}>
-            {deleteTimeOffMutation.isPending ? 'Deleting...' : 'Delete Request'}
-          </Button>
-        </DialogActions>
-      </Dialog>
+      {(() => {
+        const selectedReq = timeOffRequests.find(r => r.id === selectedTimeOffId);
+        if (!selectedReq) return null;
+        return (
+          <Dialog open={!!selectedTimeOffId} onClose={() => setSelectedTimeOffId(null)} maxWidth="xs" fullWidth>
+            <DialogTitle>Manage Time-Off Request</DialogTitle>
+            <DialogContent>
+              <Typography variant="body1" fontWeight={700} sx={{ mb: 1 }}>
+                {selectedReq.type.toUpperCase()} Leave ({selectedReq.status.toUpperCase()})
+              </Typography>
+              <Typography variant="body2" sx={{ mb: 3 }}>
+                {format(new Date(selectedReq.startDate), 'MMM d, yyyy')} - {format(new Date(selectedReq.endDate), 'MMM d, yyyy')}
+                {selectedReq.reason && <><br />Reason: {selectedReq.reason}</>}
+              </Typography>
+
+              {selectedReq.status === 'approved' && isManager && (
+                <Box sx={{ mb: 3, p: 2, borderRadius: 2, bgcolor: isDark ? '#342A1E' : '#F5F5F5' }}>
+                  <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1 }}>Payment Status</Typography>
+                  <ButtonGroup fullWidth size="small">
+                    <Button 
+                      variant={selectedReq.isPaid ? 'contained' : 'outlined'} 
+                      color="success"
+                      disabled={togglePaidMutation.isPending}
+                      onClick={() => togglePaidMutation.mutate({ id: selectedReq.id, isPaid: true })}
+                    >
+                      Paid Leave (₱)
+                    </Button>
+                    <Button 
+                      variant={!selectedReq.isPaid ? 'contained' : 'outlined'} 
+                      color="inherit"
+                      disabled={togglePaidMutation.isPending}
+                      onClick={() => togglePaidMutation.mutate({ id: selectedReq.id, isPaid: false })}
+                    >
+                      Unpaid
+                    </Button>
+                  </ButtonGroup>
+                </Box>
+              )}
+
+              <Divider sx={{ mb: 2 }} />
+              <Typography variant="body2" color="error" fontWeight={600} sx={{ mb: 1 }}>
+                Danger Zone
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                Deleting this request will remove it permanently and restore any deducted leave credits.
+              </Typography>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setSelectedTimeOffId(null)}>Close</Button>
+              <Button variant="contained" color="error" disabled={deleteTimeOffMutation.isPending}
+                onClick={() => selectedTimeOffId && deleteTimeOffMutation.mutate(selectedTimeOffId)}>
+                {deleteTimeOffMutation.isPending ? 'Deleting...' : 'Delete Request'}
+              </Button>
+            </DialogActions>
+          </Dialog>
+        );
+      })()}
 
       {/* â”€â”€â”€ TIME-OFF MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Dialog open={timeOffModalOpen} onClose={() => setTimeOffModalOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
@@ -1036,7 +1408,7 @@ export default function ScheduleV2() {
               <Select value={tradeForm.targetUserId} label="Trade With" onChange={e => setTradeForm(p => ({ ...p, targetUserId: e.target.value }))}>
                 <MenuItem value=""><em>Open to anyone</em></MenuItem>
                 {employees.filter(e => e.id !== currentUser?.id).map(e => (
-                  <MenuItem key={e.id} value={e.id}>{e.firstName} {e.lastName} {e.position && `Â· ${e.position}`}</MenuItem>
+                  <MenuItem key={e.id} value={e.id}>{e.firstName} {e.lastName} {e.position && ` \u00B7 ${e.position}`}</MenuItem>
                 ))}
               </Select>
             </FormControl>
@@ -1176,6 +1548,62 @@ export default function ScheduleV2() {
           </Button>
         </DialogActions>
       </Dialog>
+    
+      {/* FLOATING ACTION BAR FOR SELECTION MODE */}
+      {isSelectionMode && (selectedShifts.size > 0 || selectedLogs.size > 0) && (
+        <Paper
+          elevation={8}
+          sx={{
+            position: 'fixed',
+            bottom: { xs: 16, sm: 32 },
+            left: '50%',
+            transform: 'translateX(-50%)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 2,
+            py: 1.5,
+            px: 3,
+            borderRadius: 8,
+            bgcolor: isDark ? '#1C1410' : '#FFF',
+            color: isDark ? '#FFF' : '#000',
+            border: '1px solid',
+            borderColor: isDark ? '#3D3228' : '#E8E0D4',
+            zIndex: 1300,
+          }}
+        >
+          <Typography variant="body2" fontWeight={700}>
+            {selectedShifts.size + selectedLogs.size} item(s) selected
+          </Typography>
+          <Divider orientation="vertical" flexItem sx={{ borderColor: 'divider', mx: 1 }} />
+          <Button
+            size="small"
+            startIcon={<ClearAllIcon />}
+            onClick={() => {
+              setSelectedShifts(new Set());
+              setSelectedLogs(new Set());
+              setIsSelectionMode(false);
+            }}
+            sx={{ textTransform: 'none', color: 'text.secondary', fontWeight: 600 }}
+          >
+            Cancel
+          </Button>
+          <Button
+            size="small"
+            variant="contained"
+            color="error"
+            startIcon={<DeleteIcon />}
+            disabled={bulkDeleteMutation.isPending}
+            onClick={() => {
+              if (confirm(`Are you sure you want to delete ${selectedShifts.size + selectedLogs.size} item(s)?`)) {
+                bulkDeleteMutation.mutate();
+              }
+            }}
+            sx={{ textTransform: 'none', fontWeight: 800, borderRadius: 2 }}
+          >
+            {bulkDeleteMutation.isPending ? "Deleting..." : "Delete Selected"}
+          </Button>
+        </Paper>
+      )}
     </Box>
   );
 }
