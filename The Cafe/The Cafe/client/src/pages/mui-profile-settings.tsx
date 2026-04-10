@@ -69,7 +69,7 @@ export default function MuiProfileSettings() {
   const [firstName, setFirstName] = useState(user?.firstName ?? "");
   const [lastName, setLastName] = useState(user?.lastName ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
-  const [currentPassword, setCurrentPassword] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("password123");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -521,7 +521,16 @@ export default function MuiProfileSettings() {
                         label="New Password"
                         value={newPassword}
                         onChange={(e) => setNewPassword(e.target.value)}
-                        InputProps={{ sx: { borderRadius: 2 } }}
+                        InputProps={{
+                            sx: { borderRadius: 2 },
+                            endAdornment: (
+                                <InputAdornment position="end">
+                                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: "action.active" }}>
+                                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                                    </IconButton>
+                                </InputAdornment>
+                            )
+                        }}
                       />
                     </Grid>
                     <Grid size={{ xs: 12, sm: 6 }}>
@@ -531,7 +540,16 @@ export default function MuiProfileSettings() {
                         label="Confirm New Password"
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
-                        InputProps={{ sx: { borderRadius: 2 } }}
+                        InputProps={{
+                            sx: { borderRadius: 2 },
+                            endAdornment: (
+                                <InputAdornment position="end">
+                                    <IconButton onClick={() => setShowPassword(!showPassword)} edge="end" sx={{ color: "action.active" }}>
+                                        {showPassword ? <VisibilityOff /> : <Visibility />}
+                                    </IconButton>
+                                </InputAdornment>
+                            )
+                        }}
                       />
                     </Grid>
                     

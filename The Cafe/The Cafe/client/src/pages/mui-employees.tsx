@@ -66,6 +66,7 @@ import {
   Edit as EditIcon,
   Delete as DeleteIcon,
   Visibility as ViewIcon,
+  VisibilityOff as VisibilityOffIcon,
   Receipt as ReceiptIcon,
   People as UsersIcon,
   AccessTime as ClockIcon,
@@ -261,6 +262,7 @@ export default function MuiEmployees() {
   const [deductionsDialogOpen, setDeductionsDialogOpen] = useState(false);
   const [shiftModalOpen, setShiftModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
   const [formData, setFormData] = useState<EmployeeFormData>(initialFormData);
   const [deductionsFormData, setDeductionsFormData] = useState({
@@ -590,6 +592,7 @@ export default function MuiEmployees() {
       });
       const action = isActive ? "activated" : "deactivated";
       toast({ title: "Success", description: `${ids.length} employees ${action} successfully` });
+    },
   });
 
   // Handlers
@@ -604,7 +607,7 @@ export default function MuiEmployees() {
     setCurrentEmployee(employee);
     setFormData({
       username: employee.username,
-      password: "********",
+      password: "password123",
       firstName: employee.firstName,
       lastName: employee.lastName,
       email: employee.email,
@@ -653,15 +656,17 @@ export default function MuiEmployees() {
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (isEditing && currentEmployee) {
-      const updateData = { ...formData };
-      if (!updateData.password || updateData.password === "********") {
-        delete (updateData as any).password;
+    startTransition(() => {
+      if (isEditing && currentEmployee) {
+        const updateData = { ...formData };
+        if (!updateData.password || updateData.password === "password123" || updateData.password === "********") {
+          delete (updateData as any).password;
+        }
+        updateEmployee.mutate({ id: currentEmployee.id, data: updateData });
+      } else {
+        createEmployee.mutate(formData);
       }
-      updateEmployee.mutate({ id: currentEmployee.id, data: updateData });
-    } else {
-      createEmployee.mutate(formData);
-    }
+    });
   };
 
   const handleDeductionsSubmit = (e: React.FormEvent) => {
@@ -1147,7 +1152,7 @@ export default function MuiEmployees() {
         </Menu>
 
         {/* Add/Edit Dialog */}
-        <Dialog open={formDialogOpen} onClose={handleCloseFormDialog} maxWidth="sm" fullWidth>
+        <Dialog open={formDialogOpen} onClose={handleCloseFormDialog} maxWidth="sm" fullWidth disableRestoreFocus>
           <form onSubmit={handleFormSubmit}>
             <DialogTitle>
               {isEditing ? `Edit Employee: ${currentEmployee?.firstName} ${currentEmployee?.lastName}` : "Add New Employee"}
@@ -1172,6 +1177,7 @@ export default function MuiEmployees() {
                     <TextField
                       fullWidth
                       label="First Name"
+                      autoFocus
                       value={formData.firstName}
                       onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                       required
@@ -1212,13 +1218,27 @@ export default function MuiEmployees() {
                       fullWidth
                       label={isEditing ? "New Password" : "Password"}
                       placeholder={isEditing ? "Leave blank to keep existing" : "password123"}
-                      type="password"
+                      type={showPassword ? "text" : "password"}
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       required={!isEditing}
                       helperText={isEditing 
                         ? "Leave blank to keep current password" 
                         : "Required. Default is usually password123"}
+                      InputProps={{
+                        endAdornment: (
+                          <InputAdornment position="end">
+                            <IconButton
+                              aria-label="toggle password visibility"
+                              onClick={() => setShowPassword(!showPassword)}
+                              edge="end"
+                              size="small"
+                            >
+                              {showPassword ? <VisibilityOffIcon /> : <ViewIcon />}
+                            </IconButton>
+                          </InputAdornment>
+                        ),
+                      }}
                     />
                   </Grid>
                 </Grid>
