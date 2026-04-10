@@ -424,7 +424,7 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
         open={mobileOpen}
         onClose={onMobileClose || (() => {})}
         onOpen={() => {}}
-        ModalProps={{ keepMounted: true }} // Better open performance on mobile
+        ModalProps={{ keepMounted: false }} // Disabled to fix ghost backdrop bug on hydration
         sx={{
           "& .MuiDrawer-paper": {
             width: DRAWER_WIDTH,
