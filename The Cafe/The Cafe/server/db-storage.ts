@@ -85,9 +85,12 @@ export class DatabaseStorage implements IStorage {
   async updateUser(id: string, user: Partial<InsertUser>): Promise<User | undefined> {
     const updateData: any = { ...user };
     
-    // Hash password if it's being updated
-    if (user.password) {
+    // Hash password if it's being updated with a non-empty value
+    if (user.password && typeof user.password === 'string' && user.password.trim().length > 0) {
       updateData.password = await bcrypt.hash(user.password, 10);
+    } else {
+      // SAFETY: Never write empty/null/undefined password to DB — remove it from update
+      delete updateData.password;
     }
     
     await db.update(users).set(updateData).where(eq(users.id, id));

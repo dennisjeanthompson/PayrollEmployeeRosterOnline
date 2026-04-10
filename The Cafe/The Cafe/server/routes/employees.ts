@@ -406,14 +406,15 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']),
 
     // Whitelist allowed fields to prevent mass assignment
     const updates: Record<string, any> = {};
-    const allowedFields = ['username', 'password', 'firstName', 'lastName', 'email', 'position', 'hourlyRate', 'role', 'isActive', 'tin', 'sssNumber', 'philhealthNumber', 'pagibigNumber', 'isMwe'];
+    const allowedFields = ['username', 'password', 'firstName', 'lastName', 'email', 'position', 'hourlyRate', 'role', 'isActive', 'branchId', 'tin', 'sssNumber', 'philhealthNumber', 'pagibigNumber', 'isMwe'];
     for (const field of allowedFields) {
       if (body[field] !== undefined) {
         if (field === 'password') {
-          // Only update password if one is provided
-          if (body[field] !== '') {
+          // Only update password if a non-empty string is explicitly provided
+          if (typeof body[field] === 'string' && body[field].trim().length > 0) {
             updates[field] = body[field];
           }
+          // Skip password entirely if empty, null, or undefined — preserve existing
         } else if (['tin', 'sssNumber', 'philhealthNumber', 'pagibigNumber'].includes(field) && body[field] === '') {
           // Treat empty strings as null for government IDs
           updates[field] = null;
