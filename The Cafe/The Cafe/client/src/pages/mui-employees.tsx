@@ -604,7 +604,7 @@ export default function MuiEmployees() {
     setCurrentEmployee(employee);
     setFormData({
       username: employee.username,
-      password: "",
+      password: "********",
       firstName: employee.firstName,
       lastName: employee.lastName,
       email: employee.email,
@@ -655,7 +655,7 @@ export default function MuiEmployees() {
     e.preventDefault();
     if (isEditing && currentEmployee) {
       const updateData = { ...formData };
-      if (!updateData.password) {
+      if (!updateData.password || updateData.password === "********") {
         delete (updateData as any).password;
       }
       updateEmployee.mutate({ id: currentEmployee.id, data: updateData });
