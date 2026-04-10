@@ -76,7 +76,7 @@ interface AuthState {
 }
 
 function AppRoutes() {
-  const [location] = useLocation();
+  const [location, setLocation] = useLocation();
   const [authState, setAuthStateLocal] = useState<AuthState>(() => {
     const state = getAuthState();
     return {
@@ -139,8 +139,7 @@ function AppRoutes() {
 
   // Defensive redirect: if not authenticated, send user to login immediately
   if (!authState.authenticated && !isLoginPage) {
-    // useLocation setter is available via hook
-    const [, setLocation] = useLocation();
+    // setLocation already obtained from the hook at the top of the component
     setTimeout(() => setLocation('/login'), 0);
     return <LoadingFallback />;
   }

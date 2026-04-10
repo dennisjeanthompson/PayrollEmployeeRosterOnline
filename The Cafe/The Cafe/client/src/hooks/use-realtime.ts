@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef } from "react";
+import { useEffect, useCallback, useRef, startTransition } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { io, Socket } from "socket.io-client";
 import { getCurrentUser } from "@/lib/auth";
@@ -91,33 +91,39 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     // Shift events — invalidate all known shift query keys (desktop + mobile)
     const invalidateShiftQueries = () => {
-      queryClient.invalidateQueries({ queryKey: ["employee-shifts"] });
-      queryClient.invalidateQueries({ queryKey: ["shifts", "branch"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/shifts/branch"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
-      // Dashboard components that depend on shift data
-      queryClient.invalidateQueries({ queryKey: ["upcoming-shifts"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/employee-status"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/hours/team-summary"] });
-      // Mobile query keys
-      queryClient.invalidateQueries({ queryKey: ["mobile-schedule-shifts"] });
-      queryClient.invalidateQueries({ queryKey: ["mobile-shifts"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["employee-shifts"] });
+        queryClient.invalidateQueries({ queryKey: ["shifts", "branch"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/shifts/branch"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
+        // Dashboard components that depend on shift data
+        queryClient.invalidateQueries({ queryKey: ["upcoming-shifts"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/employee-status"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/hours/team-summary"] });
+        // Mobile query keys
+        queryClient.invalidateQueries({ queryKey: ["mobile-schedule-shifts"] });
+        queryClient.invalidateQueries({ queryKey: ["mobile-shifts"] });
+      });
     };
 
     const invalidateTimeOffQueries = () => {
-      queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/time-off-requests"] });
-      // Mobile query keys
-      queryClient.invalidateQueries({ queryKey: ["mobile-time-off"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/time-off-requests"] });
+        // Mobile query keys
+        queryClient.invalidateQueries({ queryKey: ["mobile-time-off"] });
+      });
     };
 
     const invalidateTradeQueries = () => {
-      queryClient.invalidateQueries({ queryKey: ["shift-trades"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/shift-trades"] });
-      // Mobile query keys
-      queryClient.invalidateQueries({ queryKey: ["mobile-shift-trades-available"] });
-      queryClient.invalidateQueries({ queryKey: ["mobile-shift-trades-my"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["shift-trades"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/shift-trades"] });
+        // Mobile query keys
+        queryClient.invalidateQueries({ queryKey: ["mobile-shift-trades-available"] });
+        queryClient.invalidateQueries({ queryKey: ["mobile-shift-trades-my"] });
+      });
     };
 
     socket.on("shift:created", (data) => {
@@ -162,147 +168,181 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     socket.on("trade:approved", (data) => {
       console.log("✅ Trade approved:", data);
-      invalidateTradeQueries();
-      invalidateShiftQueries();
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      startTransition(() => {
+        invalidateTradeQueries();
+        invalidateShiftQueries();
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      });
       onEventRef.current?.("trade:approved", data);
     });
 
     // Time-off events
     socket.on("time-off:created", (data) => {
       console.log("📅 Time-off request created:", data);
-      invalidateTimeOffQueries();
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      startTransition(() => {
+        invalidateTimeOffQueries();
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      });
       onEventRef.current?.("time-off:created", data);
     });
 
     socket.on("time-off:updated", (data) => {
       console.log("📅 Time-off request updated:", data);
-      invalidateTimeOffQueries();
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      startTransition(() => {
+        invalidateTimeOffQueries();
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      });
       onEventRef.current?.("time-off:updated", data);
     });
 
     socket.on("time-off:approved", (data) => {
       console.log("✅ Time-off approved:", data);
-      invalidateTimeOffQueries();
-      invalidateShiftQueries();
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      startTransition(() => {
+        invalidateTimeOffQueries();
+        invalidateShiftQueries();
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      });
       onEventRef.current?.("time-off:approved", data);
     });
 
     socket.on("time-off:rejected", (data) => {
       console.log("❌ Time-off rejected:", data);
-      invalidateTimeOffQueries();
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      startTransition(() => {
+        invalidateTimeOffQueries();
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      });
       onEventRef.current?.("time-off:rejected", data);
     });
 
     // Availability events
     socket.on("availability:updated", (data) => {
       console.log("👥 Availability updated:", data);
-      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["employees"] });
+      });
       onEventRef.current?.("availability:updated", data);
     });
 
     // Employee events - with automatic query refetch for immediate UI updates
     socket.on("employee:created", (data) => {
       console.log("👤 New employee created:", data);
-      queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
-      queryClient.refetchQueries({ queryKey: ["/api/employees"] });
-      queryClient.refetchQueries({ queryKey: ["employees"] });
-      queryClient.refetchQueries({ queryKey: ["employee-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/employee-status"] });
+      startTransition(() => {
+        queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
+        queryClient.refetchQueries({ queryKey: ["/api/employees"] });
+        queryClient.refetchQueries({ queryKey: ["employees"] });
+        queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/employee-status"] });
+      });
       onEventRef.current?.("employee:created", data);
     });
 
     socket.on("employee:updated", (data) => {
       console.log("👤 Employee updated:", data);
-      queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
-      queryClient.refetchQueries({ queryKey: ["/api/employees"] });
-      queryClient.refetchQueries({ queryKey: ["employees"] });
-      queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+      startTransition(() => {
+        queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
+        queryClient.refetchQueries({ queryKey: ["/api/employees"] });
+        queryClient.refetchQueries({ queryKey: ["employees"] });
+        queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+      });
       onEventRef.current?.("employee:updated", data);
     });
 
     socket.on("employee:deleted", (data) => {
       console.log("👤 Employee deleted:", data);
-      queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
-      queryClient.refetchQueries({ queryKey: ["/api/employees"] });
-      queryClient.refetchQueries({ queryKey: ["employees"] });
-      queryClient.refetchQueries({ queryKey: ["employee-stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/employee-status"] });
+      startTransition(() => {
+        queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
+        queryClient.refetchQueries({ queryKey: ["/api/employees"] });
+        queryClient.refetchQueries({ queryKey: ["employees"] });
+        queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/employee-status"] });
+      });
       onEventRef.current?.("employee:deleted", data);
     });
 
     // Payroll events
     socket.on("payroll:period-created", (data) => {
       console.log("📅 Payroll period created:", data);
-      queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
-      queryClient.invalidateQueries({ queryKey: ["current-payroll-period"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
+        queryClient.invalidateQueries({ queryKey: ["current-payroll-period"] });
+      });
       onEventRef.current?.("payroll:period-created", data);
     });
 
     socket.on("payroll:period-updated", (data) => {
       console.log("📅 Payroll period updated:", data);
-      queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
-      queryClient.invalidateQueries({ queryKey: ["current-payroll-period"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
+        queryClient.invalidateQueries({ queryKey: ["current-payroll-period"] });
+      });
       onEventRef.current?.("payroll:period-updated", data);
     });
 
     socket.on("payroll:processed", (data) => {
       console.log("💰 Payroll processed:", data);
-      queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
-      queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
-      queryClient.invalidateQueries({ queryKey: ["payroll-entries-branch"] });
-      queryClient.invalidateQueries({ queryKey: ["current-payroll-period"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
+        queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
+        queryClient.invalidateQueries({ queryKey: ["payroll-entries-branch"] });
+        queryClient.invalidateQueries({ queryKey: ["current-payroll-period"] });
+      });
       onEventRef.current?.("payroll:processed", data);
     });
 
     socket.on("payroll:entry-updated", (data) => {
       console.log("💵 Payroll entry updated:", data);
-      queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
-      queryClient.invalidateQueries({ queryKey: ["payroll-entries-branch"] });
-      queryClient.invalidateQueries({ queryKey: ["current-payroll-period"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
+        queryClient.invalidateQueries({ queryKey: ["payroll-entries-branch"] });
+        queryClient.invalidateQueries({ queryKey: ["current-payroll-period"] });
+      });
       onEventRef.current?.("payroll:entry-updated", data);
     });
 
     socket.on("payroll:sent", (data) => {
       console.log("📧 Payslip sent:", data);
-      queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
-      queryClient.invalidateQueries({ queryKey: ["mobile-payroll"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
+        queryClient.invalidateQueries({ queryKey: ["mobile-payroll"] });
+      });
       onEventRef.current?.("payroll:sent", data);
     });
 
     // Notification events
     socket.on("notification:created", (data) => {
       console.log("🔔 New notification:", data);
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      // Also refresh related data based on notification type
-      const notif = data?.notification || data;
-      if (notif?.type) {
-        if (notif.type.includes('time_off')) invalidateTimeOffQueries();
-        if (notif.type.includes('shift') || notif.type.includes('trade')) {
-          invalidateShiftQueries();
-          invalidateTradeQueries();
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        // Also refresh related data based on notification type
+        const notif = data?.notification || data;
+        if (notif?.type) {
+          if (notif.type.includes('time_off')) invalidateTimeOffQueries();
+          if (notif.type.includes('shift') || notif.type.includes('trade')) {
+            invalidateShiftQueries();
+            invalidateTradeQueries();
+          }
         }
-      }
+      });
       onEventRef.current?.("notification:created", data);
     });
 
     socket.on("notification", (data) => {
       console.log("🔔 Notification event:", data);
-      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      });
       onEventRef.current?.("notification", data);
     });
 
     // Audit log events - real-time updates for audit logs page
     socket.on("audit:created", (data) => {
       console.log("📝 New audit log:", data);
-      queryClient.invalidateQueries({ queryKey: ["/api/audit-logs"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/audit-logs/stats"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/audit-logs"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/audit-logs/stats"] });
+      });
       onEventRef.current?.("audit:created", data);
     });
 

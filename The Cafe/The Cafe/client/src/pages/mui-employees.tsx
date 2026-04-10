@@ -1,5 +1,5 @@
 import PesoIcon from "@/components/PesoIcon";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, startTransition } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, parseISO } from "date-fns";
@@ -312,8 +312,10 @@ export default function MuiEmployees() {
       // Directly refetch employees when any employee event occurs
       if (event.startsWith('employee:')) {
         console.log('ðŸ”„ Refetching employees due to event:', event);
-        refetchEmployees();
-        refetchStats();
+        startTransition(() => {
+          refetchEmployees();
+          refetchStats();
+        });
       }
     }
   });
