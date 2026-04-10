@@ -916,7 +916,7 @@ export async function seedSampleUsers() {
       // === PERO – Malate ===
       { 
         id: 'user-mgr-sarah',
-        username: 'bautista.m', 
+        username: 'marialourdes', 
         firstName: 'Maria Lourdes', 
         lastName: 'Bautista', 
         email: 'maria.bautista@pero.com.ph', 
@@ -928,7 +928,7 @@ export async function seedSampleUsers() {
       },
       { 
         id: 'user-emp-sam',
-        username: 'santos.j', 
+        username: 'juan', 
         firstName: 'Juan Miguel', 
         lastName: 'Santos', 
         email: 'juan.santos@pero.com.ph', 
@@ -940,7 +940,7 @@ export async function seedSampleUsers() {
       },
       { 
         id: 'user-emp-ana',
-        username: 'garcia.a', 
+        username: 'ana', 
         firstName: 'Ana Marie', 
         lastName: 'Garcia', 
         email: 'ana.garcia@pero.com.ph', 
@@ -954,7 +954,7 @@ export async function seedSampleUsers() {
       // === PERO – Tondo ===
       { 
         id: 'user-mgr-tondo',
-        username: 'reyes.r', 
+        username: 'renato', 
         firstName: 'Renato', 
         lastName: 'Reyes', 
         email: 'renato.reyes@pero.com.ph', 
@@ -966,7 +966,7 @@ export async function seedSampleUsers() {
       },
       { 
         id: 'user-emp-pedro',
-        username: 'dela.cruz.p', 
+        username: 'pedro', 
         firstName: 'Pedro Miguel', 
         lastName: 'Dela Cruz', 
         email: 'pedro.delacruz@pero.com.ph', 
@@ -978,7 +978,7 @@ export async function seedSampleUsers() {
       },
       {
         id: 'user-emp-sofia',
-        username: 'mendoza.s',
+        username: 'sofia',
         firstName: 'Sofia Isabelle',
         lastName: 'Mendoza',
         email: 'sofia.mendoza@pero.com.ph',
@@ -992,7 +992,7 @@ export async function seedSampleUsers() {
       // === PERO – Quezon City ===
       {
         id: 'user-mgr-quezon',
-        username: 'cruz.m',
+        username: 'maricel',
         firstName: 'Maricel',
         lastName: 'Cruz',
         email: 'maricel.cruz@pero.com.ph',
@@ -1004,7 +1004,7 @@ export async function seedSampleUsers() {
       },
       {
         id: 'user-emp-miguel',
-        username: 'torres.l',
+        username: 'luis',
         firstName: 'Luis Miguel',
         lastName: 'Torres',
         email: 'luis.torres@pero.com.ph',
@@ -1016,7 +1016,7 @@ export async function seedSampleUsers() {
       },
       {
         id: 'user-emp-bea',
-        username: 'alonzo.b',
+        username: 'beatriz',
         firstName: 'Beatriz',
         lastName: 'Alonzo',
         email: 'beatriz.alonzo@pero.com.ph',

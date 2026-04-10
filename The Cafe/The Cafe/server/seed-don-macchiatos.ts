@@ -81,7 +81,7 @@ async function main() {
   const employeesData = [
     {
       id: 'user-don-mgr-lita',
-      username: 'angeles.l',
+      username: 'lita',
       firstName: 'Lita',
       lastName: 'Angeles',
       email: 'lita.angeles@pero.com.ph',
@@ -93,7 +93,7 @@ async function main() {
     },
     {
       id: 'user-don-emp-kaye',
-      username: 'gonzales.k',
+      username: 'kaye',
       firstName: 'Kaye Anne',
       lastName: 'Gonzales',
       email: 'kaye.gonzales@pero.com.ph',
@@ -105,7 +105,7 @@ async function main() {
     },
     {
       id: 'user-don-emp-jhon',
-      username: 'bowden.j',
+      username: 'jhon',
       firstName: 'Jhon',
       lastName: 'Bowden',
       email: 'jhon.bowden@pero.com.ph',
@@ -117,7 +117,7 @@ async function main() {
     },
     {
       id: 'user-don-emp-ryan',
-      username: 'go.r',
+      username: 'ryan',
       firstName: 'Ryan',
       lastName: 'Go',
       email: 'ryan.go@pero.com.ph',
@@ -129,7 +129,7 @@ async function main() {
     },
     {
       id: 'user-don-emp-jenny',
-      username: 'horton.j',
+      username: 'jenny',
       firstName: 'Jenny',
       lastName: 'Horton',
       email: 'jenny.horton@pero.com.ph',

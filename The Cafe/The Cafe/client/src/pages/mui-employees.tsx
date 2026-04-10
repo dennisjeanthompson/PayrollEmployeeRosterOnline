@@ -383,12 +383,14 @@ export default function MuiEmployees() {
       return response.json();
     },
     onSuccess: () => {
-      // Invalidate all employee-related queries for real-time sync
-      queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
-      queryClient.invalidateQueries({ queryKey: ["employees"] }); // Schedule page roster
-      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      // Invalidate all employee-related queries for real-time sync inside transition
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+        queryClient.invalidateQueries({ queryKey: ["employees"] }); // Schedule page roster
+        queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+        handleCloseFormDialog();
+      });
       toast({ title: "Success", description: "Employee created successfully" });
-      handleCloseFormDialog();
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -405,12 +407,14 @@ export default function MuiEmployees() {
       return response.json();
     },
     onSuccess: () => {
-      // Invalidate all employee-related queries for real-time sync
-      queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
-      queryClient.invalidateQueries({ queryKey: ["employees"] }); // Schedule page roster
-      queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+      startTransition(() => {
+        // Invalidate all employee-related queries for real-time sync
+        queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+        queryClient.invalidateQueries({ queryKey: ["employees"] }); // Schedule page roster
+        queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+        handleCloseFormDialog();
+      });
       toast({ title: "Success", description: "Employee updated successfully" });
-      handleCloseFormDialog();
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -444,15 +448,17 @@ export default function MuiEmployees() {
         return;
       }
       // Force immediate refetch of all employee-related queries
-      queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
-      queryClient.refetchQueries({ queryKey: ["employees"] }); // Schedule page roster
-      queryClient.refetchQueries({ queryKey: ["/api/employees"] });
-      queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+      startTransition(() => {
+        queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
+        queryClient.refetchQueries({ queryKey: ["employees"] }); // Schedule page roster
+        queryClient.refetchQueries({ queryKey: ["/api/employees"] });
+        queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+        setDeleteDialogOpen(false);
+        setDeletionModalOpen(false);
+        setCurrentEmployee(null);
+        setEmployeeRelatedData(null);
+      });
       toast({ title: "Success", description: data?.forceDeleted ? "Employee and all data permanently deleted" : "Employee deleted successfully" });
-      setDeleteDialogOpen(false);
-      setDeletionModalOpen(false);
-      setCurrentEmployee(null);
-      setEmployeeRelatedData(null);
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -518,9 +524,11 @@ export default function MuiEmployees() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+        setDeductionsDialogOpen(false);
+      });
       toast({ title: "Success", description: "Deductions updated successfully" });
-      setDeductionsDialogOpen(false);
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -539,16 +547,18 @@ export default function MuiEmployees() {
       return response.json();
     },
     onSuccess: (data, { isActive }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+        // Close the deletion modal if open
+        setDeletionModalOpen(false);
+        setEmployeeRelatedData(null);
+        // Update current employee if viewing
+        if (currentEmployee) {
+          setCurrentEmployee({ ...currentEmployee, isActive });
+        }
+      });
       const action = isActive ? "activated" : "deactivated";
       toast({ title: "Success", description: `Employee ${action} successfully` });
-      // Close the deletion modal if open
-      setDeletionModalOpen(false);
-      setEmployeeRelatedData(null);
-      // Update current employee if viewing
-      if (currentEmployee) {
-        setCurrentEmployee({ ...currentEmployee, isActive });
-      }
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -574,14 +584,12 @@ export default function MuiEmployees() {
       return results;
     },
     onSuccess: (data, { isActive, ids }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+        setSelectedEmployees([]);
+      });
       const action = isActive ? "activated" : "deactivated";
       toast({ title: "Success", description: `${ids.length} employees ${action} successfully` });
-      setSelectedEmployees([]);
-    },
-    onError: (error: any) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
   });
 
   // Handlers
@@ -1202,11 +1210,15 @@ export default function MuiEmployees() {
                   <Grid size={{ xs: 6 }}>
                     <TextField
                       fullWidth
-                      label={isEditing ? "Password (leave blank to keep)" : "Password"}
+                      label={isEditing ? "New Password" : "Password"}
+                      placeholder={isEditing ? "Leave blank to keep existing" : "password123"}
                       type="password"
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       required={!isEditing}
+                      helperText={isEditing 
+                        ? "Leave blank to keep current password" 
+                        : "Required. Default is usually password123"}
                     />
                   </Grid>
                 </Grid>

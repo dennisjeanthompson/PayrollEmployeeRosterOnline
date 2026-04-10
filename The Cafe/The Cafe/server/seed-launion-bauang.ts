@@ -64,8 +64,8 @@ const USER_DEFS = [
   // ── ADMIN ──
   {
     id: 'lu-admin-001',
-    username: 'lu.admin',
-    password: 'LuAdmin2026!',
+    username: 'ricardo',
+    password: 'password123',
     firstName: 'Ricardo',
     lastName: 'Agustin',
     email: 'ricardo.agustin@pero-launion.com.ph',
@@ -80,8 +80,8 @@ const USER_DEFS = [
   // ── MANAGER ──
   {
     id: 'lu-mgr-001',
-    username: 'lu.manager',
-    password: 'LuManager2026!',
+    username: 'angelica',
+    password: 'password123',
     firstName: 'Angelica',
     lastName: 'Dumlao',
     email: 'angelica.dumlao@pero-launion.com.ph',
@@ -96,8 +96,8 @@ const USER_DEFS = [
   // ── 6 EMPLOYEES ──
   {
     id: 'lu-emp-001',
-    username: 'lu.flores',
-    password: 'Flores2026!',
+    username: 'jerome',
+    password: 'password123',
     firstName: 'Jerome',
     lastName: 'Flores',
     email: 'jerome.flores@pero-launion.com.ph',
@@ -111,8 +111,8 @@ const USER_DEFS = [
   },
   {
     id: 'lu-emp-002',
-    username: 'lu.navarro',
-    password: 'Navarro2026!',
+    username: 'mariafe',
+    password: 'password123',
     firstName: 'Maria Fe',
     lastName: 'Navarro',
     email: 'mariafe.navarro@pero-launion.com.ph',
@@ -126,8 +126,8 @@ const USER_DEFS = [
   },
   {
     id: 'lu-emp-003',
-    username: 'lu.corpuz',
-    password: 'Corpuz2026!',
+    username: 'mark',
+    password: 'password123',
     firstName: 'Mark Anthony',
     lastName: 'Corpuz',
     email: 'mark.corpuz@pero-launion.com.ph',
@@ -141,8 +141,8 @@ const USER_DEFS = [
   },
   {
     id: 'lu-emp-004',
-    username: 'lu.ramos',
-    password: 'Ramos2026!',
+    username: 'joy',
+    password: 'password123',
     firstName: 'Joy Angelyn',
     lastName: 'Ramos',
     email: 'joy.ramos@pero-launion.com.ph',
@@ -156,8 +156,8 @@ const USER_DEFS = [
   },
   {
     id: 'lu-emp-005',
-    username: 'lu.pascual',
-    password: 'Pascual2026!',
+    username: 'carlo',
+    password: 'password123',
     firstName: 'Carlo',
     lastName: 'Pascual',
     email: 'carlo.pascual@pero-launion.com.ph',
@@ -171,8 +171,8 @@ const USER_DEFS = [
   },
   {
     id: 'lu-emp-006',
-    username: 'lu.salazar',
-    password: 'Salazar2026!',
+    username: 'rhea',
+    password: 'password123',
     firstName: 'Rhea Mae',
     lastName: 'Salazar',
     email: 'rhea.salazar@pero-launion.com.ph',
