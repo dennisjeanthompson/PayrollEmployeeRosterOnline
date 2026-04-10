@@ -106,20 +106,22 @@ export default function MuiProfileSettings() {
       return json;
     },
     onSuccess: (data) => {
-      toast({ title: "Profile Updated", description: data.message });
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
-      // Immediately sync local form state from the saved user so
-      // change-detection stays correct without needing a full re-fetch
-      if (data.user) {
-        setTin(data.user.tin ?? "");
-        setSssNumber(data.user.sssNumber ?? "");
-        setPhilhealthNumber(data.user.philhealthNumber ?? "");
-        setPagibigNumber(data.user.pagibigNumber ?? "");
-      }
-      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-      if (refreshUser && typeof refreshUser === 'function') refreshUser();
+      import("react").then(({ startTransition }) => {
+        startTransition(() => {
+          toast({ title: "Profile Updated", description: data.message });
+          setCurrentPassword("");
+          setNewPassword("");
+          setConfirmPassword("");
+          if (data.user) {
+            setTin(data.user.tin ?? "");
+            setSssNumber(data.user.sssNumber ?? "");
+            setPhilhealthNumber(data.user.philhealthNumber ?? "");
+            setPagibigNumber(data.user.pagibigNumber ?? "");
+          }
+          queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+          if (refreshUser && typeof refreshUser === 'function') refreshUser();
+        });
+      });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -213,8 +215,12 @@ export default function MuiProfileSettings() {
                     currentPhotoUrl={user.photoUrl ?? undefined}
                     size="lg"
                     onUploadComplete={() => {
-                        queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-                        if (refreshUser) refreshUser();
+                      import("react").then(({ startTransition }) => {
+                        startTransition(() => {
+                          queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+                          if (refreshUser) refreshUser();
+                        });
+                      });
                     }}
                   />
                 </Box>

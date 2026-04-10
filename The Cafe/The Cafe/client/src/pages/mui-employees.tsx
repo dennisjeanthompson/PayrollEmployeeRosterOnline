@@ -1166,7 +1166,11 @@ export default function MuiEmployees() {
                     employeeId={currentEmployee.id}
                     employeeName={`${currentEmployee.firstName} ${currentEmployee.lastName}`}
                     onUploadComplete={() => {
-                      queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+                      import("react").then(({ startTransition }) => {
+                        startTransition(() => {
+                          queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+                        });
+                      });
                     }}
                   />
                 </Box>
