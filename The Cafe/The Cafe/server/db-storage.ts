@@ -1267,6 +1267,8 @@ export class DatabaseStorage implements IStorage {
       payrollPeriodId: log.payrollPeriodId ?? null,
       calculatedAmount: log.calculatedAmount ?? null,
       rejectionReason: null,
+      disputeReason: null,
+      disputedAt: null,
       isIncluded: log.isIncluded ?? true,
       createdAt: new Date(),
     };

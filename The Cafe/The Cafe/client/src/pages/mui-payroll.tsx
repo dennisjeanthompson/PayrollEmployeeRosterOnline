@@ -56,6 +56,7 @@ import {
   Visibility as ViewIcon,
   Description as DescriptionIcon,
   Refresh as RefreshIcon,
+  Tune as AdjustmentIcon,
 } from "@mui/icons-material";
 import { getPaymentDate } from "@shared/payroll-dates";
 
@@ -444,6 +445,13 @@ export default function MuiPayroll() {
                             </TableCell>
                             <TableCell align="center">
                               <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
+                                <Chip 
+                                  icon={<AdjustmentIcon sx={{ fontSize: '14px !important' }} />}
+                                  label="Audit Trail" 
+                                  size="small" 
+                                  variant="outlined"
+                                  sx={{ color: 'info.main', borderColor: alpha(theme.palette.info.main, 0.4), fontWeight: 600 }}
+                                />
                                 <Chip
                                   label="Paid"
                                   color="success"
@@ -583,12 +591,20 @@ export default function MuiPayroll() {
                           <Avatar sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1), color: 'primary.main', width: 44, height: 44 }}>
                             <ReceiptIcon />
                           </Avatar>
-                          <Chip 
-                            label="Paid" 
-                            size="small" 
-                            color="success" 
-                            sx={{ fontWeight: 800, fontSize: '0.65rem', borderRadius: 1.5 }} 
-                          />
+                          <Stack direction="row" spacing={1}>
+                            <Chip 
+                              icon={<AdjustmentIcon sx={{ fontSize: '12px !important' }} />}
+                              label="Audit Trail" 
+                              size="small" 
+                              sx={{ bgcolor: alpha(theme.palette.info.main, 0.1), color: 'info.main', fontWeight: 700, fontSize: '0.65rem', borderRadius: 1.5 }}
+                            />
+                            <Chip 
+                              label="Paid" 
+                              size="small" 
+                              color="success" 
+                              sx={{ fontWeight: 800, fontSize: '0.65rem', borderRadius: 1.5 }} 
+                            />
+                          </Stack>
                         </Stack>
                         <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: 0.5, display: 'block', position: 'relative', zIndex: 1 }}>
                           Pay Period

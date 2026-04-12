@@ -2525,9 +2525,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     let periodEnd: string | null = null;
     let payDate: string | null = null;
     
+    let includedExceptions: any[] = [];
     try {
-      const { payrollPeriods } = await import('../shared/schema');
-      const { eq } = await import('drizzle-orm');
+      const { payrollPeriods, adjustmentLogs } = await import('../shared/schema');
+      const { eq, and, gte, lte, inArray } = await import('drizzle-orm');
       const { db } = await import('./db');
       
       const periods = await db.select().from(payrollPeriods).where(eq(payrollPeriods.id, entry.payrollPeriodId)).limit(1);
@@ -2542,9 +2543,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         payDate = period.payDate
           ? (period.payDate instanceof Date ? period.payDate.toISOString() : String(period.payDate))
           : null;
+
+        // Fetch verified/approved exception logs within this period for this user
+        const logs = await db.select()
+          .from(adjustmentLogs)
+          .where(
+            and(
+              eq(adjustmentLogs.employeeId, entry.userId),
+              gte(adjustmentLogs.startDate, new Date(periodStart)),
+              lte(adjustmentLogs.startDate, new Date(periodEnd)),
+              inArray(adjustmentLogs.status, ['employee_verified', 'approved'])
+            )
+          );
+        includedExceptions = logs;
       }
     } catch (e) {
-      console.error("[Payslip] Error fetching payroll period:", e);
+      console.error("[Payslip] Error fetching payroll period or exceptions:", e);
     }
 
     // Company settings for dynamic payslip branding/details
@@ -2604,6 +2618,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       employeeSss: user.sssNumber || null,
       employeePhilhealth: user.philhealthNumber || null,
       employeePagibig: user.pagibigNumber || null,
+      // Included adjustments/exceptions
+      includedExceptions,
     };
 
     res.json({ payslip: payslipData });

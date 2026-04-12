@@ -990,7 +990,6 @@ export default function ScheduleV2() {
                 onOpenRequests={() => setDrawerOpen(true)}
                 onDeleteTimeOff={(id) => setSelectedTimeOffId(id)}
                 onManageLogGroup={setManageLogGroup}
-                onExceptionLogClick={handleExceptionLogClick}
                 onAddHolidayPay={(userId, date) => addHolidayPayMutation.mutate({ userId, branchId: currentUser?.branchId!, date })}
               />
             ) : (
@@ -1032,7 +1031,6 @@ export default function ScheduleV2() {
                 onEditShift={!isSelectionMode ? handleEditShift : () => {}}
                 onDeleteTimeOff={(id) => setSelectedTimeOffId(id)}
                 onManageLogGroup={setManageLogGroup}
-                onExceptionLogClick={handleExceptionLogClick}
                 onAddHolidayPay={(userId, date) => addHolidayPayMutation.mutate({ userId, branchId: currentUser?.branchId!, date })}
               />
             ) : (

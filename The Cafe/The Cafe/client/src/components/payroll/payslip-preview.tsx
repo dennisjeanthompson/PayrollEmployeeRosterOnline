@@ -84,6 +84,9 @@ interface PayslipData {
   employeeSss?: string | null;
   employeePhilhealth?: string | null;
   employeePagibig?: string | null;
+
+  // Audit Trailing
+  includedExceptions?: any[];
 }
 
 interface PayslipPreviewProps {
@@ -599,8 +602,73 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     doc.setFontSize(14);
     doc.text("NET PAY:", 25, y + 8);
     doc.text(formatCurrency(payslipData.netPay), pageWidth - 25, y + 8, { align: "right" });
-    
-    y += 20;
+    y += 15;
+
+    // Exception Logs Addendum
+    if (payslipData.includedExceptions && payslipData.includedExceptions.length > 0) {
+      if (y > 240) {
+        doc.addPage();
+        y = 20;
+      }
+
+      doc.setFillColor(...lightGray);
+      doc.setDrawColor(...black);
+      doc.setLineWidth(0.5);
+      doc.rect(20, y, pageWidth - 40, 8, 'FD');
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(...black);
+      doc.setFontSize(10);
+      doc.text("EXCEPTION LOG ADDENDUM (Included in Calculation)", 25, y + 5.5);
+      y += 8;
+
+      // Table Header
+      doc.setFillColor(...darkGray);
+      doc.setTextColor(255, 255, 255);
+      doc.rect(20, y, pageWidth - 40, 7, 'FD');
+      doc.setFontSize(9);
+      doc.text("DATE", 22, y + 5);
+      doc.text("TYPE", 50, y + 5);
+      doc.text("DURATION", 100, y + 5);
+      doc.text("REMARKS", 130, y + 5);
+      y += 7;
+
+      doc.setTextColor(...black);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+
+      payslipData.includedExceptions.forEach((log, idx) => {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        
+        doc.setDrawColor(...mediumGray);
+        doc.setLineWidth(0.1);
+        if (idx % 2 === 0) doc.setFillColor(249, 249, 249);
+        else doc.setFillColor(255, 255, 255);
+        
+        doc.rect(20, y, pageWidth - 40, 6, 'FD');
+        doc.text(format(new Date(log.startDate), "MMM d, yyyy"), 22, y + 4.5);
+        
+        const typeLabels: Record<string, string> = { late: 'Lateness', undertime: 'Undertime', absent: 'Absence', overtime: 'Overtime', rest_day_ot: 'Rest Day OT', special_holiday_ot: 'Special Hol OT', regular_holiday_ot: 'Reg Hol OT', night_diff: 'Night Diff', holiday_pay: 'Holiday Premium' };
+        doc.text((typeLabels[log.type] || log.type).toUpperCase(), 50, y + 4.5);
+        
+        const unit = ['absent'].includes(log.type) ? 'days' : ['late', 'undertime'].includes(log.type) ? 'm' : 'h';
+        doc.text(`${log.value}${unit}`, 100, y + 4.5);
+        
+        if (log.remarks) {
+          const truncated = log.remarks.length > 50 ? log.remarks.substring(0, 47) + '...' : log.remarks;
+          doc.text(truncated, 130, y + 4.5);
+        }
+        y += 6;
+      });
+      
+      doc.setDrawColor(...black);
+      doc.line(20, y, pageWidth - 20, y);
+      y += 10;
+    }
+
+    y += 10;
     doc.setTextColor(...mediumGray);
     doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
@@ -786,6 +854,41 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
                 </tr>
               </tbody>
             </table>
+
+            {/* Exception Log Addendum */}
+            {payslip.includedExceptions && payslip.includedExceptions.length > 0 && (
+              <div style={{ marginTop: 24, breakBefore: "auto" }}>
+                <div style={{ background: '#333', color: 'white', padding: '8px 12px', fontSize: 13, fontWeight: 'bold' }}>
+                  EXCEPTION LOG ADDENDUM (Included in Calculation)
+                </div>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: '#555', color: 'white' }}>
+                      <th style={{ padding: '8px', border: '1px solid #999', textAlign: 'left' }}>DATE</th>
+                      <th style={{ padding: '8px', border: '1px solid #999', textAlign: 'left' }}>TYPE</th>
+                      <th style={{ padding: '8px', border: '1px solid #999', textAlign: 'left' }}>DURATION</th>
+                      <th style={{ padding: '8px', border: '1px solid #999', textAlign: 'left' }}>REMARKS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {payslip.includedExceptions.map((log, idx) => {
+                      const bg = idx % 2 === 0 ? '#f9f9f9' : 'white';
+                      const typeLabels: Record<string, string> = { late: 'Lateness', undertime: 'Undertime', absent: 'Absence', overtime: 'Overtime', rest_day_ot: 'Rest Day OT', special_holiday_ot: 'Special Hol OT', regular_holiday_ot: 'Reg Hol OT', night_diff: 'Night Diff', holiday_pay: 'Holiday Premium' };
+                      const typeDisplay = (typeLabels[log.type] || log.type).toUpperCase();
+                      const unit = ['absent'].includes(log.type) ? 'days' : ['late', 'undertime'].includes(log.type) ? 'm' : 'h';
+                      return (
+                        <tr key={idx} style={{ background: bg }}>
+                          <td style={{ padding: '6px 8px', border: '1px solid #ccc' }}>{format(new Date(log.startDate), "MMM d, yyyy")}</td>
+                          <td style={{ padding: '6px 8px', border: '1px solid #ccc' }}>{typeDisplay}</td>
+                          <td style={{ padding: '6px 8px', border: '1px solid #ccc' }}>{log.value}{unit}</td>
+                          <td style={{ padding: '6px 8px', border: '1px solid #ccc' }}>{log.remarks || '—'}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
 
             {/* Footer */}
             <div className="payslip-footer">
