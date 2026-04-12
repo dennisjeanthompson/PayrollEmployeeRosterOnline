@@ -49,16 +49,17 @@ const escapeCSV = (value: any): string => {
 };
 
 /**
- * Format a monetary value as Philippine Peso.
+ * Format a monetary value for CSV export.
  * Uses Math.round to eliminate floating-point artifacts.
- * Returns a plain string like "₱1,407.63" — suitable for CSV cells.
+ * Returns a plain numeric string like "1,407.63" — no currency symbol.
+ * Column headers already indicate (PHP).
  */
 const peso = (value: any): string => {
-  if (value === null || value === undefined || value === "") return "₱0.00";
+  if (value === null || value === undefined || value === "") return "0.00";
   const n = typeof value === "string" ? parseFloat(value) : Number(value);
-  if (isNaN(n)) return "₱0.00";
+  if (isNaN(n)) return "0.00";
   const rounded = Math.round(n * 100) / 100;
-  return "₱" + rounded.toLocaleString("en-PH", {
+  return rounded.toLocaleString("en-PH", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });

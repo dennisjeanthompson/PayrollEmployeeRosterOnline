@@ -151,7 +151,7 @@ router.get('/api/thirteenth-month/export', requireAuth, requireManagerRole, asyn
       const str = String(v ?? '');
       return str.includes(',') || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
     };
-    const peso = (n: number) => '₱' + n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const peso = (n: number) => n.toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
     const headerMeta = [
       'PERO PAYROLL SYSTEM \u2014 13TH MONTH PAY LEDGER EXPORT',
