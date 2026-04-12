@@ -3,6 +3,7 @@
  * Overview of Philippine payroll compliance status
  */
 
+import { startTransition } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   Box,
@@ -249,7 +250,7 @@ export default function MuiComplianceDashboard() {
               <Button
                 variant="contained"
                 startIcon={<OpenIcon />}
-                onClick={() => setLocation("/admin/deduction-rates")}
+                onClick={() => startTransition(() => setLocation("/admin/deduction-rates"))}
                 sx={{ borderRadius: 2 }}
               >
                 Configure Rates

@@ -312,8 +312,10 @@ export const adjustmentLogs = pgTable("adjustment_logs", {
   // For undertime: minutes
   value: text("value").notNull(), // Numeric value stored as text
   remarks: text("remarks"), // DOLE compliance: reason/context for the adjustment
-  status: text("status").default("pending"), // 'pending', 'employee_verified', 'approved', 'rejected'
+  status: text("status").default("pending"), // 'pending', 'employee_verified', 'disputed', 'approved', 'rejected'
   rejectionReason: text("rejection_reason"), // Manager reason if rejected
+  disputeReason: text("dispute_reason"), // Employee reason when disputing
+  disputedAt: timestamp("disputed_at"), // When employee disputed
   verifiedByEmployee: boolean("verified_by_employee").default(false),
   verifiedAt: timestamp("verified_at"),
   approvedBy: text("approved_by").references(() => users.id), // Admin who approved for payroll
@@ -322,6 +324,15 @@ export const adjustmentLogs = pgTable("adjustment_logs", {
   // Calculated amount (filled when payroll is processed)
   calculatedAmount: text("calculated_amount"), // Positive for OT, negative for late deduction
   isIncluded: boolean("is_included").default(true), // Toggle on/off for payroll inclusion
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Per-log comment thread for manager-employee communication on exception logs
+export const adjustmentLogComments = pgTable("adjustment_log_comments", {
+  id: text("id").primaryKey(),
+  adjustmentLogId: text("adjustment_log_id").references(() => adjustmentLogs.id).notNull(),
+  userId: text("user_id").references(() => users.id).notNull(),
+  message: text("message").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
 });
 
@@ -558,6 +569,11 @@ export const insertAdjustmentLogSchema = createInsertSchema(adjustmentLogs).omit
   endDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
 });
 
+export const insertAdjustmentLogCommentSchema = createInsertSchema(adjustmentLogComments).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertThirteenthMonthLedgerSchema = createInsertSchema(thirteenthMonthLedger).omit({
   id: true,
   createdAt: true,
@@ -619,6 +635,7 @@ export type AuditLog = typeof auditLogs.$inferSelect;
 export type TimeOffPolicy = typeof timeOffPolicy.$inferSelect;
 export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
 export type AdjustmentLog = typeof adjustmentLogs.$inferSelect;
+export type AdjustmentLogComment = typeof adjustmentLogComments.$inferSelect;
 export type CompanySettings = typeof companySettings.$inferSelect;
 export type ThirteenthMonthLedger = typeof thirteenthMonthLedger.$inferSelect;
 export type LeaveCredit = typeof leaveCredits.$inferSelect;
@@ -661,6 +678,7 @@ export type InsertThirteenthMonthLedger = z.infer<typeof insertThirteenthMonthLe
 export type InsertLeaveCredit = z.infer<typeof insertLeaveCreditsSchema>;
 export type InsertLoanRequest = z.infer<typeof insertLoanRequestSchema>;
 export type InsertServiceChargePool = z.infer<typeof insertServiceChargePoolSchema>;
+export type InsertAdjustmentLogComment = z.infer<typeof insertAdjustmentLogCommentSchema>;
 
 // Phase 2 Types
 export const insertSssContributionTableSchema = createInsertSchema(sssContributionTable).omit({ id: true });

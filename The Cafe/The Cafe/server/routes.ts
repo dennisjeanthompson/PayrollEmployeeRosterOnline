@@ -483,7 +483,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Check if password is a valid bcrypt hash
-      const isBcryptHash = user.password.startsWith('$2b$') || user.password.startsWith('$2a$');
+      const isBcryptHash = user.password && (user.password.startsWith('$2b$') || user.password.startsWith('$2a$'));
       
       let isPasswordValid = false;
       
@@ -785,14 +785,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Employee does not belong to your branch" });
       }
 
-      // Block Sunday shifts (Rest Day per Philippine Labor Law)
-      // Check in both UTC and local Philippine time (UTC+8)
-      const shiftDate = new Date(shiftData.startTime);
-      const phHour = shiftDate.getUTCHours() + 8;
-      const phDate = new Date(shiftDate.getTime() + 8 * 60 * 60 * 1000);
-      if (phDate.getUTCDay() === 0) {
-        return res.status(400).json({ message: 'Cannot create shifts on Sunday (Rest Day). Rest day pay rules apply per Philippine Labor Code.' });
-      }
+
 
       // Validate shift times - end time must be after start time
       const timeError = validateShiftTimes(shiftData.startTime, shiftData.endTime);
@@ -800,20 +793,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: timeError });
       }
 
-      // Check for overlapping shifts with the same employee
-      const overlappingShift = await storage.checkShiftOverlap(
+      // Check if employee already has a shift on this calendar date
+      const existingShifts = await storage.checkShiftOnDate(
         shiftData.userId,
-        new Date(shiftData.startTime),
-        new Date(shiftData.endTime)
+        new Date(shiftData.startTime)
       );
 
-      if (overlappingShift) {
-        const existingStart = new Date(overlappingShift.startTime);
-        const existingEnd = new Date(overlappingShift.endTime);
+      if (existingShifts.length > 0) {
+        const existingStart = new Date(existingShifts[0].startTime);
+        const existingEnd = new Date(existingShifts[0].endTime);
         return res.status(409).json({
-          message: `Employee already has a shift scheduled from ${existingStart.toLocaleString()} to ${existingEnd.toLocaleString()}. Please choose a different time or remove the conflicting shift.`,
+          message: `Employee already has a shift scheduled on this day (${existingStart.toLocaleTimeString()} to ${existingEnd.toLocaleTimeString()}). Employees can only have 1 shift per day.`,
           code: 'SHIFT_CONFLICT',
-          conflictingShift: overlappingShift
+          conflictingShift: existingShifts[0]
         });
       }
 
@@ -877,12 +869,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const newEndTime = updateData.endTime ? new Date(updateData.endTime) : new Date(existingShift.endTime);
       const newUserId = updateData.userId || existingShift.userId;
 
-      // Block Sunday shifts (Rest Day per Philippine Labor Law)
-      const phStartTime = new Date(newStartTime.getTime() + 8 * 60 * 60 * 1000);
-      if (phStartTime.getUTCDay() === 0) {
-        return res.status(400).json({ message: 'Cannot schedule shifts on Sunday (Rest Day).' });
-      }
-
       // If both times are provided, validate them
       if (updateData.startTime && updateData.endTime) {
         const timeError = validateShiftTimes(updateData.startTime, updateData.endTime);
@@ -894,16 +880,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check for overlapping shifts (excluding current shift)
       if (updateData.startTime || updateData.endTime || updateData.userId) {
-        const overlappingShift = await storage.checkShiftOverlap(newUserId, newStartTime, newEndTime, id);
+        const existingShifts = await storage.checkShiftOnDate(newUserId, newStartTime, id);
         
-        if (overlappingShift) {
-          console.log('❌ [PUT /api/shifts/:id] Overlap detected:', overlappingShift);
-          const existingStart = new Date(overlappingShift.startTime);
-          const existingEnd = new Date(overlappingShift.endTime);
+        if (existingShifts.length > 0) {
+          const existingStart = new Date(existingShifts[0].startTime);
+          const existingEnd = new Date(existingShifts[0].endTime);
           return res.status(409).json({
-            message: `Employee already has a shift scheduled from ${existingStart.toLocaleString()} to ${existingEnd.toLocaleString()}. Please choose a different time.`,
+            message: `Employee already has a shift scheduled on this day (${existingStart.toLocaleTimeString()} to ${existingEnd.toLocaleTimeString()}). Employees can only have 1 shift per day.`,
             code: 'SHIFT_CONFLICT',
-            conflictingShift: overlappingShift
+            conflictingShift: existingShifts[0]
           });
         }
       }
@@ -1339,7 +1324,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         verifiedByEmployee: true,
         verifiedAt: new Date(),
       });
-      
+
+      // Notify the manager who logged it
+      const employee = await storage.getUser(userId);
+      await storage.createNotification({
+        userId: log.loggedBy,
+        type: 'adjustment',
+        title: 'Exception Log Confirmed',
+        message: `${employee?.firstName || 'Employee'} ${employee?.lastName || ''} confirmed your ${log.type} log for ${log.startDate ? new Date(log.startDate).toLocaleDateString('en-PH') : 'N/A'}.`,
+        data: JSON.stringify({ adjustmentLogId: id }),
+      } as any);
+
       res.json({ log: updated });
     } catch (error: any) {
       res.status(500).json({ message: error.message || "Failed to verify adjustment log" });
@@ -1412,6 +1407,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
+  // Update adjustment log (Manager)
+  app.put("/api/adjustment-logs/:id", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+    try {
+      const { id } = req.params;
+      const log = await storage.getAdjustmentLog(id);
+      if (!log) return res.status(404).json({ message: "Adjustment log not found" });
+      if (log.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+
+      const { type, value, remarks } = req.body;
+      const updated = await storage.updateAdjustmentLog(id, { type, value, remarks });
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to update adjustment log" });
+    }
+  }));
+
   // Toggle adjustment log inclusion in payroll (Manager)
   app.put("/api/adjustment-logs/:id/toggle-included", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
@@ -1430,6 +1443,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ log: updated });
     } catch (error: any) {
       res.status(500).json({ message: error.message || "Failed to toggle adjustment log inclusion" });
+    }
+  }));
+
+  // Employee dispute adjustment log
+  app.put("/api/adjustment-logs/:id/dispute", requireAuth, asyncHandler(async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+      const { reason } = req.body;
+
+      if (!reason || !reason.trim()) {
+        return res.status(400).json({ message: "Dispute reason is required" });
+      }
+
+      const log = await storage.getAdjustmentLog(id);
+      if (!log) return res.status(404).json({ message: "Adjustment log not found" });
+      if (log.employeeId !== userId) return res.status(403).json({ message: "Not authorized" });
+
+      const updated = await storage.updateAdjustmentLog(id, {
+        status: 'disputed',
+        disputeReason: reason.trim(),
+        disputedAt: new Date(),
+        isIncluded: false, // Auto-exclude disputed logs from payroll
+      });
+
+      // Notify the manager who logged it
+      const employee = await storage.getUser(userId);
+      await storage.createNotification({
+        userId: log.loggedBy,
+        type: 'adjustment',
+        title: 'Exception Log Disputed',
+        message: `${employee?.firstName || 'Employee'} ${employee?.lastName || ''} disputed your ${log.type} log: "${reason.trim()}"`,
+        data: JSON.stringify({ adjustmentLogId: id }),
+      } as any);
+
+      // Also create an auto-comment for the audit trail
+      const { adjustmentLogComments } = await import('../shared/schema');
+      const { db: routeDb } = await import('./db');
+      await routeDb.insert(adjustmentLogComments).values({
+        id: crypto.randomUUID(),
+        adjustmentLogId: id,
+        userId,
+        message: `⚠️ Disputed: ${reason.trim()}`,
+      });
+
+      res.json({ log: updated });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to dispute adjustment log" });
+    }
+  }));
+
+  // Get comments for an adjustment log
+  app.get("/api/adjustment-logs/:id/comments", requireAuth, asyncHandler(async (req, res) => {
+    try {
+      const { id } = req.params;
+      const log = await storage.getAdjustmentLog(id);
+      if (!log) return res.status(404).json({ message: "Adjustment log not found" });
+
+      // Allow access if employee owns the log OR user is manager of the branch
+      const userId = req.user!.id;
+      const isOwner = log.employeeId === userId;
+      const isManager = (req.user!.role === 'manager' || req.user!.role === 'admin') && log.branchId === req.user!.branchId;
+      if (!isOwner && !isManager) return res.status(403).json({ message: "Not authorized" });
+
+      const { adjustmentLogComments } = await import('../shared/schema');
+      const { db: routeDb } = await import('./db');
+      const { eq: drizzleEq } = await import('drizzle-orm');
+
+      const comments = await routeDb.select().from(adjustmentLogComments)
+        .where(drizzleEq(adjustmentLogComments.adjustmentLogId, id))
+        .orderBy(adjustmentLogComments.createdAt);
+
+      // Enrich with user names
+      const enriched = await Promise.all(comments.map(async (c) => {
+        const user = await storage.getUser(c.userId);
+        return {
+          ...c,
+          userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+          userRole: user?.role || 'employee',
+        };
+      }));
+
+      res.json({ comments: enriched });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to get comments" });
+    }
+  }));
+
+  // Post a comment on an adjustment log
+  app.post("/api/adjustment-logs/:id/comments", requireAuth, asyncHandler(async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+      const { message } = req.body;
+
+      if (!message || !message.trim()) {
+        return res.status(400).json({ message: "Comment message is required" });
+      }
+
+      const log = await storage.getAdjustmentLog(id);
+      if (!log) return res.status(404).json({ message: "Adjustment log not found" });
+
+      const isOwner = log.employeeId === userId;
+      const isManager = (req.user!.role === 'manager' || req.user!.role === 'admin') && log.branchId === req.user!.branchId;
+      if (!isOwner && !isManager) return res.status(403).json({ message: "Not authorized" });
+
+      const { adjustmentLogComments } = await import('../shared/schema');
+      const { db: routeDb } = await import('./db');
+
+      const comment = await routeDb.insert(adjustmentLogComments).values({
+        id: crypto.randomUUID(),
+        adjustmentLogId: id,
+        userId,
+        message: message.trim(),
+      }).returning();
+
+      // Notify the other party
+      const sender = await storage.getUser(userId);
+      const senderName = `${sender?.firstName || 'Someone'} ${sender?.lastName || ''}`.trim();
+      const recipientId = isOwner ? log.loggedBy : log.employeeId;
+
+      await storage.createNotification({
+        userId: recipientId,
+        type: 'adjustment',
+        title: 'New Comment on Exception Log',
+        message: `${senderName} commented: "${message.trim().substring(0, 80)}${message.length > 80 ? '...' : ''}"`,
+        data: JSON.stringify({ adjustmentLogId: id }),
+      } as any);
+
+      const user = await storage.getUser(userId);
+      res.json({
+        comment: {
+          ...comment[0],
+          userName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+          userRole: user?.role || 'employee',
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to post comment" });
     }
   }));
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, startTransition } from "react";
 import {
   Box,
   Typography,
@@ -82,7 +82,7 @@ export default function MobileMore() {
     <Paper
       key={item.path + index}
       elevation={0}
-      onClick={() => item.path !== "#" && setLocation(item.path)}
+      onClick={() => item.path !== "#" && startTransition(() => setLocation(item.path))}
       sx={{
         p: 2,
         borderRadius: 3,

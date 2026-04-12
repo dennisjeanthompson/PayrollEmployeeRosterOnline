@@ -4,7 +4,7 @@
  * Toggles are saved per-branch to the deduction_settings table.
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, startTransition } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { getCurrentUser } from "@/lib/auth";
@@ -432,7 +432,7 @@ export default function MuiDeductionSettings() {
               color="warning"
               size="small"
               endIcon={<OpenInNew sx={{ fontSize: 16 }} />}
-              onClick={() => setLocation("/employees")}
+              onClick={() => startTransition(() => setLocation("/employees"))}
               sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
             >
               Go to Employees
@@ -447,7 +447,7 @@ export default function MuiDeductionSettings() {
           variant="text"
           size="small"
           endIcon={<OpenInNew sx={{ fontSize: 14 }} />}
-          onClick={() => setLocation("/admin/deduction-rates")}
+          onClick={() => startTransition(() => setLocation("/admin/deduction-rates"))}
           sx={{ textTransform: "none", color: "text.secondary" }}
         >
           View Deduction Rate Tables

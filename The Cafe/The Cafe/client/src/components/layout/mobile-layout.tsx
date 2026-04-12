@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, startTransition } from "react";
 import { 
   Box, 
   BottomNavigation, 
@@ -61,7 +61,7 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
               PERO
             </Typography>
           </Box>
-          <IconButton onClick={() => setLocation("/employee/profile")} sx={{ p: 0.5 }}>
+          <IconButton onClick={() => startTransition(() => setLocation("/employee/profile"))} sx={{ p: 0.5 }}>
             <Avatar 
               src={currentUser?.photoUrl || undefined}
               sx={{ 
@@ -112,12 +112,14 @@ export default function MobileLayout({ children }: MobileLayoutProps) {
           value={value}
           onChange={(event, newValue) => {
             setValue(newValue);
-            switch(newValue) {
-              case 0: setLocation("/employee/dashboard"); break;
-              case 1: setLocation("/employee/schedule"); break;
-              case 2: setLocation("/employee/payroll"); break;
-              case 3: setLocation("/employee/more"); break;
-            }
+            startTransition(() => {
+              switch(newValue) {
+                case 0: setLocation("/employee/dashboard"); break;
+                case 1: setLocation("/employee/schedule"); break;
+                case 2: setLocation("/employee/payroll"); break;
+                case 3: setLocation("/employee/more"); break;
+              }
+            });
           }}
           sx={{
             height: 65,

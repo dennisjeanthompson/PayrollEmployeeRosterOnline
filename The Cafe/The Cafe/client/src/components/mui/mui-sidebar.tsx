@@ -1,11 +1,11 @@
 import PesoIcon from "@/components/PesoIcon";
-import { Link, useLocation } from "wouter";
+import { useLocation } from "wouter";
 import { useAuth, isManager, isAdmin, setAuthState } from "@/lib/auth";
 import { getInitials, capitalizeFirstLetter } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import Logo from "@/components/Logo";
-import React, { useState } from "react";
+import React, { useState, startTransition } from "react";
 
 // MUI Components
 import {
@@ -142,11 +142,13 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
       <ListItem disablePadding sx={{ mb: 0.5 }}>
         <Tooltip title={isCollapsed ? item.name : ""} placement="right" arrow>
           <ListItemButton
-            component={Link}
-            href={item.href}
             selected={isActive}
-            onClick={() => {
+            onClick={(e) => {
+              e.preventDefault();
               if (onMobileClose) onMobileClose();
+              startTransition(() => {
+                setLocation(item.href);
+              });
             }}
             sx={{
               borderRadius: 3,

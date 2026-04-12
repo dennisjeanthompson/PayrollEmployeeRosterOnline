@@ -283,7 +283,7 @@ export default function MuiEmployees() {
   // Redirect non-managers
   useEffect(() => {
     if (!managerRole) {
-      setLocation("/");
+      startTransition(() => setLocation("/"));
     }
   }, [managerRole, setLocation]);
 
@@ -1185,6 +1185,7 @@ export default function MuiEmployees() {
                       value={formData.firstName}
                       onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                       required
+                      disabled={isEditing}
                     />
                   </Grid>
                   <Grid size={{ xs: 6 }}>
@@ -1194,6 +1195,7 @@ export default function MuiEmployees() {
                       value={formData.lastName}
                       onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
                       required
+                      disabled={isEditing}
                     />
                   </Grid>
                 </Grid>
@@ -1205,6 +1207,7 @@ export default function MuiEmployees() {
                   value={formData.email}
                   onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                   required
+                  disabled={isEditing}
                 />
 
                 <Grid container spacing={2}>
@@ -1215,6 +1218,7 @@ export default function MuiEmployees() {
                       value={formData.username}
                       onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                       required
+                      disabled={isEditing}
                     />
                   </Grid>
                   <Grid size={{ xs: 6 }}>
@@ -1226,6 +1230,7 @@ export default function MuiEmployees() {
                       value={formData.password}
                       onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                       required={!isEditing}
+                      disabled={isEditing}
                       helperText={isEditing 
                         ? "Leave blank to keep current password" 
                         : "Required. Default is usually password123"}
@@ -1393,7 +1398,7 @@ export default function MuiEmployees() {
         {/* View Details Dialog */}
         <Dialog open={viewDialogOpen} onClose={() => setViewDialogOpen(false)} maxWidth="md" fullWidth>
           <DialogTitle sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Typography variant="h6">Employee Profile</Typography>
+            <Typography variant="h6" component="span">Employee Profile</Typography>
             <IconButton onClick={() => setViewDialogOpen(false)} size="small">
               <CloseIcon />
             </IconButton>
@@ -1629,7 +1634,7 @@ export default function MuiEmployees() {
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <ReceiptIcon color="primary" />
                 <Box>
-                  <Typography variant="h6">
+                  <Typography variant="h6" component="span" sx={{ display: 'block' }}>
                     Employee Deductions
                   </Typography>
                   <Typography variant="body2" color="text.secondary">

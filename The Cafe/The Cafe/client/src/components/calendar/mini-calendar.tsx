@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { format, isSameDay, isToday, addDays } from "date-fns";
-import { Link } from "wouter";
+import { TransitionLink as Link } from "@/components/TransitionLink";
 import { Calendar as CalendarIcon, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getCurrentUser, isManager } from "@/lib/auth";

@@ -1,5 +1,5 @@
 import PesoIcon from "@/components/PesoIcon";
-import React from "react";
+import React, { startTransition } from "react";
 import { useLocation } from "wouter";
 import {
   BottomNavigation,
@@ -44,7 +44,7 @@ export default function MuiMobileBottomNav({ notificationCount = 0 }: MuiMobileB
       "/employee/profile",
       "/employee/more",
     ];
-    setLocation(paths[newValue]);
+    startTransition(() => setLocation(paths[newValue]));
   };
 
   return (

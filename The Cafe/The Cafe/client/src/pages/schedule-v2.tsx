@@ -16,7 +16,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   FormControl, InputLabel, Select, MenuItem, Stack, Tooltip, Avatar,
   CircularProgress, useTheme, useMediaQuery, Divider, ButtonGroup,
-  InputAdornment
+  InputAdornment, Menu
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -38,11 +38,12 @@ import {
   ContentCopy as ContentCopyIcon,
   ChecklistRtl as ChecklistIcon,
   ClearAll as ClearAllIcon,
+  MoreVert as MoreVertIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { getCurrentUser, isManager as checkIsManager } from '@/lib/auth';
-import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, setHours, setMinutes, differenceInHours, isValid, areIntervalsOverlapping, eachDayOfInterval } from 'date-fns';
+import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, setHours, setMinutes, differenceInHours, isValid, areIntervalsOverlapping, eachDayOfInterval, isSameDay } from 'date-fns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DateTimePicker, DatePicker } from '@mui/x-date-pickers';
@@ -53,6 +54,7 @@ import { toast } from 'react-toastify';
 import WeeklyGrid from '@/components/schedule-v2/WeeklyGrid';
 import DayView, { MyDayView } from '@/components/schedule-v2/DayView';
 import RequestsPanel from '@/components/schedule-v2/RequestsPanel';
+import ExceptionLogDrawer from '@/components/schedule-v2/ExceptionLogDrawer';
 import type { Shift, Employee, TimeOffRequest, ShiftTrade, Holiday } from '@/components/schedule-v2/types';
 
 type ViewMode = 'week' | 'day';
@@ -85,6 +87,7 @@ export default function ScheduleV2() {
 
   // Exception Log Dialog State
   const [isAdjustmentDialogOpen, setIsAdjustmentDialogOpen] = useState(false);
+  const [editAdjId, setEditAdjId] = useState<string | null>(null);
   const [adjEmployeeId, setAdjEmployeeId] = useState("");
   const [adjDate, setAdjDate] = useState<Date | null>(new Date());
   const [adjEndDate, setAdjEndDate] = useState<Date | null>(null);
@@ -109,6 +112,17 @@ export default function ScheduleV2() {
   const [editForm, setEditForm] = useState({ startTime: null as Date | null, endTime: null as Date | null, notes: '' });
   const [timeOffForm, setTimeOffForm] = useState({ type: 'vacation', startDate: new Date() as Date | null, endDate: new Date() as Date | null, reason: '' });
   const [tradeForm, setTradeForm] = useState({ shiftId: '', targetUserId: '', reason: '' });
+  const [actionsMenuAnchor, setActionsMenuAnchor] = useState<null | HTMLElement>(null);
+  const [manageLogGroup, setManageLogGroup] = useState<any[] | null>(null);
+
+  // Exception Log Detail Drawer state
+  const [exceptionLogDrawerOpen, setExceptionLogDrawerOpen] = useState(false);
+  const [selectedExceptionLog, setSelectedExceptionLog] = useState<any>(null);
+
+  const handleExceptionLogClick = useCallback((log: any) => {
+    setSelectedExceptionLog(log);
+    setExceptionLogDrawerOpen(true);
+  }, []);
 
   // Bulk Edit / Selection State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -568,6 +582,74 @@ export default function ScheduleV2() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const deleteAdjustmentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('DELETE', `/api/adjustment-logs/${id}`);
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to delete'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [isManager ? "adjustment-logs-branch" : "adjustment-logs-mine"] });
+      toast.success("Exception log deleted");
+      
+      // Remove from active modal if open
+      if (manageLogGroup) {
+        setManageLogGroup(prev => {
+          if (!prev) return null;
+          const filtered = prev.filter(l => l.id !== deleteAdjustmentMutation.variables); // We'll handle this in UI instead to be safe
+          return filtered;
+        });
+      }
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const updateAdjustmentMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      const res = await apiRequest('PUT', `/api/adjustment-logs/${id}`, data);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || "Failed to update exception");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [isManager ? "adjustment-logs-branch" : "adjustment-logs-mine"] });
+      toast.success("Exception updated successfully");
+      setIsAdjustmentDialogOpen(false);
+      setAdjValue("");
+      setAdjRemarks("");
+      setEditAdjId(null);
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const approveAdjustmentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('PUT', `/api/adjustment-logs/${id}/approve`);
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to approve'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [isManager ? "adjustment-logs-branch" : "adjustment-logs-mine"] });
+      toast.success("Exception log approved");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const rejectAdjustmentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('PUT', `/api/adjustment-logs/${id}/reject`, { reason: 'Rejected by manager' });
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to reject'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [isManager ? "adjustment-logs-branch" : "adjustment-logs-mine"] });
+      toast.success("Exception log rejected");
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   const deleteTradeMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest('DELETE', `/api/shift-trades/${id}`);
@@ -647,7 +729,21 @@ export default function ScheduleV2() {
   }, []);
 
   const handleCreateAdjustment = async () => {
-    if (!adjEmployeeId || (!adjDate && !adjIsRange) || !adjType || !adjValue) return;
+    if (!adjType || !adjValue) return;
+
+    if (editAdjId) {
+      await updateAdjustmentMutation.mutateAsync({
+        id: editAdjId,
+        data: {
+          type: adjType,
+          value: adjValue,
+          remarks: adjRemarks,
+        }
+      });
+      return;
+    }
+
+    if (!adjEmployeeId || (!adjDate && !adjIsRange)) return;
 
     let datesToLog: Date[] = [adjDate!];
     if (adjIsRange && adjEndDate && adjEndDate > adjDate!) {
@@ -719,27 +815,6 @@ export default function ScheduleV2() {
             </Tooltip>
           )}
 
-          {isManager && (
-            <Tooltip title="Log Late, OT, or Exception">
-              <Button
-                size="small" variant="text" startIcon={<NoteAddIcon />}
-                onClick={() => setIsAdjustmentDialogOpen(true)}
-                sx={{ 
-                  textTransform: 'none', fontWeight: 700, height: 32, mr: 0.5, 
-                  display: { xs: 'none', sm: 'flex' },
-                  color: isDark ? '#F59E0B' : '#92400E',
-                  bgcolor: alpha('#F59E0B', 0.08),
-                  borderRadius: 2,
-                  '&:hover': { bgcolor: alpha('#F59E0B', 0.15) },
-                }}
-              >
-                Log Exception
-              </Button>
-            </Tooltip>
-          )}
-
-
-
           <ButtonGroup size="small" variant="outlined" sx={{ height: 32 }}>
             <Button
               variant={viewMode === 'week' ? 'contained' : 'outlined'}
@@ -763,44 +838,6 @@ export default function ScheduleV2() {
             <>
               <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' }, mx: 0.5 }} />
 
-              <Tooltip title="Request Time Off">
-                <Button
-                  size="small" variant="text" startIcon={<TimeOffIcon />}
-                  onClick={() => setTimeOffModalOpen(true)}
-                  sx={{ 
-                    textTransform: 'none', fontWeight: 700, 
-                    display: { xs: 'none', sm: 'flex' }, height: 32,
-                    color: isDark ? '#FBBF24' : '#92400E',
-                    bgcolor: alpha('#F59E0B', 0.06),
-                    borderRadius: 2,
-                    '&:hover': { bgcolor: alpha('#F59E0B', 0.12) },
-                  }}
-                >
-                  Time Off
-                </Button>
-              </Tooltip>
-
-              <Tooltip title="Trade a Shift">
-                <Button
-                  size="small" variant="text" startIcon={<SwapIcon />}
-                  onClick={() => {
-                    const myFutureShifts = shifts.filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date());
-                    if (myFutureShifts.length === 0) { toast.info('No future shifts to trade'); return; }
-                    setTradeModalOpen(true);
-                  }}
-                  sx={{ 
-                    textTransform: 'none', fontWeight: 700, 
-                    display: { xs: 'none', sm: 'flex' }, height: 32,
-                    color: isDark ? '#A78BFA' : '#5B21B6',
-                    bgcolor: alpha('#8B5CF6', 0.06),
-                    borderRadius: 2,
-                    '&:hover': { bgcolor: alpha('#8B5CF6', 0.12) },
-                  }}
-                >
-                  Trade
-                </Button>
-              </Tooltip>
-
               <Tooltip title="Toggle Bulk Edit Mode">
                 <Button
                   size="small" variant={isSelectionMode ? "contained" : "outlined"} startIcon={<ChecklistIcon />}
@@ -822,31 +859,60 @@ export default function ScheduleV2() {
                   {isSelectionMode ? 'Editing...' : 'Bulk Edit'}
                 </Button>
               </Tooltip>
-            </>
-          )}
 
-          {isManager && (
-            <Tooltip title="Copy Previous Week's Shifts">
               <Button
-                size="small" variant="text" startIcon={<ContentCopyIcon />}
-                disabled={copyWeekMutation.isPending}
-                onClick={() => {
-                  if (confirm("Copy all shifts from the previous week into this week?")) {
-                    copyWeekMutation.mutate();
-                  }
-                }}
+                size="small"
+                variant="outlined"
+                endIcon={<MoreVertIcon />}
+                onClick={(e) => setActionsMenuAnchor(e.currentTarget)}
                 sx={{ 
-                  textTransform: 'none', fontWeight: 700, height: 32, 
-                  display: { xs: 'none', md: 'flex' },
-                  color: isDark ? '#14B8A6' : '#0F766E',
-                  bgcolor: alpha('#14B8A6', 0.06),
-                  borderRadius: 2,
-                  '&:hover': { bgcolor: alpha('#14B8A6', 0.12) },
+                  textTransform: 'none', fontWeight: 700, height: 32,
+                  display: { xs: 'none', sm: 'flex' },
+                  color: 'text.primary',
+                  borderColor: alpha(theme.palette.text.primary, 0.2),
+                  '&:hover': { borderColor: alpha(theme.palette.text.primary, 0.3), bgcolor: alpha(theme.palette.text.primary, 0.04) },
                 }}
               >
-                Copy Week
+                More
               </Button>
-            </Tooltip>
+              <Menu
+                anchorEl={actionsMenuAnchor}
+                open={Boolean(actionsMenuAnchor)}
+                onClose={() => setActionsMenuAnchor(null)}
+                slotProps={{ paper: { sx: { mt: 1, minWidth: 180, borderRadius: 2, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' } } }}
+              >
+                <MenuItem onClick={() => { setActionsMenuAnchor(null); setIsAdjustmentDialogOpen(true); }}>
+                  <NoteAddIcon sx={{ mr: 1.5, fontSize: 18, color: '#F59E0B' }} />
+                  <Typography variant="body2" fontWeight={600}>Log Exception</Typography>
+                </MenuItem>
+                <MenuItem onClick={() => { setActionsMenuAnchor(null); setTimeOffModalOpen(true); }}>
+                  <TimeOffIcon sx={{ mr: 1.5, fontSize: 18, color: '#92400E' }} />
+                  <Typography variant="body2" fontWeight={600}>Time Off Request</Typography>
+                </MenuItem>
+                <MenuItem onClick={() => {
+                  setActionsMenuAnchor(null);
+                  const myFutureShifts = shifts.filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date());
+                  if (myFutureShifts.length === 0) { toast.info('No future shifts to trade'); return; }
+                  setTradeModalOpen(true);
+                }}>
+                  <SwapIcon sx={{ mr: 1.5, fontSize: 18, color: '#8B5CF6' }} />
+                  <Typography variant="body2" fontWeight={600}>Trade Shift</Typography>
+                </MenuItem>
+                <Divider sx={{ my: 0.5 }} />
+                <MenuItem 
+                  onClick={() => {
+                    setActionsMenuAnchor(null);
+                    if (confirm("Copy all shifts from the previous week into this week?")) {
+                      copyWeekMutation.mutate();
+                    }
+                  }}
+                  disabled={copyWeekMutation.isPending}
+                >
+                  <ContentCopyIcon sx={{ mr: 1.5, fontSize: 18, color: '#14B8A6' }} />
+                  <Typography variant="body2" fontWeight={600}>Copy Previous Week</Typography>
+                </MenuItem>
+              </Menu>
+            </>
           )}
 
           {isManager && (
@@ -923,6 +989,8 @@ export default function ScheduleV2() {
                 onEditShift={!isSelectionMode ? handleEditShift : () => {}}
                 onOpenRequests={() => setDrawerOpen(true)}
                 onDeleteTimeOff={(id) => setSelectedTimeOffId(id)}
+                onManageLogGroup={setManageLogGroup}
+                onExceptionLogClick={handleExceptionLogClick}
                 onAddHolidayPay={(userId, date) => addHolidayPayMutation.mutate({ userId, branchId: currentUser?.branchId!, date })}
               />
             ) : (
@@ -963,6 +1031,8 @@ export default function ScheduleV2() {
                 onCreateShift={handleCreateShift}
                 onEditShift={!isSelectionMode ? handleEditShift : () => {}}
                 onDeleteTimeOff={(id) => setSelectedTimeOffId(id)}
+                onManageLogGroup={setManageLogGroup}
+                onExceptionLogClick={handleExceptionLogClick}
                 onAddHolidayPay={(userId, date) => addHolidayPayMutation.mutate({ userId, branchId: currentUser?.branchId!, date })}
               />
             ) : (
@@ -1137,17 +1207,13 @@ export default function ScheduleV2() {
             disabled={!newShift.employeeId || !newShift.startTime || !newShift.endTime || createShiftMutation.isPending}
             onClick={() => {
               if (!newShift.startTime || !newShift.endTime || !isValid(newShift.startTime) || !isValid(newShift.endTime)) { toast.error('Please select valid start and end times'); return; }
-              if (newShift.startTime.getDay() === 0) { toast.warning('Sunday is a Rest Day'); return; }
-              
-              const hasOverlap = shifts.some(s => 
+              const hasShiftOnDay = shifts.some(s => 
                 s.userId === newShift.employeeId && 
-                areIntervalsOverlapping(
-                  { start: new Date(s.startTime), end: new Date(s.endTime) },
-                  { start: newShift.startTime!, end: newShift.endTime! }
-                )
+                s.startTime &&
+                isSameDay(new Date(s.startTime), newShift.startTime!)
               );
-              if (hasOverlap) {
-                toast.error('This employee already has an overlapping shift on this day.');
+              if (hasShiftOnDay) {
+                toast.error('This employee already has a shift scheduled on this day. Employees can only have 1 shift per day.');
                 return;
               }
 
@@ -1243,16 +1309,13 @@ export default function ScheduleV2() {
             disabled={updateShiftMutation.isPending || !editForm.startTime || !editForm.endTime}
             onClick={() => {
               if (selectedShift && editForm.startTime && editForm.endTime && isValid(editForm.startTime) && isValid(editForm.endTime)) {
-                const hasOverlap = shifts.some(s => 
+                const hasShiftOnDay = shifts.some(s => 
                   s.userId === selectedShift.userId &&
                   s.id !== selectedShift.id &&
-                  areIntervalsOverlapping(
-                    { start: new Date(s.startTime), end: new Date(s.endTime) },
-                    { start: editForm.startTime!, end: editForm.endTime! }
-                  )
+                  isSameDay(new Date(s.startTime), editForm.startTime!)
                 );
-                if (hasOverlap) {
-                  toast.error('This edit would overlap with an existing shift.');
+                if (hasShiftOnDay) {
+                  toast.error('This edit would conflict. Employees can only have 1 shift per day.');
                   return;
                 }
 
@@ -1443,57 +1506,62 @@ export default function ScheduleV2() {
           <Stack direction="row" alignItems="center" spacing={1}>
             <NoteAddIcon color="warning" />
             <Typography variant="h6" fontWeight={800}>
-              Log Exception
+              {editAdjId ? "Edit Exception" : "Log Exception"}
             </Typography>
           </Stack>
           <Typography variant="caption" color="text.secondary">
-            Log overtime, tardiness, or adjustments directly to payroll.
+            {editAdjId ? "Update the specified payroll exception." : "Log overtime, tardiness, or adjustments directly to payroll."}
           </Typography>
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ mt: 1 }}>
-            <FormControl fullWidth size="small">
-              <InputLabel>Employee</InputLabel>
-              <Select
-                value={adjEmployeeId}
-                label="Employee"
-                onChange={(e) => setAdjEmployeeId(e.target.value as string)}
-              >
-                {employees.map((emp) => (
-                  <MenuItem key={emp.id} value={emp.id}>
-                    {emp.firstName} {emp.lastName} {emp.position && `· ${emp.position}`}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            
+            {!editAdjId && (
+              <FormControl fullWidth size="small">
+                <InputLabel>Employee</InputLabel>
+                <Select
+                  value={adjEmployeeId}
+                  label="Employee"
+                  onChange={(e) => setAdjEmployeeId(e.target.value as string)}
+                >
+                  {employees.map((emp) => (
+                    <MenuItem key={emp.id} value={emp.id}>
+                      {emp.firstName} {emp.lastName} {emp.position && `· ${emp.position}`}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
 
-            <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <DatePicker
-                  label={adjIsRange ? "Start Date" : "Date"}
-                  value={adjDate}
-                  onChange={(val: Date | null) => setAdjDate(val)}
-                  slotProps={{ textField: { size: "small", fullWidth: true } }}
-                />
-                {adjIsRange && (
+            {!editAdjId && (
+              <LocalizationProvider dateAdapter={AdapterDateFns}>
+                <Stack direction="row" spacing={1} alignItems="center">
                   <DatePicker
-                    label="End Date"
-                    value={adjEndDate}
-                    onChange={(val: Date | null) => setAdjEndDate(val)}
-                    minDate={adjDate || undefined}
+                    label={adjIsRange ? "Start Date" : "Date"}
+                    value={adjDate}
+                    onChange={(val: Date | null) => setAdjDate(val)}
                     slotProps={{ textField: { size: "small", fullWidth: true } }}
                   />
-                )}
-              </Stack>
-              <Button
-                size="small"
-                variant="text"
-                onClick={() => { setAdjIsRange(!adjIsRange); setAdjEndDate(null); }}
-                sx={{ textTransform: 'none', alignSelf: 'flex-start', mt: -1 }}
-              >
-                {adjIsRange ? '← Log for single day' : '📅 Log for multiple days'}
-              </Button>
-            </LocalizationProvider>
+                  {adjIsRange && (
+                    <DatePicker
+                      label="End Date"
+                      value={adjEndDate}
+                      onChange={(val: Date | null) => setAdjEndDate(val)}
+                      minDate={adjDate || undefined}
+                      slotProps={{ textField: { size: "small", fullWidth: true } }}
+                    />
+                  )}
+                </Stack>
+                <Button
+                  size="small"
+                  variant="text"
+                  onClick={() => { setAdjIsRange(!adjIsRange); setAdjEndDate(null); }}
+                  sx={{ textTransform: 'none', alignSelf: 'flex-start', mt: -1 }}
+                >
+                  {adjIsRange ? '← Log for single day' : '📅 Log for multiple days'}
+                </Button>
+              </LocalizationProvider>
+            )}
 
             <FormControl fullWidth size="small">
               <InputLabel>Type</InputLabel>
@@ -1536,16 +1604,93 @@ export default function ScheduleV2() {
           </Stack>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setIsAdjustmentDialogOpen(false)} sx={{ borderRadius: 2, textTransform: "none" }}>Cancel</Button>
+          <Button onClick={() => { setIsAdjustmentDialogOpen(false); setEditAdjId(null); }} sx={{ borderRadius: 2, textTransform: "none" }}>Cancel</Button>
           <Button
             variant="contained"
-            color="warning"
+            color={editAdjId ? "primary" : "warning"}
             onClick={handleCreateAdjustment}
-            disabled={!adjEmployeeId || (!adjDate && !adjIsRange) || !adjType || !adjValue || createAdjustmentMutation.isPending}
+            disabled={(!editAdjId && (!adjEmployeeId || (!adjDate && !adjIsRange))) || !adjType || !adjValue || createAdjustmentMutation.isPending || updateAdjustmentMutation.isPending}
             sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800, px: 3 }}
           >
-            {createAdjustmentMutation.isPending ? "Logging..." : "Log Exception"}
+            {createAdjustmentMutation.isPending || updateAdjustmentMutation.isPending ? "Saving..." : editAdjId ? "Save Changes" : "Log Exception"}
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ─── MANAGE LOG GROUP MODAL ─────────────────────────────────────────────────── */}
+      <Dialog
+        open={Boolean(manageLogGroup)}
+        onClose={() => setManageLogGroup(null)}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{
+          sx: { borderRadius: 3, bgcolor: isDark ? '#1C1410' : '#FFF', backgroundImage: 'none' }
+        }}
+      >
+        <DialogTitle sx={{ pb: 1 }}>
+          <Typography variant="h6" fontWeight={800}>Manage Exceptions</Typography>
+        </DialogTitle>
+        <DialogContent sx={{ p: 0 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', pb: 2 }}>
+            {manageLogGroup?.map((log, idx) => (
+              <Box key={log.id} sx={{ 
+                px: 3, py: 2, 
+                borderBottom: idx < manageLogGroup.length - 1 ? '1px solid' : 'none',
+                borderColor: 'divider',
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between'
+              }}>
+                <Box>
+                  <Typography variant="body2" fontWeight={700}>
+                    {log.type.toUpperCase()}: {log.value}{log.type === 'late' || log.type === 'undertime' ? 'm' : log.type === 'absent' ? 'd' : 'h'}
+                  </Typography>
+                  {log.remarks && (
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5, fontStyle: 'italic' }}>
+                      "{log.remarks}"
+                    </Typography>
+                  )}
+                  {log.isIncluded === false && (
+                    <Chip label="Excluded" size="small" color="error" variant="outlined" sx={{ height: 16, fontSize: '0.6rem', mt: 0.5 }} />
+                  )}
+                </Box>
+                <Box sx={{ display: 'flex', gap: 1 }}>
+                  <IconButton 
+                    size="small" 
+                    color="primary"
+                    onClick={() => {
+                      setEditAdjId(log.id);
+                      setAdjEmployeeId(log.employeeId);
+                      setAdjDate(new Date(log.date));
+                      setAdjIsRange(false);
+                      setAdjType(log.type);
+                      setAdjValue(log.value);
+                      setAdjRemarks(log.remarks || '');
+                      setManageLogGroup(null);
+                      setIsAdjustmentDialogOpen(true);
+                    }}
+                    sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1), '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) } }}
+                  >
+                    <EditIcon fontSize="small" />
+                  </IconButton>
+                  <IconButton 
+                    size="small" 
+                    color="error"
+                    disabled={deleteAdjustmentMutation.isPending}
+                    onClick={() => {
+                      if (confirm("Delete this exception log?")) {
+                        deleteAdjustmentMutation.mutate(log.id);
+                      }
+                    }}
+                    sx={{ bgcolor: alpha(theme.palette.error.main, 0.1), '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.2) } }}
+                  >
+                    <DeleteIcon fontSize="small" />
+                  </IconButton>
+                </Box>
+              </Box>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button onClick={() => setManageLogGroup(null)} sx={{ borderRadius: 2, textTransform: "none" }}>Done</Button>
         </DialogActions>
       </Dialog>
     
@@ -1604,6 +1749,21 @@ export default function ScheduleV2() {
           </Button>
         </Paper>
       )}
+      {/* Exception Log Detail Drawer — Confirm/Dispute workflow */}
+      <ExceptionLogDrawer
+        open={exceptionLogDrawerOpen}
+        onClose={() => { setExceptionLogDrawerOpen(false); setSelectedExceptionLog(null); }}
+        log={selectedExceptionLog}
+        isManager={isManager}
+        onApprove={(id) => {
+          approveAdjustmentMutation.mutate(id);
+          setExceptionLogDrawerOpen(false);
+        }}
+        onReject={(id) => {
+          rejectAdjustmentMutation.mutate(id);
+          setExceptionLogDrawerOpen(false);
+        }}
+      />
     </Box>
   );
 }

@@ -1,12 +1,13 @@
 import PesoIcon from "@/components/PesoIcon";
-import React from "react";
+import React, { startTransition } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager, isAdmin, getCurrentUser } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useRealtime } from "@/hooks/use-realtime";
 import { format, isValid } from "date-fns";
-import { Link, useLocation } from "wouter";
+import { TransitionLink as Link } from "@/components/TransitionLink";
+import { useLocation } from "wouter";
 import { getInitials } from "@/lib/utils";
 import { StatCard, InfoCard, UserCard, EmptyState, ActionButtons } from "@/components/mui/cards";
 import { motion, AnimatePresence } from "framer-motion";
@@ -661,7 +662,10 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
 
   // Calculate this week's total scheduled hours
   const thisWeekShifts = (employeeShifts?.shifts || []).filter((s: any) => {
+    if (!s.startTime || !s.endTime) return false;
     const d = new Date(s.startTime);
+    if (isNaN(d.getTime())) return false;
+    
     const now = new Date();
     const startOfWeek = new Date(now);
     startOfWeek.setDate(now.getDate() - now.getDay());
@@ -673,11 +677,12 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
 
   const totalHoursThisWeek = thisWeekShifts.reduce((sum: number, s: any) => {
     const diffMs = new Date(s.endTime).getTime() - new Date(s.startTime).getTime();
-    return sum + diffMs / 3600000;
+    const hours = diffMs / 3600000;
+    return sum + (isNaN(hours) ? 0 : hours);
   }, 0);
 
   const upcomingShifts = (employeeShifts?.shifts || [])
-    .filter((s: any) => new Date(s.startTime) >= new Date())
+    .filter((s: any) => s.startTime && !isNaN(new Date(s.startTime).getTime()) && new Date(s.startTime) >= new Date())
     .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
     .slice(0, 5);
 
@@ -847,7 +852,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                     </Typography>
                     <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main' }}>
                       {currentPeriod
-                        ? `${format(new Date(currentPeriod.startDate), 'MMM d')} – ${format(new Date(currentPeriod.endDate), 'MMM d, yyyy')}`
+                        ? `${sfmt(currentPeriod.startDate, 'MMM d')} – ${sfmt(currentPeriod.endDate, 'MMM d, yyyy')}`
                         : 'This Pay Period'}
                     </Typography>
                   </Stack>
@@ -879,7 +884,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                     <Button
                       fullWidth
                       variant="contained"
-                      onClick={() => setLocation('/employee/payroll')}
+                      onClick={() => startTransition(() => setLocation('/employee/payroll'))}
                       size="small"
                       startIcon={<PesoIcon />}
                       sx={{ 
@@ -923,7 +928,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
               >
                 <Paper
                   elevation={isDark ? 0 : 2}
-                  onClick={() => setLocation('/employee/schedule')}
+                  onClick={() => startTransition(() => setLocation('/employee/schedule'))}
                   sx={{
                     p: 2.5,
                     borderRadius: 4,
@@ -977,7 +982,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
             <Typography variant="overline" color="text.secondary" sx={{ fontWeight: 800, letterSpacing: 1.5 }}>
               Upcoming Shifts
             </Typography>
-            <Button size="small" endIcon={<ArrowRightIcon />} onClick={() => setLocation('/employee/schedule')} sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+            <Button size="small" endIcon={<ArrowRightIcon />} onClick={() => startTransition(() => setLocation('/employee/schedule'))} sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
               View All
             </Button>
           </Stack>
@@ -993,7 +998,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
               >
                 <Paper
                   elevation={0}
-                  onClick={() => setLocation('/employee/schedule')}
+                  onClick={() => startTransition(() => setLocation('/employee/schedule'))}
                   sx={{ 
                     p: 2, 
                     borderRadius: 3, 

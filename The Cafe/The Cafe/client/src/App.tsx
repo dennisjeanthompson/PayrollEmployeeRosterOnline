@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, Suspense, lazy } from "react";
+import React, { useEffect, useState, useCallback, Suspense, lazy, startTransition } from "react";
 import { Route, Switch, Redirect, useLocation } from "wouter";
 import ErrorBoundary from "@/components/layout/error-boundary";
 import { queryClient, apiRequest } from "./lib/queryClient";
@@ -18,39 +18,26 @@ import { MuiThemeProvider } from "@/components/mui/mui-theme-provider";
 import Logo from "@/components/Logo";
 import { Box, alpha } from "@mui/material";
 
-// MUI Layout Components - Lazy loaded to keep initial bundle small
-const MuiSidebar = lazy(() => import("@/components/mui/mui-sidebar"));
-const MuiHeader = lazy(() => import("@/components/mui/mui-header"));
-const MobileLayout = lazy(() => import("@/components/layout/mobile-layout"));
+// MUI Layout Components - Direct imports (NOT lazy) because they render
+// outside <Suspense> boundaries. Lazy-loading them causes the
+// "suspended while responding to synchronous input" crash.
+import MuiSidebar from "@/components/mui/mui-sidebar";
+import MuiHeader from "@/components/mui/mui-header";
+import MobileLayout from "@/components/layout/mobile-layout";
 
-// Ultimatum Fix for Phantom MUI Backdrops
+// Route Cleanup: Only reset body styles on navigation.
+// IMPORTANT: Never manually remove MUI portal DOM nodes (Menu, Modal, Popover, etc.)
+// because React still tracks them. Removing them causes:
+//   "Failed to execute 'removeChild' on 'Node'"
+// MUI portals clean themselves up when their parent components unmount.
 function UltimatumRouteCleanup() {
   const [location] = useLocation();
 
   useEffect(() => {
-    // 1. Force remove any sticky pointer-events or overflow locks from the body
-    document.body.style.pointerEvents = 'auto';
+    // Only reset body styles that MUI may have locked during modal/menu interactions
+    document.body.style.pointerEvents = '';
     document.body.style.overflow = '';
-
-    // 2. Remove orphaned MUI overlays that stay behind after rapid unmounting/navigation
-    const cleanupBackdrops = () => {
-      const overlays = document.querySelectorAll('.MuiBackdrop-root, .MuiDialog-root, .MuiPopover-root, .MuiModal-root');
-      overlays.forEach(el => {
-        // If it's a lingering portal without a parent transitioning correctly, remove it.
-        // We only forcefully clean them on route changes to ensure no navigation freezes.
-        if (el.parentElement === document.body || el.closest('[role="presentation"]')) {
-           // Skip if it belongs to an active Drawer (Sidebar). Drawers have root classes we can ignore.
-           if (!el.closest('.MuiDrawer-root')) {
-             el.remove();
-           }
-        }
-      });
-    };
-
-    // Run cleanup immediately and slightly delayed to handle MUI's exit animations
-    cleanupBackdrops();
-    setTimeout(cleanupBackdrops, 300);
-
+    document.body.style.paddingRight = '';
   }, [location]);
 
   return null;
@@ -200,8 +187,7 @@ function DesktopLayout({ children }: { children: React.ReactNode }) {
         />
       </Box>
 
-      <Suspense fallback={null}>
-        <MuiSidebar
+      <MuiSidebar
           mobileOpen={mobileOpen}
           onMobileClose={() => setMobileOpen(false)}
         />
@@ -211,7 +197,6 @@ function DesktopLayout({ children }: { children: React.ReactNode }) {
             {children}
           </Box>
         </Box>
-      </Suspense>
     </Box>
   );
 }
@@ -223,7 +208,7 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isAuthenticated && user && user.role !== "admin") {
-      setLocation("/");
+      startTransition(() => setLocation("/"));
     }
   }, [isAuthenticated, user, setLocation]);
 
@@ -245,7 +230,7 @@ function RequireManagerOrAdmin({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (isAuthenticated && user && user.role !== "manager" && user.role !== "admin") {
-      setLocation("/");
+      startTransition(() => setLocation("/"));
     }
   }, [isAuthenticated, user, setLocation]);
 
@@ -545,7 +530,9 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
       <Route path="/employee">
         <MobileLayout>
           <RouteLoader>
-            <MuiDashboard />
+            <ErrorBoundary>
+              <MuiDashboard />
+            </ErrorBoundary>
           </RouteLoader>
         </MobileLayout>
       </Route>
@@ -553,7 +540,9 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
       <Route path="/employee/dashboard">
         <MobileLayout>
           <RouteLoader>
-            <MuiDashboard />
+            <ErrorBoundary>
+              <MuiDashboard />
+            </ErrorBoundary>
           </RouteLoader>
         </MobileLayout>
       </Route>
@@ -571,7 +560,9 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
       <Route path="/employee/payroll">
         <MobileLayout>
           <RouteLoader>
-            <MuiPayroll />
+            <ErrorBoundary>
+              <MuiPayroll />
+            </ErrorBoundary>
           </RouteLoader>
         </MobileLayout>
       </Route>
@@ -579,7 +570,9 @@ function MobileRouter({ authState }: { authState: { isAuthenticated: boolean; us
       <Route path="/employee/notifications">
         <MobileLayout>
           <RouteLoader>
-            <MuiNotifications />
+            <ErrorBoundary>
+              <MuiNotifications />
+            </ErrorBoundary>
           </RouteLoader>
         </MobileLayout>
       </Route>

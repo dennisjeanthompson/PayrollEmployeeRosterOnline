@@ -47,6 +47,7 @@ interface DayViewProps {
   selectedLogs?: Set<string>;
   onToggleShiftSelection?: (id: string) => void;
   onToggleLogSelection?: (id: string) => void;
+  onManageLogGroup?: (logs: any[]) => void;
   onDateChange: (date: Date) => void;
   onCreateShift: (employeeId: string, date: Date) => void;
   onEditShift: (shift: Shift) => void;
@@ -230,6 +231,7 @@ export default function DayView({
   selectedLogs,
   onToggleShiftSelection,
   onToggleLogSelection,
+  onManageLogGroup,
   onDateChange,
   onCreateShift,
   onEditShift,
@@ -379,7 +381,7 @@ export default function DayView({
           <Typography variant="h4" sx={{ mb: 1 }}>📭</Typography>
           <Typography variant="h6" fontWeight={700}>No shifts scheduled</Typography>
           <Typography variant="body2" color="text.secondary">
-            {date.getDay() === 0 ? 'Sunday is a rest day' : 'Click + to add a shift'}
+            {'Click + to add a shift'}
           </Typography>
         </Box>
       ) : (
@@ -462,9 +464,11 @@ export default function DayView({
                         log={log} 
                         isSelected={isSelectionMode && selectedLogs?.has(log.id)}
                         onClick={(e) => {
+                          e.stopPropagation();
                           if (isSelectionMode && onToggleLogSelection) {
-                            e.stopPropagation();
                             onToggleLogSelection(log.id);
+                          } else if (!isSelectionMode && onManageLogGroup) {
+                            onManageLogGroup([log]);
                           }
                         }}
                       />

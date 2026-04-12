@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Coffee, ArrowLeft, Home, Search } from "lucide-react";
-import { Link } from "wouter";
+import { TransitionLink as Link } from "@/components/TransitionLink";
 
 export default function NotFound() {
   return (

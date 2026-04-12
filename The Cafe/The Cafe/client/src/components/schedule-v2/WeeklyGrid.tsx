@@ -50,11 +50,13 @@ interface WeeklyGridProps {
   selectedLogs?: Set<string>;
   onToggleShiftSelection?: (id: string) => void;
   onToggleLogSelection?: (id: string) => void;
+  onManageLogGroup?: (logs: any[]) => void;
   onCreateShift: (employeeId: string, date: Date) => void;
   onEditShift: (shift: Shift) => void;
   onOpenRequests?: () => void;
   onDeleteTimeOff?: (id: string) => void;
   onAddHolidayPay?: (userId: string, date: Date) => void;
+  onExceptionLogClick?: (log: any) => void;
 }
 
 /** Generate array of 7 days: Mon–Sun */
@@ -298,8 +300,23 @@ export function AdjustmentBadge({ log, isSelectionMode, isSelected, onClick }: {
   const iconMap: Record<string, string> = { late: '⏰', undertime: '📉', absent: '❌', holiday_pay: '💰' };
   const icon = iconMap[log.type] || '⚡';
 
+  // Status indicator colors
+  const statusDot: Record<string, { color: string; pulse: boolean }> = {
+    pending: { color: '#f59e0b', pulse: true },
+    employee_verified: { color: '#10b981', pulse: false },
+    disputed: { color: '#ef4444', pulse: true },
+    approved: { color: '#3b82f6', pulse: false },
+    rejected: { color: '#6b7280', pulse: false },
+  };
+  const dot = statusDot[log.status] || statusDot.pending;
+
+  const isGrouped = log.count && log.count > 1;
+  const tooltipText = isGrouped 
+    ? `${config.label} (${log.count} records): ${log.value}${unit}${isExcluded ? ' (Excluded)' : ''}\n${log.logs?.map((l: any) => `- ${l.value}${unit}${l.remarks ? ` "${l.remarks}"` : ''}`).join('\n')}`
+    : `${config.label}: ${log.value}${unit}${isExcluded ? ' (Excluded from payroll)' : ''}${log.status === 'disputed' ? '\n⚠️ Disputed by employee' : log.status === 'employee_verified' ? '\n✅ Confirmed by employee' : ''}${log.remarks ? `\n"${log.remarks}"` : ''}`;
+
   return (
-    <Tooltip title={`${config.label}: ${log.value}${unit}${isExcluded ? ' (Excluded from payroll)' : ''}${log.remarks ? `\n"${log.remarks}"` : ''}`} arrow placement="top">
+    <Tooltip title={tooltipText} arrow placement="top" sx={{ whiteSpace: 'pre-line' }}>
       <Box
         onClick={onClick}
         sx={{
@@ -308,8 +325,8 @@ export function AdjustmentBadge({ log, isSelectionMode, isSelected, onClick }: {
         width: '100%', minHeight: 28, px: 1, py: 0.4, borderRadius: 1.5,
         bgcolor: isExcluded ? alpha(config.bgColor, 0.4) : config.bgColor,
         borderLeft: `3px solid ${isExcluded ? alpha(config.color, 0.3) : config.color}`,
-        border: '1px solid',
-        borderColor: isSelected ? '#3B82F6' : alpha(config.color, isExcluded ? 0.1 : 0.25),
+        border: log.status === 'disputed' ? '2px solid' : '1px solid',
+        borderColor: isSelected ? '#3B82F6' : log.status === 'disputed' ? alpha('#ef4444', 0.5) : alpha(config.color, isExcluded ? 0.1 : 0.25),
         fontSize: '0.72rem', fontWeight: 700,
         color: isExcluded ? alpha(config.color, 0.4) : config.color,
         cursor: onClick ? 'pointer' : 'default',
@@ -320,6 +337,16 @@ export function AdjustmentBadge({ log, isSelectionMode, isSelected, onClick }: {
         overflow: 'hidden',
         '&:hover': onClick ? { filter: 'brightness(0.92)', transform: isSelected ? 'scale(1.02)' : 'translateY(-1px)', boxShadow: isSelected ? undefined : '0 3px 8px rgba(0,0,0,0.1)' } : {}
       }}>
+        {/* Status indicator dot */}
+        <Box sx={{
+          position: 'absolute', top: 3, right: 3,
+          width: 6, height: 6, borderRadius: '50%',
+          bgcolor: dot.color,
+          boxShadow: `0 0 4px ${dot.color}`,
+          animation: dot.pulse ? 'statusPulse 2s infinite' : 'none',
+          '@keyframes statusPulse': { '0%, 100%': { opacity: 1 }, '50%': { opacity: 0.3 } },
+          zIndex: 5,
+        }} />
         {isSelectionMode && (
           <Box sx={{
             position: 'absolute', top: -6, right: -6,
@@ -340,7 +367,7 @@ export function AdjustmentBadge({ log, isSelectionMode, isSelected, onClick }: {
           overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1,
           textDecoration: isExcluded ? 'line-through' : 'none',
         }}>
-          {config.label}
+          {isGrouped ? `${log.count}x ${config.label}` : config.label}
         </Box>
         <Box component="span" sx={{ 
           fontSize: '0.62rem', fontWeight: 800, flexShrink: 0,
@@ -374,6 +401,8 @@ export default function WeeklyGrid({
   selectedLogs,
   onToggleShiftSelection,
   onToggleLogSelection,
+  onManageLogGroup,
+  onExceptionLogClick,
 }: WeeklyGridProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -473,7 +502,7 @@ export default function WeeklyGrid({
                           <Typography variant="caption" fontWeight={600} sx={{ fontSize: '0.65rem', minWidth: 60 }}>
                             {emp.firstName} {emp.lastName?.[0]}.
                           </Typography>
-                          <AdjustmentBadge log={log} />
+                          <AdjustmentBadge log={log} onClick={() => onExceptionLogClick?.(log)} />
                         </Box>
                       ))}
                     </Box>
@@ -765,34 +794,7 @@ export default function WeeklyGrid({
                         display: 'flex', flexDirection: 'column', gap: 0.5, minHeight: 44,
                         overflow: 'visible',
                       }}>
-                        {/* Upper row for compact badges */}
-                        {(cellTimeOff.length > 0 || cellAdjustments.length > 0) && (
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            {cellTimeOff.map(req => (
-                              <TimeOffIndicator 
-                                key={`to-${req.id}`} 
-                                request={req} 
-                                compact
-                                onDelete={isManager ? onDeleteTimeOff : undefined}
-                              />
-                            ))}
-                            {cellAdjustments.map(log => (
-                              <AdjustmentBadge 
-                                key={`adj-${log.id}`} 
-                                log={log} 
-                                isSelectionMode={isSelectionMode}
-                                isSelected={isSelectionMode && selectedLogs?.has(log.id)}
-                                onClick={() => {
-                                  if (isSelectionMode && onToggleLogSelection) {
-                                    onToggleLogSelection(log.id);
-                                  }
-                                }}
-                              />
-                            ))}
-                          </Box>
-                        )}
-
-                        {/* Shift pills with trade badge overlay */}
+                        {/* Shift pills with trade badge overlay FIRST for perfect horizontal alignment */}
                         {cellShifts.map(shift => {
                           const trade = getTradeForShift(activeTrades, shift.id);
                           return (
@@ -812,6 +814,54 @@ export default function WeeklyGrid({
                             />
                           );
                         })}
+
+                        {/* Exceptions & Time-off rendered BELOW shifts */}
+                        {(cellTimeOff.length > 0 || cellAdjustments.length > 0) && (
+                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                            {cellTimeOff.map(req => (
+                              <TimeOffIndicator 
+                                key={`to-${req.id}`} 
+                                request={req} 
+                                compact
+                                onDelete={isManager ? onDeleteTimeOff : undefined}
+                              />
+                            ))}
+                            {(() => {
+                              // Smart aggregation: Group by type + isIncluded
+                              const grouped = new Map<string, any>();
+                              cellAdjustments.forEach(log => {
+                                const key = `${log.type}-${log.isIncluded}`;
+                                if (!grouped.has(key)) {
+                                  grouped.set(key, { ...log, value: parseFloat(log.value) || 0, count: 1, logs: [log] });
+                                } else {
+                                  const existing = grouped.get(key);
+                                  existing.value += (parseFloat(log.value) || 0);
+                                  existing.count++;
+                                  existing.logs.push(log);
+                                }
+                              });
+                              
+                              return Array.from(grouped.values()).map(aggrLog => (
+                                <AdjustmentBadge 
+                                  key={`adj-group-${aggrLog.id}`} 
+                                  log={aggrLog} 
+                                  isSelectionMode={isSelectionMode}
+                                  isSelected={isSelectionMode && selectedLogs?.has(aggrLog.id)} // In selection mode, maybe it only selects the first ID, which is a known limitation of bulk edits with grouped views
+                                  onClick={() => {
+                                    if (isSelectionMode && onToggleLogSelection) {
+                                      // Toggle all individual IDs in the group
+                                      aggrLog.logs.forEach((l: any) => onToggleLogSelection(l.id));
+                                    } else if (!isSelectionMode && onManageLogGroup) {
+                                      onManageLogGroup(aggrLog.logs);
+                                    } else if (!isSelectionMode && onExceptionLogClick) {
+                                      onExceptionLogClick(aggrLog.logs?.[0] || aggrLog);
+                                    }
+                                  }}
+                                />
+                              ));
+                            })()}
+                          </Box>
+                        )}
                         {cellShifts.length === 0 && !hasApprovedTimeOff && isManager && !isSelectionMode && (
                           <Box className="add-shift-btn" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, opacity: 0, transform: 'scale(0.95)', transition: 'all 0.2s ease', '&:hover': { opacity: 1, transform: 'scale(1)' } }}>
                             {!isBlocked && (

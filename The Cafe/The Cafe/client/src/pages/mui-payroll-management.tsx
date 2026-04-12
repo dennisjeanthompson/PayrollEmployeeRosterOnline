@@ -1,5 +1,5 @@
 import PesoIcon from "@/components/PesoIcon";
-import { useState, useMemo } from "react";
+import { useState, useEffect, useMemo, startTransition } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -133,7 +133,7 @@ const getStatusColor = (status: string) => {
   }
 };
 
-type PeriodType = '2weeks' | 'month' | 'custom';
+type PeriodType = 'semi-monthly' | 'month' | 'custom';
 
 export default function MuiPayrollManagement() {
   const theme = useTheme();
@@ -145,7 +145,7 @@ export default function MuiPayrollManagement() {
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
   const [payDate, setPayDate] = useState<Date | null>(null);
-  const [periodType, setPeriodType] = useState<PeriodType>('2weeks');
+  const [periodType, setPeriodType] = useState<PeriodType>('semi-monthly');
   
   // Digital payslip viewer state
   const [payslipViewerOpen, setPayslipViewerOpen] = useState(false);
@@ -180,6 +180,7 @@ export default function MuiPayrollManagement() {
   useRealtime({
     queryKeys: ["payroll-periods", "payroll-entries-branch"]
   });
+
   
   // Handle opening digital payslip viewer
   const handleViewPayslip = (entry: PayrollEntry) => {
@@ -228,7 +229,7 @@ export default function MuiPayrollManagement() {
     setStartDate(start);
     setEndDate(end);
     setPayDate(end);
-    setPeriodType('custom');
+    setPeriodType('semi-monthly');
     setIsCreateDialogOpen(true);
   };
 
@@ -238,10 +239,11 @@ export default function MuiPayrollManagement() {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
-    if (type === '2weeks') {
-      setStartDate(today);
-      setEndDate(addDays(today, 13)); // 14 days total (2 weeks)
-      setPayDate(addDays(today, 13));
+    if (type === 'semi-monthly') {
+      const { start, end } = getCurrentSemiMonthlyDates();
+      setStartDate(start);
+      setEndDate(end);
+      setPayDate(end);
     } else if (type === 'month') {
       setStartDate(startOfMonth(today));
       setEndDate(endOfMonth(today));
@@ -275,6 +277,14 @@ export default function MuiPayrollManagement() {
     enabled: !!selectedPeriod,
     refetchOnWindowFocus: true,
   });
+
+  // Auto-select latest open period when data loads (so Entries tab never shows empty)
+  useEffect(() => {
+    if (!selectedPeriod && periodsData?.periods?.length > 0) {
+      const openPeriod = periodsData.periods.find((p: any) => p.status === 'open');
+      setSelectedPeriod(openPeriod || periodsData.periods[0]);
+    }
+  }, [periodsData, selectedPeriod]);
 
   // Mutations
   const createPeriodMutation = useMutation({
@@ -1093,7 +1103,7 @@ export default function MuiPayrollManagement() {
               <Button
                 size="small"
                 startIcon={<SettingsIcon sx={{ fontSize: 16 }} />}
-                onClick={() => setLocation('/deduction-settings')}
+                onClick={() => startTransition(() => setLocation('/deduction-settings'))}
                 sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
               >
                 Configure
@@ -1159,11 +1169,30 @@ export default function MuiPayrollManagement() {
                   alignItems: "center",
                 }}
               >
-                <Box>
-                  <Typography variant="subtitle1" fontWeight={600}>
-                    {format(new Date(selectedPeriod.startDate), "MMM d")} –{" "}
-                    {format(new Date(selectedPeriod.endDate), "MMM d, yyyy")}
-                  </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                  <FormControl size="small" sx={{ minWidth: 260 }}>
+                    <Select
+                      value={selectedPeriod?.id || ''}
+                      onChange={(e) => {
+                        const newPeriod = periods.find((p: any) => p.id === e.target.value);
+                        if (newPeriod) setSelectedPeriod(newPeriod);
+                      }}
+                      sx={{
+                        borderRadius: 2,
+                        fontWeight: 600,
+                        bgcolor: alpha(theme.palette.background.paper, 0.5),
+                        '& .MuiOutlinedInput-notchedOutline': {
+                          borderColor: alpha(theme.palette.primary.main, 0.2),
+                        },
+                      }}
+                    >
+                      {periods.map((p: any) => (
+                        <MenuItem key={p.id} value={p.id}>
+                          {format(new Date(p.startDate), "MMM d")} – {format(new Date(p.endDate), "MMM d, yyyy")}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                   <Typography variant="caption" color="text.secondary">
                     {entries.length} employees
                   </Typography>
@@ -1421,26 +1450,30 @@ export default function MuiPayrollManagement() {
                         </TableCell>
                         <TableCell>
                           <Chip
-                            label={log.status?.replace('_', ' ')}
+                            label={log.status === 'disputed' ? '⚠️ Disputed' : log.status?.replace('_', ' ')}
                             size="small"
                             color={
                               log.status === 'approved' ? 'success' :
                               log.status === 'employee_verified' ? 'info' :
                               log.status === 'rejected' ? 'error' :
+                              log.status === 'disputed' ? 'error' :
                               'warning'
                             }
+                            variant={log.status === 'disputed' ? 'outlined' : 'filled'}
                             sx={{ fontWeight: 600, textTransform: "capitalize" }}
                           />
                         </TableCell>
                         <TableCell align="center">
-                          <Tooltip title={logIncluded ? 'Included — will affect next payroll run' : 'Excluded — will be skipped during payroll'} arrow>
-                            <MuiSwitch
-                              size="small"
-                              checked={logIncluded}
-                              onChange={() => toggleIncludedMutation.mutate(log.id)}
-                              disabled={toggleIncludedMutation.isPending}
-                              color="success"
-                            />
+                          <Tooltip title={log.status !== 'approved' ? 'Cannot include pending/disputed/rejected logs' : logIncluded ? 'Included — will affect next payroll run' : 'Excluded — will be skipped during payroll'} arrow>
+                            <span>
+                              <MuiSwitch
+                                size="small"
+                                checked={logIncluded}
+                                onChange={() => toggleIncludedMutation.mutate(log.id)}
+                                disabled={toggleIncludedMutation.isPending || log.status !== 'approved'}
+                                color="success"
+                              />
+                            </span>
                           </Tooltip>
                         </TableCell>
                         <TableCell align="right">
@@ -1554,8 +1587,8 @@ export default function MuiPayrollManagement() {
                 </Typography>
                 <Stack direction="row" spacing={1}>
                   <Button
-                    variant={periodType === '2weeks' ? 'contained' : 'outlined'}
-                    onClick={() => handlePeriodTypeChange('2weeks')}
+                    variant={periodType === 'semi-monthly' ? 'contained' : 'outlined'}
+                    onClick={() => handlePeriodTypeChange('semi-monthly')}
                     sx={{ 
                       flex: 1, 
                       borderRadius: 2,
@@ -1564,7 +1597,7 @@ export default function MuiPayrollManagement() {
                       fontWeight: 600,
                     }}
                   >
-                    2 Weeks
+                    Semi-Monthly
                   </Button>
                   <Button
                     variant={periodType === 'month' ? 'contained' : 'outlined'}
@@ -1577,7 +1610,7 @@ export default function MuiPayrollManagement() {
                       fontWeight: 600,
                     }}
                   >
-                    1 Month
+                    Monthly
                   </Button>
                   <Button
                     variant={periodType === 'custom' ? 'contained' : 'outlined'}

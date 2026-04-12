@@ -24,8 +24,10 @@ import {
   CircularProgress,
   ToggleButton,
   ToggleButtonGroup,
+  useTheme,
+  alpha,
 } from "@mui/material";
-import { Delete as DeleteIcon, Edit as EditIcon } from "@mui/icons-material";
+import { Delete as DeleteIcon, Edit as EditIcon, Event as EventIcon, Schedule as ScheduleIcon } from "@mui/icons-material";
 
 interface Shift {
   id?: string;
@@ -62,10 +64,12 @@ export function WeekShiftPicker({
   branchId,
 }: WeekShiftPickerProps) {
   const queryClient = useQueryClient();
+  const theme = useTheme();
+  const isDark = theme.palette.mode === 'dark';
+  
   const [weekStartDate, setWeekStartDate] = useState(() => startOfWeek(initialWeekDate, { weekStartsOn: 1 }));
   const [selectedPreset, setSelectedPreset] = useState<string>("morning");
   const [weekShifts, setWeekShifts] = useState<Record<string, Shift>>({});
-  const [appliedTemplate, setAppliedTemplate] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Generate week dates (Monday to Sunday)
@@ -136,6 +140,7 @@ export function WeekShiftPicker({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shifts"] });
+      queryClient.invalidateQueries({ queryKey: ["employee-shifts"] });
       setError(null);
       handleClose();
     },
@@ -159,6 +164,7 @@ export function WeekShiftPicker({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shifts"] });
+      queryClient.invalidateQueries({ queryKey: ["employee-shifts"] });
     },
     onError: (error: Error) => console.error('Failed to delete shift:', error.message),
   });
@@ -178,7 +184,8 @@ export function WeekShiftPicker({
     }));
   };
 
-  const handleDeleteShift = (dayIndex: number) => {
+  const handleDeleteShift = (dayIndex: number, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
     const dayDate = weekDates[dayIndex];
     const dateStr = format(dayDate.date, "yyyy-MM-dd");
     const shift = weekShifts[dateStr];
@@ -219,26 +226,53 @@ export function WeekShiftPicker({
   ).length;
 
   return (
-    <Dialog open={open} onClose={handleClose} maxWidth="md" fullWidth>
-      <DialogTitle>
-        Weekly Shift Schedule - {employeeName}
-        <Typography variant="caption" display="block" color="textSecondary">
-          {format(weekStartDate, "MMMM d")} - {format(addDays(weekStartDate, 6), "MMMM d, yyyy")}
-        </Typography>
+    <Dialog 
+      open={open} 
+      onClose={handleClose} 
+      maxWidth="md" 
+      fullWidth
+      PaperProps={{
+        sx: { 
+          borderRadius: 3,
+          bgcolor: isDark ? '#1C1410' : '#FFFFFF',
+          backgroundImage: 'none',
+        }
+      }}
+    >
+      <DialogTitle sx={{ pb: 2 }}>
+        <Stack direction="row" alignItems="center" spacing={1.5} mb={0.5}>
+          <Box sx={{ 
+            bgcolor: alpha(theme.palette.primary.main, 0.1),
+            color: 'primary.main',
+            p: 1,
+            borderRadius: 2,
+            display: 'flex'
+          }}>
+            <EventIcon fontSize="small" />
+          </Box>
+          <Box>
+            <Typography variant="h6" fontWeight={800} component="span" sx={{ display: 'block' }}>
+              Weekly Shift Schedule
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              {employeeName} · {format(weekStartDate, "MMM d")} - {format(addDays(weekStartDate, 6), "MMM d, yyyy")}
+            </Typography>
+          </Box>
+        </Stack>
       </DialogTitle>
 
-      <DialogContent>
+      <DialogContent sx={{ px: 3, pb: 1 }}>
         <Stack spacing={3}>
           {error && (
-            <Alert severity="error" onClose={() => setError(null)}>
+            <Alert severity="error" onClose={() => setError(null)} sx={{ borderRadius: 2 }}>
               {error}
             </Alert>
           )}
 
           {/* Shift Preset Selector */}
           <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Quick Preset
+            <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ color: 'text.secondary', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+              Quick Preset Context
             </Typography>
             <ToggleButtonGroup
               value={selectedPreset}
@@ -246,6 +280,20 @@ export function WeekShiftPicker({
               onChange={(e, newValue) => newValue && setSelectedPreset(newValue)}
               fullWidth
               size="small"
+              sx={{
+                '& .MuiToggleButton-root': {
+                  borderRadius: '12px !important',
+                  mx: 0.5,
+                  mb: 1,
+                  border: '1px solid',
+                  borderColor: isDark ? alpha(theme.palette.common.white, 0.1) : alpha(theme.palette.primary.main, 0.2),
+                  '&.Mui-selected': {
+                    bgcolor: alpha(theme.palette.primary.main, 0.1),
+                    color: 'primary.main',
+                    fontWeight: 700,
+                  }
+                }
+              }}
             >
               <ToggleButton value="morning">Morning (6AM-2PM)</ToggleButton>
               <ToggleButton value="afternoon">Afternoon (2PM-10PM)</ToggleButton>
@@ -256,10 +304,10 @@ export function WeekShiftPicker({
 
           {/* Week Grid */}
           <Box>
-            <Typography variant="subtitle2" gutterBottom>
-              Apply shifts to each day
+            <Typography variant="subtitle2" fontWeight={700} gutterBottom sx={{ color: 'text.secondary', textTransform: 'uppercase', fontSize: '0.75rem', letterSpacing: '0.05em' }}>
+              Select Days to Apply Preset
             </Typography>
-            <Grid container spacing={1}>
+            <Grid container spacing={1.5}>
               {weekDates.map((dayInfo, dayIndex) => {
                 const dateStr = format(dayInfo.date, "yyyy-MM-dd");
                 const shift = weekShifts[dateStr];
@@ -268,80 +316,107 @@ export function WeekShiftPicker({
 
                 return (
                   <Grid size={{ xs: 12, sm: 6, md: 4 }} key={dayIndex}>
-                    <Card
-                      variant={hasShift ? "outlined" : "elevation"}
+                    <Box
                       sx={{
-                        backgroundColor: hasShift
-                          ? "rgba(16, 185, 129, 0.08)"
+                        borderRadius: 2,
+                        p: 2,
+                        height: '100%',
+                        border: '1px solid',
+                        borderColor: hasShift
+                          ? alpha(theme.palette.success.main, 0.4)
+                          : isDark ? '#3D3228' : alpha(theme.palette.primary.main, 0.1),
+                        bgcolor: hasShift
+                          ? alpha(theme.palette.success.main, 0.05)
                           : isWeekend
-                          ? "rgba(0, 0, 0, 0.02)"
-                          : "background.paper",
+                          ? isDark ? alpha(theme.palette.common.white, 0.02) : '#fafafa'
+                          : isDark ? '#261C14' : '#FFFFFF',
                         cursor: "pointer",
-                        transition: "all 0.2s",
+                        transition: "all 0.2s ease",
+                        display: 'flex',
+                        flexDirection: 'column',
+                        justifyContent: 'space-between',
                         "&:hover": {
+                          borderColor: alpha(theme.palette.primary.main, 0.6),
                           boxShadow: 2,
                         },
                       }}
                       onClick={() => handleApplyPreset(dayIndex)}
                     >
-                      <CardContent sx={{ p: 2, "&:last-child": { pb: 2 } }}>
-                        <Typography variant="subtitle2" fontWeight="bold">
-                          {dayInfo.day}
-                        </Typography>
-                        <Typography variant="caption" color="textSecondary">
-                          {format(dayInfo.date, "MMM d")}
-                        </Typography>
-
-                        {hasShift ? (
-                          <Box mt={1}>
-                            <Chip
-                              label={`${shift.startTime} - ${shift.endTime}`}
-                              size="small"
-                              variant="outlined"
-                              color="success"
-                              onDelete={() => handleDeleteShift(dayIndex)}
-                            />
-                          </Box>
-                        ) : (
-                          <Typography variant="caption" color="textSecondary" sx={{ display: "block", mt: 1 }}>
-                            No shift
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                         <Box>
+                          <Typography variant="subtitle2" fontWeight={800} color={hasShift ? 'success.main' : 'text.primary'}>
+                            {dayInfo.day}
                           </Typography>
-                        )}
-                      </CardContent>
-                    </Card>
+                          <Typography variant="caption" color="text.secondary" fontWeight={600}>
+                            {format(dayInfo.date, "MMM d")}
+                          </Typography>
+                         </Box>
+                         {hasShift && (
+                            <IconButton
+                               size="small"
+                               onClick={(e) => handleDeleteShift(dayIndex, e)}
+                               sx={{ 
+                                  p: 0.5, 
+                                  color: 'error.main', 
+                                  bgcolor: alpha(theme.palette.error.main, 0.1),
+                                  '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.2) } 
+                               }}
+                             >
+                               <DeleteIcon sx={{ fontSize: '1rem' }} />
+                             </IconButton>
+                         )}
+                      </Box>
+
+                      {hasShift ? (
+                        <Box mt={2}>
+                          <Chip
+                            icon={<ScheduleIcon sx={{ fontSize: '1rem !important' }} />}
+                            label={`${shift.startTime} - ${shift.endTime}`}
+                            size="small"
+                            color="success"
+                            variant="outlined"
+                            sx={{ fontWeight: 700, border: 'none', bgcolor: alpha(theme.palette.success.main, 0.12) }}
+                          />
+                        </Box>
+                      ) : (
+                        <Typography variant="caption" color="text.disabled" sx={{ display: "block", mt: 2, fontWeight: 600 }}>
+                          No Shift
+                        </Typography>
+                      )}
+                    </Box>
                   </Grid>
                 );
               })}
             </Grid>
           </Box>
 
-          {/* Summary */}
-          <Box sx={{ p: 2, backgroundColor: "rgba(16, 185, 129, 0.05)", borderRadius: 1 }}>
-            <Typography variant="body2">
-              <strong>Shifts this week:</strong> {shiftCount}
-            </Typography>
-          </Box>
         </Stack>
       </DialogContent>
 
-      <DialogActions>
-        <Button onClick={handleClose} disabled={createShiftsMutation.isPending}>
-          Cancel
-        </Button>
-        <Button
-          onClick={handleSaveWeek}
-          variant="contained"
-          disabled={shiftCount === 0 || createShiftsMutation.isPending}
-        >
-          {createShiftsMutation.isPending ? (
-            <>
-              <CircularProgress size={16} sx={{ mr: 1 }} />
-              Saving...
-            </>
-          ) : (
-            `Save ${shiftCount} Shift${shiftCount !== 1 ? "s" : ""}`
-          )}
-        </Button>
+      <DialogActions sx={{ px: 3, pb: 2, pt: 2, borderTop: '1px solid', borderColor: 'divider', display: 'flex', justifyContent: 'space-between' }}>
+        <Typography variant="body2" fontWeight={600} color="text.secondary" sx={{ ml: 1 }}>
+          Shifts Selected: <Typography component="span" fontWeight={800} color="primary.main">{shiftCount}</Typography>
+        </Typography>
+        <Box>
+          <Button onClick={handleClose} disabled={createShiftsMutation.isPending} sx={{ borderRadius: 2, px: 3, textTransform: 'none', mr: 1 }} color="inherit">
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSaveWeek}
+            variant="contained"
+            disabled={shiftCount === 0 || createShiftsMutation.isPending}
+            sx={{ borderRadius: 2, px: 3, textTransform: 'none', fontWeight: 700 }}
+          >
+            {createShiftsMutation.isPending ? (
+              <>
+                <CircularProgress size={16} sx={{ mr: 1 }} />
+                Saving...
+              </>
+            ) : (
+              `Save ${shiftCount} Shift${shiftCount !== 1 ? "s" : ""}`
+            )}
+          </Button>
+        </Box>
       </DialogActions>
     </Dialog>
   );

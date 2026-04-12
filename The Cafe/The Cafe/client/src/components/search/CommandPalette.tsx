@@ -1,5 +1,5 @@
 import PesoIcon from "@/components/PesoIcon";
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, startTransition } from 'react';
 import { useLocation } from 'wouter';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -187,7 +187,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
       } else if (e.key === 'Enter') {
         e.preventDefault();
         if (results[selectedIndex]) {
-          results[selectedIndex].action();
+          startTransition(() => {
+            results[selectedIndex].action();
+          });
           onClose();
         }
       }
@@ -304,7 +306,9 @@ export function CommandPalette({ open, onClose }: CommandPaletteProps) {
               <ListItemButton
                 selected={index === selectedIndex}
                 onClick={() => {
-                  result.action();
+                  startTransition(() => {
+                    result.action();
+                  });
                   onClose();
                 }}
                 onMouseEnter={() => setSelectedIndex(index)}

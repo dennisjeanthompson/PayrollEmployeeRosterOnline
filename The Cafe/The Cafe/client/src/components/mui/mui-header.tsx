@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getCurrentUser, isManager, isAdmin, useAuth } from "@/lib/auth";
 import { invalidateQueries, getQueryFn } from "@/lib/queryClient";
 import { getInitials } from "@/lib/utils";
-import { useLocation, Link } from "wouter";
+import { useLocation } from "wouter";
+import { TransitionLink as Link } from "@/components/TransitionLink";
 import { useTheme as useAppTheme } from "@/components/theme-provider";
 import CommandPalette from "../search/CommandPalette";
 import NotificationBell from "./notification-bell";
@@ -116,6 +117,11 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
   
   // Profile dropdown state
   const [profileMenuAnchor, setProfileMenuAnchor] = useState<null | HTMLElement>(null);
+
+  // Close profile menu upon route changes so we don't leave orphaned UI nodes
+  useEffect(() => {
+    setProfileMenuAnchor(null);
+  }, [location]);
 
   const shouldLoadBranches = canSwitchBranch && isAuthenticated;
   const { data: branchesData } = useQuery<{ branches?: Array<{ id: string; name: string; isActive?: boolean }> } | null>({

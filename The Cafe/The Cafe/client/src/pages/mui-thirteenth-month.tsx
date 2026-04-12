@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, startTransition } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { apiUrl } from "@/lib/api";
@@ -66,7 +66,7 @@ export default function MuiThirteenthMonth() {
   // Auth check
   const hasAccess = isManager() || isAdmin();
   if (!hasAccess) {
-    setLocation("/");
+    startTransition(() => setLocation("/"));
     return null;
   }
 

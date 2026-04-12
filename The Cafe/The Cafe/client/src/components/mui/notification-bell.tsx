@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/lib/auth';
-import { Link } from 'wouter';
+import { Link, useLocation } from 'wouter';
 import { formatDistanceToNow } from 'date-fns';
 import { useRealtime } from '@/hooks/use-realtime';
 
@@ -70,7 +70,8 @@ export default function NotificationBell() {
   const queryClient = useQueryClient();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const open = Boolean(anchorEl);
-  const { isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
+  const [location, setLocation] = useLocation();
 
   const { data: notificationsData, isLoading } = useQuery<{ notifications: Notification[] }>({
     queryKey: ['/api/notifications'],
@@ -118,6 +119,21 @@ export default function NotificationBell() {
   const handleNotificationClick = (notification: Notification) => {
     if (!notification.isRead) markReadMutation.mutate(notification.id);
     setAnchorEl(null);
+
+    // Context-aware routing for professional tier UX
+    const type = notification.type;
+    const role = user?.role;
+    const isManager = role === 'admin' || role === 'manager';
+
+    if (type.startsWith('shift_update') || type === 'shift_assigned' || type === 'schedule' || type === 'adjustment') {
+      setLocation(isManager ? '/schedule' : '/employee/schedule');
+    } else if (type.startsWith('time_off') || type.startsWith('leave')) {
+      setLocation(isManager ? '/requests' : '/employee/dashboard');
+    } else if (type.includes('trade')) {
+      setLocation(isManager ? '/schedule' : '/shift-trading');
+    } else if (type === 'payroll' || type === 'payment') {
+      setLocation('/payroll'); 
+    }
   };
 
   const recentNotifications = notifications.slice(0, 6);
@@ -216,7 +232,7 @@ export default function NotificationBell() {
         </Stack>
 
         {/* List */}
-        <Box sx={{ maxHeight: 380, overflow: 'auto', py: 0.75 }}>
+        <Box sx={{ maxHeight: 380, overflow: 'auto', p: 2 }}>
           {isLoading ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 5 }}>
               <CircularProgress size={24} sx={{ color: isDark ? alpha('#FBF8F4', 0.3) : '#D1D5DB' }} />
@@ -237,7 +253,7 @@ export default function NotificationBell() {
               </Typography>
             </Box>
           ) : (
-            <Stack>
+            <Stack spacing={1.5}>
               {recentNotifications.map((n) => {
                 const style = getStyle(n.type);
                 return (
@@ -247,20 +263,20 @@ export default function NotificationBell() {
                     sx={{
                       position: 'relative',
                       display: 'flex', alignItems: 'flex-start', gap: 1.5,
-                      px: 2.5, py: 1.75, cursor: 'pointer',
-                      bgcolor: n.isRead ? 'transparent' : (isDark ? alpha('#FBF8F4', 0.02) : '#FAFAFA'),
-                      transition: 'all 0.15s cubic-bezier(.4,0,.2,1)',
+                      p: 2, cursor: 'pointer',
+                      borderRadius: 3,
+                      border: '1px solid',
+                      borderColor: n.isRead 
+                        ? (isDark ? alpha('#FBF8F4', 0.05) : '#F3F4F6')
+                        : alpha(style.color, 0.3),
+                      bgcolor: n.isRead ? 'transparent' : (isDark ? alpha(style.color, 0.05) : alpha(style.color, 0.02)),
+                      transition: 'all 0.2s cubic-bezier(.4,0,.2,1)',
                       '&:hover': {
-                        bgcolor: alpha(style.color, isDark ? 0.08 : 0.04),
+                        transform: 'translateY(-2px)',
+                        boxShadow: `0 4px 12px ${alpha(style.color, 0.15)}`,
+                        bgcolor: n.isRead ? alpha(theme.palette.action.hover, 0.05) : alpha(style.color, 0.08),
+                        borderColor: alpha(style.color, 0.4),
                       },
-                      '&::before': !n.isRead ? {
-                        content: '""',
-                        position: 'absolute',
-                        left: 0, top: 8, bottom: 8,
-                        width: 3,
-                        background: style.gradient,
-                        borderRadius: '0 3px 3px 0',
-                      } : undefined,
                     }}
                   >
                     <Avatar sx={{

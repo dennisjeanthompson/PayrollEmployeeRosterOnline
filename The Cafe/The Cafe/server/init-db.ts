@@ -399,6 +399,25 @@ export async function initializeDatabase() {
       ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS is_included BOOLEAN DEFAULT true
     `).catch(() => {});
 
+    // Migration: Add dispute columns to adjustment_logs
+    await db.execute(sql`
+      ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS dispute_reason TEXT
+    `).catch(() => {});
+    await db.execute(sql`
+      ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS disputed_at TIMESTAMP
+    `).catch(() => {});
+
+    // Per-log comment thread for manager–employee communication
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS adjustment_log_comments (
+        id TEXT PRIMARY KEY,
+        adjustment_log_id TEXT REFERENCES adjustment_logs(id) NOT NULL,
+        user_id TEXT REFERENCES users(id) NOT NULL,
+        message TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT NOW()
+      )
+    `);
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS sss_contribution_table (
         id SERIAL PRIMARY KEY,

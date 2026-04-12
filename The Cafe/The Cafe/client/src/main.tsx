@@ -49,8 +49,19 @@ window.addEventListener('unhandledrejection', (event) => {
 
 // Global error handler for runtime errors
 window.addEventListener('error', (event) => {
-  console.error('❌ Runtime error:', event.error);
   const errorMsg = event.error?.message || event.message || String(event.error);
+  
+  // Safely suppress benign ResizeObserver errors without crashing the app
+  if (
+    typeof errorMsg === 'string' && 
+    (errorMsg.includes('ResizeObserver loop limit exceeded') || 
+     errorMsg.includes('ResizeObserver loop completed with undelivered notifications'))
+  ) {
+    event.preventDefault();
+    return; // Don't show the error overlay
+  }
+
+  console.error('❌ Runtime error:', event.error);
   const errorStack = event.error?.stack || '';
   showErrorOverlay(`Runtime Error`, errorMsg, errorStack);
 });

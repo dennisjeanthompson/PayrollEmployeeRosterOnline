@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, startTransition } from "react";
 import {
   Box,
   Card,
@@ -65,10 +65,10 @@ export default function MuiLogin() {
       // Redirect user based on role to correct routes
       if (data.user?.role === 'admin' || data.user?.role === 'manager') {
         // Admin/Manager use DesktopRouter which starts at /
-        setLocation('/');
+        startTransition(() => setLocation('/'));
       } else {
         // Employee -> mobile dashboard namespace
-        setLocation('/employee/dashboard');
+        startTransition(() => setLocation('/employee/dashboard'));
       }
 
       toast({

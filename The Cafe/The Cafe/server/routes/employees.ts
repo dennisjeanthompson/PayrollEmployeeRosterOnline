@@ -288,21 +288,7 @@ router.post('/api/employees', requireAuth, requireRole(['manager', 'admin']), as
       return res.status(400).json({ message: 'hourlyRate must be a non-negative number' });
     }
 
-    // --- DOLE COMPLIANCE: Feature 4 Min Wage Guardian ---
     const calculatedDailyRate = parsedRate * 8;
-    const { wageOrders } = await import('../../shared/schema');
-    const { eq } = await import('drizzle-orm');
-    const { db } = await import('../db');
-    
-    // Check against NCR minimum wage order
-    const ncrOrder = await db.select().from(wageOrders).where(eq(wageOrders.region, 'NCR')).limit(1);
-    const minWage = ncrOrder.length > 0 ? parseFloat(ncrOrder[0].dailyRate) : 645.00;
-    
-    if (calculatedDailyRate < minWage) {
-      return res.status(400).json({ 
-        message: `DOLE Violation: Calculated daily rate (₱${calculatedDailyRate.toFixed(2)}) is below the Minimum Wage (₱${minWage.toFixed(2)}).` 
-      });
-    }
 
     // Restrict role — only admins can create admin accounts
     const allowedRoles = req.session.user?.role === 'admin' ? ['employee', 'manager', 'admin'] : ['employee', 'manager'];
@@ -447,21 +433,7 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']),
         return res.status(400).json({ message: 'hourlyRate must be a non-negative number' });
       }
 
-      // --- DOLE COMPLIANCE: Feature 4 Min Wage Guardian ---
       const calculatedDailyRate = rate * 8;
-      const { wageOrders } = await import('../../shared/schema');
-      const { eq } = await import('drizzle-orm');
-      const { db } = await import('../db');
-      
-      const ncrOrder = await db.select().from(wageOrders).where(eq(wageOrders.region, 'NCR')).limit(1);
-      const minWage = ncrOrder.length > 0 ? parseFloat(ncrOrder[0].dailyRate) : 645.00;
-      
-      if (calculatedDailyRate < minWage) {
-        return res.status(400).json({ 
-          message: `DOLE Violation: Calculated daily rate (₱${calculatedDailyRate.toFixed(2)}) is below the Minimum Wage (₱${minWage.toFixed(2)}).` 
-        });
-      }
-
       updates.hourlyRate = String(rate);
       updates.dailyRate = calculatedDailyRate.toString();
     }
