@@ -1,6 +1,51 @@
 /**
  * Forecast & Analytics Routes
  * Provides predictive analytics for labor demand, payroll costs, and staffing
+ *
+ * ══════════════════════════════════════════════════════════════════════════════
+ *  FORECASTING MODEL: Seasonal Naive (Day-of-Week Average)
+ * ══════════════════════════════════════════════════════════════════════════════
+ *
+ *  TYPE:       Seasonal Naive / Historical Day-of-Week Average
+ *  NOT:        Linear Regression, ARIMA, or any trend-based model
+ *
+ *  HOW IT WORKS:
+ *    1. Collects 8 weeks (~56 days) of historical shift data for the branch.
+ *    2. Groups total labor hours and payroll costs by day-of-week (Mon–Sun).
+ *    3. Computes the arithmetic mean for each weekday to establish a
+ *       recurring weekly pattern (e.g., "Saturdays average 42 labor hours").
+ *    4. For each future date, looks up that date's weekday and uses the
+ *       historical average as the predicted value.
+ *
+ *  HOLIDAY ADJUSTMENTS:
+ *    - Regular holidays (e.g., Christmas, Independence Day):
+ *        → 60% reduction in predicted hours, 200% pay premium applied
+ *    - Special non-working holidays (e.g., EDSA Anniversary):
+ *        → 30% reduction in predicted hours, 130% pay premium applied
+ *
+ *  CONFIDENCE BAND:
+ *    - A fixed ±10% band around the predicted value.
+ *    - This is NOT a statistically derived confidence interval (no standard
+ *      deviation or prediction interval is used for the band itself).
+ *    - Standard deviation IS calculated per weekday for internal diagnostics.
+ *
+ *  ASSUMPTIONS:
+ *    - Weekly patterns are stable (no long-term trend or growth modeled).
+ *    - 8 weeks of data is sufficient to capture seasonal weekly patterns.
+ *    - When insufficient data exists (< 2 samples per weekday), defaults to
+ *      8 labor hours/day and ₱800/day payroll cost.
+ *
+ *  LIMITATIONS:
+ *    - Does not model growth, decline, or long-term trends.
+ *    - Does not account for special events, promotions, or weather.
+ *    - Holiday adjustments use fixed multipliers, not learned behavior.
+ *    - Confidence band is heuristic, not probabilistic.
+ *
+ *  FUTURE IMPROVEMENTS:
+ *    - Weighted Moving Average (give recent weeks more influence)
+ *    - Simple Exponential Smoothing for trend detection
+ *    - Holiday-specific learned adjustments from historical holiday data
+ * ══════════════════════════════════════════════════════════════════════════════
  */
 
 import { Router, Request, Response } from "express";

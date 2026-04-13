@@ -1,14 +1,34 @@
 /**
- * Schedule V2 â€” Clean, separated UI architecture
+ * Schedule V2 — Clean, separated UI architecture
  * 
  * Key principles:
  * 1. Schedule grid shows ONLY confirmed shifts (no pending items cluttering)
  * 2. Requests/trades live in a separate panel (slide-out drawer)
- * 3. Simple toolbar with week navigation â€” no 12-button chaos
+ * 3. Simple toolbar with week navigation — no 12-button chaos
  * 4. Weekly grid for managers, personal list for employees
  * 5. Mobile-first: auto-switches to card layout
  * 
  * Replaces the 5,000+ line monolith with ~500 lines of clean, composable code.
+ *
+ * ── UX DECISION: "Recent Activities" feed ──────────────────────────────────
+ * The Recent Activities / Activity Log does NOT belong on this page.
+ * It should live on the Manager/Admin Requests page instead. Rationale:
+ *
+ *   1. FOCUS: The schedule page is already dense with the weekly grid,
+ *      exception log pills, shift trades, and time-off overlays. Adding
+ *      an activity feed here would clutter the core scheduling workflow.
+ *
+ *   2. NATURAL HOME: The Requests/Approvals page is where managers review
+ *      trades, time-off, and exception logs — exactly the entities that
+ *      generate "recent activity." The feed belongs alongside that context.
+ *
+ *   3. AUDIENCE: Employees don't need to see administrative activity
+ *      (who approved what, who edited which rate). Showing it here adds
+ *      noise for non-manager roles. A manager-only Requests page keeps
+ *      this information properly scoped.
+ *
+ *   4. PERFORMANCE: The schedule grid already queries shifts, users, trades,
+ *      and time-off. Adding an activity log query would slow initial render.
  */
 import React, { useState, useMemo, useCallback } from 'react';
 import {
