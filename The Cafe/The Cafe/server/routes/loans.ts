@@ -15,6 +15,21 @@ router.post("/", async (req, res) => {
 
     // Always start the remaining balance exactly as the total amount requested
     const parsedData = insertLoanRequestSchema.parse(req.body);
+
+    // Validate loan amounts are positive and logically consistent
+    const totalAmount = parseFloat(parsedData.totalAmount || "0");
+    const monthlyAmort = parseFloat(parsedData.monthlyAmortization || "0");
+
+    if (totalAmount <= 0) {
+      return res.status(400).json({ message: "Total loan amount must be greater than zero." });
+    }
+    if (monthlyAmort <= 0) {
+      return res.status(400).json({ message: "Monthly amortization must be greater than zero." });
+    }
+    if (monthlyAmort > totalAmount) {
+      return res.status(400).json({ message: "Monthly amortization cannot exceed total loan amount." });
+    }
+
     const data = {
       ...parsedData,
       remainingBalance: parsedData.totalAmount || "0",

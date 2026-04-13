@@ -145,7 +145,7 @@ export default function MuiAdminDeductionRates() {
       queryClient.invalidateQueries({ queryKey: ["/api/admin/deduction-rates"] });
       toast({ 
         title: "Success", 
-        description: data.message || "All 2025 rates seeded successfully!" 
+        description: data.message || "All 2026 rates seeded successfully!" 
       });
     },
     onError: (error: Error) => {
@@ -250,7 +250,7 @@ export default function MuiAdminDeductionRates() {
             color="warning"
             startIcon={seedAllRatesMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
             onClick={() => {
-              if (confirm("This will replace ALL existing rates with official 2025 Philippine deduction rates (SSS, PhilHealth, Pag-IBIG, Tax). Continue?")) {
+              if (confirm("This will replace ALL existing rates with official 2026 Philippine deduction rates (SSS, PhilHealth, Pag-IBIG, Tax). Continue?")) {
                 seedAllRatesMutation.mutate();
               }
             }}
@@ -262,7 +262,7 @@ export default function MuiAdminDeductionRates() {
               textTransform: "none",
             }}
           >
-            Seed 2025 Rates
+            Seed 2026 Rates
           </Button>
           <Button
             variant="contained"

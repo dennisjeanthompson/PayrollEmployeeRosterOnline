@@ -1164,6 +1164,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: `Invalid type. Valid types: ${validTypes.join(', ')}` });
       }
 
+      // Validate value is a positive number
+      const numValue = parseFloat(value);
+      if (isNaN(numValue) || numValue <= 0) {
+        return res.status(400).json({ message: "Value must be a positive number." });
+      }
+
+      // Validate manager's branch matches the employee's branch
+      if (req.user!.role === 'manager' && branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Cannot create exception logs for employees in another branch." });
+      }
+
       const log = await storage.createAdjustmentLog({
         employeeId,
         loggedBy,
@@ -1171,7 +1182,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         startDate: new Date(date),
         endDate: new Date(date),
         type,
-        value: value.toString(),
+        value: numValue.toString(),
         remarks: remarks || null,
         status: 'pending',
       });
@@ -1206,7 +1217,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
 
   // Get adjustment logs by branch (Manager)
-  app.get("/api/adjustment-logs/branch", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+  app.get("/api/adjustment-logs/branch", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
       const { startDate, endDate } = req.query;
@@ -1260,14 +1271,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Missing required fields: startDate, endDate, type, value" });
       }
 
+      // Validate value is a positive number
+      const numValue = parseFloat(value);
+      if (isNaN(numValue) || numValue <= 0) {
+        return res.status(400).json({ message: "Value must be a positive number." });
+      }
+
+      // Validate date chronology
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      if (start.getTime() > end.getTime()) {
+        return res.status(400).json({ message: "Start date cannot be after end date." });
+      }
+
       const log = await storage.createAdjustmentLog({
         employeeId: userId,
         branchId: req.user!.branchId!,
         loggedBy: userId,
-        startDate: new Date(startDate),
-        endDate: new Date(endDate),
+        startDate: start,
+        endDate: end,
         type,
-        value: typeof value === 'number' ? value.toString() : value,
+        value: numValue.toString(),
         remarks: remarks || "",
         status: "pending", // Manager needs to approve
       });
