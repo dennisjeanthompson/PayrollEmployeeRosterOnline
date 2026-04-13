@@ -390,6 +390,11 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']),
       return res.status(403).json({ message: 'Unauthorized to update this employee' });
     }
 
+    // Prevent managers from modifying admin accounts
+    if (existingEmployee.role === 'admin' && req.session.user?.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admins can modify admin accounts' });
+    }
+
     // Whitelist allowed fields to prevent mass assignment
     const updates: Record<string, any> = {};
     const allowedFields = ['username', 'password', 'firstName', 'lastName', 'email', 'position', 'hourlyRate', 'role', 'isActive', 'branchId', 'tin', 'sssNumber', 'philhealthNumber', 'pagibigNumber', 'isMwe'];
@@ -491,6 +496,11 @@ router.put('/api/employees/:id/deductions', requireAuth, requireRole(['manager',
       return res.status(403).json({ message: 'Unauthorized to update this employee' });
     }
 
+    // Prevent managers from modifying admin deductions
+    if (existingEmployee.role === 'admin' && req.session.user?.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admins can modify admin deductions' });
+    }
+
     // Update the employee deductions
     const updatedEmployee = await storage.updateUser(id, {
       sssLoanDeduction: sssLoanDeduction !== undefined ? String(sssLoanDeduction) : existingEmployee.sssLoanDeduction,
@@ -551,6 +561,11 @@ router.patch('/api/employees/:id/status', requireAuth, requireRole(['manager', '
     const existingEmployee = await storage.getUser(id);
     if (!existingEmployee) {
       return res.status(404).json({ message: 'Employee not found' });
+    }
+
+    // Prevent managers from deactivating admin accounts
+    if (existingEmployee.role === 'admin' && req.session.user?.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admins can modify admin status' });
     }
 
     // Update the employee status
