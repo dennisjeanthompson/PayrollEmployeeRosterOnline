@@ -113,8 +113,8 @@ router.get('/:id', requireAuth, async (req: Request, res: Response) => {
   }
 });
 
-// POST /api/holidays - Create a new holiday (admin/manager only)
-router.post('/', requireAuth, requireRole(['admin', 'manager']), async (req: Request, res: Response) => {
+// POST /api/holidays - Create a new holiday (admin only)
+router.post('/', requireAuth, requireRole(['admin']), async (req: Request, res: Response) => {
   try {
     const validatedData = insertHolidaySchema.parse(req.body);
 
@@ -145,8 +145,8 @@ router.post('/', requireAuth, requireRole(['admin', 'manager']), async (req: Req
   }
 });
 
-// PUT /api/holidays/:id - Update a holiday (admin/manager only)
-router.put('/:id', requireAuth, requireRole(['admin', 'manager']), async (req: Request, res: Response) => {
+// PUT /api/holidays/:id - Update a holiday (admin only)
+router.put('/:id', requireAuth, requireRole(['admin']), async (req: Request, res: Response) => {
   try {
     const existingHoliday = await storage.getHoliday(req.params.id);
 
@@ -180,8 +180,8 @@ router.put('/:id', requireAuth, requireRole(['admin', 'manager']), async (req: R
   }
 });
 
-// DELETE /api/holidays/:id - Delete a holiday (admin/manager only)
-router.delete('/:id', requireAuth, requireRole(['admin', 'manager']), async (req: Request, res: Response) => {
+// DELETE /api/holidays/:id - Delete a holiday (admin only)
+router.delete('/:id', requireAuth, requireRole(['admin']), async (req: Request, res: Response) => {
   try {
     const existingHoliday = await storage.getHoliday(req.params.id);
 

@@ -56,6 +56,7 @@ import { format } from "date-fns";
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { useAuth } from "@/hooks/use-auth";
 
 interface Holiday {
   id: string;
@@ -85,6 +86,8 @@ export default function MuiHolidayCalendar() {
   const theme = useTheme();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const calendarRef = useRef<FullCalendar | null>(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [tabValue, setTabValue] = useState(0);
@@ -320,7 +323,7 @@ export default function MuiHolidayCalendar() {
               Holiday Calendar Management
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Configure Philippine holidays for payroll calculations (Admin/Manager Only)
+              Configure Philippine holidays for payroll calculations {isAdmin ? "(Admin Only)" : "(View Only)"}
             </Typography>
           </Box>
         </Box>
@@ -340,54 +343,58 @@ export default function MuiHolidayCalendar() {
             ))}
           </TextField>
 
-          <Button
-            variant="outlined"
-            color="warning"
-            startIcon={seedMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
-            onClick={() => {
-              if (confirm("Seed official 2025 Philippine holidays (Proclamation 727)?")) {
-                seedMutation.mutate();
-              }
-            }}
-            disabled={seedMutation.isPending}
-            sx={{ borderRadius: 3, textTransform: "none", fontWeight: 600 }}
-          >
-            Seed 2025 Holidays
-          </Button>
+          {isAdmin && (
+            <>
+              <Button
+                variant="outlined"
+                color="warning"
+                startIcon={seedMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
+                onClick={() => {
+                  if (confirm("Seed official 2025 Philippine holidays (Proclamation 727)?")) {
+                    seedMutation.mutate();
+                  }
+                }}
+                disabled={seedMutation.isPending}
+                sx={{ borderRadius: 3, textTransform: "none", fontWeight: 600 }}
+              >
+                Seed 2025 Holidays
+              </Button>
 
-          <Button
-            variant="outlined"
-            color="success"
-            startIcon={seed2026Mutation.isPending ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
-            onClick={() => {
-              if (confirm("Seed official 2026 Philippine holidays?")) {
-                seed2026Mutation.mutate();
-              }
-            }}
-            disabled={seed2026Mutation.isPending}
-            sx={{ borderRadius: 3, textTransform: "none", fontWeight: 600 }}
-          >
-            Seed 2026 Holidays
-          </Button>
+              <Button
+                variant="outlined"
+                color="success"
+                startIcon={seed2026Mutation.isPending ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
+                onClick={() => {
+                  if (confirm("Seed official 2026 Philippine holidays?")) {
+                    seed2026Mutation.mutate();
+                  }
+                }}
+                disabled={seed2026Mutation.isPending}
+                sx={{ borderRadius: 3, textTransform: "none", fontWeight: 600 }}
+              >
+                Seed 2026 Holidays
+              </Button>
 
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => {
-              setEditingHoliday(null);
-              resetForm();
-              setIsDialogOpen(true);
-            }}
-            sx={{
-              borderRadius: 3,
-              px: 3,
-              fontWeight: 600,
-              textTransform: "none",
-              boxShadow: `0 4px 16px ${alpha(theme.palette.primary.main, 0.3)}`,
-            }}
-          >
-            Add Holiday
-          </Button>
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => {
+                  setEditingHoliday(null);
+                  resetForm();
+                  setIsDialogOpen(true);
+                }}
+                sx={{
+                  borderRadius: 3,
+                  px: 3,
+                  fontWeight: 600,
+                  textTransform: "none",
+                  boxShadow: `0 4px 16px ${alpha(theme.palette.primary.main, 0.3)}`,
+                }}
+              >
+                Add Holiday
+              </Button>
+            </>
+          )}
         </Stack>
       </Box>
 
@@ -572,16 +579,22 @@ export default function MuiHolidayCalendar() {
                         </TableCell>
                         <TableCell align="right">
                           <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                            <Tooltip title="Edit">
-                              <IconButton size="small" onClick={() => handleEdit(holiday)}>
-                                <EditIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
-                            <Tooltip title="Delete">
-                              <IconButton size="small" color="error" onClick={() => handleDelete(holiday)}>
-                                <DeleteIcon fontSize="small" />
-                              </IconButton>
-                            </Tooltip>
+                            {isAdmin ? (
+                              <>
+                                <Tooltip title="Edit">
+                                  <IconButton size="small" onClick={() => handleEdit(holiday)}>
+                                    <EditIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                                <Tooltip title="Delete">
+                                  <IconButton size="small" color="error" onClick={() => handleDelete(holiday)}>
+                                    <DeleteIcon fontSize="small" />
+                                  </IconButton>
+                                </Tooltip>
+                              </>
+                            ) : (
+                              <Typography variant="caption" color="text.disabled">View Only</Typography>
+                            )}
                           </Stack>
                         </TableCell>
                       </TableRow>
