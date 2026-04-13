@@ -63,19 +63,23 @@ export async function calculateSSS(monthlyBasicSalary: number): Promise<number> 
 
 /**
  * Calculate PhilHealth contribution (employee share)
- * 2026 Rate: 2.5% employee share (5% total, split 50-50)
- * Salary floor: ₱10,000, ceiling: ₱100,000
+ * Dynamically driven by database rates configured by Admin
  */
 export async function calculatePhilHealth(monthlyBasicSalary: number): Promise<number> {
   try {
-    // 2026 Rate: 2.5% employee share (5% total)
-    // Floor: 10,000, Ceiling: 100,000
+    const rates = await dbStorage.getDeductionRatesByType('philhealth');
+    const activeRate = rates.find(r => r.isActive);
+    
+    // Default fallback to 2026 constants if DB is missing
+    const floor = activeRate ? parseFloat(activeRate.minSalary) : 10000;
+    const ceiling = activeRate?.maxSalary ? parseFloat(activeRate.maxSalary) : 100000;
+    const rate = activeRate?.employeeRate ? (parseFloat(activeRate.employeeRate) / 100) : 0.025;
     
     let baseSalary = monthlyBasicSalary;
-    if (baseSalary < PHILHEALTH_FLOOR) baseSalary = PHILHEALTH_FLOOR;
-    if (baseSalary > PHILHEALTH_CEILING) baseSalary = PHILHEALTH_CEILING;
+    if (baseSalary < floor) baseSalary = floor;
+    if (baseSalary > ceiling) baseSalary = ceiling;
     
-    const contribution = baseSalary * PHILHEALTH_EMPLOYEE_RATE;
+    const contribution = baseSalary * rate;
     return Math.round(contribution * 100) / 100;
   } catch (error) {
     console.error('Error calculating PhilHealth:', error);
@@ -85,18 +89,21 @@ export async function calculatePhilHealth(monthlyBasicSalary: number): Promise<n
 
 /**
  * Calculate Pag-IBIG contribution (employee share)
- * 2026 Rate: 2% of monthly basic salary, maximum ₱200
- * (Increased from ₱100 max in 2025 to ₱200 in 2026)
+ * Dynamically driven by database rates configured by Admin
  */
 export async function calculatePagibig(monthlyBasicSalary: number): Promise<number> {
   try {
-    // 2026 Rate: 2% employee share
-    // MFS Cap: 10,000 max basic salary for computation -> Max Contribution = 200
+    const rates = await dbStorage.getDeductionRatesByType('pagibig');
+    const activeRate = rates.find(r => r.isActive);
+    
+    // Default fallback to 2026 constants if DB is missing
+    const cap = activeRate?.maxSalary ? parseFloat(activeRate.maxSalary) : 10000;
+    const rate = activeRate?.employeeRate ? (parseFloat(activeRate.employeeRate) / 100) : 0.02;
     
     let baseSalary = monthlyBasicSalary;
-    if (baseSalary > PAGIBIG_MFS_CAP) baseSalary = PAGIBIG_MFS_CAP;
+    if (baseSalary > cap) baseSalary = cap;
     
-    const contribution = baseSalary * PAGIBIG_RATE;
+    const contribution = baseSalary * rate;
     return Math.round(contribution * 100) / 100;
   } catch (error) {
     console.error('Error calculating Pag-IBIG:', error);
@@ -138,7 +145,7 @@ export async function calculateWithholdingTax(monthlyBasicSalary: number): Promi
         } else {
           // Compute cumulative base tax from all preceding taxable brackets
           let baseTax = 0;
-          for (let j = 1; j < i; j++) {
+          for (let j = 0; j < i; j++) {
             const prev = activeRates[j];
             const prevMin = parseFloat(prev.minSalary);
             const prevMax = prev.maxSalary ? parseFloat(prev.maxSalary) : 0;
