@@ -227,7 +227,7 @@ export default function MuiAnalytics() {
             Forecasting
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Predicted labor hours &amp; payroll costs
+            Predicted labor hours &amp; payroll costs • Model: Seasonal Naive (Day-of-Week Average)
           </Typography>
         </Box>
         <Button
