@@ -1878,11 +1878,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (!employee.isActive) continue;
 
         // --- DOLE COMPLIANCE: MSEC/BIR Mandatory Verification ---
-        // Skip employees missing government IDs with a warning instead of blocking the entire payroll
+        // We log a warning for missing government IDs but MUST process payroll for hours worked.
         if (!employee.tin || !employee.sssNumber || !employee.philhealthNumber || !employee.pagibigNumber ||
             employee.tin === '—' || employee.sssNumber === '—') {
-          console.warn(`[PAYROLL SKIP] ${employee.firstName} ${employee.lastName} — missing government IDs, skipping.`);
-          continue;
+          console.warn(`[PAYROLL WARNING] ${employee.firstName} ${employee.lastName} is missing government IDs, but processing payroll to prevent DOLE violation.`);
+          // Do not skip the employee's payroll processing
         }
 
         // Get shifts for this employee in the period
@@ -3875,8 +3875,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const user = userMap.get(shift.userId);
       if (user) {
         const hours = (new Date(shift.endTime).getTime() - new Date(shift.startTime).getTime()) / (1000 * 60 * 60);
+        const rate = parseFloat(user.hourlyRate);
         // Estimate revenue as 3x labor cost (typical cafe margin)
-        revenue += hours * parseFloat(user.hourlyRate) * 3;
+        revenue += hours * (isNaN(rate) ? 0 : rate) * 3;
       }
     }
     const totalEmployees = branchUsers.length;
@@ -4030,7 +4031,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Calculate estimated sales (3x labor cost)
-      const sales = hours * parseFloat(user.hourlyRate) * 3;
+      const rate = parseFloat(user.hourlyRate);
+      const sales = hours * (isNaN(rate) ? 0 : rate) * 3;
 
       monthlyData.push({
         name: monthDate.toLocaleDateString('en-US', { month: 'short' }),
@@ -4058,7 +4060,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       monthlyData,
       currentMonth: {
         hours: Number(currentMonthHours.toFixed(2)),
-        sales: Number((currentMonthHours * parseFloat(user.hourlyRate) * 3).toFixed(2)),
+        sales: Number((currentMonthHours * (isNaN(parseFloat(user.hourlyRate)) ? 0 : parseFloat(user.hourlyRate)) * 3).toFixed(2)),
         shiftsCompleted: completedShifts,
         totalShifts: totalShifts,
         completionRate: Number(completionRate.toFixed(1)),
@@ -4864,6 +4866,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const overtimeHours = Math.max(0, totalHours - 88);
 
         const hourlyRate = parseFloat(emp.hourlyRate);
+        if (isNaN(hourlyRate) || hourlyRate <= 0) {
+          console.error(`[PAYROLL] Invalid hourly rate for ${emp.firstName}: ${emp.hourlyRate}`);
+          continue;
+        }
         const basicPay = regularHours * hourlyRate;
         const overtimePay = overtimeHours * hourlyRate * HOLIDAY_RATES.normal.overtime;
         const grossPay = basicPay + overtimePay;

@@ -84,9 +84,14 @@ async function run() {
       const pay = calculatePeriodPay(shifts, hourlyRate, periodHolidays, 0, false);
 
       const gross = pay.totalGrossPay;
-      const sss = gross > 0 ? 500 : 0;
-      const phic = gross > 0 ? 300 : 0;
-      const hdmf = gross > 0 ? 200 : 0;
+      const { calculateAllDeductions } = await import('./utils/deductions.js');
+      const monthlyBasicSalary = hourlyRate * 22 * 8; // Project to DOLE standard 22-day month
+      const deductions = await calculateAllDeductions(monthlyBasicSalary, { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: false });
+      
+      const sss = Math.round(deductions.sssContribution * 0.5 * 100) / 100; // Semi-monthly splits it
+      const phic = Math.round(deductions.philHealthContribution * 0.5 * 100) / 100;
+      const hdmf = Math.round(deductions.pagibigContribution * 0.5 * 100) / 100;
+
       const totalDed = sss + phic + hdmf;
       const net = gross - totalDed;
 

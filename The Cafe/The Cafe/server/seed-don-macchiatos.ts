@@ -246,9 +246,13 @@ async function main() {
       const overtimeHours = pay.breakdown.reduce((s, d) => s + d.overtimeHours, 0);
       const nightDiffHours = pay.breakdown.reduce((s, d) => s + d.regularNightDiffHours + d.overtimeNightDiffHours, 0);
 
-      const sss = pay.totalGrossPay > 0 ? 300 : 0;
-      const phic = pay.totalGrossPay > 0 ? 150 : 0;
-      const hdmf = pay.totalGrossPay > 0 ? 100 : 0;
+      const { calculateAllDeductions } = await import('./utils/deductions.js');
+      const monthlyBasicSalary = rate * 22 * 8; // DOLE standard projection
+      const deductions = await calculateAllDeductions(monthlyBasicSalary, { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: false });
+      
+      const sss = Math.round(deductions.sssContribution * 0.5 * 100) / 100; // Semi-monthly splits it
+      const phic = Math.round(deductions.philHealthContribution * 0.5 * 100) / 100;
+      const hdmf = Math.round(deductions.pagibigContribution * 0.5 * 100) / 100;
       const totalDed = sss + phic + hdmf;
 
       const entry = {
