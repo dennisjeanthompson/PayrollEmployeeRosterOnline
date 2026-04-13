@@ -107,7 +107,29 @@ const PH_HOLIDAYS: { date: string; name: string; type: "regular" | "special" }[]
   { date: "2026-12-30", name: "Rizal Day", type: "regular" },
 ];
 
-// Helper: Check if date is a holiday
+// Helper: Check if date is a holiday — reads from DB first, falls back to static list
+async function getHolidayFromDB(date: Date, branchHolidays?: any[]): Promise<{ name: string; type: "regular" | "special" } | null> {
+  const dateStr = format(date, "yyyy-MM-dd");
+  
+  // If pre-fetched DB holidays were supplied, use those
+  if (branchHolidays && branchHolidays.length > 0) {
+    const dbHoliday = branchHolidays.find(h => {
+      const hDate = format(new Date(h.date), "yyyy-MM-dd");
+      return hDate === dateStr;
+    });
+    if (dbHoliday) {
+      const mappedType: "regular" | "special" = dbHoliday.type === 'regular' ? 'regular' : 'special';
+      return { name: dbHoliday.name, type: mappedType };
+    }
+    return null;
+  }
+
+  // Fallback to static list
+  const holiday = PH_HOLIDAYS.find(h => h.date === dateStr);
+  return holiday ? { name: holiday.name, type: holiday.type } : null;
+}
+
+// Legacy sync function kept for backward compatibility in non-async contexts
 function getHoliday(date: Date): { name: string; type: "regular" | "special" } | null {
   const dateStr = format(date, "yyyy-MM-dd");
   const holiday = PH_HOLIDAYS.find(h => h.date === dateStr);
@@ -176,8 +198,10 @@ router.get("/api/analytics/trends", requireAuth, requireManagerRole, async (req,
         dailyData[dateKey].hours += hours;
         dailyData[dateKey].shifts += 1;
         const user = userMap.get(shift.userId);
-        const hourlyRate = parseFloat(user?.hourlyRate || "100");
-        dailyData[dateKey].cost += hours * hourlyRate;
+        const hourlyRate = parseFloat(user?.hourlyRate || "0");
+        if (hourlyRate > 0) {
+          dailyData[dateKey].cost += hours * hourlyRate;
+        }
       }
     }
 
@@ -285,6 +309,16 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
       return d >= historyStart && d < today;
     });
 
+    // Fetch holidays from DB for the forecast window
+    let dbHolidays: any[] = [];
+    try {
+      const { db: forecastDb } = await import('../db');
+      const { holidays: holidaysTable } = await import('../../shared/schema');
+      dbHolidays = await forecastDb.select().from(holidaysTable);
+    } catch (e) {
+      console.warn('[Forecast] Could not load DB holidays, using static fallback');
+    }
+
     // Calculate day-of-week averages
     const dowStats: Record<number, { hours: number[]; }> = {};
     for (let i = 0; i < 7; i++) dowStats[i] = { hours: [] };
@@ -319,7 +353,7 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
     for (let i = 0; i < forecastDays; i++) {
       const forecastDate = addDays(today, i);
       const dow = getDay(forecastDate);
-      const holiday = getHoliday(forecastDate);
+      const holiday = await getHolidayFromDB(forecastDate, dbHolidays);
       
       let predicted = dowAverages[dow].avg;
       
@@ -378,10 +412,23 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
     const allShifts = await storage.getShiftsByBranch(branchId, historyStart, today);
     const employees = await storage.getUsersByBranch(branchId);
     
-    // Build employee hourly rate map
+    // Build employee hourly rate map — skip employees with no valid rate
     const rateMap: Record<string, number> = {};
     for (const emp of employees) {
-      rateMap[emp.id] = parseFloat(emp.hourlyRate || "100");
+      const rate = parseFloat(emp.hourlyRate || "0");
+      if (rate > 0) {
+        rateMap[emp.id] = rate;
+      }
+    }
+
+    // Fetch holidays from DB for the forecast window
+    let dbHolidays: any[] = [];
+    try {
+      const { db: forecastDb } = await import('../db');
+      const { holidays: holidaysTable } = await import('../../shared/schema');
+      dbHolidays = await forecastDb.select().from(holidaysTable);
+    } catch (e) {
+      console.warn('[Forecast] Could not load DB holidays, using static fallback');
     }
     
     // Calculate average daily cost by day-of-week
@@ -397,7 +444,8 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
     for (const shift of historicalShifts) {
       const dateKey = format(new Date(shift.startTime), "yyyy-MM-dd");
       const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
-      const rate = rateMap[shift.userId] || 100;
+      const rate = rateMap[shift.userId];
+      if (!rate) continue; // Skip shifts for employees with no valid rate
       dailyCosts[dateKey] = (dailyCosts[dateKey] || 0) + (hours * rate);
     }
 
@@ -422,7 +470,7 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
     for (let i = 0; i < forecastDays; i++) {
       const forecastDate = addDays(today, i);
       const dow = getDay(forecastDate);
-      const holiday = getHoliday(forecastDate);
+      const holiday = await getHolidayFromDB(forecastDate, dbHolidays);
       
       let predicted = dowAverages[dow];
       
