@@ -74,10 +74,10 @@ export default function MuiComplianceDashboard() {
     name: "SSS Contribution Table",
     status: sssRates.length >= 30 ? "pass" : sssRates.length > 0 ? "warning" : "fail",
     message: sssRates.length >= 30 
-      ? `${sssRates.length} brackets configured (2025 compliant)`
+      ? `${sssRates.length} brackets configured (2026 compliant)`
       : sssRates.length > 0 
-        ? `Only ${sssRates.length} brackets. Should be 33 for full 2025 compliance.`
-        : "No SSS rates configured. Add 2025 rate brackets.",
+        ? `Only ${sssRates.length} brackets. Should be 33 for full 2026 compliance.`
+        : "No SSS rates configured. Add 2026 rate brackets.",
     icon: <SecurityIcon />,
   });
 
@@ -135,7 +135,7 @@ export default function MuiComplianceDashboard() {
   });
 
   // 6. Min wage compliance
-  const minWageLaUnion = 470; // ₱470/day La Union 2025
+  const minWageLaUnion = 470; // ₱470/day La Union 2026
   const minHourlyRate = minWageLaUnion / 8;
   const belowMinWage = employees.filter(e => 
     e.hourlyRate && parseFloat(e.hourlyRate) < minHourlyRate
@@ -191,7 +191,7 @@ export default function MuiComplianceDashboard() {
             Compliance Dashboard
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Philippine Payroll Compliance Status (2025)
+            Philippine Payroll Compliance Status (2026)
           </Typography>
         </Box>
         <Chip
@@ -335,12 +335,12 @@ export default function MuiComplianceDashboard() {
       {/* Reference Information */}
       <Alert severity="info" sx={{ mt: 4, borderRadius: 2 }}>
         <Typography variant="body2" gutterBottom>
-          <strong>2025 Rate References:</strong>
+          <strong>2026 Rate References:</strong>
         </Typography>
         <Typography variant="caption" component="div">
           • SSS: CI-2024-006 (15% total, 5% employee, 10% employer, 33 brackets)
           <br />
-          • PhilHealth: PA2025-0002 (5% total, 2.5% each, ₱10k-₱100k salary range)
+          • PhilHealth: PA2026-0002 (5% total, 2.5% each, ₱10k-₱100k salary range)
           <br />
           • Pag-IBIG: Circular 460 (2% each, max ₱200/share)
           <br />
