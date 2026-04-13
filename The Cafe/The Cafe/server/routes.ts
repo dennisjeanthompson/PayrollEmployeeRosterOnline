@@ -2904,9 +2904,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Shift not found" });
       }
 
-      // Prevent trading past/completed shifts
-      if (new Date(shift.endTime) < new Date()) {
-        return res.status(400).json({ message: "Cannot trade a shift that has already ended" });
+      // Prevent trading shifts that have already started or ended
+      if (new Date(shift.startTime) <= new Date()) {
+        return res.status(400).json({ message: "Cannot trade a shift that has already started or ended" });
       }
 
       let fromUserId = req.user!.id;
@@ -4191,6 +4191,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
         throw new Error(`Invalid date format. Start: ${req.body.startDate}, End: ${req.body.endDate}`);
+      }
+
+      // Prevent negative duration requests
+      if (startDate.getTime() > endDate.getTime()) {
+        return res.status(400).json({ message: "End date cannot be before start date" });
       }
 
       // Calculate advance notice days (from today to start date)
