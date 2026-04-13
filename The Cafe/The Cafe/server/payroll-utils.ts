@@ -123,7 +123,8 @@ export const MINS_PER_HOUR = 60;
 export interface ShiftHourBreakdown {
   regularHours: number;
   overtimeHours: number;
-  nightDiffHours: number;
+  regularNightDiffHours: number;
+  overtimeNightDiffHours: number;
   holidayType: HolidayType;
   isRestDay: boolean;
   date: Date;
@@ -383,7 +384,6 @@ export function calculateDailyHoursBreakdown(
     for (const segment of segments) {
       const dateKey = toLocalDateString(segment.date);
       const segmentHours = calculateSegmentHours(segment.start, segment.end);
-      const nightDiffHours = calculateNightDiffHours(segment.start, segment.end);
       const holidayType = getHolidayType(segment.date, holidays);
       const isRest = isRestDay(segment.date, restDay);
 
@@ -391,7 +391,8 @@ export function calculateDailyHoursBreakdown(
         dailyBreakdown.set(dateKey, {
           regularHours: 0,
           overtimeHours: 0,
-          nightDiffHours: 0,
+          regularNightDiffHours: 0,
+          overtimeNightDiffHours: 0,
           holidayType,
           isRestDay: isRest,
           date: segment.date
@@ -401,21 +402,27 @@ export function calculateDailyHoursBreakdown(
       const existing = dailyBreakdown.get(dateKey)!;
       const currentTotalHours = existing.regularHours + existing.overtimeHours;
 
-      // Apply daily 8-hour overtime rule
+      // Apply daily 8-hour overtime rule and accurately split Night Differential
       if (currentTotalHours >= DAILY_REGULAR_HOURS) {
         // Already exceeded 8 hours, all additional hours are OT
         existing.overtimeHours += segmentHours;
+        existing.overtimeNightDiffHours += calculateNightDiffHours(segment.start, segment.end);
       } else if (currentTotalHours + segmentHours > DAILY_REGULAR_HOURS) {
-        // This segment crosses the 8-hour threshold
+        // This segment crosses the 8-hour threshold, need to split the exact minute
         const remainingRegular = DAILY_REGULAR_HOURS - currentTotalHours;
+        const boundaryMs = segment.start.getTime() + (remainingRegular * 60 * 60 * 1000);
+        const boundaryDate = new Date(boundaryMs);
+
         existing.regularHours += remainingRegular;
         existing.overtimeHours += (segmentHours - remainingRegular);
+        
+        existing.regularNightDiffHours += calculateNightDiffHours(segment.start, boundaryDate);
+        existing.overtimeNightDiffHours += calculateNightDiffHours(boundaryDate, segment.end);
       } else {
         // All hours are regular
         existing.regularHours += segmentHours;
+        existing.regularNightDiffHours += calculateNightDiffHours(segment.start, segment.end);
       }
-
-      existing.nightDiffHours += nightDiffHours;
     }
   }
 
@@ -465,8 +472,9 @@ export function calculatePeriodPay(
     const otPay = dayData.overtimeHours * hourlyRate * otRate;
 
     // Night differential is calculated on top of the applicable rate
-    const nightDiffBase = (dayData.nightDiffHours * hourlyRate * regularRate);
-    const nightDiff = nightDiffBase * NIGHT_DIFF_RATE;
+    const regularNightDiffBase = (dayData.regularNightDiffHours * hourlyRate * regularRate);
+    const otNightDiffBase = (dayData.overtimeNightDiffHours * hourlyRate * otRate);
+    const nightDiff = (regularNightDiffBase + otNightDiffBase) * NIGHT_DIFF_RATE;
 
     // Categorize the pay
     if (dayData.holidayType !== 'normal') {
