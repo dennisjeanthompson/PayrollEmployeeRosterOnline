@@ -1233,7 +1233,7 @@ export default function MuiEmployees() {
                       disabled={isEditing}
                       helperText={isEditing 
                         ? "Leave blank to keep current password" 
-                        : "Required. Default is usually password123"}
+                        : "Required. Default password applies if not specified."}
                       InputProps={{
                         endAdornment: (
                           <InputAdornment position="end">

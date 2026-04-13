@@ -69,7 +69,7 @@ export default function MuiProfileSettings() {
   const [firstName, setFirstName] = useState(user?.firstName ?? "");
   const [lastName, setLastName] = useState(user?.lastName ?? "");
   const [email, setEmail] = useState(user?.email ?? "");
-  const [currentPassword, setCurrentPassword] = useState("password123");
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -474,8 +474,8 @@ export default function MuiProfileSettings() {
                           boxShadow: 'none',
                           ':hover': { boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)' },
                           '&.Mui-disabled': {
-                            bgcolor: '#e2e8f0',
-                            color: '#94a3b8',
+                            bgcolor: 'action.disabledBackground',
+                            color: 'text.disabled',
                           },
                         }}
                       >
@@ -574,8 +574,8 @@ export default function MuiProfileSettings() {
                           boxShadow: 'none',
                           ':hover': { boxShadow: '0 4px 12px rgba(15, 23, 42, 0.15)' },
                           '&.Mui-disabled': {
-                            bgcolor: '#e2e8f0',
-                            color: '#94a3b8',
+                            bgcolor: 'action.disabledBackground',
+                            color: 'text.disabled',
                           },
                         }}
                       >

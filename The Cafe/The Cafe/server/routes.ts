@@ -301,9 +301,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Mark setup as complete
       await storage.markSetupComplete();
 
-      console.log('✅ Setup completed successfully');
-      console.log(`   Branch: ${createdBranch.name}`);
-      console.log(`   Manager: ${createdManager.firstName} ${createdManager.lastName} (${createdManager.username})`);
 
       res.json({
         message: 'Setup completed successfully',
@@ -368,7 +365,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
-      console.log(`✅ Password fix complete: ${fixed} fixed, ${skipped} already hashed`);
       res.json({
         message: `Fixed ${fixed} unhashed passwords, ${skipped} were already hashed`,
         fixed,
@@ -413,7 +409,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       await storage.updateUser(userId, { password: newPassword });
       
-      console.log(`✅ Password reset for user ${user.username} by ${currentUser.username}`);
       res.json({ message: `Password reset successfully for ${user.username}` });
     } catch (error) {
       console.error('Reset password error:', error);
@@ -440,7 +435,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       clientDebugReports.unshift(entry);
       if (clientDebugReports.length > 200) clientDebugReports.pop();
 
-      console.log('📣 Client debug report received:', entry.url, payload.type || payload.message || '(no type)');
 
       // Accept via beacon/fetch without blocking client
       res.status(204).end();
@@ -489,13 +483,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       if (!isBcryptHash) {
         // Password is stored as plain text - compare directly and then hash it
-        console.log(`⚠️ [LOGIN] User ${username} has unhashed password - fixing...`);
         
         if (user.password === password) {
           // Password matches, now hash it for future logins
           const hashedPassword = await bcrypt.hash(password, 10);
           await storage.updateUser(user.id, { password }); // db-storage will hash it
-          console.log(`✅ [LOGIN] Fixed password hash for user ${username}`);
           isPasswordValid = true;
         }
       } else {
@@ -504,7 +496,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       if (!isPasswordValid) {
-        console.log(`❌ [LOGIN] Invalid password for user ${username}`);
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
@@ -527,7 +518,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error('❌ Session save error:', err);
             res.status(500).json({ message: 'Failed to create session' });
           } else {
-            console.log('✅ Session saved for user:', username);
 
 
             // Remove password from response
@@ -581,7 +571,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isSetupComplete = await storage.isSetupComplete();
       
       if (req.session?.user?.id) {
-        console.log(`✅ [AUTH STATUS] Session found for user: ${req.session.user.username}`);
         // Fetch fresh data from DB to avoid returning stale session snapshot
         try {
           const freshUser = await storage.getUser(req.session.user.id);
@@ -602,7 +591,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           res.json({ authenticated: true, isSetupComplete, user: req.session.user });
         }
       } else {
-        console.log(`⚠️  [AUTH STATUS] No session found`);
         res.json({ 
           authenticated: false, 
           isSetupComplete,
@@ -669,7 +657,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error("❌ Failed to save session after branch switch:", err);
             res.status(500).json({ message: "Failed to switch branch" });
           } else {
-            console.log(`✅ Branch switched to ${branch.name} (${branchId}) for user ${req.user!.username}`);
             res.json({ 
               message: "Branch switched successfully",
               branchId,
@@ -696,7 +683,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(403).json({ message: "Insufficient permissions" });
     }
 
-    console.log('Fetching shifts for user:', targetUserId, 'startDate:', startDate, 'endDate:', endDate);
 
     const shifts = await storage.getShiftsByUser(
       targetUserId,
@@ -704,7 +690,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       endDate ? new Date(endDate as string) : undefined
     );
 
-    console.log('Found shifts:', shifts.length);
 
     // Enrich shifts with date property extracted from startTime
     const enrichedShifts = shifts.map((shift: any) => ({
@@ -713,7 +698,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }));
 
     // Log what we're sending back for debugging
-    console.log('Returning shifts with data:', enrichedShifts.slice(0, 2).map(s => ({ startTime: s.startTime, date: s.date })));
     
     res.json({ shifts: enrichedShifts });
   }));
@@ -723,9 +707,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { startDate, endDate } = req.query;
       const branchId = req.user!.branchId;
       
-      console.log('📡 [GET /api/shifts/branch] Request from manager:', req.user!.username);
-      console.log('📍 Branch ID:', branchId);
-      console.log('📅 Date range:', startDate, 'to', endDate);
 
       // PERFORMANCE FIX: Batch load all users and shifts in parallel instead of N+1 queries
       const [shifts, allUsers] = await Promise.all([
@@ -737,7 +718,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getUsersByBranch(branchId)
       ]);
       
-      console.log('📊 [GET /api/shifts/branch] Found shifts:', shifts.length, ', users:', allUsers.length);
 
       // Create user lookup map for O(1) access
       const userMap = new Map(allUsers.map(u => [u.id, u]));
@@ -755,12 +735,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (req.user!.role === 'employee') {
         const userId = req.user!.id;
         activeShifts = activeShifts.filter(shift => shift.userId === userId);
-        console.log(`🔒 [GET /api/shifts/branch] Filtered shifts for employee ${req.user!.username} (showing ${activeShifts.length} own shifts)`);
       }
       
-      console.log('✅ [GET /api/shifts/branch] Returning shifts:', activeShifts.length);
       if (activeShifts.length > 0) {
-        console.log('   Sample:', activeShifts[0].user?.firstName, activeShifts[0].user?.lastName);
       }
 
       res.json({ shifts: activeShifts });
@@ -772,7 +749,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/shifts", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
-      console.log('Creating shift with data:', req.body);
       const shiftData = insertShiftSchema.parse(req.body);
 
       // Enforce branch ownership — manager can only create shifts in their own branch
@@ -845,16 +821,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/shifts/:id", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
-      console.log('🔧 [PUT /api/shifts/:id] Request for shift:', id);
-      console.log('🔧 [PUT /api/shifts/:id] Body:', req.body);
       
       const updateData = insertShiftSchema.partial().parse(req.body);
-      console.log('✅ [PUT /api/shifts/:id] Parsed data:', updateData);
 
       // Get the existing shift first to validate changes
       const existingShift = await storage.getShift(id);
       if (!existingShift) {
-        console.log('❌ [PUT /api/shifts/:id] Shift not found:', id);
         return res.status(404).json({ message: "Shift not found" });
       }
 
@@ -862,7 +834,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existingShift.branchId !== req.user!.branchId) {
         return res.status(403).json({ message: "Cannot update shift from another branch" });
       }
-      console.log('📍 [PUT /api/shifts/:id] Found existing shift:', existingShift);
 
       // Determine the new shift times (use existing if not provided)
       const newStartTime = updateData.startTime ? new Date(updateData.startTime) : new Date(existingShift.startTime);
@@ -894,10 +865,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const shift = await storage.updateShift(id, updateData);
-      console.log('✅ [PUT /api/shifts/:id] Updated shift:', shift);
 
       if (!shift) {
-        console.log('❌ [PUT /api/shifts/:id] Update returned null');
         return res.status(404).json({ message: "Shift not found" });
       }
 
@@ -1836,7 +1805,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.deletePayrollPeriod(id);
-      console.log(`✅ Deleted payroll period ${id} by ${req.user!.username}`);
       res.json({ message: "Payroll period deleted successfully" });
     } catch (error: any) {
       console.error("Delete payroll period error:", error);
@@ -1893,7 +1861,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deductSSS: true, deductPhilHealth: true,
         deductPagibig: true, deductWithholdingTax: true
       };
-      console.log(`[PAYROLL] Branch deduction settings: SSS=${branchDeductionSettings.deductSSS}, PhilHealth=${branchDeductionSettings.deductPhilHealth}, PagIBIG=${branchDeductionSettings.deductPagibig}, Tax=${branchDeductionSettings.deductWithholdingTax}`);
 
       for (const employee of employees) {
         if (!employee.isActive) continue;
@@ -2102,8 +2069,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const philHealthContribution = Math.round(mandatoryBreakdown.philHealthContribution * periodFraction * 100) / 100;
         const pagibigContribution = Math.round(mandatoryBreakdown.pagibigContribution * periodFraction * 100) / 100;
 
-        console.log(`[PAYROLL DEDUCTIONS] ${employee.firstName} ${employee.lastName}: hourlyRate=₱${hourlyRate}, monthlyBasic=₱${monthlyBasicSalary.toFixed(2)}, daysInPeriod=${daysInPeriod}, isSemiMonthly=${isSemiMonthly}, periodFraction=${periodFraction}`);
-        console.log(`[PAYROLL DEDUCTIONS] Monthly SSS=₱${mandatoryBreakdown.sssContribution.toFixed(2)} → Period SSS=₱${sssContribution.toFixed(2)}, Monthly PH=₱${mandatoryBreakdown.philHealthContribution.toFixed(2)} → Period PH=₱${philHealthContribution.toFixed(2)}, Monthly PI=₱${mandatoryBreakdown.pagibigContribution.toFixed(2)} → Period PI=₱${pagibigContribution.toFixed(2)}`);
 
         // --- Feature 3: De Minimis Benefits & Allowances ---
         const { workerAllowances, allowanceTypes } = await import('../shared/schema');
@@ -2324,7 +2289,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Rollback: Delete any created payroll entries
       if (createdEntryIds.length > 0) {
-        console.log(`Rolling back ${createdEntryIds.length} payroll entries...`);
         for (const entryId of createdEntryIds) {
           try {
             await storage.deletePayrollEntry(entryId);
@@ -2332,7 +2296,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
             console.error(`Failed to rollback entry ${entryId}:`, deleteError);
           }
         }
-        console.log('Rollback complete');
       }
 
       res.status(500).json({
@@ -2487,19 +2450,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const { entryId } = req.params;
     const userId = req.user!.id;
 
-    console.log(`[Payslip] Looking for entry ${entryId} for user ${userId}`);
 
     // Get payroll entry directly by ID
     const entry = await storage.getPayrollEntry(entryId);
     
     if (!entry) {
-      console.log(`[Payslip] Entry ${entryId} not found in database`);
       return res.status(404).json({ message: "Payroll entry not found" });
     }
     
     // Verify the entry belongs to the current user or user is admin/manager
     if (entry.userId !== userId && req.user!.role !== 'admin' && req.user!.role !== 'manager') {
-      console.log(`[Payslip] Entry ${entryId} belongs to ${entry.userId}, not ${userId}`);
       return res.status(403).json({ message: "Unauthorized access to payroll entry" });
     }
 
@@ -2964,7 +2924,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } : null,
       };
       
-      console.log(`✅ Shift trade created: ${trade.id} by user ${fromUserId}`);
       
       // Get the requester details for the notification message
       const requester = await storage.getUser(fromUserId);
@@ -3100,7 +3059,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } : null,
       };
       
-      console.log(`📝 Shift trade ${id} status updated to ${status} by user ${userId}`);
       
       // Broadcast real-time events based on status
       if (status === "accepted") {
@@ -3256,7 +3214,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const action = status === "approved" ? "✅ approved" : "❌ rejected";
-      console.log(`${action} shift trade ${id} by manager ${managerId}`);
       res.json({ trade: enrichedTrade });
     } catch (error: any) {
       console.error("Manager approve trade error:", error);
@@ -3312,7 +3269,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } : null,
       };
 
-      console.log(`✅ User ${userId} took shift trade ${id}`);
 
       // 1. Notify the original requester
       const taker = await storage.getUser(userId);
@@ -3436,7 +3392,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } : null,
       };
 
-      console.log(`✅ Shift trade ${id} approved by manager ${managerId}`);
       
       // CRITICAL: Broadcast real-time approval with updated shift
       // This triggers instant schedule updates on all clients
@@ -3509,7 +3464,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } : null,
       };
 
-      console.log(`❌ Shift trade ${id} rejected by manager ${managerId}`);
 
       // Audit log for trade rejection
       await createAuditLog({
@@ -3579,7 +3533,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } : null,
       };
 
-      console.log(`🗑️  Shift trade ${id} cancelled by user ${userId}`);
       res.json({ 
         message: "Trade cancelled successfully",
         trade: enrichedTrade 
@@ -3926,14 +3879,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const pendingTimeOffCount = allTimeOffRequests.flat().filter(r => r.status === 'pending').length;
     const pendingRequests = pendingTimeOffCount + (pendingTrades?.length || 0);
 
-    console.log('Sending dashboard stats:', {
-      clockedIn,
-      onBreak,
-      late,
-      revenue,
-      todayShiftsCount: todayShifts.length
-    });
-
     res.json({
       stats: {
         totalEmployees,
@@ -4224,7 +4169,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/time-off-requests", requireAuth, asyncHandler(async (req, res) => {
     try {
-      console.log('📝 Received time off request body:', req.body);
       
       // Manually parse dates
       const startDate = new Date(req.body.startDate);
@@ -4293,7 +4237,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ message: "You already have a pending or approved time-off request overlapping these dates" });
       }
 
-      console.log(`📅 Advance notice: ${advanceDays} days (minimum: ${minimumAdvanceDays}, shortNotice: ${shortNotice})`);
 
       const request = await storage.createTimeOffRequest(requestPayload);
 
@@ -4677,7 +4620,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const daysToRestore = Math.max(1, Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) + 1);
           
           await restoreLeaveCredit(existingRequest.userId, existingRequest.type, daysToRestore, startD.getFullYear());
-          console.log(`Restored ${daysToRestore} ${existingRequest.type} days for user ${existingRequest.userId}`);
         } catch (restoreErr) {
           console.error("Failed to restore leave credits during time-off deletion:", restoreErr);
         }
@@ -5106,7 +5048,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      console.log('🌱 Manual seeding triggered via API');
       await seedSampleUsers();
       await seedSampleSchedulesAndPayroll();
       
@@ -5126,43 +5067,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Full database reset + reseed (admin only)
   app.post("/api/debug/reset-and-reseed", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
     try {
-      console.log('🔄 Full database reset + reseed triggered via API');
 
       // 1. Drop all tables
       await resetDatabase();
-      console.log('   ✅ Database reset');
 
       // 2. Recreate tables
       await initializeDatabase();
-      console.log('   ✅ Tables created');
 
       // 3. Create admin account
       await createAdminAccount();
-      console.log('   ✅ Admin account created');
 
       // 4. Seed deduction rates FIRST (payroll entries need these for calculations)
       await seedDeductionRates();
-      console.log('   ✅ Deduction rates seeded');
 
       // 5. Seed users
       await seedSampleUsers();
-      console.log('   ✅ Sample users seeded');
 
       // 6. Seed schedules + payroll (uses deduction rates)
       await seedSampleSchedulesAndPayroll();
-      console.log('   ✅ Schedules + payroll seeded');
 
       // 7. Seed holidays
       await seedPhilippineHolidays();
-      console.log('   ✅ Holidays seeded');
 
       // 8. Seed shift trades
       await seedSampleShiftTrades();
-      console.log('   ✅ Shift trades seeded');
 
       // 9. Mark setup complete
       await markSetupComplete();
-      console.log('   ✅ Setup marked complete');
 
       res.json({
         message: "Database fully reset and reseeded!",

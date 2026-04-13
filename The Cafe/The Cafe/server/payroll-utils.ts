@@ -483,7 +483,6 @@ export function calculatePeriodPay(
 
     overtimePay += otPay;
     nightDiffPay += nightDiff;
-    console.log(`DEBUG: Date=${toLocalDateString(dayData.date)}, HolidayType=${dayData.holidayType}`);
   }
 
   // --- DOLE Art. 94 Unworked Regular Holiday Pay ---
