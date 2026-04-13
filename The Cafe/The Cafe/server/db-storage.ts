@@ -43,11 +43,8 @@ export class DatabaseStorage implements IStorage {
 
   async createUser(user: InsertUser): Promise<User> {
     const id = randomUUID();
-    console.log('Creating user:', user.username);
-    console.log('Plain password length:', user.password.length);
 
     const hashedPassword = await bcrypt.hash(user.password, 10);
-    console.log('Hashed password starts with:', hashedPassword.substring(0, 10));
 
     try {
       // Don't pass createdAt - let the database default handle it
@@ -58,17 +55,11 @@ export class DatabaseStorage implements IStorage {
         // createdAt will be set by database default: sql`(unixepoch())`
       });
 
-      console.log('User inserted, retrieving...');
-
-      // Give the database a moment to commit
       const created = await this.getUser(id);
       if (!created) {
         console.error('User was inserted but could not be retrieved:', id);
         throw new Error('Failed to create user - database record not found after insertion');
       }
-
-      console.log('User created successfully:', created.username);
-      console.log('Stored password hash starts with:', created.password.substring(0, 10));
 
       return created;
     } catch (error: any) {

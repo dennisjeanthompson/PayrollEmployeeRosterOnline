@@ -11,8 +11,8 @@ import {
   GridFilterOperator,
   GridToolbar,
 } from "@mui/x-data-grid";
-import { ThemeProvider, createTheme } from "@mui/material/styles";
-import { Box, Chip, Avatar, IconButton, Tooltip } from "@mui/material";
+import { ThemeProvider, createTheme, alpha } from "@mui/material/styles";
+import { Box, Chip, Avatar, IconButton, Tooltip, useTheme } from "@mui/material";
 import { Eye, Pencil, Receipt, Trash2, CheckCircle, XCircle } from "lucide-react";
 
 interface Employee {
@@ -192,14 +192,17 @@ export function EmployeeDataGrid({
         minWidth: 250,
         filterOperators: extendedStringOperators,
         valueGetter: (value, row) => `${row.firstName || ''} ${row.lastName || ''}`.trim(),
-        renderCell: (params: GridRenderCellParams<Employee>) => (
+        renderCell: (params: GridRenderCellParams<Employee>) => {
+          const appTheme = useTheme();
+          return (
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1 }}>
             <Avatar
               sx={{
                 width: 40,
                 height: 40,
-                bgcolor: params.row.role === 'manager' ? '#3b82f6' : 
-                         params.row.role === 'admin' ? '#8b5cf6' : '#10b981',
+                bgcolor: params.row.role === 'manager' ? appTheme.palette.primary.main : 
+                         params.row.role === 'admin' ? appTheme.palette.secondary.main : appTheme.palette.info.main,
+                color: '#fff',
                 fontSize: '0.875rem',
                 fontWeight: 600,
               }}
@@ -215,7 +218,8 @@ export function EmployeeDataGrid({
               </Box>
             </Box>
           </Box>
-        ),
+          );
+        },
       },
       {
         field: 'position',
@@ -223,7 +227,9 @@ export function EmployeeDataGrid({
         flex: 1,
         minWidth: 150,
         filterOperators: extendedStringOperators,
-        renderCell: (params: GridRenderCellParams<Employee>) => (
+        renderCell: (params: GridRenderCellParams<Employee>) => {
+          const appTheme = useTheme();
+          return (
           <Box>
             <Box>{params.row.position}</Box>
             <Chip
@@ -235,15 +241,15 @@ export function EmployeeDataGrid({
                 fontSize: '0.65rem',
                 fontWeight: 600,
                 textTransform: 'capitalize',
-                bgcolor: params.row.role === 'manager' ? 'rgba(59, 130, 246, 0.1)' :
-                         params.row.role === 'admin' ? 'rgba(139, 92, 246, 0.1)' : 'rgba(100, 116, 139, 0.1)',
-                color: params.row.role === 'manager' ? '#3b82f6' :
-                       params.row.role === 'admin' ? '#8b5cf6' : '#64748b',
+                bgcolor: params.row.role === 'manager' ? alpha(appTheme.palette.primary.main, 0.1) :
+                         params.row.role === 'admin' ? alpha(appTheme.palette.secondary.main, 0.1) : alpha(appTheme.palette.info.main, 0.1),
+                color: params.row.role === 'manager' ? appTheme.palette.primary.main :
+                       params.row.role === 'admin' ? appTheme.palette.secondary.main : appTheme.palette.info.main,
               }}
             />
           </Box>
-        ),
-      },
+        )
+      }},
       {
         field: 'hourlyRate',
         headerName: 'Rate',
@@ -279,7 +285,9 @@ export function EmployeeDataGrid({
         headerName: 'Status',
         width: 100,
         type: 'boolean',
-        renderCell: (params: GridRenderCellParams<Employee>) => (
+        renderCell: (params: GridRenderCellParams<Employee>) => {
+          const appTheme = useTheme();
+          return (
           <Chip
             icon={params.row.isActive ? <CheckCircle size={14} /> : <XCircle size={14} />}
             label={params.row.isActive ? 'Active' : 'Inactive'}
@@ -288,15 +296,15 @@ export function EmployeeDataGrid({
               height: 24,
               fontSize: '0.7rem',
               fontWeight: 600,
-              bgcolor: params.row.isActive ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-              color: params.row.isActive ? '#10b981' : '#ef4444',
+              bgcolor: params.row.isActive ? alpha(appTheme.palette.success.main, 0.1) : alpha(appTheme.palette.error.main, 0.1),
+              color: params.row.isActive ? appTheme.palette.success.main : appTheme.palette.error.main,
               '& .MuiChip-icon': {
                 color: 'inherit',
               },
             }}
           />
-        ),
-      },
+        )
+      }},
       {
         field: 'actions',
         headerName: 'Actions',

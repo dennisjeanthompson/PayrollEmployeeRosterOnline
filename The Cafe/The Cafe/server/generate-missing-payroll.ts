@@ -94,7 +94,7 @@ async function run() {
       const totalHours = pay.breakdown.reduce((s, d) => s + d.regularHours + d.overtimeHours, 0);
       const regularHours = pay.breakdown.reduce((s, d) => s + d.regularHours, 0);
       const overtimeHours = pay.breakdown.reduce((s, d) => s + d.overtimeHours, 0);
-      const nightDiffHours = pay.breakdown.reduce((s, d) => s + d.nightDiffHours, 0);
+      const nightDiffHours = pay.breakdown.reduce((s, d) => s + d.regularNightDiffHours + d.overtimeNightDiffHours, 0);
 
       totalHoursAll += totalHours;
       totalPayAll += gross;

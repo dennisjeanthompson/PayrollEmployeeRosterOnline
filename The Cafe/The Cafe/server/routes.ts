@@ -844,7 +844,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (updateData.startTime && updateData.endTime) {
         const timeError = validateShiftTimes(updateData.startTime, updateData.endTime);
         if (timeError) {
-          console.log('❌ [PUT /api/shifts/:id] Time validation error:', timeError);
+          console.warn('[PUT /api/shifts/:id] Time validation error:', timeError);
           return res.status(400).json({ message: timeError });
         }
       }
@@ -1862,6 +1862,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         deductPagibig: true, deductWithholdingTax: true
       };
 
+      // --- Pre-fetch static branch & company data to prevent N+1 Queries ---
+      const companySettings = await storage.getCompanySettings();
+      const globalHolidayPayEnabled = companySettings ? companySettings.includeHolidayPay : false;
+      const activeHeadcount = employees.filter(e => e.isActive).length;
+      const branchRecord = await storage.getBranch(branchId);
+      const isBranchExempt = !!(
+        branchRecord?.intentHolidayExempt && 
+        ['retail', 'service'].includes(branchRecord?.establishmentType || '') && 
+        activeHeadcount <= 5
+      );
+      const isHolidayExempt = !globalHolidayPayEnabled || isBranchExempt;
+
       for (const employee of employees) {
         if (!employee.isActive) continue;
 
@@ -1894,20 +1906,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // --- DOLE COMPLIANCE: Holiday Exemption Gateway (Feature 4) ---
         // Exemption applies globally if company settings "Include Holiday Pay" is turned OFF (which is the default).
         // If it's turned ON, we still check the specific branch retail/service exemptions, though the global toggle takes precedence as a master switch.
-        const companySettings = await storage.getCompanySettings();
-        const globalHolidayPayEnabled = companySettings ? companySettings.includeHolidayPay : false;
-
-        const activeHeadcount = employees.filter(e => e.isActive).length;
-        const branchRecord = await storage.getBranch(branchId);
-        const isBranchExempt = !!(
-          branchRecord?.intentHolidayExempt && 
-          ['retail', 'service'].includes(branchRecord?.establishmentType || '') && 
-          activeHeadcount <= 5
-        );
-
-        const isHolidayExempt = !globalHolidayPayEnabled || isBranchExempt;
 
         const hourlyRate = parseFloat(employee.hourlyRate);
+        if (isNaN(hourlyRate) || hourlyRate <= 0) {
+          console.warn(`[PAYROLL SKIP] ${employee.firstName} ${employee.lastName} — invalid hourlyRate "${employee.hourlyRate}", skipping.`);
+          continue;
+        }
         const payCalculation = calculatePeriodPay(shifts, hourlyRate, periodHolidays, 0, isHolidayExempt); // 0 = Sunday as rest day
 
         // -- Add Service Incentive Leave (Paid Time Off) --
@@ -1936,7 +1940,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         for (const day of payCalculation.breakdown) {
           regularHours += day.regularHours;
           overtimeHours += day.overtimeHours;
-          nightDiffHours += day.nightDiffHours;
+          nightDiffHours += day.regularNightDiffHours + day.overtimeNightDiffHours;
           employeeTotalHours += day.regularHours + day.overtimeHours;
         }
 
@@ -2315,6 +2319,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const employees = allEmployees.filter(emp => emp.isActive);
 
       let allEntries: any[] = [];
+      const periodCache: Record<string, { startDate: Date; endDate: Date } | null> = {};
+
       for (const employee of employees) {
         const entries = await storage.getPayrollEntriesByUser(
           employee.id,
@@ -2326,12 +2332,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
           let periodStartDate = null;
           let periodEndDate = null;
           try {
-            const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
-            if (period) {
-              periodStartDate = period.startDate;
-              periodEndDate = period.endDate;
+            if (periodCache[entry.payrollPeriodId] === undefined) {
+              const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
+              periodCache[entry.payrollPeriodId] = period ? { startDate: period.startDate, endDate: period.endDate } : null;
             }
-          } catch {}
+            
+            const cachedPeriod = periodCache[entry.payrollPeriodId];
+            if (cachedPeriod) {
+              periodStartDate = cachedPeriod.startDate;
+              periodEndDate = cachedPeriod.endDate;
+            }
+          } catch (err: any) {
+            console.warn(`[PAYROLL] Failed to resolve period ${entry.payrollPeriodId}:`, err?.message);
+          }
           return {
             ...entry,
             periodStartDate,
@@ -4913,7 +4926,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             entriesCreated++;
           }
         } catch (err: any) {
-          console.log(`Error creating payroll entry for ${emp.firstName}:`, err.message);
+          console.error(`[PAYROLL] Error creating entry for ${emp.firstName}:`, err.message);
         }
       }
 

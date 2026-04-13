@@ -989,7 +989,7 @@ export default function MuiShiftTrading() {
                   onChange={(e) => setFormData({ ...formData, targetUserId: e.target.value })}
                 >
                   {employees
-                    .filter((emp: any) => emp.id !== currentUser?.id && emp.role === 'employee' && (!currentUser?.branchId || emp.branchId === currentUser.branchId))
+                    .filter((emp: any) => emp.id !== currentUser?.id && emp.isActive !== false && (!currentUser?.branchId || emp.branchId === currentUser.branchId))
                     .map((emp: any) => (
                       <MenuItem key={emp.id} value={emp.id}>
                         {emp.firstName} {emp.lastName}
