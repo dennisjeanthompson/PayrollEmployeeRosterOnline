@@ -136,14 +136,21 @@ function getHoliday(date: Date): { name: string; type: "regular" | "special" } |
   return holiday ? { name: holiday.name, type: holiday.type } : null;
 }
 
-// Helper: Get upcoming holidays within N days
-function getUpcomingHolidays(days: number): typeof PH_HOLIDAYS {
+// Helper: Get upcoming holidays from DB
+async function getUpcomingHolidaysFromDB(days: number): Promise<any[]> {
   const today = startOfDay(new Date());
   const endDate = addDays(today, days);
-  return PH_HOLIDAYS.filter(h => {
-    const holidayDate = parseISO(h.date);
-    return isWithinInterval(holidayDate, { start: today, end: endDate });
-  });
+  try {
+    const holidays = await storage.getHolidays(today, endDate);
+    return holidays.map(h => ({
+      date: format(new Date(h.date), "yyyy-MM-dd"),
+      name: h.name,
+      type: h.type === 'regular' ? 'regular' : 'special',
+    }));
+  } catch (error) {
+    console.error("Failed to load upcoming DB holidays, returning empty", error);
+    return [];
+  }
 }
 
 // ============================================
@@ -183,6 +190,9 @@ router.get("/api/analytics/trends", requireAuth, requireManagerRole, async (req,
     const branchUsers = await storage.getUsersByBranch(branchId);
     const userMap = new Map(branchUsers.map(u => [u.id, u]));
 
+    // Pre-fetch DB holidays
+    const dbHolidays = await storage.getHolidays(startDate, endDate);
+
     // Aggregate by day
     const dailyData: Record<string, { hours: number; cost: number; shifts: number; date: string }> = {};
     
@@ -206,12 +216,20 @@ router.get("/api/analytics/trends", requireAuth, requireManagerRole, async (req,
     }
 
     // Convert to array and add day-of-week
-    const trends = Object.values(dailyData).map(d => ({
-      ...d,
-      dayOfWeek: format(parseISO(d.date), "EEE"),
-      dayOfWeekNum: getDay(parseISO(d.date)),
-      isHoliday: getHoliday(parseISO(d.date)),
-    }));
+    const trends = Object.values(dailyData).map(d => {
+      const parsedDate = parseISO(d.date);
+      const isHolidayDb = dbHolidays.find(h => format(new Date(h.date), "yyyy-MM-dd") === d.date);
+      const holidayFinal = isHolidayDb 
+         ? { name: isHolidayDb.name, type: isHolidayDb.type === 'regular' ? 'regular' : 'special' }
+         : getHoliday(parsedDate); // fallback to static
+         
+      return {
+        ...d,
+        dayOfWeek: format(parsedDate, "EEE"),
+        dayOfWeekNum: getDay(parsedDate),
+        isHoliday: holidayFinal,
+      };
+    });
 
     // Calculate weekly aggregates if requested
     let weeklyData: any[] = [];
@@ -568,13 +586,15 @@ router.get("/api/forecast/peaks", requireAuth, requireManagerRole, async (req, r
 
     // Predict peak dates in forecast period
     const upcomingPeaks: any[] = [];
-    const upcomingHolidays = getUpcomingHolidays(forecastDays);
+    const upcomingHolidays = await getUpcomingHolidaysFromDB(forecastDays);
 
     for (let i = 0; i < forecastDays; i++) {
       const forecastDate = addDays(today, i);
       const dow = getDay(forecastDate);
       const dayData = dowAverages.find(d => d.dayOfWeekNum === dow);
-      const holiday = getHoliday(forecastDate);
+      
+      const forecastDateStr = format(forecastDate, "yyyy-MM-dd");
+      const holiday = upcomingHolidays.find(h => h.date === forecastDateStr) || getHoliday(forecastDate);
 
       if (dayData?.isPeak || holiday) {
         upcomingPeaks.push({

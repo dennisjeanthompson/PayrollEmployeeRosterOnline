@@ -1347,6 +1347,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Not authorized for this branch" });
       }
 
+      // Prevent managers from self-approving their own overtime or exception logs
+      if (log.userId === approvedBy && req.user!.role !== 'admin') {
+        return res.status(403).json({ message: "Conflict of Interest: You cannot approve your own exception logs." });
+      }
+
       const updated = await storage.updateAdjustmentLog(id, {
         status: 'approved',
         approvedBy,
@@ -2207,7 +2212,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           advances +
           otherDeductions;
 
-        const netPay = grossPay - totalDeductions;
+        // Ensure Employee Net Pay does not drop below 0 due to excessive combined deductions 
+        const netPay = Math.max(0, grossPay - totalDeductions);
 
         // Create payroll entry with detailed breakdown
         const entry = await storage.createPayrollEntry({
