@@ -18,6 +18,14 @@ const requireManagerOrAdmin = (req: Request, res: Response, next: NextFunction) 
   next();
 };
 
+const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+  const role = (req as any).user?.role;
+  if (role !== "admin") {
+    return res.status(403).json({ message: "Admin permissions required" });
+  }
+  next();
+};
+
 export function registerBranchesRoutes(router: Router) {
   // Get all branches with pagination and search
   router.get("/api/branches", requireAuth, async (req: Request, res: Response) => {
@@ -48,7 +56,7 @@ export function registerBranchesRoutes(router: Router) {
   });
 
   // Create a new branch
-  router.post("/api/branches", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+  router.post("/api/branches", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
       console.log('Received request body:', req.body);
       
@@ -128,14 +136,9 @@ export function registerBranchesRoutes(router: Router) {
   router.patch("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
 
   // Delete a branch (soft delete by setting isActive to false)
-  router.delete("/api/branches/:id", requireAuth, requireManagerOrAdmin, async (req: Request, res: Response) => {
+  router.delete("/api/branches/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
-
-      // Managers can only deactivate their own branch
-      if ((req as any).user?.role === 'manager' && (req as any).user?.branchId !== id) {
-        return res.status(403).json({ message: "Managers can only modify their own branch" });
-      }
 
       const updatedBranch = await dbStorage.updateBranch(id, { isActive: false });
 

@@ -21,14 +21,13 @@ const requireAuth = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
-// Role check for manager/admin
-const requireManagerOrAdmin = (req: Request, res: Response, next: NextFunction) => {
+// Role check for admin
+const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
   if (!req.session || !req.session.user) {
     return res.status(401).json({ success: false, error: 'Authentication required' });
   }
-  const role = req.session.user.role;
-  if (role !== 'manager' && role !== 'admin') {
-    return res.status(403).json({ success: false, error: 'Manager or Admin access required' });
+  if (req.session.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Admin access required' });
   }
   next();
 };
@@ -66,7 +65,7 @@ router.get('/', requireAuth, async (_req: Request, res: Response) => {
  * GET /api/company-settings/full
  * Returns full unmasked company settings (admin only, for editing form)
  */
-router.get('/full', requireManagerOrAdmin, async (_req: Request, res: Response) => {
+router.get('/full', requireAdmin, async (_req: Request, res: Response) => {
   try {
     const settings = await dbStorage.getCompanySettings();
     res.json({ success: true, settings: settings || null });
@@ -83,7 +82,7 @@ router.get('/full', requireManagerOrAdmin, async (_req: Request, res: Response) 
  * POST /api/company-settings
  * Create company settings (initial setup)
  */
-router.post('/', requireManagerOrAdmin, async (req: Request, res: Response) => {
+router.post('/', requireAdmin, async (req: Request, res: Response) => {
   try {
     const existing = await dbStorage.getCompanySettings();
     if (existing) {
@@ -135,7 +134,7 @@ router.post('/', requireManagerOrAdmin, async (req: Request, res: Response) => {
  * PUT /api/company-settings/:id
  * Update company settings
  */
-router.put('/:id', requireManagerOrAdmin, async (req: Request, res: Response) => {
+router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const existing = await dbStorage.getCompanySettings();

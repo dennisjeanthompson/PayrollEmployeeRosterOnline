@@ -2944,6 +2944,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(403).json({ message: "You can only trade your own shifts" });
         }
       }
+      
+      // If direct trade, prevent requesting if target already has an overlapping shift
+      if (tradeData.toUserId) {
+        const overlappingShift = await storage.checkShiftOverlap(
+          tradeData.toUserId, 
+          new Date(shift.startTime), 
+          new Date(shift.endTime)
+        );
+        if (overlappingShift) {
+          return res.status(409).json({ message: "The target employee already has an overlapping shift during this time" });
+        }
+      }
 
       const trade = await storage.createShiftTrade({
         ...tradeData,
@@ -3289,6 +3301,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "You cannot take your own trade" });
       }
 
+      // Prevent taking if the shift overlaps with the user's existing schedule
+      const overlappingShift = await storage.checkShiftOverlap(
+        userId, 
+        new Date(tradeShift.startTime), 
+        new Date(tradeShift.endTime)
+      );
+      if (overlappingShift) {
+        return res.status(409).json({ message: "You already have an overlapping shift during this time" });
+      }
+
       const updatedTrade = await storage.updateShiftTrade(id, {
         toUserId: userId,
         status: "pending", // Still needs manager approval
@@ -3376,6 +3398,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!trade.toUserId) {
         return res.status(400).json({ message: "Cannot approve trade without a target user" });
+      }
+
+      // Final overlapping check before finalizing trade
+      const overlappingShift = await storage.checkShiftOverlap(
+        trade.toUserId, 
+        new Date(tradeShift.startTime), 
+        new Date(tradeShift.endTime)
+      );
+      if (overlappingShift) {
+        return res.status(409).json({ message: "Approval failed: The target employee now has an overlapping shift" });
       }
 
       // 1. Update the shift ownership
@@ -5046,6 +5078,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // If changing password, verify old password for security
         if (!password) {
           return res.status(400).json({ message: "Current password is required to set a new password" });
+        }
+
+        // Enforce minimum password length (same as admin reset-password route)
+        if (newPassword.length < 6) {
+          return res.status(400).json({ message: "New password must be at least 6 characters long." });
         }
         
         const validPassword = await bcrypt.compare(password, user.password);

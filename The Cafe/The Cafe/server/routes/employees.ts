@@ -290,8 +290,8 @@ router.post('/api/employees', requireAuth, requireRole(['manager', 'admin']), as
 
     const calculatedDailyRate = parsedRate * 8;
 
-    // Restrict role — only admins can create admin accounts
-    const allowedRoles = req.session.user?.role === 'admin' ? ['employee', 'manager', 'admin'] : ['employee', 'manager'];
+    // Restrict role — only admins can create admin or manager accounts
+    const allowedRoles = req.session.user?.role === 'admin' ? ['employee', 'manager', 'admin'] : ['employee'];
     if (!allowedRoles.includes(role)) {
       return res.status(400).json({ message: `Invalid role. Allowed: ${allowedRoles.join(', ')}` });
     }
@@ -423,9 +423,9 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']),
       }
     }
 
-    // Restrict role changes — only admins can set role to 'admin'
+    // Restrict role changes — only admins can set role to 'manager' or 'admin'
     if (updates.role) {
-      const allowedRoles = req.session.user?.role === 'admin' ? ['employee', 'manager', 'admin'] : ['employee', 'manager'];
+      const allowedRoles = req.session.user?.role === 'admin' ? ['employee', 'manager', 'admin'] : ['employee'];
       if (!allowedRoles.includes(updates.role)) {
         return res.status(400).json({ message: `Invalid role. Allowed: ${allowedRoles.join(', ')}` });
       }
