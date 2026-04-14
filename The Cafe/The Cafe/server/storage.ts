@@ -653,6 +653,22 @@ export class MemStorage implements IStorage {
       // Get the user who made the request to check their branch
       const user = this.users.get(approval.requestedBy);
       return user?.branchId === branchId;
+    }).map((approval) => {
+      const user = this.users.get(approval.requestedBy);
+      return {
+        ...approval,
+        requestedByUser: user
+          ? {
+              id: user.id,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              username: user.username,
+              position: user.position,
+              photoUrl: user.photoUrl,
+              branchId: user.branchId,
+            }
+          : null,
+      } as Approval;
     });
   }
 
@@ -680,7 +696,12 @@ export class MemStorage implements IStorage {
     const request = this.timeOffRequests.get(id);
     if (!request) return undefined;
 
-    const updatedRequest = { ...request, ...requestData, approvedAt: new Date() };
+    const updatedRequest = { ...request, ...requestData } as TimeOffRequest;
+    if (Object.prototype.hasOwnProperty.call(requestData, "status")) {
+      updatedRequest.approvedAt = requestData.status === 'approved'
+        ? request.approvedAt ?? new Date()
+        : request.approvedAt ?? null;
+    }
     this.timeOffRequests.set(id, updatedRequest);
     return updatedRequest;
   }
@@ -690,7 +711,15 @@ export class MemStorage implements IStorage {
   }
 
   async deleteTimeOffRequest(id: string): Promise<boolean> {
-    return this.timeOffRequests.delete(id);
+    const request = this.timeOffRequests.get(id);
+    if (!request) return false;
+
+    this.timeOffRequests.set(id, {
+      ...request,
+      status: 'cancelled',
+      isPaid: false,
+    });
+    return true;
   }
 
   async createNotification(insertNotification: InsertNotification): Promise<Notification> {

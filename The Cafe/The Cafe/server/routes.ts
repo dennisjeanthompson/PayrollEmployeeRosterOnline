@@ -1626,7 +1626,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
 
   // ─── Dashboard Stats (Consolidated API to prevent front-end waterfall) ───
-  app.get("/api/dashboard/stats/manager", requireAuth, requireRole(["manager"]), apiCache(60), asyncHandler(async (req, res) => {
+  app.get("/api/dashboard/stats/manager", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
       const now = new Date();
@@ -1639,13 +1639,53 @@ export async function registerRoutes(app: Express): Promise<Server> {
         storage.getPendingApprovals(branchId),
         storage.getUsersByBranch(branchId)
       ]);
+      const userMap = new Map(allUsers.map((user: any) => [user.id, user]));
 
       // Aggregate time-off requests for all branch users
       const allTimeOffRequests: any[] = [];
       for (const user of allUsers) {
         const userRequests = await storage.getTimeOffRequestsByUser(user.id);
-        allTimeOffRequests.push(...userRequests.map(r => ({ ...r, employeeName: `${user.firstName} ${user.lastName}` })));
+        allTimeOffRequests.push(
+          ...userRequests.map((request) => ({
+            ...request,
+            employeeName: `${user.firstName} ${user.lastName}`,
+            user: {
+              id: user.id,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              username: user.username,
+              position: user.position,
+              photoUrl: user.photoUrl,
+              isActive: user.isActive,
+            },
+          }))
+        );
       }
+      const sortedTimeOffRequests = allTimeOffRequests.sort((a, b) => {
+        const left = new Date(a.requestedAt || 0).getTime();
+        const right = new Date(b.requestedAt || 0).getTime();
+        return right - left;
+      });
+
+      const shiftsWithProfiles = allShifts
+        .map((shift: any) => {
+          const user = userMap.get(shift.userId);
+          return {
+            ...shift,
+            user: user
+              ? {
+                  id: user.id,
+                  firstName: user.firstName,
+                  lastName: user.lastName,
+                  username: user.username,
+                  position: user.position,
+                  photoUrl: user.photoUrl,
+                  isActive: user.isActive,
+                }
+              : null,
+          };
+        })
+        .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
 
       // Calculate Team Hours using the previously exported logic
       // We need to import date-fns manually here for boundary calculation
@@ -1666,8 +1706,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.json({
         approvals: allApprovals,
-        timeOffRequests: allTimeOffRequests.filter((req: any) => new Date(req.startDate) >= new Date(now.getFullYear(), 0, 1)), // Filter past 1 year to avoid massive payload
-        shifts: allShifts.filter((s: any) => s.user?.isActive !== false),
+        timeOffRequests: sortedTimeOffRequests.filter((req: any) => new Date(req.startDate) >= new Date(now.getFullYear(), 0, 1)), // Filter past 1 year to avoid massive payload
+        shifts: shiftsWithProfiles.filter((s: any) => s.user?.isActive !== false),
         teamHours: {
           thisWeek: Number(weekHours.toFixed(2)),
           thisMonth: Number(monthHours.toFixed(2)),
@@ -4732,11 +4772,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ request: updated });
   }));
 
-  // Delete time off request (employee can delete pending requests)
+  // Cancel time off request (employees can withdraw pending requests; managers/admins can cancel within their scope)
   app.delete("/api/time-off-requests/:id", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
-      const userId = req.user!.id;
+      const actor = req.user!;
 
       // Fetch the request to verify ownership
       const existingRequest = await storage.getTimeOffRequest(id);
@@ -4744,14 +4784,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Time off request not found" });
       }
 
+      if (existingRequest.status === 'cancelled') {
+        return res.status(409).json({ message: "Request has already been cancelled" });
+      }
+
+      const requestOwner = await storage.getUser(existingRequest.userId);
+      if (!requestOwner) {
+        return res.status(404).json({ message: "Time off request owner not found" });
+      }
+
+      const isOwner = existingRequest.userId === actor.id;
+      const isManagerOrAdmin = actor.role === 'manager' || actor.role === 'admin';
+
       // Only allow deleting own requests or if manager/admin
-      if (existingRequest.userId !== userId && req.user!.role !== 'manager' && req.user!.role !== 'admin') {
+      if (!isOwner && !isManagerOrAdmin) {
         return res.status(403).json({ message: "Unauthorized" });
       }
 
-      // Employees cannot delete approved/rejected requests. Managers can override.
-      if (existingRequest.status !== 'pending' && req.user!.role !== 'manager' && req.user!.role !== 'admin') {
-        return res.status(400).json({ message: "Only managers can delete approved or rejected requests" });
+      if (actor.role === 'manager' && requestOwner.branchId !== actor.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+
+      // Employees can only withdraw pending requests; managers/admins can cancel requests in their branch.
+      if (existingRequest.status !== 'pending' && !isManagerOrAdmin) {
+        return res.status(400).json({ message: "Only managers can cancel approved or rejected requests" });
       }
 
       // If the request was approved and PAID, restore the leave credits
@@ -4768,11 +4824,62 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      await storage.deleteTimeOffRequest(id);
-      res.json({ message: "Request deleted successfully" });
+      const cancelled = await storage.deleteTimeOffRequest(id);
+      if (!cancelled) {
+        return res.status(500).json({ message: "Failed to cancel request" });
+      }
+
+      const actorProfile = await storage.getUser(actor.id);
+      const actorName = actorProfile ? `${actorProfile.firstName} ${actorProfile.lastName}` : actor.username;
+      const cancelledByLabel = isOwner ? 'you' : actorName;
+
+      const notification = await storage.createNotification({
+        userId: existingRequest.userId,
+        branchId: requestOwner.branchId,
+        type: 'time_off_cancelled',
+        title: 'Time Off Request Cancelled',
+        message: `Your ${existingRequest.type} request from ${format(new Date(existingRequest.startDate), "MMM d")} to ${format(new Date(existingRequest.endDate), "MMM d, yyyy")} was cancelled by ${cancelledByLabel}.`,
+        isRead: false,
+        data: JSON.stringify({
+          status: 'cancelled',
+          startDate: format(new Date(existingRequest.startDate), "MMM d, yyyy"),
+          endDate: format(new Date(existingRequest.endDate), "MMM d, yyyy"),
+          type: existingRequest.type,
+          cancelledBy: actor.id,
+        }),
+      } as any);
+      realTimeManager.broadcastNotification(notification);
+
+      await createAuditLog({
+        action: 'time_off_cancel',
+        entityType: 'time_off_request',
+        entityId: id,
+        userId: actor.id,
+        oldValues: {
+          status: existingRequest.status,
+          isPaid: existingRequest.isPaid,
+          approvedBy: existingRequest.approvedBy,
+          approvedAt: existingRequest.approvedAt,
+        },
+        newValues: {
+          status: 'cancelled',
+          cancelledBy: actor.id,
+          cancelledByRole: actor.role,
+          employeeId: existingRequest.userId,
+          startDate: existingRequest.startDate,
+          endDate: existingRequest.endDate,
+          type: existingRequest.type,
+        },
+        reason: isOwner ? 'Employee withdrew request' : 'Manager cancelled request',
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+        branchId: requestOwner.branchId,
+      });
+
+      res.json({ message: "Request cancelled successfully" });
     } catch (error: any) {
-      console.error('Delete time-off request error:', error);
-      res.status(500).json({ message: error.message || "Failed to delete request" });
+      console.error('Cancel time-off request error:', error);
+      res.status(500).json({ message: error.message || "Failed to cancel request" });
     }
   }));
   // Notification routes

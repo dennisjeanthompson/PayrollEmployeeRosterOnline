@@ -183,13 +183,16 @@ export default function MuiCompanySettings() {
   const logoInputRef = useRef<HTMLInputElement>(null);
 
   // Fetch company settings (full/unmasked for managers)
-  const { data, isLoading, error } = useQuery({
+  const { data, isLoading, isError } = useQuery<CompanySettings | null>({
     queryKey: ["company-settings"],
     queryFn: async () => {
       const res = await apiRequest("GET", "/api/company-settings/full");
       const json = await res.json();
       return json.settings as CompanySettings | null;
     },
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   useEffect(() => {
@@ -344,7 +347,7 @@ export default function MuiCompanySettings() {
     );
   }
 
-  if (error) {
+  if (isError) {
     return (
       <Box p={3}>
         <Alert severity="error">Failed to load company settings. Please try again.</Alert>

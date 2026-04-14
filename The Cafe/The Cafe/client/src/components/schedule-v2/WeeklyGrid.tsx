@@ -14,6 +14,7 @@ import {
   Cancel as RejectedIcon,
   Check as CheckIcon,
   AttachMoney as AttachMoneyIcon,
+  NoteAdd as LogAttendanceIcon,
 } from '@mui/icons-material';
 import { format, addDays, isSameDay, isToday, differenceInHours, isWithinInterval, parseISO, isValid } from 'date-fns';
 import { getRoleColor } from '@/lib/schedule-theme';
@@ -56,6 +57,7 @@ interface WeeklyGridProps {
   onOpenRequests?: () => void;
   onDeleteTimeOff?: (id: string) => void;
   onAddHolidayPay?: (userId: string, date: Date) => void;
+  onLogAdjustment?: (shift: Shift) => void;
   onExceptionLogClick?: (log: any) => void;
 }
 
@@ -110,6 +112,7 @@ const TIME_OFF_STATUS_CONFIG = {
   pending: { color: '#F59E0B', bgColor: '#FEF3C7', borderColor: '#FDE68A', icon: PendingIcon, label: 'Pending' },
   approved: { color: '#10B981', bgColor: '#DCFCE7', borderColor: '#A7F3D0', icon: ApprovedIcon, label: 'Approved' },
   rejected: { color: '#EF4444', bgColor: '#FEE2E2', borderColor: '#FECACA', icon: RejectedIcon, label: 'Rejected' },
+  cancelled: { color: '#6B7280', bgColor: '#F3F4F6', borderColor: '#D1D5DB', icon: RejectedIcon, label: 'Cancelled' },
 } as const;
 
 /** Full-width time-off event banner for calendar cells */
@@ -126,13 +129,13 @@ function TimeOffIndicator({ request, compact = false, onDelete }: { request: Tim
   const dynamicColor = isApproved ? (isPaid ? '#FFFFFF' : config.color) : config.color;
   
   return (
-    <Tooltip title={`${typeLabel} Leave · ${paidLabel}${request.reason ? `\n"${request.reason}"` : ''}${onDelete ? '\n(Click to view/edit)' : ''}`} arrow placement="top">
+    <Tooltip title={`${typeLabel} Leave · ${paidLabel}${request.reason ? `\n"${request.reason}"` : ''}${onDelete ? '\n(Click to manage)' : ''}`} arrow placement="top">
       <Box 
         component={motion.div}
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
-        whileHover={onDelete ? { scale: 1.02, y: -2 } : { scale: 1.02 }}
-        whileTap={onDelete ? { scale: 0.98 } : {}}
+        whileHover={{ boxShadow: onDelete ? '0 6px 14px rgba(0,0,0,0.12)' : '0 4px 10px rgba(0,0,0,0.08)' }}
+        whileTap={{}}
         onClick={onDelete ? (e: any) => { e.stopPropagation(); onDelete(request.id); } : undefined}
         sx={{
           display: 'flex', alignItems: 'center', gap: 0.5,
@@ -194,7 +197,7 @@ function TradeBadge({ trade }: { trade: ShiftTrade }) {
 }
 
 // Shift pill — the colored chip inside each cell
-function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected }: { shift: Shift; onClick?: () => void; trade?: ShiftTrade; isSelectionMode?: boolean; isSelected?: boolean }) {
+function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, onLogAdjustment }: { shift: Shift; onClick?: () => void; trade?: ShiftTrade; isSelectionMode?: boolean; isSelected?: boolean; onLogAdjustment?: () => void }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const rc = getRoleColor(shift.position, shift.user?.role);
@@ -220,8 +223,10 @@ function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected }: { shi
           position: 'relative',
           display: 'flex',
           alignItems: 'center',
-          justifyContent: 'center',
+          justifyContent: onLogAdjustment ? 'space-between' : 'center',
+          gap: onLogAdjustment ? 0.75 : 0,
           px: 0.75,
+          pr: onLogAdjustment ? 0.5 : 0.75,
           py: 0.6,
           borderRadius: 1.5,
           bgcolor: hasTrade ? alpha(rc.bg, 0.4) : alpha(rc.bg, 0.25),
@@ -265,6 +270,29 @@ function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected }: { shi
         )}
         {hasTrade && <TradeBadge trade={trade} />}
         {startStr}-{endStr}
+        {onLogAdjustment && (
+          <Tooltip title="Log attendance" arrow placement="top">
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                onLogAdjustment();
+              }}
+              sx={{
+                width: 20,
+                height: 20,
+                flexShrink: 0,
+                color: '#B45309',
+                bgcolor: alpha('#F59E0B', 0.14),
+                border: '1px solid',
+                borderColor: alpha('#F59E0B', 0.22),
+                '&:hover': { bgcolor: alpha('#F59E0B', 0.24) },
+              }}
+            >
+              <LogAttendanceIcon sx={{ fontSize: 12 }} />
+            </IconButton>
+          </Tooltip>
+        )}
       </Box>
     </Tooltip>
   );
@@ -332,10 +360,10 @@ export function AdjustmentBadge({ log, isSelectionMode, isSelected, onClick }: {
         cursor: onClick ? 'pointer' : 'default',
         opacity: isExcluded ? 0.55 : 1,
         boxShadow: isSelected ? '0 0 0 2px #3B82F6, 0 4px 12px rgba(59, 130, 246, 0.4)' : '0 1px 3px rgba(0,0,0,0.08)',
-        transform: isSelected ? 'scale(1.02)' : 'none',
-        transition: 'all 0.2s ease',
+        transform: 'none',
+        transition: 'box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease',
         overflow: 'hidden',
-        '&:hover': onClick ? { filter: 'brightness(0.92)', transform: isSelected ? 'scale(1.02)' : 'translateY(-1px)', boxShadow: isSelected ? undefined : '0 3px 8px rgba(0,0,0,0.1)' } : {}
+        '&:hover': onClick ? { filter: 'brightness(0.92)', boxShadow: isSelected ? undefined : '0 3px 8px rgba(0,0,0,0.1)' } : {}
       }}>
         {/* Status indicator dot */}
         <Box sx={{
@@ -402,6 +430,7 @@ export default function WeeklyGrid({
   onToggleShiftSelection,
   onToggleLogSelection,
   onManageLogGroup,
+  onLogAdjustment,
   onExceptionLogClick,
 }: WeeklyGridProps) {
   const theme = useTheme();
@@ -446,7 +475,6 @@ export default function WeeklyGrid({
                 overflow: 'hidden',
               }}
             >
-              {/* Day header */}
               <Box sx={{
                 px: 2, py: 1.5,
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
@@ -479,14 +507,12 @@ export default function WeeklyGrid({
                 </Box>
               </Box>
 
-              {/* Shift cards for this day + time-off indicators */}
               <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
-                {/* Time-off indicators for this day (mobile: show all employees) */}
                 {employees.map(emp => {
                   const dayTimeOff = getTimeOffForCell(allVisibleTimeOff, emp.id, date);
                   const dayAdjustments = getAdjustmentsForCell(adjustmentLogs, emp.id, date);
                   if (dayTimeOff.length === 0 && dayAdjustments.length === 0) return null;
-                  
+
                   return (
                     <Box key={`emp-status-${emp.id}`} sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
                       {dayTimeOff.map(req => (
@@ -564,26 +590,33 @@ export default function WeeklyGrid({
                             {shift.position || 'Staff'} · {safeFormat(shift.startTime, 'h:mm a')} – {safeFormat(shift.endTime, 'h:mm a')} ({hours}h)
                           </Typography>
                         </Box>
-                        {isManager && <EditIcon sx={{ fontSize: 16, color: 'text.secondary' }} />}
+                        {isManager && onLogAdjustment && !isSelectionMode && (
+                          <Tooltip title="Log attendance" arrow placement="top">
+                            <IconButton
+                              size="small"
+                              aria-label="Log attendance"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onLogAdjustment(shift);
+                              }}
+                              sx={{
+                                width: 20,
+                                height: 20,
+                                flexShrink: 0,
+                                color: '#B45309',
+                                bgcolor: alpha('#F59E0B', 0.14),
+                                border: '1px solid',
+                                borderColor: alpha('#F59E0B', 0.22),
+                                '&:hover': { bgcolor: alpha('#F59E0B', 0.24) },
+                              }}
+                            >
+                              <LogAttendanceIcon sx={{ fontSize: 12 }} />
+                            </IconButton>
+                          </Tooltip>
+                        )}
                       </Box>
                     );
                   })
-                )}
-                {isManager && (
-                  <Box
-                    onClick={() => onCreateShift('', date)}
-                    sx={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.5,
-                      py: 1, borderRadius: 2, border: '1px dashed',
-                      borderColor: isDark ? '#3D3228' : '#D4C4A8',
-                      color: 'text.secondary',
-                      cursor: 'pointer',
-                      fontSize: '0.8rem', fontWeight: 600,
-                      '&:hover': { borderColor: 'primary.main', color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.04) },
-                    }}
-                  >
-                    <AddIcon sx={{ fontSize: 18 }} /> Add Shift
-                  </Box>
                 )}
               </Box>
             </Box>
@@ -804,6 +837,7 @@ export default function WeeklyGrid({
                               trade={trade}
                               isSelectionMode={isSelectionMode}
                               isSelected={isSelectionMode && selectedShifts?.has(shift.id)}
+                              onLogAdjustment={isManager && !isSelectionMode && onLogAdjustment ? () => onLogAdjustment(shift) : undefined}
                               onClick={() => {
                                 if (isSelectionMode && onToggleShiftSelection) {
                                   onToggleShiftSelection(shift.id);

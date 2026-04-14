@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager, isAdmin, getCurrentUser } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useRealtime } from "@/hooks/use-realtime";
 import { format, isValid } from "date-fns";
 import { TransitionLink as Link } from "@/components/TransitionLink";
 import { useLocation } from "wouter";
@@ -89,31 +88,21 @@ export default function MuiDashboard() {
   const queryClient = useQueryClient();
   const theme = useTheme();
 
-  // Enable real-time updates
-  useRealtime({
-    enabled: true,
-    queryKeys: ["/api/approvals", "/api/time-off-requests", "/api/notifications", "/api/shifts/branch", "/api/shifts"],
-    onEvent: (event: string) => {
-      if (event.startsWith('time-off:') || event.startsWith('trade:') || event.startsWith('shift:') ||
-          event === 'notification:created' || event === 'notification') {
-        queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/time-off-requests"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/shifts/branch"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/shifts"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
-      }
-    },
-  });
-
   // Queries
   const { data: dashboardStats, isLoading: statsLoading } = useQuery<any>({
     queryKey: ["/api/dashboard/stats/manager"],
     enabled: isManagerRole,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const { data: employeeShifts, isLoading: employeeShiftsLoading } = useQuery<ShiftsResponse>({
     queryKey: ["/api/shifts"],
     enabled: !isManagerRole,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const approvals = dashboardStats ? { approvals: dashboardStats.approvals || [] } : undefined;
@@ -151,6 +140,7 @@ export default function MuiDashboard() {
       toast({ title: "Approved", description: "Time off request approved" });
       queryClient.invalidateQueries({ queryKey: ["/api/time-off-requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats/manager"] });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -169,6 +159,7 @@ export default function MuiDashboard() {
       toast({ title: "Rejected", description: "Time off request rejected" });
       queryClient.invalidateQueries({ queryKey: ["/api/time-off-requests"] });
       queryClient.invalidateQueries({ queryKey: ["/api/approvals"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats/manager"] });
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -286,6 +277,20 @@ function ManagerDashboard({
   const [rejectingRequest, setRejectingRequest] = React.useState<any>(null);
   const [rejectionReason, setRejectionReason] = React.useState('');
 
+  const todayRoster = React.useMemo(() => {
+    const rosterByEmployee = new Map<string, any>();
+    [...todayShifts]
+      .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+      .forEach((shift: any) => {
+        const employeeId = shift.user?.id || shift.userId || shift.id;
+        if (!rosterByEmployee.has(employeeId)) {
+          rosterByEmployee.set(employeeId, shift);
+        }
+      });
+
+    return Array.from(rosterByEmployee.values());
+  }, [todayShifts]);
+
   // Extract recently rejected time-off requests from approvals history 
   // to display rejection reasons if applicable.
   const recentlyHandledApprovals = approvals?.approvals?.filter((a: any) => a.status === 'rejected' || a.status === 'approved')?.slice(0, 5) || [];
@@ -380,7 +385,7 @@ function ManagerDashboard({
           {teamHoursLoading ? <Skeleton variant="rounded" height={130} sx={{ borderRadius: 3 }} /> : (
             <StatCard
               title="Today's Shifts"
-              value={todayShifts.length}
+              value={todayRoster.length}
               subtitle={format(new Date(), "PP")}
               icon={<CalendarIcon />}
               color="success"
@@ -438,7 +443,7 @@ function ManagerDashboard({
                     <CalendarIcon color="primary" /> Today's Roster
                   </Typography>
                   <Typography variant="body2" color="text.secondary">
-                    {todayShifts.length} employees scheduled
+                      {todayRoster.length} employees scheduled
                   </Typography>
                 </Box>
                 <Link href="/schedule">
@@ -448,9 +453,9 @@ function ManagerDashboard({
 
               {shiftsLoading ? (
                 <Stack spacing={2}>{[1, 2, 3].map(i => <Skeleton key={i} variant="rounded" height={70} sx={{ borderRadius: 2 }} />)}</Stack>
-              ) : todayShifts.length > 0 ? (
+              ) : todayRoster.length > 0 ? (
                 <Stack spacing={1.5}>
-                  {todayShifts.slice(0, 5).map((shift: any) => (
+                  {todayRoster.slice(0, 5).map((shift: any) => (
                     <Box
                       key={shift.id}
                       sx={{
@@ -464,11 +469,11 @@ function ManagerDashboard({
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
                         <Avatar src={shift.user?.photoUrl || undefined} sx={{ bgcolor: 'primary.main', width: 40, height: 40, fontSize: '0.9rem', fontWeight: 600 }}>
-                          {getInitials(shift.user?.firstName, shift.user?.lastName)}
+                          {getInitials(shift.user?.firstName, shift.user?.lastName, shift.user?.username)}
                         </Avatar>
                         <Box>
                           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                            {shift.user?.firstName} {shift.user?.lastName}
+                            {shift.user?.firstName ? `${shift.user.firstName} ${shift.user.lastName || ''}`.trim() : shift.position}
                           </Typography>
                           <Typography variant="caption" color="text.secondary" sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                             <ScheduleIcon sx={{ fontSize: 12 }} /> {shift.position}
@@ -526,12 +531,12 @@ function ManagerDashboard({
                       }}
                     >
                       <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                        <Avatar sx={{ bgcolor: alpha(theme.palette.warning.main, 0.2), color: 'warning.main', fontWeight: 700 }}>
-                          {getInitials(request.user?.firstName, request.user?.lastName)}
+                        <Avatar src={request.user?.photoUrl || undefined} sx={{ bgcolor: alpha(theme.palette.warning.main, 0.2), color: 'warning.main', fontWeight: 700 }}>
+                          {getInitials(request.user?.firstName, request.user?.lastName, request.user?.username)}
                         </Avatar>
                         <Box>
                           <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                            {request.user?.firstName} {request.user?.lastName}
+                            {request.user?.firstName ? `${request.user.firstName} ${request.user.lastName || ''}`.trim() : request.employeeName || 'Team Member'}
                           </Typography>
                           <Stack direction="row" spacing={1} alignItems="center" sx={{ mt: 0.5 }}>
                             <Chip size="small" label={request.type?.replace('_', ' ')} sx={{ height: 18, fontSize: '0.65rem', fontWeight: 600, textTransform: 'capitalize' }} />
@@ -571,7 +576,7 @@ function ManagerDashboard({
                       >
                          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                             <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.primary' }}>
-                              {approval.requestedBy?.firstName} {approval.requestedBy?.lastName}
+                              {approval.requestedByUser?.firstName ? `${approval.requestedByUser.firstName} ${approval.requestedByUser.lastName || ''}`.trim() : approval.requestedBy?.firstName ? `${approval.requestedBy.firstName} ${approval.requestedBy.lastName || ''}`.trim() : 'Team Member'}
                             </Typography>
                             <Chip size="small" label={approval.status} color={isRejected ? "error" : "success"} variant="outlined" sx={{ height: 20, fontSize: '0.65rem', fontWeight: 600, textTransform: 'capitalize' }} />
                          </Box>
@@ -603,7 +608,7 @@ function ManagerDashboard({
         <DialogContent>
           {rejectingRequest && (
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Rejecting <strong>{rejectingRequest.user?.firstName}</strong>'s request. Optionally provide a reason so they know why.
+              Rejecting <strong>{rejectingRequest.user?.firstName || rejectingRequest.employeeName || 'this employee'}</strong>'s request. Optionally provide a reason so they know why.
             </Typography>
           )}
           <TextField

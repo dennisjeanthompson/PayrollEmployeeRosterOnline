@@ -1,5 +1,5 @@
 import PesoIcon from "@/components/PesoIcon";
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -23,6 +23,7 @@ import {
   Stack,
   Chip,
   CircularProgress,
+  LinearProgress,
   MenuItem,
   useTheme,
   alpha,
@@ -44,7 +45,8 @@ import {
 } from "@mui/icons-material";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import SSSContributionTable from "@/components/sss/sss-contribution-table";
+
+const SSSContributionTable = lazy(() => import("@/components/sss/sss-contribution-table"));
 
 interface DeductionRate {
   id: string;
@@ -86,7 +88,9 @@ export default function MuiAdminDeductionRates() {
 
   const { data: ratesData, isLoading } = useQuery<{ rates: DeductionRate[] }>({
     queryKey: ["/api/admin/deduction-rates"],
-    refetchOnWindowFocus: true,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const createMutation = useMutation({
@@ -288,7 +292,9 @@ export default function MuiAdminDeductionRates() {
       {/* Rate Tables by Type */}
       <Stack spacing={3}>
         {/* SSS gets its own dedicated table component */}
-        <SSSContributionTable />
+        <Suspense fallback={<LinearProgress sx={{ borderRadius: 1 }} />}>
+          <SSSContributionTable />
+        </Suspense>
         
         {/* Other deduction types use the accordion format */}
         {deductionTypes.filter(t => t.value !== "sss").map((typeConfig) => {

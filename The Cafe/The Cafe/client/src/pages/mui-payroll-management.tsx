@@ -261,7 +261,9 @@ export default function MuiPayrollManagement() {
       const response = await apiRequest("GET", "/api/payroll/periods");
       return response.json();
     },
-    refetchOnWindowFocus: true,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Fetch payroll entries for selected period with real-time updates
@@ -275,7 +277,9 @@ export default function MuiPayrollManagement() {
       return response.json();
     },
     enabled: !!selectedPeriod,
-    refetchOnWindowFocus: true,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Auto-select latest open period when data loads (so Entries tab never shows empty)
@@ -389,7 +393,9 @@ export default function MuiPayrollManagement() {
       const response = await apiRequest("GET", "/api/adjustment-logs/branch");
       return response.json();
     },
-    refetchOnWindowFocus: true,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Fetch employees for the dropdown
@@ -399,6 +405,9 @@ export default function MuiPayrollManagement() {
       const response = await apiRequest("GET", "/api/employees");
       return response.json();
     },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
   
   // Get active employees from the branch
@@ -466,6 +475,9 @@ export default function MuiPayrollManagement() {
       const res = await apiRequest("GET", "/api/deduction-settings");
       return res.json();
     },
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Fetch company settings for holiday pay status
@@ -475,6 +487,9 @@ export default function MuiPayrollManagement() {
       const res = await apiRequest("GET", "/api/company-settings");
       return res.json();
     },
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Toggle exception log inclusion in payroll

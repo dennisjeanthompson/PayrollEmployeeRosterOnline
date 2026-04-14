@@ -36,7 +36,7 @@ class RealTimeManager {
         ].filter(Boolean),
         credentials: true,
       },
-      transports: ["polling", "websocket"],
+      transports: ["websocket"],
       pingInterval: 25000,
       pingTimeout: 60000,
     });

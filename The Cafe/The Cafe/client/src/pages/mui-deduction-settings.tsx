@@ -132,6 +132,9 @@ export default function MuiDeductionSettings() {
         return null;
       }
     },
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Initialize toggles from fetched data

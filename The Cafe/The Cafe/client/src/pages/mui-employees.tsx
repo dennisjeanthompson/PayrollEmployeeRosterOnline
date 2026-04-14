@@ -1,5 +1,5 @@
 import PesoIcon from "@/components/PesoIcon";
-import { useState, useEffect, useMemo, startTransition } from "react";
+import { useState, useEffect, useMemo, useCallback, useDeferredValue, startTransition } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { format, startOfMonth, endOfMonth, subMonths, addMonths, parseISO } from "date-fns";
@@ -110,7 +110,7 @@ import { EmployeeShiftModal } from "@/components/employees/employee-shift-modal"
 import { DeletionOptionsModal } from "@/components/employees/deletion-options-modal";
 import ProfilePhotoUpload from "@/components/employees/ProfilePhotoUpload";
 import DocumentUpload, { DocumentType } from "@/components/employees/DocumentUpload";
-import { isAdmin, getCurrentUser } from "@/lib/auth";
+import { isAdmin } from "@/lib/auth";
 
 // Types
 interface Employee {
@@ -144,6 +144,17 @@ interface Branch {
   id: string;
   name: string;
 }
+
+const getRoleColor = (role: string): "primary" | "secondary" | "default" => {
+  switch (role) {
+    case "manager":
+      return "primary";
+    case "admin":
+      return "secondary";
+    default:
+      return "default";
+  }
+};
 
 interface EmployeeFormData {
   username: string;
@@ -291,7 +302,7 @@ export default function MuiEmployees() {
   const monthStart = format(startOfMonth(selectedMonth), 'yyyy-MM-dd');
   const monthEnd = format(endOfMonth(selectedMonth), 'yyyy-MM-dd');
   
-  const { data: employeesResponse, isLoading: employeesLoading, refetch: refetchEmployees } = useQuery<{ employees: Employee[] }>({
+  const { data: employeesResponse, isLoading: employeesLoading } = useQuery<{ employees: Employee[] }>({
     queryKey: ["/api/hours/all-employees", monthStart, monthEnd],
     queryFn: async () => {
       const response = await apiRequest("GET", `/api/hours/all-employees?startDate=${monthStart}&endDate=${monthEnd}`);
@@ -310,19 +321,9 @@ export default function MuiEmployees() {
   // Enable real-time updates
   useRealtime({
     queryKeys: ["/api/hours/all-employees", "/api/employees"],
-    onEvent: (event, data) => {
-      // Directly refetch employees when any employee event occurs
-      if (event.startsWith('employee:')) {
-        console.log('ðŸ”„ Refetching employees due to event:', event);
-        startTransition(() => {
-          refetchEmployees();
-          refetchStats();
-        });
-      }
-    }
   });
 
-  const { data: employeeStats, refetch: refetchStats } = useQuery({
+  const { data: employeeStats } = useQuery({
     queryKey: ["employee-stats", monthStart, monthEnd],
     queryFn: async () => {
       const response = await apiRequest("GET", `/api/employees/stats?startDate=${monthStart}&endDate=${monthEnd}`);
@@ -345,15 +346,41 @@ export default function MuiEmployees() {
 
   const employeesData = employeesResponse?.employees || [];
   const branchesData = branchesResponse?.branches || [];
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const branchNameById = useMemo(
+    () => new Map(branchesData.map((branch) => [branch.id, branch.name])),
+    [branchesData]
+  );
+
+  const getBranchName = useCallback(
+    (branchId: string) => branchNameById.get(branchId) || "Unknown",
+    [branchNameById]
+  );
+
+  const invalidateEmployeeQueries = useCallback(() => {
+    queryClient.invalidateQueries({
+      predicate: (query) => {
+        const key = query.queryKey[0] as string | undefined;
+        return (
+          key === "/api/hours/all-employees" ||
+          key === "/api/employees" ||
+          key === "employees" ||
+          key === "employee-stats"
+        );
+      },
+    });
+  }, [queryClient]);
 
   // Filter employees
   const filteredEmployees = useMemo(() => {
+    const normalizedSearchTerm = deferredSearchTerm.trim().toLowerCase();
+
     return employeesData.filter((employee) => {
       const matchesSearch =
-        searchTerm === "" ||
-        `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        employee.position.toLowerCase().includes(searchTerm.toLowerCase());
+        normalizedSearchTerm === "" ||
+        `${employee.firstName} ${employee.lastName}`.toLowerCase().includes(normalizedSearchTerm) ||
+        employee.email.toLowerCase().includes(normalizedSearchTerm) ||
+        employee.position.toLowerCase().includes(normalizedSearchTerm);
 
       const matchesStatus =
         statusFilter === "all" ||
@@ -365,14 +392,7 @@ export default function MuiEmployees() {
 
       return matchesSearch && matchesStatus && matchesRole && matchesBranch;
     });
-  }, [employeesData, searchTerm, statusFilter, roleFilter, branchFilter]);
-
-  const stats = {
-    totalEmployees: employeeStats?.totalEmployees ?? filteredEmployees.length,
-    activeEmployees: employeeStats?.activeEmployees ?? filteredEmployees.filter((e) => e.isActive).length,
-    totalHoursThisMonth: employeeStats?.totalHoursThisMonth ?? 0,
-    totalPayrollThisMonth: employeeStats?.totalPayrollThisMonth ?? 0,
-  };
+  }, [employeesData, deferredSearchTerm, statusFilter, roleFilter, branchFilter]);
 
   // Mutations
   const createEmployee = useMutation({
@@ -387,9 +407,7 @@ export default function MuiEmployees() {
     onSuccess: () => {
       // Invalidate all employee-related queries for real-time sync inside transition
       startTransition(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
-        queryClient.invalidateQueries({ queryKey: ["employees"] }); // Schedule page roster
-        queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+        invalidateEmployeeQueries();
         handleCloseFormDialog();
       });
       toast({ title: "Success", description: "Employee created successfully" });
@@ -411,9 +429,7 @@ export default function MuiEmployees() {
     onSuccess: () => {
       startTransition(() => {
         // Invalidate all employee-related queries for real-time sync
-        queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
-        queryClient.invalidateQueries({ queryKey: ["employees"] }); // Schedule page roster
-        queryClient.invalidateQueries({ queryKey: ["/api/employees"] });
+        invalidateEmployeeQueries();
         handleCloseFormDialog();
       });
       toast({ title: "Success", description: "Employee updated successfully" });
@@ -449,12 +465,9 @@ export default function MuiEmployees() {
         setDeletionModalOpen(true);
         return;
       }
-      // Force immediate refetch of all employee-related queries
+      // Refresh all employee-related caches.
       startTransition(() => {
-        queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
-        queryClient.refetchQueries({ queryKey: ["employees"] }); // Schedule page roster
-        queryClient.refetchQueries({ queryKey: ["/api/employees"] });
-        queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+        invalidateEmployeeQueries();
         setDeleteDialogOpen(false);
         setDeletionModalOpen(false);
         setCurrentEmployee(null);
@@ -468,7 +481,7 @@ export default function MuiEmployees() {
   });
 
   // Check for related data before deletion
-  const checkRelatedData = useMutation({
+  const { mutate: checkRelatedData } = useMutation({
     mutationFn: async (id: string) => {
       const response = await apiRequest("GET", `/api/employees/${id}/related-data`);
       if (!response.ok) throw new Error("Failed to check related data");
@@ -527,7 +540,7 @@ export default function MuiEmployees() {
     },
     onSuccess: () => {
       startTransition(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+        invalidateEmployeeQueries();
         setDeductionsDialogOpen(false);
       });
       toast({ title: "Success", description: "Deductions updated successfully" });
@@ -550,7 +563,7 @@ export default function MuiEmployees() {
     },
     onSuccess: (data, { isActive }) => {
       startTransition(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+        invalidateEmployeeQueries();
         // Close the deletion modal if open
         setDeletionModalOpen(false);
         setEmployeeRelatedData(null);
@@ -587,7 +600,7 @@ export default function MuiEmployees() {
     },
     onSuccess: (data, { isActive, ids }) => {
       startTransition(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
+        invalidateEmployeeQueries();
         setSelectedEmployees([]);
       });
       const action = isActive ? "activated" : "deactivated";
@@ -596,13 +609,13 @@ export default function MuiEmployees() {
   });
 
   // Handlers
-  const handleOpenAddDialog = () => {
+  const handleOpenAddDialog = useCallback(() => {
     setIsEditing(false);
     setFormData(initialFormData);
     setFormDialogOpen(true);
-  };
+  }, []);
 
-  const handleOpenEditDialog = (employee: Employee) => {
+  const handleOpenEditDialog = useCallback((employee: Employee) => {
     setIsEditing(true);
     setCurrentEmployee(employee);
     setFormData({
@@ -623,27 +636,27 @@ export default function MuiEmployees() {
       isMwe: employee.isMwe || false,
     });
     setFormDialogOpen(true);
-  };
+  }, []);
 
-  const handleCloseFormDialog = () => {
+  const handleCloseFormDialog = useCallback(() => {
     setFormDialogOpen(false);
     setIsEditing(false);
     setCurrentEmployee(null);
     setFormData(initialFormData);
-  };
+  }, []);
 
-  const handleOpenViewDialog = (employee: Employee) => {
+  const handleOpenViewDialog = useCallback((employee: Employee) => {
     setCurrentEmployee(employee);
     setViewDialogOpen(true);
-  };
+  }, []);
 
-  const handleOpenDeleteDialog = (employee: Employee) => {
+  const handleOpenDeleteDialog = useCallback((employee: Employee) => {
     setCurrentEmployee(employee);
     // Check for related data first
-    checkRelatedData.mutate(employee.id);
-  };
+    checkRelatedData(employee.id);
+  }, [checkRelatedData]);
 
-  const handleOpenDeductionsDialog = (employee: Employee) => {
+  const handleOpenDeductionsDialog = useCallback((employee: Employee) => {
     setCurrentEmployee(employee);
     setDeductionsFormData({
       sssLoanDeduction: employee.sssLoanDeduction || "0",
@@ -652,7 +665,7 @@ export default function MuiEmployees() {
       otherDeductions: employee.otherDeductions || "0",
     });
     setDeductionsDialogOpen(true);
-  };
+  }, []);
 
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -676,32 +689,12 @@ export default function MuiEmployees() {
     }
   };
 
-  const handleContextMenu = (event: React.MouseEvent, employee: Employee) => {
-    event.preventDefault();
-    setContextMenu({ mouseX: event.clientX, mouseY: event.clientY, employee });
-  };
-
-  const handleCloseContextMenu = () => {
+  const handleCloseContextMenu = useCallback(() => {
     setContextMenu(null);
-  };
-
-  const getBranchName = (branchId: string) => {
-    return branchesData.find((b) => b.id === branchId)?.name || "Unknown";
-  };
-
-  const getRoleColor = (role: string): "primary" | "secondary" | "default" => {
-    switch (role) {
-      case "manager":
-        return "primary";
-      case "admin":
-        return "secondary";
-      default:
-        return "default";
-    }
-  };
+  }, []);
 
   // DataGrid columns - optimized for better visibility
-  const columns: GridColDef[] = [
+  const columns = useMemo<GridColDef[]>(() => [
     {
       field: "employee",
       headerName: "Employee",
@@ -876,7 +869,7 @@ export default function MuiEmployees() {
         </Stack>
       ),
     },
-  ];
+  ], [handleOpenViewDialog, handleOpenEditDialog, handleOpenDeductionsDialog, handleOpenDeleteDialog, getBranchName]);
 
   if (!managerRole) return null;
 
@@ -1046,7 +1039,6 @@ export default function MuiEmployees() {
               checkboxSelection
               disableRowSelectionOnClick
               rowHeight={65}
-              getRowHeight={() => 65}
               onRowSelectionModelChange={(newSelection) => {
                 setSelectedEmployees(Array.from(newSelection.ids || []).map(String));
               }}
@@ -1166,10 +1158,8 @@ export default function MuiEmployees() {
                     employeeId={currentEmployee.id}
                     employeeName={`${currentEmployee.firstName} ${currentEmployee.lastName}`}
                     onUploadComplete={() => {
-                      import("react").then(({ startTransition }) => {
-                        startTransition(() => {
-                          queryClient.invalidateQueries({ queryKey: ["/api/hours/all-employees"] });
-                        });
+                      startTransition(() => {
+                        invalidateEmployeeQueries();
                       });
                     }}
                   />

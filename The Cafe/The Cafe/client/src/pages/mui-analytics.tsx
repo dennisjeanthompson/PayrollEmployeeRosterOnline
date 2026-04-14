@@ -48,6 +48,7 @@ import {
 import { format, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { useRealtime } from "@/hooks/use-realtime";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -74,10 +75,21 @@ interface ForecastPoint {
   isHoliday?: { name: string; type: string } | null;
 }
 
+interface ForecastMeta {
+  name: string;
+  variant: string;
+  label: string;
+  trainingWindow: string;
+  confidenceBand: string;
+  description: string;
+  generatedAt: string;
+}
+
 interface LaborForecast {
   forecasts: ForecastPoint[];
   confidence: string;
   message: string;
+  meta?: ForecastMeta;
 }
 
 interface PayrollForecast {
@@ -87,6 +99,7 @@ interface PayrollForecast {
     avgDaily: number;
     period: string;
   };
+  meta?: ForecastMeta;
 }
 
 // ── Empty Chart Placeholder ──────────────────────────────
@@ -118,11 +131,21 @@ function EmptyChart({ message }: { message: string }) {
 export default function MuiAnalytics() {
   const theme = useTheme();
   const queryClient = useQueryClient();
+  const { isConnected } = useRealtime({
+    queryKeys: [
+      "analytics-trends",
+      "forecast-labor",
+      "forecast-payroll",
+      "forecast-peaks",
+      "forecast-staffing",
+    ],
+  });
   const [forecastDays, setForecastDays] = useState<number>(14);
 
   // ── Data queries ──
   const {
     data: trendsData,
+    dataUpdatedAt: trendsUpdatedAt,
     isLoading: trendsLoading,
     isError: trendsError,
   } = useQuery<TrendsData>({
@@ -133,10 +156,13 @@ export default function MuiAnalytics() {
     },
     retry: 2,
     staleTime: 5 * 60 * 1000,
+    refetchInterval: isConnected ? false : 60 * 1000,
+    refetchIntervalInBackground: true,
   });
 
   const {
     data: laborForecast,
+    dataUpdatedAt: laborUpdatedAt,
     isLoading: laborLoading,
     isError: laborError,
     refetch: refetchLabor,
@@ -148,10 +174,13 @@ export default function MuiAnalytics() {
     },
     retry: 2,
     staleTime: 5 * 60 * 1000,
+    refetchInterval: isConnected ? false : 60 * 1000,
+    refetchIntervalInBackground: true,
   });
 
   const {
     data: payrollForecast,
+    dataUpdatedAt: payrollUpdatedAt,
     isLoading: payrollLoading,
     isError: payrollError,
     refetch: refetchPayroll,
@@ -163,6 +192,8 @@ export default function MuiAnalytics() {
     },
     retry: 2,
     staleTime: 5 * 60 * 1000,
+    refetchInterval: isConnected ? false : 60 * 1000,
+    refetchIntervalInBackground: true,
   });
 
   const handleRefreshAll = () => {
@@ -202,6 +233,18 @@ export default function MuiAnalytics() {
     }));
 
   const isLowConfidence = laborForecast?.confidence === "low";
+  const forecastMeta = laborForecast?.meta ?? payrollForecast?.meta;
+  const forecastModelLabel = forecastMeta?.label ?? "Seasonal Naive (Day-of-Week Average)";
+  const forecastModelDescription =
+    forecastMeta?.description ??
+    "Uses the last 8 weeks of branch shift history, groups by weekday, and applies holiday-aware adjustments.";
+  const forecastTrainingWindow = forecastMeta?.trainingWindow ?? "8 weeks";
+  const forecastConfidenceBand = forecastMeta?.confidenceBand ?? "±10%";
+  const forecastRangeLabel = forecastConfidenceBand === "±10%" ? "Usually within about 10%" : `Usually within ${forecastConfidenceBand}`;
+  const lastSyncedAt = Math.max(trendsUpdatedAt ?? 0, laborUpdatedAt ?? 0, payrollUpdatedAt ?? 0);
+  const lastSyncedLabel =
+    lastSyncedAt > 0 ? format(new Date(lastSyncedAt), "MMM d, h:mm a") : "waiting for first sync";
+  const liveSyncLabel = isConnected ? "Auto-updating" : "Updating every minute";
 
   // ── Render ──
   return (
@@ -222,13 +265,24 @@ export default function MuiAnalytics() {
         >
           <AnalyticsIcon sx={{ color: "white", fontSize: 22 }} />
         </Box>
-        <Box sx={{ flex: 1 }}>
+        <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography variant="h5" fontWeight={700}>
             Forecasting
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Predicted labor hours &amp; payroll costs • Model: Seasonal Naive (Day-of-Week Average)
+            Forecast method: {forecastModelLabel} • {forecastModelDescription}
           </Typography>
+          <Stack direction="row" flexWrap="wrap" gap={1} sx={{ mt: 1 }}>
+            <Chip
+              size="small"
+              label={liveSyncLabel}
+              color={isConnected ? "success" : "warning"}
+              variant="outlined"
+            />
+            <Chip size="small" label={`Based on ${forecastTrainingWindow} of recent shifts`} variant="outlined" />
+            <Chip size="small" label={forecastRangeLabel} variant="outlined" />
+            <Chip size="small" label={`Last sync: ${lastSyncedLabel}`} variant="outlined" />
+          </Stack>
         </Box>
         <Button
           size="small"
@@ -241,10 +295,48 @@ export default function MuiAnalytics() {
         </Button>
       </Box>
 
+      <Alert
+        severity={isConnected ? "success" : "warning"}
+        variant="outlined"
+        sx={{ mb: 2, borderRadius: 2 }}
+      >
+        {isConnected
+          ? "This view updates automatically when shifts, employee rates, or trade approvals change."
+          : "This view keeps refreshing every minute until the live connection comes back."}
+      </Alert>
+
+      <Paper
+        elevation={0}
+        sx={{
+          mb: 2,
+          p: 2,
+          borderRadius: 2,
+          border: `1px solid ${alpha(theme.palette.info.main, 0.18)}`,
+          bgcolor: alpha(theme.palette.info.main, 0.04),
+        }}
+      >
+        <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ md: "center" }}>
+          <Box sx={{ flex: 1 }}>
+            <Typography variant="subtitle2" fontWeight={700} color="text.primary">
+              How to read this forecast
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+              The line shows the most likely daily hours or payroll cost. The shaded area is the usual range we expect, not a guarantee.
+              Use it for staffing and budgeting, then click Refresh if you want the latest numbers right away.
+            </Typography>
+          </Box>
+          <Stack direction="row" flexWrap="wrap" gap={1}>
+            <Chip size="small" color="info" label="Line = expected number" />
+            <Chip size="small" color="info" variant="outlined" label="Shaded area = usual range" />
+            <Chip size="small" color="info" variant="outlined" label="More shifts = better accuracy" />
+          </Stack>
+        </Stack>
+      </Paper>
+
       {/* Low-data info banner */}
       {!isLoading && isLowConfidence && (
         <Alert severity="info" sx={{ mb: 2, borderRadius: 2 }}>
-          <strong>Limited data:</strong> {laborForecast?.message ?? "Showing estimates based on default staffing patterns. Add more shifts to improve accuracy."}
+          <strong>Limited data:</strong> {laborForecast?.message ?? "The forecast is using default staffing patterns right now. Add more shifts to make it more accurate."}
         </Alert>
       )}
 

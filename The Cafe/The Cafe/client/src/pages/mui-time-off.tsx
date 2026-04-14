@@ -95,6 +95,8 @@ const getStatusColor = (status: string): "error" | "warning" | "success" | "defa
       return "error";
     case "pending":
       return "warning";
+    case "cancelled":
+      return "default";
     default:
       return "default";
   }
@@ -108,6 +110,8 @@ const getStatusIcon = (status: string) => {
       return <CancelIcon sx={{ fontSize: 18 }} />;
     case "pending":
       return <AccessTimeIcon sx={{ fontSize: 18 }} />;
+    case "cancelled":
+      return <CancelIcon sx={{ fontSize: 18 }} />;
     default:
       return null;
   }
@@ -221,7 +225,7 @@ export default function MuiTimeOff() {
     },
   });
 
-  // Delete time off request
+  // Withdraw/cancel time off request
   const deleteMutation = useMutation({
     mutationFn: async (requestId: string) => {
       const response = await apiRequest("DELETE", `/api/time-off-requests/${requestId}`);
@@ -231,14 +235,14 @@ export default function MuiTimeOff() {
       queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
       toast({
         title: "Success",
-        description: "Time off request deleted",
+        description: "Time off request cancelled",
       });
       refetch();
     },
     onError: (error: any) => {
       toast({
         title: "Error",
-        description: error.message || "Failed to delete request",
+        description: error.message || "Failed to cancel request",
         variant: "destructive",
       });
     },
@@ -465,6 +469,7 @@ export default function MuiTimeOff() {
               <MenuItem value="pending">Pending</MenuItem>
               <MenuItem value="approved">Approved</MenuItem>
               <MenuItem value="rejected">Rejected</MenuItem>
+              <MenuItem value="cancelled">Cancelled</MenuItem>
             </Select>
           </FormControl>
 
@@ -706,7 +711,7 @@ export default function MuiTimeOff() {
                   }}
                   color="error"
                 >
-                  Delete
+                  Withdraw Request
                 </Button>
              )}
              {editingRequest && isManagerRole && editingRequest.status === 'pending' && (

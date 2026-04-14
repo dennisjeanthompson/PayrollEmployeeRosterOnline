@@ -12,8 +12,6 @@ import { MuiThemeProvider } from "@/components/mui/mui-theme-provider";
 
 // Modern Layout (with responsive sidebar)
 import ModernLayout from "@/components/layout/modern-layout";
-import ShiftTradingPanel from "@/components/shift-trading/shift-trading-panel";
-
 // Real-time hook
 import { useRealtime } from "@/hooks/use-realtime";
 
@@ -39,6 +37,7 @@ const MuiDeductionSettings = lazy(() => import("@/pages/mui-deduction-settings")
 const MuiPayrollManagement = lazy(() => import("@/pages/mui-payroll-management"));
 const MuiAdminDeductionRates = lazy(() => import("@/pages/mui-admin-deduction-rates"));
 const MuiCompanySettings = lazy(() => import("@/pages/mui-company-settings"));
+const ShiftTradingPanel = lazy(() => import("@/components/shift-trading/shift-trading-panel"));
 
 const Setup = lazy(() => import("@/pages/setup"));
 const NotFound = lazy(() => import("@/pages/not-found"));
@@ -85,10 +84,21 @@ function AppRoutes() {
     };
   });
   const [hydrated, setHydrated] = useState(false);
+  const realtimeEnabled = authState.authenticated && (
+    location === "/" ||
+    location.startsWith("/dashboard") ||
+    location.startsWith("/schedule") ||
+    location.startsWith("/shift-trading") ||
+    location.startsWith("/time-off") ||
+    location.startsWith("/employees") ||
+    location.startsWith("/payroll") ||
+    location.startsWith("/notifications") ||
+    location.startsWith("/employee/")
+  );
 
   // Real-time updates subscription
   const { isConnected } = useRealtime({
-    enabled: authState.authenticated,
+    enabled: realtimeEnabled,
     queryKeys: ["shift-trades", "employee-shifts"],
   });
 

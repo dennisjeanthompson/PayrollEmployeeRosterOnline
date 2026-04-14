@@ -4,7 +4,7 @@
  * Features: FullCalendar month view, CRUD controls, color-coded holiday types
  */
 
-import { useState, useMemo, useRef } from "react";
+import { lazy, Suspense, useCallback, useState, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Box,
@@ -27,6 +27,7 @@ import {
   Stack,
   Chip,
   CircularProgress,
+  LinearProgress,
   MenuItem,
   useTheme,
   alpha,
@@ -47,16 +48,15 @@ import {
   Block,
   Close as CloseIcon,
 } from "@mui/icons-material";
-import FullCalendar from "@fullcalendar/react";
-import dayGridPlugin from "@fullcalendar/daygrid";
-import interactionPlugin from "@fullcalendar/interaction";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { useAuth } from "@/hooks/use-auth";
+import { useAuth } from "@/lib/auth";
+
+const HolidayCalendarView = lazy(() => import("@/components/holiday-calendar/HolidayCalendarView"));
 
 interface Holiday {
   id: string;
@@ -88,7 +88,6 @@ export default function MuiHolidayCalendar() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const calendarRef = useRef<FullCalendar | null>(null);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [tabValue, setTabValue] = useState(0);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -108,13 +107,15 @@ export default function MuiHolidayCalendar() {
   });
 
   // Fetch holidays
-  const { data: holidaysData, isLoading } = useQuery<{ holidays: Holiday[] }>({
+  const { data: holidaysData, isLoading, isFetching } = useQuery<{ holidays: Holiday[] }>({
     queryKey: ["/api/holidays", { year: selectedYear }],
     queryFn: async () => {
       const res = await apiRequest("GET", `/api/holidays?year=${selectedYear}`);
       return res.json();
     },
-    refetchOnWindowFocus: true,
+    staleTime: 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    placeholderData: (previousData) => previousData,
   });
 
   // Create mutation
@@ -217,7 +218,7 @@ export default function MuiHolidayCalendar() {
     });
   };
 
-  const handleEdit = (holiday: Holiday) => {
+  const handleEdit = useCallback((holiday: Holiday) => {
     setEditingHoliday(holiday);
     setFormData({
       name: holiday.name,
@@ -229,12 +230,12 @@ export default function MuiHolidayCalendar() {
       notes: holiday.notes || "",
     });
     setIsDialogOpen(true);
-  };
+  }, []);
 
-  const handleDelete = (holiday: Holiday) => {
+  const handleDelete = useCallback((holiday: Holiday) => {
     setDeletingHoliday(holiday);
     setIsDeleteDialogOpen(true);
-  };
+  }, []);
 
   const handleSubmit = () => {
     const submitData = {
@@ -249,12 +250,13 @@ export default function MuiHolidayCalendar() {
     }
   };
 
+  const holidayList = holidaysData?.holidays ?? [];
+
   // Calendar events
   const calendarEvents = useMemo(() => {
-    if (!holidaysData?.holidays) return [];
+    if (!holidayList.length) return [];
 
-    return holidaysData.holidays.map((holiday) => {
-      const typeConfig = getTypeConfig(holiday.type);
+    return holidayList.map((holiday) => {
       return {
         id: holiday.id,
         title: holiday.name,
@@ -267,22 +269,93 @@ export default function MuiHolidayCalendar() {
         },
       };
     });
-  }, [holidaysData?.holidays]);
+  }, [holidayList]);
 
   // Group holidays by type for stats
   const holidayStats = useMemo(() => {
-    if (!holidaysData?.holidays) return { regular: 0, special: 0, company: 0, total: 0 };
+    if (!holidayList.length) return { regular: 0, special: 0, company: 0, total: 0 };
 
-    const holidays = holidaysData.holidays;
+    const holidays = holidayList;
     return {
       regular: holidays.filter((h) => h.type === "regular").length,
       special: holidays.filter((h) => h.type.startsWith("special")).length,
       company: holidays.filter((h) => h.type === "company").length,
       total: holidays.length,
     };
-  }, [holidaysData?.holidays]);
+  }, [holidayList]);
 
-  if (isLoading) {
+  const sortedHolidays = useMemo(
+    () => [...holidayList].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()),
+    [holidayList]
+  );
+
+  const handleCalendarEventClick = useCallback((info: any) => {
+    info.jsEvent.preventDefault();
+    const holiday = info.event.extendedProps.holiday as Holiday;
+    setDetailHoliday(holiday);
+    setDetailAnchor(info.el);
+  }, []);
+
+  const renderCalendarEvent = useCallback((arg: any) => {
+    const holiday = arg.event.extendedProps.holiday as Holiday;
+    const typeConfig = getTypeConfig(holiday?.type);
+    const color = holiday.workAllowed ? typeConfig.color : "#6b7280";
+
+    return (
+      <Tooltip
+        title={
+          <Box>
+            <Typography variant="body2" fontWeight={600}>
+              {holiday?.name}
+            </Typography>
+            <Typography variant="caption">Type: {typeConfig.label}</Typography>
+            <br />
+            <Typography variant="caption">
+              Pay: {holiday?.payRule?.worked || typeConfig.payWorked}
+            </Typography>
+            <br />
+            <Typography variant="caption">
+              Work Allowed: {holiday?.workAllowed ? "Yes" : "No"}
+            </Typography>
+            {holiday?.notes && (
+              <>
+                <br />
+                <Typography variant="caption">Note: {holiday.notes}</Typography>
+              </>
+            )}
+          </Box>
+        }
+        arrow
+      >
+        <Box
+          sx={{
+            px: 1,
+            py: 0.25,
+            borderRadius: 1,
+            fontSize: "0.75rem",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            cursor: "pointer",
+            bgcolor: alpha(color, 0.15),
+            color: color,
+            borderLeft: `4px solid ${color}`,
+            borderTop: "1px solid",
+            borderRight: "1px solid",
+            borderBottom: "1px solid",
+            borderColor: alpha(color, 0.2),
+            fontWeight: 600,
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          {arg.event.title}
+        </Box>
+      </Tooltip>
+    );
+  }, []);
+
+  if (isLoading && holidayList.length === 0) {
     return (
       <Box sx={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: 300 }}>
         <CircularProgress color="primary" />
@@ -398,6 +471,10 @@ export default function MuiHolidayCalendar() {
         </Stack>
       </Box>
 
+      {isFetching && !isLoading && (
+        <LinearProgress sx={{ mb: 2, borderRadius: 1 }} />
+      )}
+
       {/* Stats Cards */}
       <Stack direction="row" spacing={2} sx={{ mb: 3 }} flexWrap="wrap">
         {[
@@ -435,82 +512,20 @@ export default function MuiHolidayCalendar() {
       {/* Calendar View */}
       {tabValue === 0 && (
         <Card sx={{ borderRadius: 3, overflow: "hidden" }}>
-          <CardContent sx={{ p: 2 }}>
-            <FullCalendar
-              ref={calendarRef}
-              plugins={[dayGridPlugin, interactionPlugin]}
-              initialView="dayGridMonth"
-              events={calendarEvents}
-              headerToolbar={{
-                left: "prev,next today",
-                center: "title",
-                right: "dayGridMonth,dayGridYear",
-              }}
-              height="auto"
-              eventClick={(info) => {
-                info.jsEvent.preventDefault();
-                const holiday = info.event.extendedProps.holiday as Holiday;
-                setDetailHoliday(holiday);
-                setDetailAnchor(info.el);
-              }}
-              eventContent={(arg) => {
-                const holiday = arg.event.extendedProps.holiday as Holiday;
-                const typeConfig = getTypeConfig(holiday?.type);
-                const color = holiday.workAllowed ? typeConfig.color : "#6b7280";
-                return (
-                  <Tooltip
-                    title={
-                      <Box>
-                        <Typography variant="body2" fontWeight={600}>
-                          {holiday?.name}
-                        </Typography>
-                        <Typography variant="caption">Type: {typeConfig.label}</Typography>
-                        <br />
-                        <Typography variant="caption">
-                          Pay: {holiday?.payRule?.worked || typeConfig.payWorked}
-                        </Typography>
-                        <br />
-                        <Typography variant="caption">
-                          Work Allowed: {holiday?.workAllowed ? "Yes" : "No"}
-                        </Typography>
-                        {holiday?.notes && (
-                          <>
-                            <br />
-                            <Typography variant="caption">Note: {holiday.notes}</Typography>
-                          </>
-                        )}
-                      </Box>
-                    }
-                    arrow
-                  >
-                    <Box
-                      sx={{
-                        px: 1,
-                        py: 0.25,
-                        borderRadius: 1,
-                        fontSize: "0.75rem",
-                        overflow: "hidden",
-                        textOverflow: "ellipsis",
-                        whiteSpace: "nowrap",
-                        cursor: "pointer",
-                        bgcolor: alpha(color, 0.15),
-                        color: color,
-                        borderLeft: `4px solid ${color}`,
-                        borderTop: '1px solid',
-                        borderRight: '1px solid',
-                        borderBottom: '1px solid',
-                        borderColor: alpha(color, 0.2),
-                        fontWeight: 600,
-                        width: '100%',
-                        boxSizing: 'border-box'
-                      }}
-                    >
-                      {arg.event.title}
-                    </Box>
-                  </Tooltip>
-                );
-              }}
-            />
+          <CardContent sx={{ p: 2, minHeight: 620 }}>
+            <Suspense
+              fallback={
+                <Box sx={{ minHeight: 580, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <CircularProgress color="primary" />
+                </Box>
+              }
+            >
+              <HolidayCalendarView
+                events={calendarEvents}
+                onEventClick={handleCalendarEventClick}
+                onEventContent={renderCalendarEvent}
+              />
+            </Suspense>
           </CardContent>
         </Card>
       )}
@@ -533,73 +548,71 @@ export default function MuiHolidayCalendar() {
                 </TableRow>
               </TableHead>
               <TableBody>
-                {holidaysData?.holidays
-                  ?.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                  .map((holiday) => {
-                    const typeConfig = getTypeConfig(holiday.type);
-                    return (
-                      <TableRow key={holiday.id} hover>
-                        <TableCell>
-                          <Typography variant="body2" fontWeight={500}>
-                            {format(new Date(holiday.date), "MMM d, yyyy")}
+                {sortedHolidays.map((holiday) => {
+                  const typeConfig = getTypeConfig(holiday.type);
+                  return (
+                    <TableRow key={holiday.id} hover>
+                      <TableCell>
+                        <Typography variant="body2" fontWeight={500}>
+                          {format(new Date(holiday.date), "MMM d, yyyy")}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="body2">{holiday.name}</Typography>
+                        {holiday.notes && (
+                          <Typography variant="caption" color="text.secondary">
+                            {holiday.notes}
                           </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">{holiday.name}</Typography>
-                          {holiday.notes && (
-                            <Typography variant="caption" color="text.secondary">
-                              {holiday.notes}
-                            </Typography>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          label={typeConfig.label}
+                          size="small"
+                          sx={{
+                            bgcolor: alpha(typeConfig.color, 0.15),
+                            color: typeConfig.color,
+                            fontWeight: 600,
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Typography variant="caption">
+                          {holiday.payRule?.worked || typeConfig.payWorked}
+                        </Typography>
+                      </TableCell>
+                      <TableCell>
+                        <Chip
+                          icon={holiday.workAllowed ? <CheckCircle /> : <Block />}
+                          label={holiday.workAllowed ? "Work OK" : "Blocked"}
+                          size="small"
+                          color={holiday.workAllowed ? "success" : "error"}
+                          variant="outlined"
+                        />
+                      </TableCell>
+                      <TableCell align="right">
+                        <Stack direction="row" spacing={0.5} justifyContent="flex-end">
+                          {isAdmin ? (
+                            <>
+                              <Tooltip title="Edit">
+                                <IconButton size="small" onClick={() => handleEdit(holiday)}>
+                                  <EditIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                              <Tooltip title="Delete">
+                                <IconButton size="small" color="error" onClick={() => handleDelete(holiday)}>
+                                  <DeleteIcon fontSize="small" />
+                                </IconButton>
+                              </Tooltip>
+                            </>
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">View Only</Typography>
                           )}
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={typeConfig.label}
-                            size="small"
-                            sx={{
-                              bgcolor: alpha(typeConfig.color, 0.15),
-                              color: typeConfig.color,
-                              fontWeight: 600,
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="caption">
-                            {holiday.payRule?.worked || typeConfig.payWorked}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            icon={holiday.workAllowed ? <CheckCircle /> : <Block />}
-                            label={holiday.workAllowed ? "Work OK" : "Blocked"}
-                            size="small"
-                            color={holiday.workAllowed ? "success" : "error"}
-                            variant="outlined"
-                          />
-                        </TableCell>
-                        <TableCell align="right">
-                          <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                            {isAdmin ? (
-                              <>
-                                <Tooltip title="Edit">
-                                  <IconButton size="small" onClick={() => handleEdit(holiday)}>
-                                    <EditIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Delete">
-                                  <IconButton size="small" color="error" onClick={() => handleDelete(holiday)}>
-                                    <DeleteIcon fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              </>
-                            ) : (
-                              <Typography variant="caption" color="text.disabled">View Only</Typography>
-                            )}
-                          </Stack>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
+                        </Stack>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
           </TableContainer>

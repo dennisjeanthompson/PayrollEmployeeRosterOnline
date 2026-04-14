@@ -107,6 +107,22 @@ const PH_HOLIDAYS: { date: string; name: string; type: "regular" | "special" }[]
   { date: "2026-12-30", name: "Rizal Day", type: "regular" },
 ];
 
+const FORECAST_MODEL = {
+  name: "Seasonal Naive",
+  variant: "Day-of-Week Average",
+  label: "Seasonal Naive (Day-of-Week Average)",
+  trainingWindow: "8 weeks",
+  confidenceBand: "±10%",
+  description: "Uses the last 8 weeks of branch shift history, groups by weekday, and applies holiday-aware adjustments.",
+};
+
+function buildForecastMeta() {
+  return {
+    ...FORECAST_MODEL,
+    generatedAt: new Date().toISOString(),
+  };
+}
+
 // Helper: Check if date is a holiday — reads from DB first, falls back to static list
 async function getHolidayFromDB(date: Date, branchHolidays?: any[]): Promise<{ name: string; type: "regular" | "special" } | null> {
   const dateStr = format(date, "yyyy-MM-dd");
@@ -408,6 +424,7 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
       message: hasEnoughData 
         ? "Predictions based on 8-week historical patterns"
         : "Limited data - predictions based on defaults. Add more shifts for better accuracy.",
+      meta: buildForecastMeta(),
     });
   } catch (error) {
     console.error("Error generating labor forecast:", error);
@@ -522,6 +539,7 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
         avgDaily: Math.round(totalPredicted / forecastDays),
         period: `${forecastDays} days`,
       },
+      meta: buildForecastMeta(),
     });
   } catch (error) {
     console.error("Error generating payroll forecast:", error);

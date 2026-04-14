@@ -32,7 +32,7 @@
  */
 import React, { useState, useMemo, useCallback } from 'react';
 import {
-  Box, Paper, Typography, Button, IconButton, Chip, Badge, Drawer,
+  Box, Paper, Typography, Button, IconButton, Chip, Badge, Drawer, Alert,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   FormControl, InputLabel, Select, MenuItem, Stack, Tooltip, Avatar,
   CircularProgress, useTheme, useMediaQuery, Divider, ButtonGroup,
@@ -127,12 +127,20 @@ export default function ScheduleV2() {
     { value: "absent", label: "Absent (days)", color: "#dc2626" },
   ];
 
+  const quickAdjustmentTypes = [
+    { value: "late", label: "Late" },
+    { value: "overtime", label: "OT" },
+    { value: "undertime", label: "Undertime" },
+    { value: "absent", label: "Absent" },
+  ];
+
   // Form data
   const [newShift, setNewShift] = useState({ employeeId: '', startTime: null as Date | null, endTime: null as Date | null, notes: '' });
   const [editForm, setEditForm] = useState({ startTime: null as Date | null, endTime: null as Date | null, notes: '' });
   const [timeOffForm, setTimeOffForm] = useState({ type: 'vacation', startDate: new Date() as Date | null, endDate: new Date() as Date | null, reason: '' });
   const [tradeForm, setTradeForm] = useState({ shiftId: '', targetUserId: '', reason: '' });
   const [actionsMenuAnchor, setActionsMenuAnchor] = useState<null | HTMLElement>(null);
+  const [copyWeekDialogOpen, setCopyWeekDialogOpen] = useState(false);
   const [manageLogGroup, setManageLogGroup] = useState<any[] | null>(null);
 
   // Exception Log Detail Drawer state
@@ -143,6 +151,35 @@ export default function ScheduleV2() {
     setSelectedExceptionLog(log);
     setExceptionLogDrawerOpen(true);
   }, []);
+
+  type AdjustmentPrefill = {
+    employeeId?: string;
+    date?: Date | null;
+    endDate?: Date | null;
+    isRange?: boolean;
+    type?: string;
+    value?: string;
+    remarks?: string;
+  };
+
+  const openAdjustmentDialog = useCallback((prefill: AdjustmentPrefill = {}) => {
+    setEditAdjId(null);
+    setAdjEmployeeId(prefill.employeeId || "");
+    setAdjDate(prefill.date ?? selectedDay);
+    setAdjEndDate(prefill.endDate ?? null);
+    setAdjIsRange(Boolean(prefill.isRange));
+    setAdjType(prefill.type || "late");
+    setAdjValue(prefill.value || "");
+    setAdjRemarks(prefill.remarks || "");
+    setIsAdjustmentDialogOpen(true);
+  }, [selectedDay]);
+
+  const handleLogAdjustmentFromShift = useCallback((shift: Shift) => {
+    openAdjustmentDialog({
+      employeeId: String(shift.userId),
+      date: new Date(shift.startTime),
+    });
+  }, [openAdjustmentDialog]);
 
   // Bulk Edit / Selection State
   const [isSelectionMode, setIsSelectionMode] = useState(false);
@@ -292,6 +329,50 @@ export default function ScheduleV2() {
       .reduce((sum, s) => sum + differenceInHours(new Date(s.endTime), new Date(s.startTime)), 0);
   }, [shifts, weekStart]);
 
+  const currentWeekShiftCount = useMemo(() => {
+    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+    return shifts.filter(s => {
+      const d = new Date(s.startTime);
+      return d >= weekStart && d <= weekEnd;
+    }).length;
+  }, [shifts, weekStart]);
+
+  const buildCopyWeekData = useCallback(() => {
+    if (!currentUser?.branchId) return null;
+
+    const lastWeekStart = subWeeks(weekStart, 1);
+    const lastWeekEnd = endOfWeek(lastWeekStart, { weekStartsOn: 1 });
+    const thisWeekStart = weekStart;
+    const thisWeekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+
+    const lastWeekShifts = shifts.filter(s => {
+      const d = new Date(s.startTime);
+      return d >= lastWeekStart && d <= lastWeekEnd && s.user?.isActive !== false;
+    });
+
+    const currentWeekShifts = shifts.filter(s => {
+      const d = new Date(s.startTime);
+      return d >= thisWeekStart && d <= thisWeekEnd;
+    });
+
+    const shiftsToCopy = lastWeekShifts.filter(s => {
+      const newStart = addWeeks(new Date(s.startTime), 1);
+      const newEnd = addWeeks(new Date(s.endTime), 1);
+      const isOverlapping = currentWeekShifts.some(cws =>
+        cws.userId === s.userId &&
+        areIntervalsOverlapping(
+          { start: newStart, end: newEnd },
+          { start: new Date(cws.startTime), end: new Date(cws.endTime) }
+        )
+      );
+      return !isOverlapping;
+    });
+
+    return { lastWeekStart, lastWeekEnd, thisWeekStart, thisWeekEnd, lastWeekShifts, currentWeekShifts, shiftsToCopy };
+  }, [currentUser?.branchId, shifts, weekStart]);
+
+  const copyWeekPreview = useMemo(() => buildCopyWeekData(), [buildCopyWeekData]);
+
   // â”€â”€â”€ MUTATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const createShiftMutation = useMutation({
     mutationFn: async (payload: { userId: string; startTime: string; endTime: string; branchId: string; position: string; notes?: string }) => {
@@ -367,43 +448,17 @@ export default function ScheduleV2() {
 
   const copyWeekMutation = useMutation({
     mutationFn: async () => {
-      if (!currentUser?.branchId) throw new Error("Branch ID missing");
-      const lastWeekStart = subWeeks(weekStart, 1);
-      const lastWeekEnd = endOfWeek(lastWeekStart, { weekStartsOn: 1 });
-      
-      const lastWeekShifts = shifts.filter(s => {
-        const d = new Date(s.startTime);
-        return d >= lastWeekStart && d <= lastWeekEnd && s.user?.isActive !== false;
-      });
+      const copyPlan = buildCopyWeekData();
+      if (!copyPlan) throw new Error("Branch ID missing");
 
-      const thisWeekStart = weekStart;
-      const thisWeekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
-      const currentWeekShifts = shifts.filter(s => {
-        const d = new Date(s.startTime);
-        return d >= thisWeekStart && d <= thisWeekEnd;
-      });
-
-      const shiftsToCopy = lastWeekShifts.filter(s => {
-        const newStart = addWeeks(new Date(s.startTime), 1);
-        const newEnd = addWeeks(new Date(s.endTime), 1);
-        const isOverlapping = currentWeekShifts.some(cws => 
-          cws.userId === s.userId && 
-          areIntervalsOverlapping(
-            { start: newStart, end: newEnd },
-            { start: new Date(cws.startTime), end: new Date(cws.endTime) }
-          )
-        );
-        return !isOverlapping;
-      });
-
-      if (shiftsToCopy.length === 0) {
-        if (lastWeekShifts.length > 0) {
+      if (copyPlan.shiftsToCopy.length === 0) {
+        if (copyPlan.lastWeekShifts.length > 0) {
           throw new Error("All shifts from the previous week already exist or overlap with the current week.");
         }
         throw new Error("No shifts found in the previous week to copy.");
       }
 
-      const newShiftsPromises = shiftsToCopy.map(s => {
+      const newShiftsPromises = copyPlan.shiftsToCopy.map(s => {
         return apiRequest('POST', '/api/shifts', {
           userId: s.userId,
           branchId: s.branchId,
@@ -422,17 +477,18 @@ export default function ScheduleV2() {
         failed += results.filter(r => !r.ok).length;
       }
 
-      const skippedCount = lastWeekShifts.length - shiftsToCopy.length;
+      const skippedCount = copyPlan.lastWeekShifts.length - copyPlan.shiftsToCopy.length;
       if (failed > 0) {
-        throw new Error(`Copied ${shiftsToCopy.length - failed} shifts. Failed to copy ${failed} shifts. Skipped ${skippedCount} overlaps.`);
+        throw new Error(`Copied ${copyPlan.shiftsToCopy.length - failed} shifts. Failed to copy ${failed} shifts. Skipped ${skippedCount} overlaps.`);
       }
-      return { copiedCount: shiftsToCopy.length, skippedCount };
+      return { copiedCount: copyPlan.shiftsToCopy.length, skippedCount };
     },
     onSuccess: ({ copiedCount, skippedCount }) => {
       queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
       let msg = `Successfully copied ${copiedCount} shifts.`;
       if (skippedCount > 0) msg += ` Skipped ${skippedCount} overlapping shifts.`;
       toast.success(msg);
+      setCopyWeekDialogOpen(false);
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -461,13 +517,13 @@ export default function ScheduleV2() {
   const deleteTimeOffMutation = useMutation({
     mutationFn: async (id: string) => {
       const res = await apiRequest('DELETE', `/api/time-off-requests/${id}`);
-      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to delete'); }
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to cancel'); }
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
       queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
-      toast.success('Time-off request deleted');
+      toast.success('Time-off request cancelled');
       setSelectedTimeOffId(null);
     },
     onError: (err: Error) => toast.error(err.message),
@@ -856,54 +912,59 @@ export default function ScheduleV2() {
 
           {isManager && (
             <>
-              <Divider orientation="vertical" flexItem sx={{ display: { xs: 'none', sm: 'block' }, mx: 0.5 }} />
+              <ButtonGroup size="small" variant="outlined" sx={{ height: 32, display: { xs: 'none', sm: 'flex' } }}>
+                <Tooltip title="Add a new shift">
+                  <Button
+                    size="small"
+                    variant="contained"
+                    startIcon={<AddIcon />}
+                    onClick={() => { setNewShift({ employeeId: '', startTime: null, endTime: null, notes: '' }); setCreateModalOpen(true); }}
+                    sx={{
+                      textTransform: 'none',
+                      fontWeight: 800,
+                      borderRadius: 2,
+                      boxShadow: '0 2px 8px rgba(92,64,51,0.15)',
+                      '&:hover': { boxShadow: '0 4px 12px rgba(92,64,51,0.2)' },
+                    }}
+                  >
+                    Add Shift
+                  </Button>
+                </Tooltip>
+                <Tooltip title="Quick actions">
+                  <Button
+                    size="small"
+                    variant="outlined"
+                    onClick={(e) => setActionsMenuAnchor(e.currentTarget)}
+                    sx={{
+                      minWidth: 36,
+                      px: 1,
+                      color: isSelectionMode ? 'primary.main' : 'text.primary',
+                      borderColor: isSelectionMode ? 'primary.main' : alpha(theme.palette.text.primary, 0.2),
+                      bgcolor: isSelectionMode ? alpha(theme.palette.primary.main, 0.08) : 'transparent',
+                      '&:hover': {
+                        borderColor: isSelectionMode ? 'primary.main' : alpha(theme.palette.text.primary, 0.3),
+                        bgcolor: isSelectionMode ? alpha(theme.palette.primary.main, 0.12) : alpha(theme.palette.text.primary, 0.04),
+                      },
+                    }}
+                  >
+                    <MoreVertIcon fontSize="small" />
+                  </Button>
+                </Tooltip>
+              </ButtonGroup>
 
-              <Tooltip title="Toggle Bulk Edit Mode">
-                <Button
-                  size="small" variant={isSelectionMode ? "contained" : "outlined"} startIcon={<ChecklistIcon />}
-                  onClick={() => {
-                    if (isSelectionMode) {
-                      setSelectedShifts(new Set());
-                      setSelectedLogs(new Set());
-                    }
-                    setIsSelectionMode(!isSelectionMode);
-                  }}
-                  color="primary"
-                  sx={{ 
-                    textTransform: 'none', fontWeight: 800, 
-                    display: { xs: 'none', sm: 'flex' }, height: 32,
-                    borderWidth: isSelectionMode ? undefined : 2,
-                    '&:hover': { borderWidth: isSelectionMode ? undefined : 2 },
-                  }}
-                >
-                  {isSelectionMode ? 'Editing...' : 'Bulk Edit'}
-                </Button>
-              </Tooltip>
-
-              <Button
-                size="small"
-                variant="outlined"
-                endIcon={<MoreVertIcon />}
-                onClick={(e) => setActionsMenuAnchor(e.currentTarget)}
-                sx={{ 
-                  textTransform: 'none', fontWeight: 700, height: 32,
-                  display: { xs: 'none', sm: 'flex' },
-                  color: 'text.primary',
-                  borderColor: alpha(theme.palette.text.primary, 0.2),
-                  '&:hover': { borderColor: alpha(theme.palette.text.primary, 0.3), bgcolor: alpha(theme.palette.text.primary, 0.04) },
-                }}
-              >
-                More
-              </Button>
               <Menu
                 anchorEl={actionsMenuAnchor}
                 open={Boolean(actionsMenuAnchor)}
                 onClose={() => setActionsMenuAnchor(null)}
                 slotProps={{ paper: { sx: { mt: 1, minWidth: 180, borderRadius: 2, boxShadow: '0 4px 20px rgba(0,0,0,0.1)' } } }}
               >
-                <MenuItem onClick={() => { setActionsMenuAnchor(null); setIsAdjustmentDialogOpen(true); }}>
+                <MenuItem onClick={() => { setActionsMenuAnchor(null); setIsSelectionMode(prev => !prev); if (isSelectionMode) { setSelectedShifts(new Set()); setSelectedLogs(new Set()); } }}>
+                  <ChecklistIcon sx={{ mr: 1.5, fontSize: 18, color: '#2563EB' }} />
+                  <Typography variant="body2" fontWeight={600}>{isSelectionMode ? 'Done Editing' : 'Bulk Edit'}</Typography>
+                </MenuItem>
+                <MenuItem onClick={() => { setActionsMenuAnchor(null); openAdjustmentDialog({ date: selectedDay, type: 'late' }); }}>
                   <NoteAddIcon sx={{ mr: 1.5, fontSize: 18, color: '#F59E0B' }} />
-                  <Typography variant="body2" fontWeight={600}>Log Exception</Typography>
+                  <Typography variant="body2" fontWeight={600}>Log Attendance</Typography>
                 </MenuItem>
                 <MenuItem onClick={() => { setActionsMenuAnchor(null); setTimeOffModalOpen(true); }}>
                   <TimeOffIcon sx={{ mr: 1.5, fontSize: 18, color: '#92400E' }} />
@@ -919,37 +980,12 @@ export default function ScheduleV2() {
                   <Typography variant="body2" fontWeight={600}>Trade Shift</Typography>
                 </MenuItem>
                 <Divider sx={{ my: 0.5 }} />
-                <MenuItem 
-                  onClick={() => {
-                    setActionsMenuAnchor(null);
-                    if (confirm("Copy all shifts from the previous week into this week?")) {
-                      copyWeekMutation.mutate();
-                    }
-                  }}
-                  disabled={copyWeekMutation.isPending}
-                >
+                <MenuItem onClick={() => { setActionsMenuAnchor(null); setCopyWeekDialogOpen(true); }}>
                   <ContentCopyIcon sx={{ mr: 1.5, fontSize: 18, color: '#14B8A6' }} />
-                  <Typography variant="body2" fontWeight={600}>Copy Previous Week</Typography>
+                  <Typography variant="body2" fontWeight={600}>Copy Last Week</Typography>
                 </MenuItem>
               </Menu>
             </>
-          )}
-
-          {isManager && (
-            <Tooltip title="Create Shift">
-              <Button
-                size="small" variant="contained" startIcon={<AddIcon />}
-                onClick={() => { setNewShift({ employeeId: '', startTime: null, endTime: null, notes: '' }); setCreateModalOpen(true); }}
-                sx={{ 
-                  textTransform: 'none', fontWeight: 800, height: 32, 
-                  borderRadius: 2,
-                  boxShadow: '0 2px 8px rgba(92,64,51,0.15)',
-                  '&:hover': { boxShadow: '0 4px 12px rgba(92,64,51,0.2)' },
-                }}
-              >
-                {isMobile ? '' : 'Shift'}
-              </Button>
-            </Tooltip>
           )}
         </Box>
       </Box>
@@ -990,28 +1026,71 @@ export default function ScheduleV2() {
         <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1, sm: 2 }, minHeight: 400 }}>
           {viewMode === 'week' ? (
             isManager ? (
-              <WeeklyGrid
-                employees={employees}
-                shifts={shifts}
-                weekStart={weekStart}
-                holidays={holidays}
-                isManager={isManager}
-                timeOffRequests={timeOffRequests}
-                shiftTrades={shiftTrades}
-                adjustmentLogs={adjustmentLogs}
-                currentUserId={currentUser?.id || ''}
-                isSelectionMode={isSelectionMode}
-                selectedShifts={selectedShifts}
-                selectedLogs={selectedLogs}
-                onToggleShiftSelection={toggleShiftSelection}
-                onToggleLogSelection={toggleLogSelection}
-                onCreateShift={handleCreateShift}
-                onEditShift={!isSelectionMode ? handleEditShift : () => {}}
-                onOpenRequests={() => setDrawerOpen(true)}
-                onDeleteTimeOff={(id) => setSelectedTimeOffId(id)}
-                onManageLogGroup={setManageLogGroup}
-                onAddHolidayPay={(userId, date) => addHolidayPayMutation.mutate({ userId, branchId: currentUser?.branchId!, date })}
-              />
+              <Stack spacing={2}>
+                {currentWeekShiftCount === 0 && (
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 3,
+                      border: `1px solid ${alpha(theme.palette.primary.main, 0.14)}`,
+                      bgcolor: alpha(theme.palette.primary.main, 0.04),
+                    }}
+                  >
+                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ sm: 'center' }} justifyContent="space-between">
+                      <Box>
+                        <Typography variant="h6" fontWeight={800} sx={{ color: 'text.primary' }}>
+                          No shifts scheduled this week
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 720 }}>
+                          Start from scratch or copy last week. New shifts will sync live to the schedule as soon as you save them.
+                        </Typography>
+                      </Box>
+                      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
+                        <Button
+                          variant="contained"
+                          startIcon={<AddIcon />}
+                          onClick={() => handleCreateShift('', selectedDay)}
+                          sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 800 }}
+                        >
+                          Add Shift
+                        </Button>
+                        <Button
+                          variant="outlined"
+                          startIcon={<ContentCopyIcon />}
+                          onClick={() => setCopyWeekDialogOpen(true)}
+                          sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+                        >
+                          Copy Last Week
+                        </Button>
+                      </Stack>
+                    </Stack>
+                  </Paper>
+                )}
+                <WeeklyGrid
+                  employees={employees}
+                  shifts={shifts}
+                  weekStart={weekStart}
+                  holidays={holidays}
+                  isManager={isManager}
+                  timeOffRequests={timeOffRequests}
+                  shiftTrades={shiftTrades}
+                  adjustmentLogs={adjustmentLogs}
+                  currentUserId={currentUser?.id || ''}
+                  isSelectionMode={isSelectionMode}
+                  selectedShifts={selectedShifts}
+                  selectedLogs={selectedLogs}
+                  onToggleShiftSelection={toggleShiftSelection}
+                  onToggleLogSelection={toggleLogSelection}
+                  onCreateShift={handleCreateShift}
+                  onEditShift={!isSelectionMode ? handleEditShift : () => {}}
+                  onOpenRequests={() => setDrawerOpen(true)}
+                  onDeleteTimeOff={(id) => setSelectedTimeOffId(id)}
+                  onManageLogGroup={setManageLogGroup}
+                  onAddHolidayPay={(userId, date) => addHolidayPayMutation.mutate({ userId, branchId: currentUser?.branchId!, date })}
+                  onLogAdjustment={handleLogAdjustmentFromShift}
+                />
+              </Stack>
             ) : (
               /* Employee week view: show their shifts only, as vertical cards */
               <WeeklyGrid
@@ -1052,6 +1131,7 @@ export default function ScheduleV2() {
                 onDeleteTimeOff={(id) => setSelectedTimeOffId(id)}
                 onManageLogGroup={setManageLogGroup}
                 onAddHolidayPay={(userId, date) => addHolidayPayMutation.mutate({ userId, branchId: currentUser?.branchId!, date })}
+                onLogAdjustment={handleLogAdjustmentFromShift}
               />
             ) : (
               <MyDayView
@@ -1323,6 +1403,24 @@ export default function ScheduleV2() {
           <Box sx={{ flex: 1 }} />
           <Button onClick={() => setEditModalOpen(false)}>Cancel</Button>
           <Button
+            variant="outlined"
+            color="warning"
+            startIcon={<NoteAddIcon />}
+            onClick={() => {
+              if (!selectedShift) return;
+              setEditModalOpen(false);
+              openAdjustmentDialog({
+                employeeId: selectedShift.userId,
+                date: new Date(selectedShift.startTime),
+                type: 'late',
+                remarks: selectedShift.notes || '',
+              });
+            }}
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
+          >
+            Log Attendance
+          </Button>
+          <Button
             variant="contained"
             disabled={updateShiftMutation.isPending || !editForm.startTime || !editForm.endTime}
             onClick={() => {
@@ -1399,18 +1497,18 @@ export default function ScheduleV2() {
               )}
 
               <Divider sx={{ mb: 2 }} />
-              <Typography variant="body2" color="error" fontWeight={600} sx={{ mb: 1 }}>
-                Danger Zone
+              <Typography variant="body2" color="warning.main" fontWeight={600} sx={{ mb: 1 }}>
+                Cancel Request
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                Deleting this request will remove it permanently and restore any deducted leave credits.
+                Cancelling keeps the request in the system for audit history. If it was already approved and paid, leave credits are restored.
               </Typography>
             </DialogContent>
             <DialogActions>
               <Button onClick={() => setSelectedTimeOffId(null)}>Close</Button>
-              <Button variant="contained" color="error" disabled={deleteTimeOffMutation.isPending}
+              <Button variant="contained" color="warning" disabled={deleteTimeOffMutation.isPending || selectedReq.status === 'cancelled'}
                 onClick={() => selectedTimeOffId && deleteTimeOffMutation.mutate(selectedTimeOffId)}>
-                {deleteTimeOffMutation.isPending ? 'Deleting...' : 'Delete Request'}
+                {selectedReq.status === 'cancelled' ? 'Already Cancelled' : (deleteTimeOffMutation.isPending ? 'Cancelling...' : 'Cancel Request')}
               </Button>
             </DialogActions>
           </Dialog>
@@ -1520,19 +1618,61 @@ export default function ScheduleV2() {
           },
         }}
       >
-        <DialogTitle sx={{ pb: 1 }}>
+        <DialogTitle component="div" sx={{ pb: 1 }}>
           <Stack direction="row" alignItems="center" spacing={1}>
             <NoteAddIcon color="warning" />
-            <Typography variant="h6" fontWeight={800}>
-              {editAdjId ? "Edit Exception" : "Log Exception"}
+            <Typography component="span" variant="h6" fontWeight={800}>
+              {editAdjId ? "Edit Attendance Log" : "Log Attendance"}
             </Typography>
           </Stack>
           <Typography variant="caption" color="text.secondary">
-            {editAdjId ? "Update the specified payroll exception." : "Log overtime, tardiness, or adjustments directly to payroll."}
+            {editAdjId ? "Update the selected attendance entry." : "Record tardiness, overtime, undertime, or absence from the schedule or logbook."}
           </Typography>
+          {!editAdjId && (
+            <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1.5 }}>
+              {quickAdjustmentTypes.map((option) => (
+                <Chip
+                  key={option.value}
+                  label={option.label}
+                  clickable
+                  onClick={() => setAdjType(option.value)}
+                  color={adjType === option.value ? 'warning' : 'default'}
+                  variant={adjType === option.value ? 'filled' : 'outlined'}
+                  sx={{ fontWeight: 700 }}
+                />
+              ))}
+            </Stack>
+          )}
         </DialogTitle>
         <DialogContent>
           <Stack spacing={2.5} sx={{ mt: 1 }}>
+            {!editAdjId && (adjEmployeeId || adjDate || adjIsRange) && (
+              <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(theme.palette.warning.main, 0.06), border: `1px solid ${alpha(theme.palette.warning.main, 0.16)}` }}>
+                <Stack direction="row" spacing={1} flexWrap="wrap">
+                  {adjEmployeeId && (
+                    <Chip
+                      size="small"
+                      label={`Employee: ${employees.find((emp) => emp.id === adjEmployeeId)?.firstName || 'Selected'}`}
+                      variant="outlined"
+                    />
+                  )}
+                  {adjDate && !adjIsRange && (
+                    <Chip
+                      size="small"
+                      label={`Date: ${format(adjDate, 'MMM d, yyyy')}`}
+                      variant="outlined"
+                    />
+                  )}
+                  {adjIsRange && adjDate && (
+                    <Chip
+                      size="small"
+                      label={`Range starts: ${format(adjDate, 'MMM d, yyyy')}`}
+                      variant="outlined"
+                    />
+                  )}
+                </Stack>
+              </Box>
+            )}
             
             {!editAdjId && (
               <FormControl fullWidth size="small">
@@ -1576,7 +1716,7 @@ export default function ScheduleV2() {
                   onClick={() => { setAdjIsRange(!adjIsRange); setAdjEndDate(null); }}
                   sx={{ textTransform: 'none', alignSelf: 'flex-start', mt: -1 }}
                 >
-                  {adjIsRange ? '← Log for single day' : '📅 Log for multiple days'}
+                  {adjIsRange ? '← Switch to single-day log' : '📅 Bulk log date range'}
                 </Button>
               </LocalizationProvider>
             )}
@@ -1612,6 +1752,11 @@ export default function ScheduleV2() {
                   </InputAdornment>
                 ),
               }}
+              helperText={adjType === 'late' || adjType === 'undertime'
+                ? 'Use minutes for tardiness or undertime from the logbook.'
+                : adjType === 'absent'
+                  ? 'Use days for a full-day absence entry.'
+                  : 'Use hours for overtime, rest day OT, holiday OT, or night differential.'}
             />
 
             <TextField
@@ -1645,8 +1790,8 @@ export default function ScheduleV2() {
           sx: { borderRadius: 3, bgcolor: isDark ? '#1C1410' : '#FFF', backgroundImage: 'none' }
         }}
       >
-        <DialogTitle sx={{ pb: 1 }}>
-          <Typography variant="h6" fontWeight={800}>Manage Exceptions</Typography>
+        <DialogTitle component="div" sx={{ pb: 1 }}>
+          <Typography component="span" variant="h6" fontWeight={800}>Manage Exceptions</Typography>
         </DialogTitle>
         <DialogContent sx={{ p: 0 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', pb: 2 }}>
@@ -1711,6 +1856,72 @@ export default function ScheduleV2() {
           <Button onClick={() => setManageLogGroup(null)} sx={{ borderRadius: 2, textTransform: "none" }}>Done</Button>
         </DialogActions>
       </Dialog>
+
+        {/* ─── DUPLICATE WEEK MODAL ─────────────────────────────────────────────── */}
+        <Dialog
+          open={copyWeekDialogOpen}
+          onClose={() => !copyWeekMutation.isPending && setCopyWeekDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{
+            sx: { borderRadius: 4, background: isDark ? '#1C1410' : '#FFFFFF' }
+          }}
+        >
+          <DialogTitle component="div" sx={{ pb: 1 }}>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <ContentCopyIcon color="primary" />
+              <Typography component="span" variant="h6" fontWeight={800}>
+                Copy Last Week
+              </Typography>
+            </Stack>
+            <Typography variant="caption" color="text.secondary">
+              Reuse the previous week as a template. The schedule updates live as the new shifts are created.
+            </Typography>
+          </DialogTitle>
+          <DialogContent>
+            <Stack spacing={2.25} sx={{ mt: 1 }}>
+              <Box sx={{ p: 1.75, borderRadius: 2, bgcolor: alpha(theme.palette.primary.main, 0.06), border: `1px solid ${alpha(theme.palette.primary.main, 0.14)}` }}>
+                <Typography variant="body2" fontWeight={700} sx={{ mb: 0.5 }}>
+                  Import summary
+                </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                  {copyWeekPreview?.lastWeekShifts.length ? (
+                    <>
+                      {copyWeekPreview.shiftsToCopy.length} shifts will be copied from {format(copyWeekPreview.lastWeekStart, 'MMM d')} to {format(copyWeekPreview.lastWeekEnd, 'MMM d')}
+                      {copyWeekPreview.lastWeekShifts.length !== copyWeekPreview.shiftsToCopy.length ? `, with ${copyWeekPreview.lastWeekShifts.length - copyWeekPreview.shiftsToCopy.length} overlap(s) skipped.` : '.'}
+                    </>
+                  ) : (
+                    'No shifts were found in the previous week yet.'
+                  )}
+                </Typography>
+              </Box>
+
+              <Stack direction="row" flexWrap="wrap" spacing={1} useFlexGap>
+                <Chip size="small" label={`Source: ${format(copyWeekPreview?.lastWeekStart || weekStart, 'MMM d')} – ${format(copyWeekPreview?.lastWeekEnd || weekEndDate, 'MMM d')}`} variant="outlined" />
+                <Chip size="small" label={`Target: ${format(weekStart, 'MMM d')} – ${format(weekEndDate, 'MMM d')}`} variant="outlined" />
+                <Chip size="small" label={copyWeekPreview?.currentWeekShifts.length ? `${copyWeekPreview.currentWeekShifts.length} shifts already exist` : 'This week is empty'} variant="outlined" />
+              </Stack>
+
+              <Alert severity="info" variant="outlined" sx={{ borderRadius: 2 }}>
+                This is the fastest way to build a repeating schedule. Use it when the pattern is mostly the same from week to week.
+              </Alert>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setCopyWeekDialogOpen(false)} sx={{ borderRadius: 2, textTransform: 'none' }}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              startIcon={<ContentCopyIcon />}
+              disabled={copyWeekMutation.isPending || !copyWeekPreview?.lastWeekShifts.length}
+              onClick={() => copyWeekMutation.mutate()}
+              sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 800, px: 3 }}
+            >
+              {copyWeekMutation.isPending ? 'Copying...' : 'Copy Week'}
+            </Button>
+          </DialogActions>
+        </Dialog>
     
       {/* FLOATING ACTION BAR FOR SELECTION MODE */}
       {isSelectionMode && (selectedShifts.size > 0 || selectedLogs.size > 0) && (

@@ -1,4 +1,4 @@
-import { useEffect, useCallback, useRef, startTransition } from "react";
+import { useEffect, useCallback, useRef, startTransition, useSyncExternalStore } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { io, Socket } from "socket.io-client";
 import { getCurrentUser } from "@/lib/auth";
@@ -12,12 +12,39 @@ interface UseRealtimeOptions {
 // Singleton socket instance to prevent multiple connections
 let globalSocket: Socket | null = null;
 let globalSocketUserId: string | null = null;
+let globalIsConnected = false;
+const connectionListeners = new Set<() => void>();
+let notificationInvalidationTimer: ReturnType<typeof setTimeout> | null = null;
+
+function invalidateManagerDashboardQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats/manager"] });
+}
+
+function setGlobalIsConnected(connected: boolean) {
+  if (globalIsConnected === connected) return;
+  globalIsConnected = connected;
+  connectionListeners.forEach((listener) => listener());
+}
+
+function subscribeToConnectionState(listener: () => void) {
+  connectionListeners.add(listener);
+  return () => connectionListeners.delete(listener);
+}
+
+function getConnectionSnapshot() {
+  return globalIsConnected;
+}
 
 export function useRealtime(options: UseRealtimeOptions = {}) {
   const { enabled = true, queryKeys = [], onEvent } = options;
   const queryClient = useQueryClient();
   const socketRef = useRef<Socket | null>(null);
   const currentUser = getCurrentUser();
+  const isConnected = useSyncExternalStore(
+    subscribeToConnectionState,
+    getConnectionSnapshot,
+    getConnectionSnapshot
+  );
   
   // Use refs to store callbacks so they don't cause reconnections
   const onEventRef = useRef(onEvent);
@@ -39,6 +66,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     // Wait for it to connect if it's currently connecting, but DO NOT spawn a duplicate.
     if (globalSocket && globalSocketUserId === currentUser.id) {
       socketRef.current = globalSocket;
+      setGlobalIsConnected(globalSocket.connected);
       
       // If it was disconnected manually (or by network drop) and we're reusing it, attempt to reconnect
       if (globalSocket.disconnected) {
@@ -49,6 +77,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     // Completely tear down existing socket only if the mapped userID has changed
     if (globalSocket && globalSocketUserId !== currentUser.id) {
+      setGlobalIsConnected(false);
       globalSocket.disconnect();
       globalSocket = null;
       globalSocketUserId = null;
@@ -64,8 +93,8 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       reconnection: true,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: 10,
-      // Use polling first, then upgrade to websocket
-      transports: ["polling", "websocket"],
+      // Use websocket only to avoid long-polling churn on the proxy path
+      transports: ["websocket"],
       // Don't force a new connection on each creation
       forceNew: false,
     });
@@ -75,6 +104,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     socketRef.current = socket;
 
     socket.on("connect", () => {
+      setGlobalIsConnected(true);
       console.log("✅ Connected to real-time updates");
       // Subscribe to relevant events
       socket.emit("subscribe:employee-shifts");
@@ -82,12 +112,28 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     });
 
     socket.on("disconnect", (reason) => {
+      setGlobalIsConnected(false);
       console.log("❌ Disconnected from real-time updates:", reason);
+    });
+
+    socket.on("connect_error", (error) => {
+      setGlobalIsConnected(false);
+      console.error("Socket connect error:", error);
     });
 
     socket.on("error", (error) => {
       console.error("Socket error:", error);
     });
+
+    const invalidateForecastQueries = () => {
+      startTransition(() => {
+        queryClient.invalidateQueries({ queryKey: ["analytics-trends"] });
+        queryClient.invalidateQueries({ queryKey: ["forecast-labor"] });
+        queryClient.invalidateQueries({ queryKey: ["forecast-payroll"] });
+        queryClient.invalidateQueries({ queryKey: ["forecast-peaks"] });
+        queryClient.invalidateQueries({ queryKey: ["forecast-staffing"] });
+      });
+    };
 
     // Shift events — invalidate all known shift query keys (desktop + mobile)
     const invalidateShiftQueries = () => {
@@ -99,20 +145,52 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
         // Dashboard components that depend on shift data
         queryClient.invalidateQueries({ queryKey: ["upcoming-shifts"] });
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+        invalidateManagerDashboardQueries(queryClient);
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/employee-status"] });
         queryClient.invalidateQueries({ queryKey: ["/api/hours/team-summary"] });
         // Mobile query keys
         queryClient.invalidateQueries({ queryKey: ["mobile-schedule-shifts"] });
         queryClient.invalidateQueries({ queryKey: ["mobile-shifts"] });
       });
+      invalidateForecastQueries();
     };
 
     const invalidateTimeOffQueries = () => {
       startTransition(() => {
         queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
         queryClient.invalidateQueries({ queryKey: ["/api/time-off-requests"] });
+        invalidateManagerDashboardQueries(queryClient);
         // Mobile query keys
         queryClient.invalidateQueries({ queryKey: ["mobile-time-off"] });
+      });
+    };
+
+    const invalidateNotifications = () => {
+      if (notificationInvalidationTimer) {
+        clearTimeout(notificationInvalidationTimer);
+      }
+
+      notificationInvalidationTimer = setTimeout(() => {
+        startTransition(() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        });
+        notificationInvalidationTimer = null;
+      }, 150);
+    };
+
+    const invalidateEmployeeQueries = () => {
+      startTransition(() => {
+        queryClient.invalidateQueries({
+          predicate: (query) => {
+            const key = query.queryKey[0] as string | undefined;
+            return (
+              key === "/api/hours/all-employees" ||
+              key === "/api/employees" ||
+              key === "employees" ||
+              key === "employee-stats"
+            );
+          },
+        });
       });
     };
 
@@ -120,6 +198,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       startTransition(() => {
         queryClient.invalidateQueries({ queryKey: ["shift-trades"] });
         queryClient.invalidateQueries({ queryKey: ["/api/shift-trades"] });
+        invalidateManagerDashboardQueries(queryClient);
         // Mobile query keys
         queryClient.invalidateQueries({ queryKey: ["mobile-shift-trades-available"] });
         queryClient.invalidateQueries({ queryKey: ["mobile-shift-trades-my"] });
@@ -171,7 +250,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       startTransition(() => {
         invalidateTradeQueries();
         invalidateShiftQueries();
-        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        invalidateNotifications();
       });
       onEventRef.current?.("trade:approved", data);
     });
@@ -181,7 +260,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       console.log("📅 Time-off request created:", data);
       startTransition(() => {
         invalidateTimeOffQueries();
-        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        invalidateNotifications();
       });
       onEventRef.current?.("time-off:created", data);
     });
@@ -190,7 +269,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       console.log("📅 Time-off request updated:", data);
       startTransition(() => {
         invalidateTimeOffQueries();
-        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        invalidateNotifications();
       });
       onEventRef.current?.("time-off:updated", data);
     });
@@ -200,7 +279,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       startTransition(() => {
         invalidateTimeOffQueries();
         invalidateShiftQueries();
-        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        invalidateNotifications();
       });
       onEventRef.current?.("time-off:approved", data);
     });
@@ -209,7 +288,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       console.log("❌ Time-off rejected:", data);
       startTransition(() => {
         invalidateTimeOffQueries();
-        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        invalidateNotifications();
       });
       onEventRef.current?.("time-off:rejected", data);
     });
@@ -223,16 +302,15 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       onEventRef.current?.("availability:updated", data);
     });
 
-    // Employee events - with automatic query refetch for immediate UI updates
+    // Employee events - refresh the shared employee caches
     socket.on("employee:created", (data) => {
       console.log("👤 New employee created:", data);
       startTransition(() => {
-        queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
-        queryClient.refetchQueries({ queryKey: ["/api/employees"] });
-        queryClient.refetchQueries({ queryKey: ["employees"] });
-        queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+        invalidateEmployeeQueries();
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+        invalidateManagerDashboardQueries(queryClient);
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/employee-status"] });
+        invalidateForecastQueries();
       });
       onEventRef.current?.("employee:created", data);
     });
@@ -240,10 +318,9 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     socket.on("employee:updated", (data) => {
       console.log("👤 Employee updated:", data);
       startTransition(() => {
-        queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
-        queryClient.refetchQueries({ queryKey: ["/api/employees"] });
-        queryClient.refetchQueries({ queryKey: ["employees"] });
-        queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+        invalidateEmployeeQueries();
+        invalidateManagerDashboardQueries(queryClient);
+        invalidateForecastQueries();
       });
       onEventRef.current?.("employee:updated", data);
     });
@@ -251,12 +328,11 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     socket.on("employee:deleted", (data) => {
       console.log("👤 Employee deleted:", data);
       startTransition(() => {
-        queryClient.refetchQueries({ queryKey: ["/api/hours/all-employees"] });
-        queryClient.refetchQueries({ queryKey: ["/api/employees"] });
-        queryClient.refetchQueries({ queryKey: ["employees"] });
-        queryClient.refetchQueries({ queryKey: ["employee-stats"] });
+        invalidateEmployeeQueries();
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
+        invalidateManagerDashboardQueries(queryClient);
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/employee-status"] });
+        invalidateForecastQueries();
       });
       onEventRef.current?.("employee:deleted", data);
     });
@@ -314,7 +390,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     socket.on("notification:created", (data) => {
       console.log("🔔 New notification:", data);
       startTransition(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        invalidateNotifications();
         // Also refresh related data based on notification type
         const notif = data?.notification || data;
         if (notif?.type) {
@@ -331,7 +407,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     socket.on("notification", (data) => {
       console.log("🔔 Notification event:", data);
       startTransition(() => {
-        queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+        invalidateNotifications();
       });
       onEventRef.current?.("notification", data);
     });
@@ -372,8 +448,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     },
     []
   );
-
-  const isConnected = socketRef.current?.connected ?? false;
 
   return { socket: socketRef.current, isConnected, emit };
 }

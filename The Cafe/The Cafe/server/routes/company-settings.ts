@@ -1,8 +1,9 @@
 /**
  * Company Settings API Routes
  * GET  /api/company-settings       - Get current company settings (any authenticated user)
- * POST /api/company-settings       - Create company settings (admin only, first-time setup)
- * PUT  /api/company-settings/:id   - Update company settings (admin/manager)
+ * GET  /api/company-settings/full   - Get unmasked company settings (manager/admin)
+ * POST /api/company-settings       - Create company settings (manager/admin, first-time setup)
+ * PUT  /api/company-settings/:id   - Update company settings (manager/admin)
  *
  * Philippine payroll compliance fields: TIN, SSS Employer No, PhilHealth No,
  * Pag-IBIG No, BIR RDO, SEC/DTI Registration.
@@ -21,13 +22,13 @@ const requireAuth = (req: Request, res: Response, next: NextFunction) => {
   next();
 };
 
-// Role check for admin
-const requireAdmin = (req: Request, res: Response, next: NextFunction) => {
+// Role check for manager/admin
+const requireManagerOrAdmin = (req: Request, res: Response, next: NextFunction) => {
   if (!req.session || !req.session.user) {
     return res.status(401).json({ success: false, error: 'Authentication required' });
   }
-  if (req.session.user.role !== 'admin') {
-    return res.status(403).json({ success: false, error: 'Admin access required' });
+  if (req.session.user.role !== 'manager' && req.session.user.role !== 'admin') {
+    return res.status(403).json({ success: false, error: 'Manager or admin access required' });
   }
   next();
 };
@@ -63,9 +64,9 @@ router.get('/', requireAuth, async (_req: Request, res: Response) => {
 
 /**
  * GET /api/company-settings/full
- * Returns full unmasked company settings (admin only, for editing form)
+ * Returns full unmasked company settings (manager/admin, for editing form)
  */
-router.get('/full', requireAdmin, async (_req: Request, res: Response) => {
+router.get('/full', requireManagerOrAdmin, async (_req: Request, res: Response) => {
   try {
     const settings = await dbStorage.getCompanySettings();
     res.json({ success: true, settings: settings || null });
@@ -82,7 +83,7 @@ router.get('/full', requireAdmin, async (_req: Request, res: Response) => {
  * POST /api/company-settings
  * Create company settings (initial setup)
  */
-router.post('/', requireAdmin, async (req: Request, res: Response) => {
+router.post('/', requireManagerOrAdmin, async (req: Request, res: Response) => {
   try {
     const existing = await dbStorage.getCompanySettings();
     if (existing) {
@@ -134,7 +135,7 @@ router.post('/', requireAdmin, async (req: Request, res: Response) => {
  * PUT /api/company-settings/:id
  * Update company settings
  */
-router.put('/:id', requireAdmin, async (req: Request, res: Response) => {
+router.put('/:id', requireManagerOrAdmin, async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const existing = await dbStorage.getCompanySettings();

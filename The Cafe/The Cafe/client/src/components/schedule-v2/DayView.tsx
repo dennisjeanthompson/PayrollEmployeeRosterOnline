@@ -53,6 +53,7 @@ interface DayViewProps {
   onEditShift: (shift: Shift) => void;
   onDeleteTimeOff?: (id: string) => void;
   onAddHolidayPay?: (userId: string, date: Date) => void;
+  onLogAdjustment?: (shift: Shift) => void;
 }
 
 /** Employee's personal day view — shows only their shifts + their requests */
@@ -74,7 +75,7 @@ export function MyDayView({
   // Time-off for this user on this date
   const myTimeOff = timeOffRequests.filter(r =>
     r.userId === currentUserId && dateStr >= toDateStr(r.startDate) && dateStr <= toDateStr(r.endDate)
-    && (r.status === 'pending' || r.status === 'approved' || r.status === 'rejected')
+    && (r.status === 'pending' || r.status === 'approved' || r.status === 'rejected' || r.status === 'cancelled')
   );
 
   // Trades for my shifts on this day
@@ -109,6 +110,7 @@ export function MyDayView({
           pending: { bg: '#FEF3C7', border: '#FDE68A', color: '#92400E', icon: <PendingIcon sx={{ fontSize: 16, color: '#F59E0B' }} />, label: 'Pending Approval' },
           approved: { bg: '#DCFCE7', border: '#A7F3D0', color: '#166534', icon: <ApprovedIcon sx={{ fontSize: 16, color: '#10B981' }} />, label: 'Approved' },
           rejected: { bg: '#FEE2E2', border: '#FECACA', color: '#991B1B', icon: <TimeOffIcon sx={{ fontSize: 16, color: '#EF4444' }} />, label: 'Rejected' },
+          cancelled: { bg: '#F3F4F6', border: '#D1D5DB', color: '#6B7280', icon: <TimeOffIcon sx={{ fontSize: 16, color: '#6B7280' }} />, label: 'Cancelled' },
         }[req.status] || { bg: '#F3F4F6', border: '#D1D5DB', color: '#6B7280', icon: <TimeOffIcon sx={{ fontSize: 16 }} />, label: req.status };
 
         return (
@@ -237,6 +239,7 @@ export default function DayView({
   onEditShift,
   onDeleteTimeOff,
   onAddHolidayPay,
+  onLogAdjustment,
 }: DayViewProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -247,7 +250,7 @@ export default function DayView({
   // Time-off for today
   const dayTimeOff = timeOffRequests.filter(r =>
     dateStr >= toDateStr(r.startDate) && dateStr <= toDateStr(r.endDate) &&
-    (r.status === 'pending' || r.status === 'approved')
+    (r.status === 'pending' || r.status === 'approved' || r.status === 'rejected' || r.status === 'cancelled')
   );
 
   // Active trades
@@ -328,7 +331,12 @@ export default function DayView({
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
           {dayTimeOff.map(req => {
             const emp = employees.find(e => e.id === req.userId);
-            const isPending = req.status === 'pending';
+            const statusConfig = {
+              pending: { bg: '#FEF3C7', border: '#FDE68A', color: '#92400E', icon: <PendingIcon sx={{ fontSize: 18, color: '#F59E0B' }} />, label: 'Pending' },
+              approved: { bg: '#DCFCE7', border: '#A7F3D0', color: '#166534', icon: <ApprovedIcon sx={{ fontSize: 18, color: '#10B981' }} />, label: req.isPaid ? 'Approved (Paid)' : 'Approved (Unpaid)' },
+              rejected: { bg: '#FEE2E2', border: '#FECACA', color: '#991B1B', icon: <TimeOffIcon sx={{ fontSize: 18, color: '#EF4444' }} />, label: 'Rejected' },
+              cancelled: { bg: '#F3F4F6', border: '#D1D5DB', color: '#6B7280', icon: <TimeOffIcon sx={{ fontSize: 18, color: '#6B7280' }} />, label: 'Cancelled' },
+            }[req.status] || { bg: '#F3F4F6', border: '#D1D5DB', color: '#6B7280', icon: <TimeOffIcon sx={{ fontSize: 18 }} />, label: req.status };
             return (
               <Box
                 key={`to-${req.id}`}
@@ -340,33 +348,33 @@ export default function DayView({
                 sx={{
                   display: 'flex', alignItems: 'center', gap: 1.5,
                   p: 1.5, borderRadius: 2,
-                  border: `1px ${isPending ? 'dashed' : 'solid'}`,
-                  borderColor: isPending ? '#FDE68A' : '#A7F3D0',
-                  bgcolor: isPending ? (isDark ? alpha('#F59E0B', 0.08) : '#FFFBEB') : (isDark ? alpha('#10B981', 0.08) : '#F0FDF4'),
+                  border: `1px ${req.status === 'pending' ? 'dashed' : 'solid'}`,
+                  borderColor: statusConfig.border,
+                  bgcolor: isDark ? alpha(statusConfig.bg, 0.08) : statusConfig.bg,
                   ...(isManager && onDeleteTimeOff && {
                     cursor: 'pointer',
                     transition: 'all 0.1s ease',
-                    '&:hover': { filter: 'brightness(0.95)', transform: 'translateY(-1px)' }
+                    '&:hover': { filter: 'brightness(0.95)' }
                   }),
                 }}
               >
-                {isPending ? <PendingIcon sx={{ fontSize: 18, color: '#F59E0B' }} /> : <ApprovedIcon sx={{ fontSize: 18, color: '#10B981' }} />}
+                {statusConfig.icon}
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Typography variant="body2" fontWeight={600} noWrap>
                     {emp ? `${emp.firstName} ${emp.lastName}` : (req.userName || 'Unknown')}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {req.type.charAt(0).toUpperCase() + req.type.slice(1)} Leave · {isPending ? 'Pending' : 'Approved'}
-                    {isManager && onDeleteTimeOff && ' · (Click to view/edit)'}
+                    {req.type.charAt(0).toUpperCase() + req.type.slice(1)} Leave · {statusConfig.label}
+                    {isManager && onDeleteTimeOff && ' · (Click to manage)'}
                   </Typography>
                 </Box>
                 <Chip
-                  label={isPending ? 'Pending' : (req.isPaid ? 'Approved (Paid)' : 'Approved (Unpaid)')}
+                  label={statusConfig.label}
                   size="small"
                   sx={{
                     height: 20, fontSize: '0.6rem', fontWeight: 700,
-                    bgcolor: isPending ? '#FEF3C7' : (req.isPaid ? '#059669' : '#DCFCE7'),
-                    color: isPending ? '#92400E' : (req.isPaid ? '#FFFFFF' : '#166534'),
+                    bgcolor: statusConfig.bg,
+                    color: statusConfig.color,
                   }}
                 />
               </Box>
@@ -415,13 +423,12 @@ export default function DayView({
                   borderLeft: `5px solid ${rc.bg}`,
                   bgcolor: isSelected ? alpha('#3B82F6', 0.1) : (isDark ? '#2A2018' : '#FFFFFF'),
                   cursor: 'pointer',
-                  transition: 'all 0.15s ease',
+                  transition: 'background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease',
                   boxShadow: isSelected ? '0 0 0 2px #3B82F6, 0 4px 12px rgba(59, 130, 246, 0.4)' : undefined,
-                  transform: isSelected ? 'scale(1.01)' : 'none',
                   position: 'relative',
                   '&:hover': {
                     bgcolor: isSelected ? alpha('#3B82F6', 0.15) : (isDark ? '#342A1E' : '#FBF8F4'),
-                    transform: isSelected ? 'scale(1.01)' : 'translateX(4px)',
+                    boxShadow: isSelected ? '0 0 0 2px #3B82F6, 0 4px 12px rgba(59, 130, 246, 0.4)' : '0 3px 10px rgba(0,0,0,0.08)',
                   },
                 }}
               >

@@ -128,6 +128,9 @@ export default function MuiHeader({ onMenuClick }: { onMenuClick?: () => void })
     queryKey: ["/api/branches"],
     queryFn: getQueryFn({ on401: "returnNull" }),
     enabled: shouldLoadBranches,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   useEffect(() => {

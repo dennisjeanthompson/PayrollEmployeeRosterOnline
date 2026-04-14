@@ -5,7 +5,6 @@ import { apiRequest } from '@/lib/queryClient';
 import { useAuth } from '@/lib/auth';
 import { Link, useLocation } from 'wouter';
 import { formatDistanceToNow } from 'date-fns';
-import { useRealtime } from '@/hooks/use-realtime';
 
 import {
   IconButton, Badge, Menu, Typography, Box, Button,
@@ -80,19 +79,9 @@ export default function NotificationBell() {
       return res.json();
     },
     enabled: isAuthenticated,
-    refetchOnWindowFocus: isAuthenticated,
-  });
-
-  useRealtime({
-    enabled: isAuthenticated,
-    queryKeys: ['/api/notifications'],
-    onEvent: (event) => {
-      if (event === 'notification:created' || event === 'notification' ||
-          event.startsWith('time-off:') || event.startsWith('trade:') ||
-          event.startsWith('shift:')) {
-        queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
-      }
-    },
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const notifications = notificationsData?.notifications || [];

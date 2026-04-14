@@ -661,7 +661,20 @@ export class DatabaseStorage implements IStorage {
       )
     );
     
-    return result.map(r => r.approval);
+    return result.map(r => ({
+      ...r.approval,
+      requestedByUser: r.user
+        ? {
+            id: r.user.id,
+            firstName: r.user.firstName,
+            lastName: r.user.lastName,
+            username: r.user.username,
+            position: r.user.position,
+            photoUrl: r.user.photoUrl,
+            branchId: r.user.branchId,
+          }
+        : null,
+    })) as Approval[];
   }
 
   // Time Off Requests
@@ -684,7 +697,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTimeOffRequest(id: string, request: Partial<InsertTimeOffRequest>): Promise<TimeOffRequest | undefined> {
-    await db.update(timeOffRequests).set(request).where(eq(timeOffRequests.id, id));
+    const existing = await db.select().from(timeOffRequests).where(eq(timeOffRequests.id, id)).limit(1);
+    if (!existing[0]) return undefined;
+
+    const updateData: Record<string, any> = { ...request };
+    if (Object.prototype.hasOwnProperty.call(request, "status")) {
+      updateData.approvedAt = request.status === 'approved'
+        ? existing[0].approvedAt ?? new Date()
+        : existing[0].approvedAt ?? null;
+    }
+
+    await db.update(timeOffRequests).set(updateData).where(eq(timeOffRequests.id, id));
     const result = await db.select().from(timeOffRequests).where(eq(timeOffRequests.id, id)).limit(1);
     return result[0] ? (result[0] as TimeOffRequest) : undefined;
   }
@@ -698,10 +721,13 @@ export class DatabaseStorage implements IStorage {
 
 
   async deleteTimeOffRequest(id: string): Promise<boolean> {
-    const result = await db.delete(timeOffRequests)
-      .where(eq(timeOffRequests.id, id))
-      .returning();
-    return result.length > 0;
+    const existing = await db.select().from(timeOffRequests).where(eq(timeOffRequests.id, id)).limit(1);
+    if (!existing[0]) return false;
+
+    await db.update(timeOffRequests)
+      .set({ status: 'cancelled', isPaid: false })
+      .where(eq(timeOffRequests.id, id));
+    return true;
   }
   // Notifications
   async createNotification(notification: InsertNotification): Promise<Notification> {

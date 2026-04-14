@@ -72,6 +72,11 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5000,
+    hmr: process.env.CODESPACES ? {
+      clientPort: 443,
+      protocol: 'wss',
+      host: `${process.env.CODESPACE_NAME}-5000.${process.env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN || "app.github.dev"}`
+    } : true,
     proxy: {
       // Proxy frontend API requests to the backend dev server.
       // Start the backend with `npm run dev` (it listens on port 5000).

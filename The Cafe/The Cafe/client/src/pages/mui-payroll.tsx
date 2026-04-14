@@ -1,13 +1,11 @@
 import PesoIcon from "@/components/PesoIcon";
-import { useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
 import { getCurrentUser } from "@/lib/auth";
 import { useRealtime } from "@/hooks/use-realtime";
-import { PayslipPreview as DigitalPayslip } from "@/components/payroll/payslip-preview";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 // MUI Components
 import {
@@ -60,6 +58,8 @@ import {
 } from "@mui/icons-material";
 import { getPaymentDate } from "@shared/payroll-dates";
 
+const DigitalPayslip = lazy(() => import("@/components/payroll/payslip-preview"));
+
 interface PayrollEntry {
   id: string;
   userId: string;
@@ -105,14 +105,13 @@ function TabPanel(props: TabPanelProps) {
 export default function MuiPayroll() {
   const theme = useTheme();
   const currentUser = getCurrentUser();
-  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState(0);
   const [selectedPayslip, setSelectedPayslip] = useState<PayrollEntry | null>(null);
   const [payslipDialogOpen, setPayslipDialogOpen] = useState(false);
 
   // Enable real-time updates
   useRealtime({ 
-    queryKeys: ["payroll-entries", "current-payroll-period"],
+    queryKeys: ["payroll-entries"],
     enabled: !!currentUser
   });
 
@@ -123,29 +122,31 @@ export default function MuiPayroll() {
       const response = await apiRequest("GET", "/api/payroll");
       return response.json();
     },
-    refetchOnWindowFocus: true,
+    enabled: !!currentUser,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
   });
 
-  // Fetch current payroll period with real-time updates
-  const { data: currentPeriod, refetch: refetchPeriod } = useQuery({
-    queryKey: ["current-payroll-period", currentUser?.branchId],
-    queryFn: async () => {
-      const response = await apiRequest("GET", `/api/payroll/periods/current?branchId=${currentUser?.branchId}`);
-      return response.json();
-    },
-    refetchOnWindowFocus: true,
-  });
-
-  const payrollEntries: PayrollEntry[] = payrollData?.entries || [];
-  
-  const currentEntry = payrollEntries.find((e) => e.status === "draft" || e.status === "pending");
-  
-  const paidEntries = payrollEntries.filter((e) => e.status === "paid");
+  const payrollEntries = useMemo<PayrollEntry[]>(() => payrollData?.entries || [], [payrollData?.entries]);
+  const currentEntry = useMemo(
+    () => payrollEntries.find((e) => e.status === "draft" || e.status === "pending"),
+    [payrollEntries]
+  );
+  const paidEntries = useMemo(() => payrollEntries.filter((e) => e.status === "paid"), [payrollEntries]);
 
   // Calculate summary stats
-  const totalEarningsYTD = paidEntries.reduce((sum, entry) => sum + parseFloat(String(entry.netPay || 0)), 0);
-  const totalHoursYTD = paidEntries.reduce((sum, entry) => sum + parseFloat(String(entry.totalHours || 0)), 0);
-  const averagePay = paidEntries.length > 0 ? totalEarningsYTD / paidEntries.length : 0;
+  const totalEarningsYTD = useMemo(
+    () => paidEntries.reduce((sum, entry) => sum + parseFloat(String(entry.netPay || 0)), 0),
+    [paidEntries]
+  );
+  const totalHoursYTD = useMemo(
+    () => paidEntries.reduce((sum, entry) => sum + parseFloat(String(entry.totalHours || 0)), 0),
+    [paidEntries]
+  );
+  const averagePay = useMemo(
+    () => (paidEntries.length > 0 ? totalEarningsYTD / paidEntries.length : 0),
+    [paidEntries.length, totalEarningsYTD]
+  );
 
   const formatCurrency = (value: number | string) => {
     const num = typeof value === "string" ? parseFloat(value) : value;
@@ -195,9 +196,11 @@ export default function MuiPayroll() {
               </Box>
               <motion.div whileHover={{ rotate: 180 }} transition={{ duration: 0.4 }}>
                 <Tooltip title="Refresh data">
-                  <IconButton 
-                    onClick={() => { refetchPayroll(); refetchPeriod(); }}
-                    sx={{ 
+                  <IconButton
+                    onClick={() => {
+                      refetchPayroll();
+                    }}
+                    sx={{
                       bgcolor: alpha(theme.palette.primary.main, 0.1),
                       backdropFilter: 'blur(10px)',
                       border: `1px solid ${alpha(theme.palette.primary.main, 0.15)}`,
@@ -267,78 +270,137 @@ export default function MuiPayroll() {
         </Grid>
 
         {/* Current Period Card */}
-        {currentEntry && (
-          <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}>
-            <Paper 
-              elevation={theme.palette.mode === 'dark' ? 0 : 8}
-              sx={{ 
-                p: 3, mb: 4, borderRadius: 4,
-                position: 'relative', overflow: 'hidden',
-                background: theme.palette.mode === 'dark' 
-                  ? `linear-gradient(135deg, ${alpha(theme.palette.primary.dark, 0.2)} 0%, #111 100%)` 
-                  : `linear-gradient(135deg, #ffffff 0%, ${alpha(theme.palette.primary.light, 0.1)} 100%)`,
-                backdropFilter: 'blur(20px)',
-                border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
-                boxShadow: theme.palette.mode === 'dark' ? '0 16px 40px rgba(0,0,0,0.4)' : `0 16px 40px ${alpha(theme.palette.primary.main, 0.08)}`,
+        <Box sx={{ mb: 4, minHeight: 220 }}>
+          {payrollLoading && !currentEntry ? (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 4,
+                minHeight: 220,
+                bgcolor: alpha(theme.palette.background.paper, 0.55),
+                border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
               }}
             >
-              <Box sx={{ position: 'absolute', top: -100, right: -50, width: 250, height: 250, borderRadius: '50%', background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.1)} 0%, transparent 70%)` }} />
-            <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2 }}>
-              <Typography variant="h6" fontWeight={600}>
-                Current Pay Period
-              </Typography>
-              <Chip
-                label={currentEntry.status.toUpperCase()}
-                color={currentEntry.status === "pending" ? "warning" : "default"}
-                size="small"
-              />
-            </Stack>
+              <Stack spacing={2}>
+                <Skeleton variant="text" width={180} height={34} />
+                <Grid container spacing={3}>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Skeleton variant="text" width="45%" height={20} />
+                    <Skeleton variant="text" width="65%" height={44} />
+                    <Skeleton variant="text" width="75%" height={16} />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Skeleton variant="text" width="45%" height={20} />
+                    <Skeleton variant="text" width="60%" height={44} />
+                    <Skeleton variant="text" width="50%" height={16} />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Skeleton variant="text" width="55%" height={20} />
+                    <Skeleton variant="text" width="70%" height={44} />
+                    <Skeleton variant="text" width="65%" height={16} />
+                  </Grid>
+                </Grid>
+              </Stack>
+            </Paper>
+          ) : currentEntry ? (
+            <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
+              <Paper
+                elevation={theme.palette.mode === 'dark' ? 0 : 8}
+                sx={{
+                  p: 3,
+                  borderRadius: 4,
+                  position: 'relative',
+                  overflow: 'hidden',
+                  background: theme.palette.mode === 'dark'
+                    ? `linear-gradient(135deg, ${alpha(theme.palette.primary.dark, 0.2)} 0%, #111 100%)`
+                    : `linear-gradient(135deg, #ffffff 0%, ${alpha(theme.palette.primary.light, 0.1)} 100%)`,
+                  backdropFilter: 'blur(20px)',
+                  border: `1px solid ${alpha(theme.palette.primary.main, 0.2)}`,
+                  boxShadow: theme.palette.mode === 'dark' ? '0 16px 40px rgba(0,0,0,0.4)' : `0 16px 40px ${alpha(theme.palette.primary.main, 0.08)}`,
+                }}
+              >
+                <Box sx={{ position: 'absolute', top: -100, right: -50, width: 250, height: 250, borderRadius: '50%', background: `radial-gradient(circle, ${alpha(theme.palette.primary.main, 0.1)} 0%, transparent 70%)` }} />
+                <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 2, position: 'relative', zIndex: 1 }}>
+                  <Typography variant="h6" fontWeight={600}>
+                    Current Pay Period
+                  </Typography>
+                  <Chip
+                    label={currentEntry.status.toUpperCase()}
+                    color={currentEntry.status === "pending" ? "warning" : "default"}
+                    size="small"
+                  />
+                </Stack>
 
-            <Grid container spacing={3}>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Hours Worked
-                  </Typography>
-                  <Typography variant="h4" fontWeight={700}>
-                    {parseFloat(String(currentEntry.totalHours)).toFixed(1)}h
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Regular: {parseFloat(String(currentEntry.regularHours)).toFixed(1)}h | OT:{" "}
-                    {parseFloat(String(currentEntry.overtimeHours)).toFixed(1)}h
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Gross Pay
-                  </Typography>
-                  <Typography variant="h4" fontWeight={700}>
-                    {formatCurrency(currentEntry.grossPay)}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    Before deductions
-                  </Typography>
-                </Box>
-              </Grid>
-              <Grid size={{ xs: 12, md: 4 }}>
-                <Box>
-                  <Typography variant="body2" color="text.secondary">
-                    Estimated Net Pay
-                  </Typography>
-                  <Typography variant="h4" fontWeight={700} color="success.main">
-                    {formatCurrency(currentEntry.netPay)}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    After {formatCurrency(currentEntry.deductions)} deductions
-                  </Typography>
-                </Box>
-              </Grid>
-            </Grid>
-          </Paper>
-          </motion.div>
-        )}
+                <Grid container spacing={3} sx={{ position: 'relative', zIndex: 1 }}>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Hours Worked
+                      </Typography>
+                      <Typography variant="h4" fontWeight={700}>
+                        {parseFloat(String(currentEntry.totalHours)).toFixed(1)}h
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Regular: {parseFloat(String(currentEntry.regularHours)).toFixed(1)}h | OT: {parseFloat(String(currentEntry.overtimeHours)).toFixed(1)}h
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Gross Pay
+                      </Typography>
+                      <Typography variant="h4" fontWeight={700}>
+                        {formatCurrency(currentEntry.grossPay)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Before deductions
+                      </Typography>
+                    </Box>
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 4 }}>
+                    <Box>
+                      <Typography variant="body2" color="text.secondary">
+                        Estimated Net Pay
+                      </Typography>
+                      <Typography variant="h4" fontWeight={700} color="success.main">
+                        {formatCurrency(currentEntry.netPay)}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        After {formatCurrency(currentEntry.deductions)} deductions
+                      </Typography>
+                    </Box>
+                  </Grid>
+                </Grid>
+              </Paper>
+            </motion.div>
+          ) : (
+            <Paper
+              elevation={0}
+              sx={{
+                p: 3,
+                borderRadius: 4,
+                minHeight: 220,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textAlign: 'center',
+                bgcolor: alpha(theme.palette.background.paper, 0.55),
+                border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
+              }}
+            >
+              <Box>
+                <Typography variant="h6" fontWeight={700} gutterBottom>
+                  No current pay period
+                </Typography>
+                <Typography variant="body2" color="text.secondary">
+                  You’ll see the active payroll cycle here once it’s created.
+                </Typography>
+              </Box>
+            </Paper>
+          )}
+        </Box>
 
         {/* Tabs */}
         <motion.div
@@ -635,11 +697,13 @@ export default function MuiPayroll() {
 
         {/* Digital Payslip Viewer (PH-Compliant 2026) */}
         {selectedPayslip && (
-          <DigitalPayslip
-            entryId={selectedPayslip.id}
-            open={payslipDialogOpen}
-            onOpenChange={setPayslipDialogOpen}
-          />
+          <Suspense fallback={null}>
+            <DigitalPayslip
+              entryId={selectedPayslip.id}
+              open={payslipDialogOpen}
+              onOpenChange={setPayslipDialogOpen}
+            />
+          </Suspense>
         )}
       </Box>
     </>

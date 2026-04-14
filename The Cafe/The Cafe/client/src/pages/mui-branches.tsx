@@ -182,7 +182,9 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
       const response = await apiRequest("GET", "/api/branches");
       return response.json();
     },
-    refetchOnWindowFocus: true,
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   // Fetch employees - use all-branches endpoint for admin/manager, standard for employee
@@ -193,6 +195,9 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
       const response = await apiRequest("GET", endpoint);
       return response.json();
     },
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 
   const branches: Branch[] = Array.isArray(branchesResponse?.branches) ? branchesResponse.branches : (Array.isArray(branchesResponse) ? branchesResponse : []);
