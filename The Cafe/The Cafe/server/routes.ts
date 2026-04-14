@@ -769,6 +769,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: timeError });
       }
 
+      // Check for approved time-off requests during this shift
+      const existingTimeOffs = await storage.getTimeOffRequestsByUser(shiftData.userId);
+      const shiftStart = new Date(shiftData.startTime).getTime();
+      const shiftEnd = new Date(shiftData.endTime).getTime();
+      const hasTimeOff = existingTimeOffs.some(r => {
+        if (r.status !== 'approved') return false;
+        const existStart = new Date(r.startDate).setHours(0,0,0,0);
+        const existEnd = new Date(r.endDate).setHours(23,59,59,999);
+        return shiftStart <= existEnd && shiftEnd >= existStart;
+      });
+      if (hasTimeOff) {
+        return res.status(409).json({
+          message: "Conflict: This employee has an approved time-off request covering this shift duration."
+        });
+      }
+
       // Check if employee already has a shift on this calendar date
       const existingShifts = await storage.checkShiftOnDate(
         shiftData.userId,
@@ -847,6 +863,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.warn('[PUT /api/shifts/:id] Time validation error:', timeError);
           return res.status(400).json({ message: timeError });
         }
+      }
+
+      // Check for approved time-off requests overlapping revised shift
+      const existingTimeOffs = await storage.getTimeOffRequestsByUser(newUserId);
+      const updShiftStart = newStartTime.getTime();
+      const updShiftEnd = newEndTime.getTime();
+      const updHasTimeOff = existingTimeOffs.some(r => {
+        if (r.status !== 'approved') return false;
+        const existStart = new Date(r.startDate).setHours(0,0,0,0);
+        const existEnd = new Date(r.endDate).setHours(23,59,59,999);
+        return updShiftStart <= existEnd && updShiftEnd >= existStart;
+      });
+      if (updHasTimeOff) {
+        return res.status(409).json({
+          message: "Conflict: This employee has an approved time-off request covering this new shift duration."
+        });
       }
 
       // Check for overlapping shifts (excluding current shift)
@@ -1074,6 +1106,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     for (const id of employeeIds) {
       const existing = await storage.getUser(id);
       if (existing && existing.branchId === managerBranchId) {
+        // Prevent managers from activating other managers or admins
+        if (req.user!.role !== 'admin' && existing.role !== 'employee') {
+          continue;
+        }
+
         const employee = await storage.updateUser(id, { isActive: true });
         if (employee) updatedEmployees.push(employee);
       }
@@ -1098,6 +1135,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     for (const id of employeeIds) {
       const existing = await storage.getUser(id);
       if (existing && existing.branchId === managerBranchId) {
+        // Prevent managers from deactivating other managers or admins
+        if (req.user!.role !== 'admin' && existing.role !== 'employee') {
+          continue;
+        }
+
         const employee = await storage.updateUser(id, { isActive: false });
         if (employee) updatedEmployees.push(employee);
       }
@@ -1348,7 +1390,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Prevent managers from self-approving their own overtime or exception logs
-      if (log.userId === approvedBy && req.user!.role !== 'admin') {
+      if (log.employeeId === approvedBy && req.user!.role !== 'admin') {
         return res.status(403).json({ message: "Conflict of Interest: You cannot approve your own exception logs." });
       }
 
@@ -4401,6 +4443,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (!request) {
       return res.status(404).json({ message: "Time off request not found" });
+    }
+
+    // ─── Shift Clearance Logic ───────────────────────────────────────────────
+    // If an employee's time off is approved, automatically delete any scheduled shifts 
+    // that overlap with the new approved time off bridging consistency gaps.
+    try {
+      const overlappingShifts = await storage.getShiftsByUser(
+        request.userId, 
+        new Date(request.startDate), 
+        new Date(request.endDate)
+      );
+
+      for (const shift of overlappingShifts) {
+        if (shift.status === 'scheduled') {
+          await storage.deleteShift(shift.id);
+        }
+      }
+    } catch (clearError) {
+      console.error('Failed to clear overlapping shifts:', clearError);
     }
 
     // ─── Smart SIL Logic ─────────────────────────────────────────────────────

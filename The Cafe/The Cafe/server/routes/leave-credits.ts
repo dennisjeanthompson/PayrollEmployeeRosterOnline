@@ -421,19 +421,49 @@ export async function restoreLeaveCredit(
     }
 
     const current = existing[0];
+    const total = parseFloat(current.totalCredits || '0');
     const used = parseFloat(current.usedCredits || '0');
     let remaining = parseFloat(current.remainingCredits);
 
     const newUsed = Math.max(0, used - daysToRestore);
-    // If we exceed totalCredits, we just restore up to totalCredits mathematically, 
-    // but the simplest safe way is strictly adding back to remaining.
-    const newRemaining = remaining + daysToRestore;
+    let newRemaining = remaining + daysToRestore;
+    let overflow = 0;
+
+    // Prevent remaining from exceeding total credits allocation 
+    if (newRemaining > total) {
+      overflow = newRemaining - total;
+      newRemaining = total;
+    }
 
     await db.update(leaveCredits).set({
       usedCredits: newUsed.toFixed(2),
       remainingCredits: newRemaining.toFixed(2),
       updatedAt: new Date(),
     }).where(eq(leaveCredits.id, current.id));
+
+    // If there is an overflow and the primary credit wasn't 'sil', it implies the 
+    // original smart-logic deduction fell back to SIL. We restore the remainder to SIL.
+    if (overflow > 0 && creditType !== 'sil') {
+      const silExisting = await db.select().from(leaveCredits)
+        .where(and(eq(leaveCredits.userId, userId), eq(leaveCredits.year, year), eq(leaveCredits.leaveType, 'sil')))
+        .limit(1);
+        
+      if (silExisting[0]) {
+        const silTotal = parseFloat(silExisting[0].totalCredits || '0');
+        const silRemaining = parseFloat(silExisting[0].remainingCredits);
+        const silUsed = parseFloat(silExisting[0].usedCredits || '0');
+        
+        let silNewRemaining = silRemaining + overflow;
+        const silNewUsed = Math.max(0, silUsed - overflow);
+        if (silNewRemaining > silTotal) silNewRemaining = silTotal;
+
+        await db.update(leaveCredits).set({
+          usedCredits: silNewUsed.toFixed(2),
+          remainingCredits: silNewRemaining.toFixed(2),
+          updatedAt: new Date(),
+        }).where(eq(leaveCredits.id, silExisting[0].id));
+      }
+    }
 
     return { success: true };
   } catch (error) {
