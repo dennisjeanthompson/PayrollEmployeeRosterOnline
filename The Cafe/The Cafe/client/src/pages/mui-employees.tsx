@@ -106,7 +106,6 @@ import {
 } from "@mui/x-data-grid";
 
 // Custom Components
-import { EmployeeShiftModal } from "@/components/employees/employee-shift-modal";
 import { DeletionOptionsModal } from "@/components/employees/deletion-options-modal";
 import ProfilePhotoUpload from "@/components/employees/ProfilePhotoUpload";
 import DocumentUpload, { DocumentType } from "@/components/employees/DocumentUpload";
@@ -269,9 +268,7 @@ export default function MuiEmployees() {
   // Dialog states
   const [formDialogOpen, setFormDialogOpen] = useState(false);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deductionsDialogOpen, setDeductionsDialogOpen] = useState(false);
-  const [shiftModalOpen, setShiftModalOpen] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
@@ -844,26 +841,18 @@ export default function MuiEmployees() {
               <EditIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Manage Shifts">
-            <IconButton
-              size="small"
-              color="primary"
-              onClick={() => {
-                setCurrentEmployee(params.row);
-                setShiftModalOpen(true);
-              }}
-            >
-              <ScheduleIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
           <Tooltip title="Deductions">
             <IconButton size="small" onClick={() => handleOpenDeductionsDialog(params.row)}>
               <ReceiptIcon fontSize="small" />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Delete">
-            <IconButton size="small" color="error" onClick={() => handleOpenDeleteDialog(params.row)}>
-              <DeleteIcon fontSize="small" />
+          <Tooltip title={params.row.isActive ? "Deactivate" : "Activate"}>
+            <IconButton 
+              size="small" 
+              color={params.row.isActive ? "warning" : "success"} 
+              onClick={() => toggleEmployeeStatus.mutate({ id: params.row.id, isActive: !params.row.isActive })}
+            >
+              {params.row.isActive ? <VisibilityOffIcon fontSize="small" /> : <ViewIcon fontSize="small" />}
             </IconButton>
           </Tooltip>
         </Stack>
@@ -1129,18 +1118,20 @@ export default function MuiEmployees() {
             <ListItemText>Manage Deductions</ListItemText>
           </MenuItem>
           <Divider />
-          <MenuItem
-            onClick={() => {
-              handleOpenDeleteDialog(contextMenu!.employee);
-              handleCloseContextMenu();
-            }}
-            sx={{ color: "error.main" }}
-          >
-            <ListItemIcon>
-              <DeleteIcon fontSize="small" color="error" />
-            </ListItemIcon>
-            <ListItemText>Delete</ListItemText>
-          </MenuItem>
+          {contextMenu?.employee && (
+            <MenuItem
+              onClick={() => {
+                toggleEmployeeStatus.mutate({ id: contextMenu.employee.id, isActive: !contextMenu.employee.isActive });
+                handleCloseContextMenu();
+              }}
+              sx={{ color: contextMenu.employee.isActive ? "warning.main" : "success.main" }}
+            >
+              <ListItemIcon>
+                {contextMenu.employee.isActive ? <VisibilityOffIcon fontSize="small" color="warning" /> : <ViewIcon fontSize="small" color="success" />}
+              </ListItemIcon>
+              <ListItemText>{contextMenu.employee.isActive ? "Deactivate" : "Activate"}</ListItemText>
+            </MenuItem>
+          )}
         </Menu>
 
         {/* Add/Edit Dialog */}
@@ -1790,17 +1781,6 @@ export default function MuiEmployees() {
             </DialogActions>
           </form>
         </Dialog>
-
-        {/* Employee Shift Modal */}
-        <EmployeeShiftModal
-          open={shiftModalOpen}
-          onClose={() => {
-            setShiftModalOpen(false);
-            setCurrentEmployee(null);
-          }}
-          employee={currentEmployee}
-          branchId={currentEmployee?.branchId || ""}
-        />
       </Box>
     </>
   );
