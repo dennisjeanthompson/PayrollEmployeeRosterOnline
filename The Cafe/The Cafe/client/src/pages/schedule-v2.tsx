@@ -1657,14 +1657,14 @@ export default function ScheduleV2() {
                       variant="outlined"
                     />
                   )}
-                  {adjDate && !adjIsRange && (
+                  {adjDate && isValid(adjDate) && !adjIsRange && (
                     <Chip
                       size="small"
                       label={`Date: ${format(adjDate, 'MMM d, yyyy')}`}
                       variant="outlined"
                     />
                   )}
-                  {adjIsRange && adjDate && (
+                  {adjIsRange && adjDate && isValid(adjDate) && (
                     <Chip
                       size="small"
                       label={`Range starts: ${format(adjDate, 'MMM d, yyyy')}`}
@@ -1823,7 +1823,7 @@ export default function ScheduleV2() {
                     onClick={() => {
                       setEditAdjId(log.id);
                       setAdjEmployeeId(log.employeeId);
-                      setAdjDate(new Date(log.date));
+                      setAdjDate(new Date(log.startDate || log.date));
                       setAdjIsRange(false);
                       setAdjType(log.type);
                       setAdjValue(log.value);
