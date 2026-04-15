@@ -10,7 +10,15 @@
  *
  * All API calls will then be prefixed with that URL automatically.
  */
-const API_BASE = import.meta.env.VITE_API_URL ?? '';
+export const API_BASE = (() => {
+  const envUrl = import.meta.env.VITE_API_URL ?? '';
+  if (!envUrl) return '';
+  // Ensure the URL has a protocol if user entered a bare domain like "myapp.onrender.com"
+  if (!envUrl.startsWith('http://') && !envUrl.startsWith('https://') && !envUrl.startsWith('//')) {
+    return `https://${envUrl}`;
+  }
+  return envUrl;
+})();
 
 /**
  * Prepends the API base URL to a relative API path.

@@ -32,14 +32,14 @@ class RealTimeManager {
           "http://localhost:5173",
           "http://localhost:3000",
           process.env.VITE_API_URL || "",
-          process.env.FRONTEND_URL || "",
-        ].filter(Boolean),
-        credentials: true,
-      },
-      transports: ["websocket"],
-      pingInterval: 25000,
-      pingTimeout: 60000,
-    });
+        process.env.FRONTEND_URL || "",
+      ].filter(Boolean),
+      credentials: true,
+    },
+    transports: ["websocket", "polling"],
+    pingInterval: 25000,
+    pingTimeout: 60000,
+  });
 
     this.setupMiddleware();
     this.setupConnections();

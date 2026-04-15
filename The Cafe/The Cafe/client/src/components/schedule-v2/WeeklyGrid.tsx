@@ -269,7 +269,9 @@ function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, onLogAd
           </Box>
         )}
         {hasTrade && <TradeBadge trade={trade} />}
-        {startStr}-{endStr}
+        <Box component="span" sx={{ flex: 1, minWidth: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+          {startStr}-{endStr}
+        </Box>
         {onLogAdjustment && (
           <Tooltip title="Log attendance" arrow placement="top">
             <IconButton

@@ -2,6 +2,7 @@ import { useEffect, useCallback, useRef, startTransition, useSyncExternalStore }
 import { useQueryClient } from "@tanstack/react-query";
 import { io, Socket } from "socket.io-client";
 import { getCurrentUser } from "@/lib/auth";
+import { API_BASE } from "@/lib/api";
 
 interface UseRealtimeOptions {
   enabled?: boolean;
@@ -83,8 +84,9 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       globalSocketUserId = null;
     }
 
-    // Connect to WebSocket
-    const socket = io({
+    // Connect to WebSocket with proper base URL if needed for Vercel/Render deployments
+    const socketUrl = API_BASE ? API_BASE : window.location.origin;
+    const socket = io(socketUrl, {
       query: { userId: currentUser.id },
       auth: {
         token: localStorage.getItem("auth_token") || "",
@@ -93,8 +95,8 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       reconnection: true,
       reconnectionDelayMax: 5000,
       reconnectionAttempts: 10,
-      // Use websocket only to avoid long-polling churn on the proxy path
-      transports: ["websocket"],
+      // Default to websocket, but allow polling as fallback if proxy blocks it
+      transports: ["websocket", "polling"],
       // Don't force a new connection on each creation
       forceNew: false,
     });
