@@ -424,7 +424,7 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']),
     }
 
     // Restrict role changes — only admins can set role to 'manager' or 'admin'
-    if (updates.role) {
+    if (updates.role && updates.role !== existingEmployee.role) {
       const allowedRoles = req.session.user?.role === 'admin' ? ['employee', 'manager', 'admin'] : ['employee'];
       if (!allowedRoles.includes(updates.role)) {
         return res.status(400).json({ message: `Invalid role. Allowed: ${allowedRoles.join(', ')}` });
