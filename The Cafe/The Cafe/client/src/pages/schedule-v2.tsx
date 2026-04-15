@@ -1173,6 +1173,7 @@ export default function ScheduleV2() {
               timeOffRequests={timeOffRequests}
               shiftTrades={shiftTrades}
               employees={employees}
+              shifts={shifts}
               isManager={isManager}
               currentUserId={currentUser?.id || ''}
               adjustmentLogs={adjustmentLogs}

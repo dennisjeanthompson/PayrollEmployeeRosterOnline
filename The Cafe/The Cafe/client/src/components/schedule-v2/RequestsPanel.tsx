@@ -35,6 +35,7 @@ interface RequestsPanelProps {
   timeOffRequests: TimeOffRequest[];
   shiftTrades: ShiftTrade[];
   employees: Employee[];
+  shifts?: any[];
   isManager: boolean;
   currentUserId: string;
   adjustmentLogs?: any[];
@@ -79,6 +80,7 @@ export default function RequestsPanel({
   timeOffRequests,
   shiftTrades,
   employees,
+  shifts = [],
   isManager,
   currentUserId,
   adjustmentLogs = [],
@@ -112,6 +114,63 @@ export default function RequestsPanel({
     setApproveAnchorEl(null);
     setApprovingId(null);
   };
+
+  const complianceWarnings = React.useMemo(() => {
+    if (!shifts || shifts.length === 0 || !employees) return [];
+    
+    // NOTE: simple week approximation
+    const now = new Date();
+    const day = now.getDay(); 
+    const diff = now.getDate() - day + (day === 0 ? -6 : 1);
+    const thisWeekStart = new Date(now.setDate(diff));
+    thisWeekStart.setHours(0,0,0,0);
+    const thisWeekEnd = new Date(thisWeekStart);
+    thisWeekEnd.setDate(thisWeekStart.getDate() + 6);
+    thisWeekEnd.setHours(23,59,59,999);
+    
+    const currentWeekShifts = shifts.filter(s => {
+      const start = new Date(s.startTime);
+      return start >= thisWeekStart && start <= thisWeekEnd;
+    });
+
+    const hoursMap: Record<string, number> = {};
+    currentWeekShifts.forEach(shift => {
+      const e = new Date(shift.endTime).getTime();
+      const s = new Date(shift.startTime).getTime();
+      const diffHrs = (e - s) / 1000 / 3600;
+      hoursMap[shift.userId] = (hoursMap[shift.userId] || 0) + diffHrs;
+    });
+
+    const warnings: string[] = [];
+    Object.keys(hoursMap).forEach(userId => {
+      // 48 hours is the legal DOLE limit. Anything STRICTLY OVER 48 hours is overtime/non-compliant.
+      if (hoursMap[userId] > 48) {
+        const empName = getEmployeeName(employees, userId);
+        warnings.push(`${empName} is scheduled for ${hoursMap[userId].toFixed(1)} hours this week (> 48h limit).`);
+      }
+    });
+
+    // Also check pending leave overlap with scheduled shifts
+    timeOffRequests.filter(r => r.status === 'pending').forEach(req => {
+      const reqStart = new Date(req.startDate);
+      reqStart.setHours(0,0,0,0);
+      const reqEnd = new Date(req.endDate);
+      reqEnd.setHours(23,59,59,999);
+      
+      const overlappingShifts = shifts.filter(s => {
+        if (s.userId !== req.userId) return false;
+        const sTime = new Date(s.startTime);
+        return sTime >= reqStart && sTime <= reqEnd;
+      });
+      
+      if (overlappingShifts.length > 0) {
+        const empName = getEmployeeName(employees, req.userId);
+        warnings.push(`${empName} has a pending leave request but is scheduled for ${overlappingShifts.length} shift(s) during that time.`);
+      }
+    });
+    
+    return warnings;
+  }, [shifts, timeOffRequests, employees]);
 
   const handleConfirmApprove = (useSil: boolean) => {
     if (approvingId) {
@@ -394,11 +453,12 @@ export default function RequestsPanel({
           </AccordionDetails>
         </Accordion>
 
-        {/* Recently resolved (collapsed) */}
-        {recentResolved.length > 0 && (
+        {/* Compliance Warnings (Managers only) */}
+        {isManager && complianceWarnings?.length > 0 && (
           <>
             <Divider sx={{ borderColor: isDark ? '#3D3228' : '#E8E0D4' }} />
             <Accordion 
+              defaultExpanded
               disableGutters 
               elevation={0}
               sx={{ 
@@ -410,64 +470,23 @@ export default function RequestsPanel({
                 expandIcon={<ExpandMoreIcon />}
                 sx={{ px: 0, minHeight: 40, '& .MuiAccordionSummary-content': { my: 0 } }}
               >
-                <Typography variant="caption" fontWeight={600} color="text.secondary" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                  Recent Activity
+                <Typography variant="caption" fontWeight={600} color="error" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <AssignmentLateIcon fontSize="small" /> Compliance Warnings
                 </Typography>
               </AccordionSummary>
               <AccordionDetails sx={{ px: 0, pt: 0, pb: 2 }}>
-                <Stack spacing={0.25}>
-                {recentResolved.map((item: any, i) => {
-                  const isAdjustmentLog = 'employeeId' in item && 'value' in item;
-                  const name = isAdjustmentLog
-                    ? getEmployeeName(employees, item.employeeId)
-                    : (item.userName
-                      || (item.requester ? `${item.requester.firstName} ${item.requester.lastName || ''}`.trim() : null)
-                      || (item.fromUser ? `${item.fromUser.firstName} ${item.fromUser.lastName || ''}`.trim() : null)
-                      || getEmployeeName(employees, item.userId || item.requesterId || item.fromUserId || ''));
-                  const isTimeOff = !isAdjustmentLog && ('startDate' in item || (item.type && !['pending','accepted','approved','rejected'].includes(item.type) && item.type !== 'open' && item.type !== 'direct'));
-                  return (
-                    <Box key={item.id || i} sx={{ 
-                      py: 0.75, px: 1, borderRadius: 1.5,
-                      transition: 'background-color 0.15s',
-                      '&:hover': { bgcolor: isDark ? alpha('#FFF', 0.03) : alpha('#000', 0.02) },
+                <Stack spacing={1}>
+                  {complianceWarnings.map((warning: string, i: number) => (
+                    <Box key={i} sx={{ 
+                      p: 1.5, borderRadius: 2,
+                      bgcolor: alpha('#EF4444', 0.1), border: `1px solid ${alpha('#EF4444', 0.2)}`,
                     }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        {isAdjustmentLog ? (
-                          <AssignmentLateIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                        ) : isTimeOff ? (
-                          <TimeOffIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                        ) : (
-                          <SwapIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
-                        )}
-                        <Typography variant="caption" color="text.secondary" sx={{ flex: 1, fontSize: '0.7rem' }}>
-                          {name} — {item.type || 'trade'}
-                        </Typography>
-                        {isAdjustmentLog ? (
-                          <Chip label={`${item.value}${item.type === 'late' || item.type === 'undertime' ? 'm' : item.type === 'absent' ? 'd' : 'h'}`} size="small" sx={{ height: 20, fontSize: '0.6rem', fontWeight: 700, bgcolor: alpha('#F59E0B', 0.12), color: '#92400E' }} />
-                        ) : (
-                          <StatusChip status={item.status} />
-                        )}
-                      </Box>
-                      {/* Show rejection reason to employees for their own rejected requests */}
-                      {item.status === 'rejected' && item.rejectionReason && (
-                        <Typography
-                          variant="caption"
-                          sx={{
-                            display: 'block',
-                            ml: 2.5,
-                            mt: 0.3,
-                            color: 'error.main',
-                            fontStyle: 'italic',
-                            fontSize: '0.65rem',
-                          }}
-                        >
-                          Reason: {item.rejectionReason}
-                        </Typography>
-                      )}
+                      <Typography variant="caption" color="error.dark" fontWeight={600}>
+                        {warning}
+                      </Typography>
                     </Box>
-                  );
-                })}
-              </Stack>
+                  ))}
+                </Stack>
               </AccordionDetails>
             </Accordion>
           </>

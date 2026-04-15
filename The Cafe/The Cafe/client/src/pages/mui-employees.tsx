@@ -458,44 +458,17 @@ export default function MuiEmployees() {
           hasPayroll: data.relatedData.hasPayroll,
           totalRecords: data.relatedData.totalRecords,
         });
-        setDeleteDialogOpen(false);
         setDeletionModalOpen(true);
         return;
       }
       // Refresh all employee-related caches.
       startTransition(() => {
         invalidateEmployeeQueries();
-        setDeleteDialogOpen(false);
         setDeletionModalOpen(false);
         setCurrentEmployee(null);
         setEmployeeRelatedData(null);
       });
       toast({ title: "Success", description: data?.forceDeleted ? "Employee and all data permanently deleted" : "Employee deleted successfully" });
-    },
-    onError: (error: any) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
-    },
-  });
-
-  // Check for related data before deletion
-  const { mutate: checkRelatedData } = useMutation({
-    mutationFn: async (id: string) => {
-      const response = await apiRequest("GET", `/api/employees/${id}/related-data`);
-      if (!response.ok) throw new Error("Failed to check related data");
-      return response.json();
-    },
-    onSuccess: (data) => {
-      if (data.hasShifts || data.hasPayroll) {
-        setEmployeeRelatedData({
-          hasShifts: data.hasShifts,
-          hasPayroll: data.hasPayroll,
-          totalRecords: data.hasTotal,
-        });
-        setDeletionModalOpen(true);
-      } else {
-        // No related data, show simple delete confirmation
-        setDeleteDialogOpen(true);
-      }
     },
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -646,12 +619,6 @@ export default function MuiEmployees() {
     setCurrentEmployee(employee);
     setViewDialogOpen(true);
   }, []);
-
-  const handleOpenDeleteDialog = useCallback((employee: Employee) => {
-    setCurrentEmployee(employee);
-    // Check for related data first
-    checkRelatedData(employee.id);
-  }, [checkRelatedData]);
 
   const handleOpenDeductionsDialog = useCallback((employee: Employee) => {
     setCurrentEmployee(employee);
@@ -858,7 +825,7 @@ export default function MuiEmployees() {
         </Stack>
       ),
     },
-  ], [handleOpenViewDialog, handleOpenEditDialog, handleOpenDeductionsDialog, handleOpenDeleteDialog, getBranchName]);
+  ], [handleOpenViewDialog, handleOpenEditDialog, handleOpenDeductionsDialog, getBranchName]);
 
   if (!managerRole) return null;
 
@@ -1549,32 +1516,6 @@ export default function MuiEmployees() {
               }}
             >
               Edit Employee
-            </Button>
-          </DialogActions>
-        </Dialog>
-
-        {/* Delete Confirmation Dialog (for employees without data) */}
-        <Dialog open={deleteDialogOpen} onClose={() => setDeleteDialogOpen(false)} maxWidth="xs" fullWidth>
-          <DialogTitle>Delete Employee</DialogTitle>
-          <DialogContent>
-            <DialogContentText>
-              Are you sure you want to delete{" "}
-              <strong>
-                {currentEmployee?.firstName} {currentEmployee?.lastName}
-              </strong>
-              ? This action cannot be undone.
-            </DialogContentText>
-          </DialogContent>
-          <DialogActions sx={{ p: 2.5 }}>
-            <Button onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
-            <Button
-              variant="contained"
-              color="error"
-              onClick={() => currentEmployee && deleteEmployee.mutate({ id: currentEmployee.id })}
-              disabled={deleteEmployee.isPending}
-              startIcon={deleteEmployee.isPending ? <CircularProgress size={16} /> : <DeleteIcon />}
-            >
-              Delete
             </Button>
           </DialogActions>
         </Dialog>
