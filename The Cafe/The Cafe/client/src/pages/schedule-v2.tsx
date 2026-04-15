@@ -31,6 +31,17 @@
  *      and time-off. Adding an activity log query would slow initial render.
  */
 import React, { useState, useMemo, useCallback } from 'react';
+
+function safeFormat(val: any, fmt: string): string {
+  if (!val) return '';
+  try {
+    const d = typeof val === 'string' || typeof val === 'number' ? new Date(val) : val;
+    if (d instanceof Date && !isNaN(d.getTime())) {
+      return format(d, fmt);
+    }
+  } catch (e) {}
+  return '';
+}
 import {
   Box, Paper, Typography, Button, IconButton, Chip, Badge, Drawer, Alert,
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
@@ -497,8 +508,8 @@ export default function ScheduleV2() {
     mutationFn: async (data: typeof timeOffForm) => {
       const payload = {
         type: data.type,
-        startDate: data.startDate ? format(data.startDate, 'yyyy-MM-dd') : '',
-        endDate: data.endDate ? format(data.endDate, 'yyyy-MM-dd') : '',
+        startDate: data.startDate ? safeFormat(data.startDate, 'yyyy-MM-dd') : '',
+        endDate: data.endDate ? safeFormat(data.endDate, 'yyyy-MM-dd') : '',
         reason: data.reason,
       };
       const res = await apiRequest('POST', '/api/time-off-requests', payload);
@@ -569,8 +580,8 @@ export default function ScheduleV2() {
   const addHolidayPayMutation = useMutation({
     mutationFn: async ({ userId, branchId, date }: { userId: string, branchId: string, date: Date }) => {
       const payload = {
-        startDate: format(date, 'yyyy-MM-dd'),
-        endDate: format(date, 'yyyy-MM-dd'),
+        startDate: safeFormat(date, 'yyyy-MM-dd'),
+        endDate: safeFormat(date, 'yyyy-MM-dd'),
         type: 'holiday_pay',
         value: '1',
         remarks: 'Holiday Pay',
@@ -830,7 +841,7 @@ export default function ScheduleV2() {
       if (!d) continue;
       await createAdjustmentMutation.mutateAsync({
         employeeId: adjEmployeeId,
-        date: format(d, "yyyy-MM-dd"),
+        date: safeFormat(d, "yyyy-MM-dd"),
         type: adjType,
         value: adjValue,
         remarks: adjRemarks,
@@ -873,7 +884,7 @@ export default function ScheduleV2() {
           </Box>
 
           <Typography variant="body2" fontWeight={800} sx={{ color: isDark ? '#F5EDE4' : '#3C2415', whiteSpace: 'nowrap', fontSize: { xs: '0.85rem', sm: '1rem' } }}>
-            {format(weekStart, 'MMM d')} – {format(weekEndDate, 'MMM d, yyyy')}
+            {safeFormat(weekStart, 'MMM d')} – {safeFormat(weekEndDate, 'MMM d, yyyy')}
           </Typography>
 
           <Chip label={`${weeklyTotalHours}h total`} size="small" variant="filled" color="default" sx={{ height: 24, fontSize: '0.7rem', fontWeight: 700, borderRadius: 2 }} />
@@ -1347,7 +1358,7 @@ export default function ScheduleV2() {
                     {selectedShift.user ? `${selectedShift.user.firstName} ${selectedShift.user.lastName}` : (() => { const e = employees.find(x => x.id === selectedShift.userId); return e ? `${e.firstName} ${e.lastName}` : 'Unknown'; })()}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {selectedShift.position || 'Staff'} · {editForm.startTime ? format(editForm.startTime, 'EEEE, MMM d, yyyy') : ''}
+                    {selectedShift.position || 'Staff'} · {editForm.startTime ? safeFormat(editForm.startTime, 'EEEE, MMM d, yyyy') : ''}
                   </Typography>
                 </Box>
               </Box>
@@ -1356,7 +1367,7 @@ export default function ScheduleV2() {
                   label="Start Time"
                   type="time"
                   fullWidth
-                  value={editForm.startTime ? format(editForm.startTime, 'HH:mm') : ''}
+                  value={editForm.startTime ? safeFormat(editForm.startTime, 'HH:mm') : ''}
                   onChange={(e) => {
                     if (editForm.startTime && e.target.value) {
                       const [h, m] = e.target.value.split(':').map(Number);
@@ -1372,7 +1383,7 @@ export default function ScheduleV2() {
                   label="End Time"
                   type="time"
                   fullWidth
-                  value={editForm.endTime ? format(editForm.endTime, 'HH:mm') : ''}
+                  value={editForm.endTime ? safeFormat(editForm.endTime, 'HH:mm') : ''}
                   onChange={(e) => {
                     if (editForm.endTime && e.target.value) {
                       const [h, m] = e.target.value.split(':').map(Number);
@@ -1469,7 +1480,7 @@ export default function ScheduleV2() {
                 {selectedReq.type.toUpperCase()} Leave ({selectedReq.status.toUpperCase()})
               </Typography>
               <Typography variant="body2" sx={{ mb: 3 }}>
-                {format(new Date(selectedReq.startDate), 'MMM d, yyyy')} - {format(new Date(selectedReq.endDate), 'MMM d, yyyy')}
+                {safeFormat(new Date(selectedReq.startDate), 'MMM d, yyyy')} - {safeFormat(new Date(selectedReq.endDate), 'MMM d, yyyy')}
                 {selectedReq.reason && <><br />Reason: {selectedReq.reason}</>}
               </Typography>
 
@@ -1578,7 +1589,7 @@ export default function ScheduleV2() {
                   .filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date())
                   .map(s => (
                     <MenuItem key={s.id} value={s.id}>
-                      {format(new Date(s.startTime), 'MMM d, h:mm a')} – {format(new Date(s.endTime), 'h:mm a')} {s.position && `(${s.position})`}
+                      {safeFormat(new Date(s.startTime), 'MMM d, h:mm a')} – {safeFormat(new Date(s.endTime), 'h:mm a')} {s.position && `(${s.position})`}
                     </MenuItem>
                   ))}
               </Select>
@@ -1660,14 +1671,14 @@ export default function ScheduleV2() {
                   {adjDate && isValid(adjDate) && !adjIsRange && (
                     <Chip
                       size="small"
-                      label={`Date: ${format(adjDate, 'MMM d, yyyy')}`}
+                      label={`Date: ${safeFormat(adjDate, 'MMM d, yyyy')}`}
                       variant="outlined"
                     />
                   )}
                   {adjIsRange && adjDate && isValid(adjDate) && (
                     <Chip
                       size="small"
-                      label={`Range starts: ${format(adjDate, 'MMM d, yyyy')}`}
+                      label={`Range starts: ${safeFormat(adjDate, 'MMM d, yyyy')}`}
                       variant="outlined"
                     />
                   )}
@@ -1888,7 +1899,7 @@ export default function ScheduleV2() {
                   <Typography variant="body2" color="text.secondary">
                   {copyWeekPreview?.lastWeekShifts.length ? (
                     <>
-                      {copyWeekPreview.shiftsToCopy.length} shifts will be copied from {format(copyWeekPreview.lastWeekStart, 'MMM d')} to {format(copyWeekPreview.lastWeekEnd, 'MMM d')}
+                      {copyWeekPreview.shiftsToCopy.length} shifts will be copied from {safeFormat(copyWeekPreview.lastWeekStart, 'MMM d')} to {safeFormat(copyWeekPreview.lastWeekEnd, 'MMM d')}
                       {copyWeekPreview.lastWeekShifts.length !== copyWeekPreview.shiftsToCopy.length ? `, with ${copyWeekPreview.lastWeekShifts.length - copyWeekPreview.shiftsToCopy.length} overlap(s) skipped.` : '.'}
                     </>
                   ) : (
@@ -1898,8 +1909,8 @@ export default function ScheduleV2() {
               </Box>
 
               <Stack direction="row" flexWrap="wrap" spacing={1} useFlexGap>
-                <Chip size="small" label={`Source: ${format(copyWeekPreview?.lastWeekStart || weekStart, 'MMM d')} – ${format(copyWeekPreview?.lastWeekEnd || weekEndDate, 'MMM d')}`} variant="outlined" />
-                <Chip size="small" label={`Target: ${format(weekStart, 'MMM d')} – ${format(weekEndDate, 'MMM d')}`} variant="outlined" />
+                <Chip size="small" label={`Source: ${safeFormat(copyWeekPreview?.lastWeekStart || weekStart, 'MMM d')} – ${safeFormat(copyWeekPreview?.lastWeekEnd || weekEndDate, 'MMM d')}`} variant="outlined" />
+                <Chip size="small" label={`Target: ${safeFormat(weekStart, 'MMM d')} – ${safeFormat(weekEndDate, 'MMM d')}`} variant="outlined" />
                 <Chip size="small" label={copyWeekPreview?.currentWeekShifts.length ? `${copyWeekPreview.currentWeekShifts.length} shifts already exist` : 'This week is empty'} variant="outlined" />
               </Stack>
 
