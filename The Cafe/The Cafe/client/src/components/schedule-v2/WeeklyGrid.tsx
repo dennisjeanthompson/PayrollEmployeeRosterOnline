@@ -207,74 +207,78 @@ function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, onLogAd
   const hasTrade = !!trade;
 
   return (
-    <Tooltip
-      title={`${shift.position || 'Staff'} · ${safeFormat(shift.startTime, 'h:mm a')} – ${safeFormat(shift.endTime, 'h:mm a')} (${hours}h)${shift.notes ? `\n${shift.notes}` : ''}${hasTrade ? `\n⇄ Trade ${trade.status}` : ''}`}
-      arrow
-      placement="top"
+    <Box
+      component={motion.div}
+      initial={{ opacity: 0, scale: 0.95 }}
+      animate={{ opacity: 1, scale: 1 }}
+      whileHover={{ scale: 1.04, y: -2 }}
+      whileTap={{ scale: 0.98 }}
+      onClick={onClick}
+      sx={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: onLogAdjustment ? 'space-between' : 'center',
+        gap: onLogAdjustment ? 0.75 : 0,
+        px: 0.75,
+        pr: onLogAdjustment ? 0.5 : 0.75,
+        py: 0.6,
+        borderRadius: 1.5,
+        bgcolor: hasTrade ? alpha(rc.bg, 0.4) : alpha(rc.bg, 0.25),
+        border: '1px solid',
+        borderColor: alpha(rc.border, 0.5),
+        borderLeft: `4px solid ${rc.bg}`,
+        color: isDark ? alpha(rc.bgLight, 1) : rc.bgDark,
+        cursor: 'pointer',
+        fontSize: '0.68rem',
+        fontWeight: 800,
+        lineHeight: 1.2,
+        letterSpacing: '-0.01em',
+        transition: 'box-shadow 0.2s',
+        whiteSpace: 'nowrap',
+        overflow: 'visible',
+        ...(hasTrade && {
+          outline: '2px dashed',
+          outlineColor: trade.status === 'accepted' ? '#3B82F6' : '#8B5CF6',
+          outlineOffset: 1,
+        }),
+        '&:hover': onClick ? {
+          filter: 'brightness(0.92)',
+          boxShadow: isSelected ? undefined : `0 6px 16px ${alpha(rc.bg, 0.3)}`,
+        } : {},
+      }}
     >
-      <Box
-        component={motion.div}
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        whileHover={{ scale: 1.04, y: -2 }}
-        whileTap={{ scale: 0.98 }}
-        onClick={onClick}
-        sx={{
-          position: 'relative',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: onLogAdjustment ? 'space-between' : 'center',
-          gap: onLogAdjustment ? 0.75 : 0,
-          px: 0.75,
-          pr: onLogAdjustment ? 0.5 : 0.75,
-          py: 0.6,
-          borderRadius: 1.5,
-          bgcolor: hasTrade ? alpha(rc.bg, 0.4) : alpha(rc.bg, 0.25),
-          border: '1px solid',
-          borderColor: alpha(rc.border, 0.5),
-          borderLeft: `4px solid ${rc.bg}`,
-          color: isDark ? alpha(rc.bgLight, 1) : rc.bgDark,
-          cursor: 'pointer',
-          fontSize: '0.68rem',
-          fontWeight: 800,
-          lineHeight: 1.2,
-          letterSpacing: '-0.01em',
-          transition: 'box-shadow 0.2s',
-          whiteSpace: 'nowrap',
-          overflow: 'visible',
-          ...(hasTrade && {
-            outline: '2px dashed',
-            outlineColor: trade.status === 'accepted' ? '#3B82F6' : '#8B5CF6',
-            outlineOffset: 1,
-          }),
-          '&:hover': onClick ? {
-            filter: 'brightness(0.92)',
-            boxShadow: isSelected ? undefined : `0 6px 16px ${alpha(rc.bg, 0.3)}`,
-          } : {},
-        }}
+      <Tooltip
+        title={`${shift.position || 'Staff'} · ${safeFormat(shift.startTime, 'h:mm a')} – ${safeFormat(shift.endTime, 'h:mm a')} (${hours}h)${shift.notes ? `\n${shift.notes}` : ''}${hasTrade ? `\n⇄ Trade ${trade.status}` : ''}`}
+        arrow
+        placement="top"
       >
-        {isSelectionMode && (
-          <Box sx={{
-            position: 'absolute', top: -6, right: -6,
-            bgcolor: isSelected ? 'primary.main' : 'background.paper',
-            color: isSelected ? '#fff' : 'transparent',
-            border: '2px solid',
-            borderColor: isSelected ? 'primary.main' : 'text.disabled',
-            borderRadius: '50%', width: 18, height: 18,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            boxShadow: isSelected ? 2 : 1, zIndex: 12,
-            transition: 'all 0.2s'
-          }}>
-            {isSelected && <CheckIcon sx={{ fontSize: 12, fontWeight: 900 }} />}
+        <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', height: '100%', gap: 0.5 }}>
+          {isSelectionMode && (
+            <Box sx={{
+              position: 'absolute', top: -6, right: -6,
+              bgcolor: isSelected ? 'primary.main' : 'background.paper',
+              color: isSelected ? '#fff' : 'transparent',
+              border: '2px solid',
+              borderColor: isSelected ? 'primary.main' : 'text.disabled',
+              borderRadius: '50%', width: 18, height: 18,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: isSelected ? 2 : 1, zIndex: 12,
+              transition: 'all 0.2s'
+            }}>
+              {isSelected && <CheckIcon sx={{ fontSize: 12, fontWeight: 900 }} />}
+            </Box>
+          )}
+          {hasTrade && <TradeBadge trade={trade} />}
+          <Box component="span" sx={{ flex: 1, minWidth: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+            {startStr}-{endStr}
           </Box>
-        )}
-        {hasTrade && <TradeBadge trade={trade} />}
-        <Box component="span" sx={{ flex: 1, minWidth: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-          {startStr}-{endStr}
         </Box>
-        {onLogAdjustment && (
-          <Tooltip title="Log attendance" arrow placement="top">
-            <IconButton
+      </Tooltip>
+
+      {onLogAdjustment && (
+        <Tooltip title="Log attendance" arrow placement="top">
+          <IconButton
               size="small"
               onClick={(e) => {
                 e.stopPropagation();
@@ -295,8 +299,7 @@ function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, onLogAd
             </IconButton>
           </Tooltip>
         )}
-      </Box>
-    </Tooltip>
+    </Box>
   );
 }
 
