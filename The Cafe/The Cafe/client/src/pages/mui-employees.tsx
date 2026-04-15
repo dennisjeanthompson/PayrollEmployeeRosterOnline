@@ -1217,6 +1217,7 @@ export default function MuiEmployees() {
                       type="number"
                       value={formData.hourlyRate}
                       onChange={(e) => setFormData({ ...formData, hourlyRate: e.target.value })}
+                      inputProps={{ step: "any", min: "0" }}
                       required
                     />
                   </Grid>
