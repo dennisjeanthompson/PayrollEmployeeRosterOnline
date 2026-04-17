@@ -4504,50 +4504,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Failed to clear overlapping shifts:', clearError);
     }
 
-    // ─── Smart SIL Logic ─────────────────────────────────────────────────────
-    // Manager can pass `useSil: true` in the body to use SIL credits for the leave.
-    // If useSil is false or not provided, the leave is treated as LWOP (Leave Without Pay).
-    const useSil = req.body.useSil === true || req.body.useSil === 'true';
     const startD = new Date(request.startDate);
     const endD = new Date(request.endDate);
     const daysToDeduct = Math.max(1, Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) + 1);
     let isPaid = false;
 
-    if (useSil) {
-      try {
-        // 1. Try to deduct from the specific leave type balance first (vacation/sick)
-        const { db } = await import('./db');
-        const { leaveCredits } = await import('@shared/schema');
-        const { eq, and } = await import('drizzle-orm');
+    try {
+      const { db } = await import('./db');
+      const { leaveCredits } = await import('@shared/schema');
+      const { eq, and } = await import('drizzle-orm');
 
-        const specificBalance = await db.select().from(leaveCredits).where(
-          and(eq(leaveCredits.userId, request.userId), eq(leaveCredits.year, startD.getFullYear()), eq(leaveCredits.leaveType, request.type))
-        ).limit(1);
+      const specificBalance = await db.select().from(leaveCredits).where(
+        and(eq(leaveCredits.userId, request.userId), eq(leaveCredits.year, startD.getFullYear()), eq(leaveCredits.leaveType, request.type))
+      ).limit(1);
 
-        let deductedFrom: string | null = null;
-        if (specificBalance[0] && parseFloat(specificBalance[0].remainingCredits) > 0) {
-          deductedFrom = request.type;
-        } else {
-          // 2. Fall back to the SIL balance
-          const silBalance = await db.select().from(leaveCredits).where(
-            and(eq(leaveCredits.userId, request.userId), eq(leaveCredits.year, startD.getFullYear()), eq(leaveCredits.leaveType, 'sil'))
-          ).limit(1);
-          if (silBalance[0] && parseFloat(silBalance[0].remainingCredits) > 0) {
-            deductedFrom = 'sil';
-          }
-        }
-
-        if (deductedFrom) {
-          await deductLeaveCredit(request.userId, employee.branchId, deductedFrom, daysToDeduct, startD.getFullYear());
-          isPaid = true;
-        }
-      } catch (deductionErr) {
-        console.error('Smart SIL deduction error:', deductionErr);
-        // Non-blocking: leave isPaid = false if deduction fails
+      let deductedFrom: string | null = null;
+      if (specificBalance[0] && parseFloat(specificBalance[0].remainingCredits) > 0) {
+        deductedFrom = request.type;
       }
+
+      if (deductedFrom) {
+        await deductLeaveCredit(request.userId, employee.branchId, deductedFrom, daysToDeduct, startD.getFullYear());
+        isPaid = true;
+      }
+    } catch (deductionErr) {
+      console.error('Leave deduction error:', deductionErr);
     }
 
-    // Mark the request as paid or unpaid based on the SIL result
+    // Mark the request as paid or unpaid
     await storage.updateTimeOffRequest(id, { isPaid } as any);
 
     // Sync with approvals table
@@ -4744,13 +4728,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let deductedFrom: string | null = null;
         if (specificBalance[0] && parseFloat(specificBalance[0].remainingCredits) > 0) {
           deductedFrom = existing.type;
-        } else {
-          const silBalance = await db.select().from(leaveCredits).where(
-            and(eq(leaveCredits.userId, existing.userId), eq(leaveCredits.year, startD.getFullYear()), eq(leaveCredits.leaveType, 'sil'))
-          ).limit(1);
-          if (silBalance[0] && parseFloat(silBalance[0].remainingCredits) > 0) {
-            deductedFrom = 'sil';
-          }
         }
         if (deductedFrom) {
           await deductLeaveCredit(existing.userId, employee.branchId, deductedFrom, daysToAdjust, startD.getFullYear());

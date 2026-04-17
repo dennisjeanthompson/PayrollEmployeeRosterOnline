@@ -87,8 +87,8 @@ export default function MuiLeaveCredits({ hideHeader }: { hideHeader?: boolean }
   // Form State
   const [formData, setFormData] = useState({
     userId: "",
-    leaveType: "sil",
-    totalCredits: "5",
+    leaveType: "vacation",
+    totalCredits: "",
     usedCredits: "0",
     notes: "",
   });
@@ -142,26 +142,9 @@ export default function MuiLeaveCredits({ hideHeader }: { hideHeader?: boolean }
     },
   });
 
-  const autoGrantSilMutation = useMutation({
-    mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/leave-credits/auto-grant-sil");
-      return res.json();
-    },
-    onSuccess: (data: any) => {
-      queryClient.invalidateQueries({ queryKey: ["leave-credits"] });
-      toast({ 
-        title: "SIL Granted", 
-        description: data.message || `Granted SIL to ${data.grantedCount} eligible employees.`,
-      });
-    },
-    onError: (err: any) => {
-      toast({ title: "Auto-Grant Failed", description: err.message, variant: "destructive" });
-    },
-  });
-
   const handleOpenGrantDialog = () => {
     setEditingCredit(null);
-    setFormData({ userId: "", leaveType: "sil", totalCredits: "5", usedCredits: "0", notes: "" });
+    setFormData({ userId: "", leaveType: "vacation", totalCredits: "", usedCredits: "0", notes: "" });
     setGrantDialogOpen(true);
   };
 
@@ -329,17 +312,6 @@ export default function MuiLeaveCredits({ hideHeader }: { hideHeader?: boolean }
 
             {isMgrOptions && (
               <Stack direction="row" spacing={1}>
-                <Tooltip title="Scans all active employees and automatically gives 5 days of SIL to those with 1 year tenure">
-                  <Button
-                    variant="outlined"
-                    startIcon={<AutoAwesomeIcon />}
-                    onClick={() => autoGrantSilMutation.mutate()}
-                    disabled={autoGrantSilMutation.isPending}
-                    sx={{ boxShadow: 1, bgcolor: 'background.paper' }}
-                  >
-                    {/* Auto-Grant SIL hidden per user request */}
-                  </Button>
-                </Tooltip>
                 <Button
                   variant="contained"
                   startIcon={<AddIcon />}
@@ -417,18 +389,16 @@ export default function MuiLeaveCredits({ hideHeader }: { hideHeader?: boolean }
                   onChange={(e) => {
                     const type = e.target.value;
                     let defaultDays = "0";
-                    if (type === "sil") defaultDays = "5";
                     if (type === "solo_parent") defaultDays = "7";
                     if (type === "vawc") defaultDays = "10";
                     setFormData({ ...formData, leaveType: type, totalCredits: defaultDays });
                   }}
                   required
                 >
-                  <MenuItem value="sil">Service Incentive Leave (SIL) - 5 days</MenuItem>
-                  <MenuItem value="solo_parent">Solo Parent Leave - 7 days</MenuItem>
-                  <MenuItem value="vawc">VAWC Leave - 10 days</MenuItem>
                   <MenuItem value="vacation">Vacation Leave</MenuItem>
                   <MenuItem value="sick">Sick Leave</MenuItem>
+                  <MenuItem value="solo_parent">Solo Parent Leave - 7 days</MenuItem>
+                  <MenuItem value="vawc">VAWC Leave - 10 days</MenuItem>
                   <MenuItem value="other">Other</MenuItem>
                 </Select>
               </FormControl>

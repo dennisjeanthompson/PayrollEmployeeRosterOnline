@@ -143,7 +143,6 @@ export default function MuiTimeOff() {
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectingRequest, setRejectingRequest] = useState<TimeOffRequest | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
-  const [useSil, setUseSil] = useState(false); // "Working Student" toggle: Use SIL for paid leave?
 
   const [formData, setFormData] = useState({
     type: "vacation",
@@ -250,11 +249,11 @@ export default function MuiTimeOff() {
 
   // Approve (manager only)
   const approveMutation = useMutation({
-    mutationFn: async ({ requestId, status, rejectionReason, useSil }: { requestId: string; status: string; rejectionReason?: string; useSil?: boolean }) => {
+    mutationFn: async ({ requestId, status, rejectionReason }: { requestId: string; status: string; rejectionReason?: string }) => {
       const endpoint = status === 'approved'
         ? `/api/time-off-requests/${requestId}/approve`
         : `/api/time-off-requests/${requestId}/reject`;
-      const body = status === 'rejected' ? { status, rejectionReason } : { status, useSil };
+      const body = status === 'rejected' ? { status, rejectionReason } : { status };
       const response = await apiRequest("PUT", endpoint, body);
       return response.json();
     },
@@ -716,40 +715,10 @@ export default function MuiTimeOff() {
              )}
              {editingRequest && isManagerRole && editingRequest.status === 'pending' && (
                <>
-                  <Box sx={{ mb: 3 }}>
-                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>Payment Handling</Typography>
-                    <RadioGroup
-                      value={useSil ? "paid" : "unpaid"}
-                      onChange={(e) => setUseSil(e.target.value === "paid")}
-                    >
-                      <FormControlLabel 
-                        value="paid" 
-                        control={<Radio color="success" size="small" />} 
-                        label={
-                          <Box>
-                            <Typography variant="body2" fontWeight="bold" color="success.main">Use SIL Credit (Paid)</Typography>
-                            <Typography variant="caption" color="text.secondary" display="block">Deducts 1 credit per day. Employee receives normal basic pay.</Typography>
-                          </Box>
-                        } 
-                        sx={{ mb: 1, p: 1, border: '1px solid', borderColor: useSil ? 'success.main' : 'divider', borderRadius: 2, bgcolor: useSil ? 'success.50' : 'transparent', ml: 0 }}
-                      />
-                      <FormControlLabel 
-                        value="unpaid" 
-                        control={<Radio color="error" size="small" />} 
-                        label={
-                          <Box>
-                            <Typography variant="body2" fontWeight="bold" color="error.main">Leave Without Pay (Unpaid)</Typography>
-                            <Typography variant="caption" color="text.secondary" display="block">Preserves SIL credits for year-end cash conversion. Pay will be deducted.</Typography>
-                          </Box>
-                        }
-                        sx={{ p: 1, border: '1px solid', borderColor: !useSil ? 'error.main' : 'divider', borderRadius: 2, bgcolor: !useSil ? 'error.50' : 'transparent', ml: 0 }}
-                      />
-                    </RadioGroup>
-                  </Box>
                  <Button
                    color="success"
                    onClick={() => {
-                     approveMutation.mutate({ requestId: editingRequest.id, status: 'approved', useSil });
+                     approveMutation.mutate({ requestId: editingRequest.id, status: 'approved' });
                      handleCloseDialog();
                    }}
                  >
