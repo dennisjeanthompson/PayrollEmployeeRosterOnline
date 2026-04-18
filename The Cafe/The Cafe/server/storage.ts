@@ -979,8 +979,8 @@ export class MemStorage implements IStorage {
   }
 
   async getHolidayByDate(date: Date): Promise<Holiday | undefined> {
-    const targetDate = new Date(date).toISOString().split('T')[0];
-    return Array.from(this.holidays.values()).find(h => new Date(h.date).toISOString().split('T')[0] === targetDate);
+    const targetDate = new Date(date).toISOString().substring(0,10);
+    return Array.from(this.holidays.values()).find(h => new Date(h.date).toISOString().substring(0,10) === targetDate);
   }
 
   async updateHoliday(id: string, holiday: Partial<InsertHoliday>): Promise<Holiday | undefined> {

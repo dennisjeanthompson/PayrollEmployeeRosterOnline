@@ -260,7 +260,7 @@ export default function MuiHolidayCalendar() {
       return {
         id: holiday.id,
         title: holiday.name,
-        date: new Date(holiday.date).toISOString().split("T")[0],
+        date: format(new Date(holiday.date), "yyyy-MM-dd"),
         backgroundColor: 'transparent',
         borderColor: 'transparent',
         extendedProps: {

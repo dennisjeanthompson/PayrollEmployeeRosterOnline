@@ -12,6 +12,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { generatePayslipPDF, generatePayslipHash } from '../services/payslip-pdf-generator';
 import { PayslipData, validatePayslipData, SAMPLE_PAYSLIP_DATA } from '../../shared/payslip-types';
 import { dbStorage } from '../db-storage';
+import { toLocalDateString } from '../payroll-utils';
 import { getPaymentDateString } from '../../shared/payroll-dates';
 import { createAuditLog } from './audit';
 import crypto from 'crypto';
@@ -118,8 +119,8 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
     
     // Get deduction rates for effective date display
     const deductionRates = await storage.getAllDeductionRates();
-    const ratesEffectiveFrom = deductionRates.length > 0 
-      ? deductionRates[0].createdAt?.toISOString().split('T')[0] 
+const ratesEffectiveFrom = deductionRates.length > 0 && deductionRates[0].createdAt
+        ? toLocalDateString(deductionRates[0].createdAt)
       : '2025-01-01';
     
     // Parse pay breakdown if available
@@ -270,10 +271,10 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
         is_mwe: (employee as any).isMwe || false,
       },
       pay_period: {
-        start: period.startDate.toISOString().split('T')[0],
-        end: period.endDate.toISOString().split('T')[0],
+        start: toLocalDateString(period.startDate),
+        end: toLocalDateString(period.endDate),
         payment_date: entry.paidAt
-          ? new Date(entry.paidAt).toISOString().split('T')[0]
+            ? toLocalDateString(new Date(entry.paidAt))
           : getPaymentDateString(period.endDate),
         frequency: 'semi-monthly',
       },
@@ -308,9 +309,9 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
       timestamp,
       hash: tamperHash,
       employee_name: `${employee.firstName} ${employee.lastName}`,
-      pay_period: `${period.startDate.toISOString().split('T')[0]} - ${period.endDate.toISOString().split('T')[0]}`,
+      pay_period: `${toLocalDateString(period.startDate)} - ${toLocalDateString(period.endDate)}`,
       net_pay: parseFloat(String(entry.netPay || 0)),
-      payment_date: new Date().toISOString().split('T')[0],
+      payment_date: toLocalDateString(new Date()),
     });
     // Cap verification records to prevent unbounded memory growth
     if (verificationRecords.size > 10000) {

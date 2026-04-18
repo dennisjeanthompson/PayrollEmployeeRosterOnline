@@ -5088,7 +5088,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Use proper 2026 deduction calculator (SSS, PhilHealth, Pag-IBIG, withholding tax)
         const { calculateAllDeductions, calculateWithholdingTax } = await import('./utils/deductions');
-        const monthlyBasicSalary = (grossPay / Math.max(regularHours / 8, 1)) * 30; // project to monthly
+        const monthlyBasicSalary = hourlyRate * MONTHLY_WORKING_HOURS; // project to true monthly salary without OT inflation
         const mandatoryBreakdown = await calculateAllDeductions(monthlyBasicSalary, {
           deductSSS: true,
           deductPhilHealth: true,
@@ -5103,13 +5103,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const pagibigContribution = mandatoryBreakdown.pagibigContribution * periodFraction;
 
         // BIR tax on taxable income (gross minus mandatory deductions)
-        const monthlyMandatory = mandatoryBreakdown.sssContribution +
-          mandatoryBreakdown.philHealthContribution + mandatoryBreakdown.pagibigContribution;
-        const monthlyTaxableIncome = Math.max(0, monthlyBasicSalary - monthlyMandatory);
-        const monthlyTax = await calculateWithholdingTax(monthlyTaxableIncome);
+        const periodMandatory = sssContribution + philhealthContribution + pagibigContribution;
+        const periodTaxableIncome = Math.max(0, grossPay - periodMandatory);
+        const projectedMonthlyTaxable = periodTaxableIncome / periodFraction;
+        
+        const monthlyTax = await calculateWithholdingTax(projectedMonthlyTaxable);
         const withholdingTax = monthlyTax * periodFraction;
-        const totalDeductions = sssContribution + philhealthContribution + pagibigContribution + withholdingTax;
-        const netPay = grossPay - totalDeductions;
+        
+        const totalDeductions = periodMandatory + withholdingTax;
+        const netPay = Math.max(0, grossPay - totalDeductions);
 
         totalPayrollAmount += netPay;
 

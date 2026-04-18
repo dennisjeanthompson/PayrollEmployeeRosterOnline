@@ -674,7 +674,7 @@ export function calculateShiftPay(params: CalculateShiftPayParams): PayBreakdown
   let applyHolidayLogic = normalizedOptions.applyHolidayLogic ?? true;
   if (normalizedOptions.holidayLogicCutoffDate && endTime < normalizedOptions.holidayLogicCutoffDate) {
     applyHolidayLogic = false;
-    notes.push(`Holiday premiums skipped for shifts before ${normalizedOptions.holidayLogicCutoffDate.toISOString().split('T')[0]}`);
+    notes.push(`Holiday premiums skipped for shifts before ${toLocalDateString(normalizedOptions.holidayLogicCutoffDate)}`);
   }
 
   const nightDiffRate = normalizedOptions.nightDiffRate ?? NIGHT_DIFF_RATE;

@@ -1,4 +1,5 @@
 import 'dotenv/config';
+process.env.TZ = 'Asia/Manila';
 import express, { type Request, Response, NextFunction } from "express";
 import cors from "cors";
 import compression from "compression";

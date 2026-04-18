@@ -1,0 +1,5 @@
+server/routes/payslips.ts(123,26): error TS1005: ':' expected.
+server/routes/payslips.ts(123,43): error TS1005: ',' expected.
+server/routes/payslips.ts(123,44): error TS1109: Expression expected.
+server/routes/payslips.ts(123,55): error TS1109: Expression expected.
+server/routes/payslips.ts(124,7): error TS1128: Declaration or statement expected.

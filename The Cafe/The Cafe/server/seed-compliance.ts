@@ -159,7 +159,7 @@ async function main() {
         periodEndDate: period.endDate,
         createdAt: new Date(),
       });
-      console.log(`  ✅ ${entry.userId.substring(0, 8)} → ₱${basicPay.toFixed(2)} recorded for period ${period.startDate.toISOString().split('T')[0]}`);
+      console.log(`  ✅ ${entry.userId.substring(0, 8)} → ₱${basicPay.toFixed(2)} recorded for period ${period.startDate.toISOString().substring(0,10)}`);
     }
   }
 

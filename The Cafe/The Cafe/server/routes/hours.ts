@@ -4,6 +4,7 @@ import { startOfWeek, endOfWeek, startOfMonth, endOfMonth, startOfDay, endOfDay 
 
 const storage = dbStorage;
 
+import { toLocalDateString } from "../payroll-utils";
 export const router = Router();
 
 // Auth middleware
@@ -246,7 +247,7 @@ router.get('/api/hours/report', requireAuth, requireRole(['manager', 'admin']), 
       // Calculate hours by day (only for completed shifts)
       const hoursByDay: { [key: string]: number } = {};
       for (const shift of completedShifts) {
-        const shiftDate = new Date(shift.startTime).toISOString().split('T')[0];
+        const shiftDate = toLocalDateString(new Date(shift.startTime));
 
         // Use same logic as calculateHoursFromShifts - don't mix actual and scheduled times
         let startTime, endTime;

@@ -12,10 +12,18 @@ import { eq } from 'drizzle-orm';
 const router = Router();
 import crypto from 'crypto';
 
-const canManageEmployeeData = (sessionUser: any, targetUserId: string) => {
+const canManageEmployeeData = async (sessionUser: any, targetUserId: string) => {
   if (!sessionUser) return false;
   if (sessionUser.id === targetUserId) return true;
-  return sessionUser.role === 'manager' || sessionUser.role === 'admin';
+  if (sessionUser.role === 'admin') return true;
+  
+  if (sessionUser.role === 'manager') {
+    const targetUser = await db.select().from(users).where(eq(users.id, targetUserId)).limit(1);
+    if (targetUser.length > 0 && targetUser[0].branchId === sessionUser.branchId) {
+      return true;
+    }
+  }
+  return false;
 };
 
 /**
@@ -26,7 +34,7 @@ router.get('/:id/documents', async (req, res) => {
   const { id } = req.params;
   const sessionUser = req.session.user;
 
-  if (!canManageEmployeeData(sessionUser, id)) {
+  if (!(await canManageEmployeeData(sessionUser, id))) {
     return res.status(403).json({ error: 'Not authorized to view these documents' });
   }
 
@@ -63,7 +71,7 @@ router.post('/:id/documents', async (req, res) => {
   const { id } = req.params;
   const sessionUser = req.session.user;
 
-  if (!canManageEmployeeData(sessionUser, id)) {
+  if (!(await canManageEmployeeData(sessionUser, id))) {
     return res.status(403).json({ error: 'Not authorized to upload documents for this user' });
   }
 
@@ -113,7 +121,7 @@ router.delete('/:id/documents/:docId', async (req, res) => {
   const { id, docId } = req.params;
   const sessionUser = req.session.user;
 
-  if (!canManageEmployeeData(sessionUser, id)) {
+  if (!(await canManageEmployeeData(sessionUser, id))) {
     return res.status(403).json({ error: 'Not authorized to delete documents for this user' });
   }
 
