@@ -36,6 +36,7 @@ import {
   Refresh as RefreshIcon,
   OpenInNew as OpenIcon,
 } from "@mui/icons-material";
+import { useRealtime } from "@/hooks/use-realtime";
 import { useLocation } from "wouter";
 
 interface ComplianceCheck {
@@ -49,6 +50,10 @@ interface ComplianceCheck {
 export default function MuiComplianceDashboard() {
   const theme = useTheme();
   const [, setLocation] = useLocation();
+
+  useRealtime({
+    queryKeys: ["/api/hours/all-employees", "/api/admin/deduction-rates"]
+  });
 
   // Fetch employees for compliance checks
   const { data: employeesData, isLoading: loadingEmployees } = useQuery<{ employees: any[] }>({

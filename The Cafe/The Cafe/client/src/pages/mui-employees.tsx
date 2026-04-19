@@ -313,7 +313,7 @@ export default function MuiEmployees() {
 
   // Enable real-time updates
   useRealtime({
-    queryKeys: ["/api/hours/all-employees", "/api/employees"],
+    queryKeys: ["/api/hours/all-employees", "/api/employees", "employee-stats"],
     onEvent: (event, data) => {
       // Directly refetch employees when any employee event occurs
       if (event.startsWith('employee:')) {
