@@ -1,3 +1,4 @@
+import { useRealtime } from "@/hooks/use-realtime";
 /**
  * Deductions Page (PERO Payroll System)
  * Interactive toggles for mandatory Philippine government deductions.
@@ -85,7 +86,7 @@ const deductions = [
     cap: "Max ₱200/mo",
     icon: Home,
     color: "#8b5cf6",
-    note: "Maximum employee monthly contribution capped at ₱200 (2026 update)",
+    note: "Maximum employee monthly contribution capped at ₱200 (latest update)",
     basis: "HDMF 2nd Amendment of Circular No. 274",
   },
   {
@@ -110,6 +111,7 @@ export default function MuiDeductionSettings() {
   const theme = useTheme();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  useRealtime({ queryKeys: ["deduction-settings"] });
   const currentUser = getCurrentUser();
   const isManager = currentUser?.role === 'manager' || currentUser?.role === 'admin';
 
@@ -205,7 +207,7 @@ export default function MuiDeductionSettings() {
               Deductions
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Philippine mandatory deductions — {isManager ? "toggle on/off per branch" : "auto-applied per 2026 law"}
+              Philippine mandatory deductions — {isManager ? "toggle on/off per branch" : "auto-applied per official rates"}
             </Typography>
           </Box>
         </Box>
@@ -239,7 +241,7 @@ export default function MuiDeductionSettings() {
               <Typography variant="body2" color="text.secondary">
                 {isManager
                   ? "Use the switches below to enable or disable specific government deductions for this branch. Changes apply to all future payroll runs."
-                  : "SSS, PhilHealth, Pag-IBIG, and BIR withholding tax are applied to every payroll run using the official 2026 government rate tables."}
+                  : "SSS, PhilHealth, Pag-IBIG, and BIR withholding tax are applied to every payroll run using the latest official government rate tables."}
               </Typography>
             </Box>
           </Stack>

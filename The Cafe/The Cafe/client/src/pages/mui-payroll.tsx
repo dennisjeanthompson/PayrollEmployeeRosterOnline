@@ -454,7 +454,7 @@ export default function MuiPayroll() {
                             </TableCell>
                             <TableCell align="center">
                               <Stack direction="row" spacing={0.5} justifyContent="center">
-                                <Tooltip title="View digital payslip (PH — Compliant 2025)">
+                                <Tooltip title="View digital payslip (PH — Compliant)">
                                   <IconButton 
                                     size="small" 
                                     color="info"
@@ -617,7 +617,7 @@ export default function MuiPayroll() {
         </Paper>
         </motion.div>
 
-        {/* Digital Payslip Viewer (PH-Compliant 2025) */}
+        {/* Digital Payslip Viewer (PH-Compliant) */}
         {selectedPayslip && (
           <DigitalPayslip
             entryId={selectedPayslip.id}

@@ -1,3 +1,4 @@
+import { useRealtime } from "@/hooks/use-realtime";
 import PesoIcon from "@/components/PesoIcon";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -72,6 +73,7 @@ export default function MuiAdminDeductionRates() {
   const theme = useTheme();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  useRealtime({ queryKeys: ["deduction-rates"] });
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingRate, setEditingRate] = useState<DeductionRate | null>(null);
   const [expandedType, setExpandedType] = useState<string | false>("sss");

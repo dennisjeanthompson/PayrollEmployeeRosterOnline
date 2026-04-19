@@ -352,7 +352,7 @@ export default function MuiLogin() {
             color="text.secondary"
             sx={{ display: "block", textAlign: "center", mt: 3 }}
           >
-            © 2026 PERO Payroll System. All rights reserved.
+            © {new Date().getFullYear()} PERO Payroll System. All rights reserved.
           </Typography>
             </Box>
           </Grid>

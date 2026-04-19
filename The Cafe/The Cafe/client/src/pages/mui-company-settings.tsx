@@ -1,3 +1,4 @@
+import { useRealtime } from "@/hooks/use-realtime";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -177,6 +178,10 @@ export default function MuiCompanySettings() {
   const theme = useTheme();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  useRealtime({ queryKeys: ["company-settings"] });
+  useRealtime({
+    queryKeys: ["company-settings"]
+  });
   const [isEditing, setIsEditing] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [isUploadingLogo, setIsUploadingLogo] = useState(false);

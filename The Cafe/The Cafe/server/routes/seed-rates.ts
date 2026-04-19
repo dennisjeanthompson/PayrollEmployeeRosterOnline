@@ -8,7 +8,7 @@
 import { Router, Request, Response } from "express";
 import { v4 as uuidv4 } from "uuid";
 import { dbStorage } from "../db-storage";
-import { sss2025Brackets } from "@shared/sss-2025-rates";
+import { sss2026Brackets } from "@shared/sss-2026-rates";
 
 const router = Router();
 
@@ -42,10 +42,10 @@ router.post("/api/admin/seed-sss-rates", requireAdmin, async (req, res) => {
     }
 
     // Insert all 61 new SSS brackets
-    console.log(`[SSS Seed] Inserting ${sss2025Brackets.length} new SSS brackets...`);
+    console.log(`[SSS Seed] Inserting ${sss2026Brackets.length} new SSS brackets...`);
     
     const insertedRates = [];
-    for (const bracket of sss2025Brackets) {
+    for (const bracket of sss2026Brackets) {
       // SSS uses FIXED AMOUNTS per MSC bracket, NOT percentages
       const rate = await dbStorage.createDeductionRate({
         type: "sss",
@@ -216,7 +216,7 @@ router.post("/api/admin/seed-all-rates", requireAdmin, async (req, res) => {
     }
 
     // Seed SSS (61 brackets) - FIXED AMOUNTS, not percentages
-    for (const bracket of sss2025Brackets) {
+    for (const bracket of sss2026Brackets) {
       await dbStorage.createDeductionRate({
         type: "sss",
         minSalary: bracket.minSalary.toString(),

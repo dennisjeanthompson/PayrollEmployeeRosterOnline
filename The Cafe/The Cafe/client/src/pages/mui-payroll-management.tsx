@@ -1240,7 +1240,7 @@ export default function MuiPayrollManagement() {
                         </TableCell>
                         <TableCell align="right">
                           <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                            <Tooltip title="View digital payslip (PH — Compliant 2026)">
+                            <Tooltip title="View digital payslip (PH — Compliant)">
                               <IconButton
                                 size="small"
                                 color="info"

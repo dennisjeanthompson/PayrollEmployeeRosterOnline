@@ -311,7 +311,7 @@ export default function Setup() {
               <div className="space-y-2">
                 <Label htmlFor="hourlyRate">Hourly Rate (₱) *</Label>
                 <p className="text-xs text-muted-foreground">
-                  NCR 2026 minimum: ₱80.63/hr (₱645 daily ÷ 8 hrs). Used for payroll calculations.
+                  Current NCR minimum: ₱80.63/hr (₱645 daily ÷ 8 hrs). Used for payroll calculations.
                 </p>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted-foreground">₱</span>

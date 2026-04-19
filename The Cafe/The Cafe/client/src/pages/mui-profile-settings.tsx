@@ -1,3 +1,4 @@
+import { useRealtime } from "@/hooks/use-realtime";
 
 import React, { useState } from "react";
 import { useAuth } from "@/lib/auth";
@@ -64,6 +65,7 @@ export default function MuiProfileSettings() {
   const { toast } = useToast();
   const [tabValue, setTabValue] = useState(0);
   const queryClient = useQueryClient();
+  useRealtime({ queryKeys: ["/api/user"] });
 
   // Form States — always default to empty string to keep inputs controlled
   const [firstName, setFirstName] = useState(user?.firstName ?? "");

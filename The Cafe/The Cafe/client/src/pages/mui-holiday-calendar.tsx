@@ -333,7 +333,7 @@ export default function MuiHolidayCalendar() {
             onChange={(e) => setSelectedYear(parseInt(e.target.value))}
             sx={{ minWidth: 100 }}
           >
-            {[2024, 2025, 2026].map((year) => (
+            {[new Date().getFullYear() - 2, new Date().getFullYear() - 1, new Date().getFullYear(), new Date().getFullYear() + 1, new Date().getFullYear() + 2].map((year) => (
               <MenuItem key={year} value={year}>
                 {year}
               </MenuItem>

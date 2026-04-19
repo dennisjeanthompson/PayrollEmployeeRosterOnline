@@ -32,7 +32,7 @@ import {
   Info as InfoIcon,
   Download as DownloadIcon,
 } from "@mui/icons-material";
-import { sss2025Brackets, SSSBracket } from "@shared/sss-2025-rates";
+import { sss2026Brackets, SSSBracket } from "@shared/sss-2026-rates";
 
 export default function SSSContributionTable() {
   const theme = useTheme();
@@ -43,7 +43,7 @@ export default function SSSContributionTable() {
     const salary = parseFloat(searchSalary);
     if (isNaN(salary) || salary < 0) return null;
     
-    return sss2025Brackets.find(b => {
+    return sss2026Brackets.find(b => {
       if (b.maxSalary === null) return salary >= b.minSalary;
       return salary >= b.minSalary && salary <= b.maxSalary;
     });
@@ -276,7 +276,7 @@ export default function SSSContributionTable() {
             </TableHead>
             
             <TableBody>
-              {sss2025Brackets.map((bracket, index) => {
+              {sss2026Brackets.map((bracket, index) => {
                 const isMatched = matchedBracket && 
                   bracket.minSalary === matchedBracket.minSalary &&
                   bracket.maxSalary === matchedBracket.maxSalary;

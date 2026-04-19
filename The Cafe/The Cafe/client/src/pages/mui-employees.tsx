@@ -1650,7 +1650,7 @@ export default function MuiEmployees() {
                 
                 <Alert severity="info" sx={{ mb: 2, py: 0.5 }} icon={false}>
                   <Typography variant="caption">
-                    These are automatically calculated based on 2025 Philippine government rates.
+                    These are automatically calculated based on latest Philippine government rates.
                     Values shown are estimates based on hourly rate × 176 hrs/month.
                   </Typography>
                 </Alert>
