@@ -178,7 +178,7 @@ export default function MuiPayrollManagement() {
 
   // Enable real-time updates for payroll management
   useRealtime({
-    queryKeys: ["payroll-periods", "payroll-entries-branch"]
+    queryKeys: ["payroll-periods", "payroll-entries-branch", "adjustment-logs-branch"]
   });
   
   // Handle opening digital payslip viewer

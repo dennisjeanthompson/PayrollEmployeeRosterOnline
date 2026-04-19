@@ -137,7 +137,7 @@ export default function ScheduleV2() {
   // Real-time updates â€” refresh calendar data on any schedule/request event
   useRealtime({
     enabled: true,
-    queryKeys: ['shifts', 'time-off-requests', 'shift-trades', 'employees', 'notifications'],
+    queryKeys: ['shifts', 'time-off-requests', 'shift-trades', 'employees', 'notifications', "adjustment-logs-branch", "adjustment-logs-mine", "/api/holidays"],
     onEvent: (event: string, data: any) => {
       // Refresh all schedule-related data on any relevant event
       if (

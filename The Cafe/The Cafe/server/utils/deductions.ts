@@ -14,7 +14,7 @@
 import { dbStorage } from '../db-storage';
 import { db } from '../db';
 import { sssContributionTable } from '../../shared/schema';
-import { eq } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 
 // --- Constants for 2026 Philippine Deductions ---
 export const PHILHEALTH_EMPLOYEE_RATE = 0.025;
@@ -40,10 +40,12 @@ export interface DeductionBreakdown {
  */
 export async function calculateSSS(monthlyBasicSalary: number): Promise<number> {
   try {
-    // Fetch 2026 brackets
-    const brackets = await db.select().from(sssContributionTable).where(eq(sssContributionTable.year, 2026));
+    // Dynamically fetch the latest brackets available regardless of hardcoded year
+    const latestBrackets = await db.select().from(sssContributionTable).orderBy(desc(sssContributionTable.year)).limit(1);
+    const activeYear = latestBrackets.length > 0 ? latestBrackets[0].year : new Date().getFullYear();
+    const brackets = await db.select().from(sssContributionTable).where(eq(sssContributionTable.year, activeYear));
     
-    console.log(`[SSS DEBUG] Monthly salary: ₱${monthlyBasicSalary.toFixed(2)}, Total brackets found: ${brackets.length}`);
+    console.log(`[SSS DEBUG] Monthly salary: ₱${monthlyBasicSalary.toFixed(2)}, Active Year: ${activeYear}, Total brackets found: ${brackets.length}`);
     
     for (const b of brackets) {
       if (monthlyBasicSalary >= parseFloat(b.minCompensation) && monthlyBasicSalary <= parseFloat(b.maxCompensation)) {

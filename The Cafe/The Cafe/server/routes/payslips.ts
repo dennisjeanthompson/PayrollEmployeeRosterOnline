@@ -120,7 +120,7 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
     const deductionRates = await storage.getAllDeductionRates();
     const ratesEffectiveFrom = deductionRates.length > 0 
       ? deductionRates[0].createdAt?.toISOString().split('T')[0] 
-      : '2025-01-01';
+      : `${new Date().getFullYear()}-01-01`;
     
     // Parse pay breakdown if available
     let payBreakdown: any = {};
