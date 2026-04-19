@@ -871,7 +871,3 @@ export function validateShiftTimes(startTime: Date | string, endTime: Date | str
 
   return null;
 }
-
-/**
- * Get 2025 Philippine holidays
- */
