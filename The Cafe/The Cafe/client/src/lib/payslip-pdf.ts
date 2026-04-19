@@ -332,7 +332,7 @@ export function generatePayslipPDF(data: PayslipData): jsPDF {
   if (data.ytdGross !== undefined) {
     doc.setFontSize(10);
     doc.setFont('helvetica', 'bold');
-    const currentYear = new Date(data.date || new Date()).getFullYear();
+    const currentYear = new Date(data.periodEnd || new Date()).getFullYear();
     doc.text(`YEAR-TO-DATE SUMMARY (Jan–Dec ${currentYear})`, margin, y);
     y += 5;
 
