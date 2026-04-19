@@ -1,7 +1,6 @@
 import { useRealtime } from "@/hooks/use-realtime";
 import React, { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useRealtime } from "@/hooks/useRealtime";
 import { apiRequest } from "@/lib/queryClient";
 import { apiUrl } from "@/lib/api";
 import { format, subYears, addYears } from "date-fns";
@@ -72,7 +71,7 @@ export default function MuiThirteenthMonth() {
     return null;
   }
 
-  useRealtime({ queryKeys: ["thirteenth-month-summary", selectedYear] });
+  useRealtime({ queryKeys: ["thirteenth-month-summary", selectedYear.toString()] });
 
   // Fetch data
   const { data, isLoading } = useQuery({
