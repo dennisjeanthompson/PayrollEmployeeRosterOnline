@@ -31,6 +31,7 @@ import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { useRealtime } from "@/hooks/use-realtime";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -61,6 +62,10 @@ export default function MobileRequests() {
   const { user } = useAuth();
   const theme = useTheme();
   const [tabIndex, setTabIndex] = useState(0);
+
+  useRealtime({
+    queryKeys: ['/api/loans/my']
+  });
 
   return (
     <Box sx={{ p: 2, pb: 10 }}>

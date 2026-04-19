@@ -183,6 +183,10 @@ const initialFormData: EmployeeFormData = {
 
 // â”€â”€â”€ Sub-component: Read-only display of approved loans from the formal workflow â”€â”€â”€
 function ActiveLoansDisplay({ employeeId }: { employeeId?: string }) {
+  useRealtime({
+    queryKeys: employeeId ? [`/api/loans/user/${employeeId}`, '/api/loans'] : ['/api/loans'],
+  });
+
   const { data: loans = [] } = useQuery<any[]>({
     queryKey: ['/api/loans/user', employeeId],
     queryFn: async () => {

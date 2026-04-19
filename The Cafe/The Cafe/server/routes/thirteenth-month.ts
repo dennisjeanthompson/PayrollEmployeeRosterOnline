@@ -31,7 +31,7 @@ const requireManagerRole = (req: Request, res: Response, next: Function) => {
   next();
 };
 
-// ─── GET /api/thirteenth-month/summary?year=2025 ──────────────────────────────
+// ─── GET /api/thirteenth-month/summary?year=YYYY ──────────────────────────────
 // Returns per-employee: totalBasicPaid, projectedThirteenthMonth, monthsCovered
 router.get('/api/thirteenth-month/summary', requireAuth, requireManagerRole, async (req, res) => {
   try {
@@ -120,7 +120,7 @@ router.get('/api/thirteenth-month/summary', requireAuth, requireManagerRole, asy
   }
 });
 
-// ─── GET /api/thirteenth-month/export?year=2025 ───────────────────────────────
+// ─── GET /api/thirteenth-month/export?year=YYYY ───────────────────────────────
 // Returns a CSV for BIR reporting
 router.get('/api/thirteenth-month/export', requireAuth, requireManagerRole, async (req, res) => {
   try {

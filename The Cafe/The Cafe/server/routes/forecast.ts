@@ -24,56 +24,18 @@ import {
 
 const router = Router();
 
-// ============================================
-// Philippine Holidays 2025/2026
-// ============================================
-const PH_HOLIDAYS: { date: string; name: string; type: "regular" | "special" }[] = [
-  // 2025 Regular Holidays
-  { date: "2025-01-01", name: "New Year's Day", type: "regular" },
-  { date: "2025-04-09", name: "Araw ng Kagitingan", type: "regular" },
-  { date: "2025-04-17", name: "Maundy Thursday", type: "regular" },
-  { date: "2025-04-18", name: "Good Friday", type: "regular" },
-  { date: "2025-05-01", name: "Labor Day", type: "regular" },
-  { date: "2025-06-12", name: "Independence Day", type: "regular" },
-  { date: "2025-08-25", name: "National Heroes Day", type: "regular" },
-  { date: "2025-11-30", name: "Bonifacio Day", type: "regular" },
-  { date: "2025-12-25", name: "Christmas Day", type: "regular" },
-  { date: "2025-12-30", name: "Rizal Day", type: "regular" },
-  // 2025 Special Non-Working Days
-  { date: "2025-01-29", name: "Chinese New Year", type: "special" },
-  { date: "2025-02-25", name: "EDSA Revolution Anniversary", type: "special" },
-  { date: "2025-04-19", name: "Black Saturday", type: "special" },
-  { date: "2025-08-21", name: "Ninoy Aquino Day", type: "special" },
-  { date: "2025-11-01", name: "All Saints' Day", type: "special" },
-  { date: "2025-11-02", name: "All Souls' Day", type: "special" },
-  { date: "2025-12-08", name: "Immaculate Conception", type: "special" },
-  { date: "2025-12-24", name: "Christmas Eve", type: "special" },
-  { date: "2025-12-31", name: "New Year's Eve", type: "special" },
-  // 2026 Regular Holidays
-  { date: "2026-01-01", name: "New Year's Day", type: "regular" },
-  { date: "2026-04-09", name: "Araw ng Kagitingan", type: "regular" },
-  { date: "2026-04-02", name: "Maundy Thursday", type: "regular" },
-  { date: "2026-04-03", name: "Good Friday", type: "regular" },
-  { date: "2026-05-01", name: "Labor Day", type: "regular" },
-  { date: "2026-06-12", name: "Independence Day", type: "regular" },
-  { date: "2026-08-31", name: "National Heroes Day", type: "regular" },
-  { date: "2026-11-30", name: "Bonifacio Day", type: "regular" },
-  { date: "2026-12-25", name: "Christmas Day", type: "regular" },
-  { date: "2026-12-30", name: "Rizal Day", type: "regular" },
-];
-
 // Helper: Check if date is a holiday
-function getHoliday(date: Date): { name: string; type: "regular" | "special" } | null {
+function getHoliday(date: Date, holidays: any[]): { name: string; type: string } | null {
   const dateStr = format(date, "yyyy-MM-dd");
-  const holiday = PH_HOLIDAYS.find(h => h.date === dateStr);
+  const holiday = holidays.find(h => h.date === dateStr);
   return holiday ? { name: holiday.name, type: holiday.type } : null;
 }
 
 // Helper: Get upcoming holidays within N days
-function getUpcomingHolidays(days: number): typeof PH_HOLIDAYS {
+function getUpcomingHolidays(holidays: any[], days: number): any[] {
   const today = startOfDay(new Date());
   const endDate = addDays(today, days);
-  return PH_HOLIDAYS.filter(h => {
+  return holidays.filter(h => {
     const holidayDate = parseISO(h.date);
     return isWithinInterval(holidayDate, { start: today, end: endDate });
   });
@@ -103,6 +65,7 @@ const requireManagerRole = (req: Request, res: Response, next: Function) => {
 router.get("/api/analytics/trends", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const branchId = req.user!.branchId;
+    const allHolidays = await storage.getHolidays();
     const { days = "56", view = "daily" } = req.query;
     const numDays = Math.min(parseInt(days as string) || 56, 90);
     
@@ -141,7 +104,7 @@ router.get("/api/analytics/trends", requireAuth, requireManagerRole, async (req,
       ...d,
       dayOfWeek: format(parseISO(d.date), "EEE"),
       dayOfWeekNum: getDay(parseISO(d.date)),
-      isHoliday: getHoliday(parseISO(d.date)),
+      isHoliday: getHoliday(parseISO(d.date), allHolidays),
     }));
 
     // Calculate weekly aggregates if requested
@@ -227,6 +190,7 @@ router.get("/api/analytics/trends", requireAuth, requireManagerRole, async (req,
 router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const branchId = req.user!.branchId;
+    const allHolidays = await storage.getHolidays();
     const { days = "14" } = req.query;
     const forecastDays = Math.min(parseInt(days as string) || 14, 30);
     
@@ -274,7 +238,7 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
     for (let i = 0; i < forecastDays; i++) {
       const forecastDate = addDays(today, i);
       const dow = getDay(forecastDate);
-      const holiday = getHoliday(forecastDate);
+      const holiday = getHoliday(forecastDate, allHolidays);
       
       let predicted = dowAverages[dow].avg;
       
@@ -324,6 +288,7 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
 router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const branchId = req.user!.branchId;
+    const allHolidays = await storage.getHolidays();
     const { days = "14" } = req.query;
     const forecastDays = Math.min(parseInt(days as string) || 14, 30);
     
@@ -377,7 +342,7 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
     for (let i = 0; i < forecastDays; i++) {
       const forecastDate = addDays(today, i);
       const dow = getDay(forecastDate);
-      const holiday = getHoliday(forecastDate);
+      const holiday = getHoliday(forecastDate, allHolidays);
       
       let predicted = dowAverages[dow];
       
@@ -424,6 +389,7 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
 router.get("/api/forecast/peaks", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const branchId = req.user!.branchId;
+    const allHolidays = await storage.getHolidays();
     const { days = "30" } = req.query;
     const forecastDays = Math.min(parseInt(days as string) || 30, 60);
     
@@ -475,13 +441,13 @@ router.get("/api/forecast/peaks", requireAuth, requireManagerRole, async (req, r
 
     // Predict peak dates in forecast period
     const upcomingPeaks: any[] = [];
-    const upcomingHolidays = getUpcomingHolidays(forecastDays);
+    const upcomingHolidays = getUpcomingHolidays(allHolidays, forecastDays);
 
     for (let i = 0; i < forecastDays; i++) {
       const forecastDate = addDays(today, i);
       const dow = getDay(forecastDate);
       const dayData = dowAverages.find(d => d.dayOfWeekNum === dow);
-      const holiday = getHoliday(forecastDate);
+      const holiday = getHoliday(forecastDate, allHolidays);
 
       if (dayData?.isPeak || holiday) {
         upcomingPeaks.push({
@@ -512,6 +478,7 @@ router.get("/api/forecast/peaks", requireAuth, requireManagerRole, async (req, r
 router.get("/api/forecast/staffing", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const branchId = req.user!.branchId;
+    const allHolidays = await storage.getHolidays();
     const { days = "14" } = req.query;
     const forecastDays = Math.min(parseInt(days as string) || 14, 30);
     
@@ -574,7 +541,7 @@ router.get("/api/forecast/staffing", requireAuth, requireManagerRole, async (req
       });
 
       const availableEmployees = activeEmployees.length - onLeave.length;
-      const holiday = getHoliday(checkDate);
+      const holiday = getHoliday(checkDate, allHolidays);
       
       // Determine if understaffed
       const expectedNeed = holiday 

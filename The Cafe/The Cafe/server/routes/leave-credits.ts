@@ -82,7 +82,7 @@ router.get('/api/leave-credits/my', requireAuth, async (req, res) => {
   }
 });
 
-// ─── GET /api/leave-credits/branch?year=2025 ─────────────────────────────────
+// ─── GET /api/leave-credits/branch?year=YYYY ─────────────────────────────────
 // Manager: view all employees' leave balances for the branch
 router.get('/api/leave-credits/branch', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
