@@ -6,6 +6,7 @@
 import PesoIcon from "@/components/PesoIcon";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useRealtime } from "@/hooks/use-realtime";
 import {
   Box,
   Typography,
@@ -119,6 +120,16 @@ export default function MuiAnalytics() {
   const theme = useTheme();
   const queryClient = useQueryClient();
   const [forecastDays, setForecastDays] = useState<number>(14);
+
+  useRealtime({
+    queryKeys: [
+      "/api/analytics/trends",
+      "/api/forecast/labor",
+      "/api/forecast/payroll",
+      "/api/forecast/peaks",
+      "/api/forecast/staffing"
+    ]
+  });
 
   // ── Data queries ──
   const {

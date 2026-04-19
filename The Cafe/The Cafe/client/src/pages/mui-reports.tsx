@@ -6,6 +6,7 @@
 import PesoIcon from "@/components/PesoIcon";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useRealtime } from "@/hooks/use-realtime";
 import { apiRequest } from "@/lib/queryClient";
 import { apiUrl } from "@/lib/api";
 import {
@@ -43,6 +44,10 @@ export default function MuiReports() {
   const theme = useTheme();
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
   const [exporting, setExporting] = useState<string | null>(null);
+
+  useRealtime({
+    queryKeys: ['/api/payroll/periods', '/api/loans']
+  });
 
   const { data: periodsData } = useQuery<{ periods: Array<{ id: string; startDate: string; endDate: string; status: string }> }>({
     queryKey: ["/api/payroll/periods"],

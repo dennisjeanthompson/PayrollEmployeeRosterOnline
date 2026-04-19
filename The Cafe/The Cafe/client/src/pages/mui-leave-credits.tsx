@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useRealtime } from "@/hooks/use-realtime";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { getCurrentUser, isManager, isAdmin } from "@/lib/auth";
@@ -78,6 +79,10 @@ export default function MuiLeaveCredits({ hideHeader }: { hideHeader?: boolean }
   const { toast } = useToast();
   const currentUser = getCurrentUser();
   const isMgrOptions = isManager() || isAdmin();
+
+  useRealtime({
+    queryKeys: ['/api/leave-credits/my', '/api/leave-credits/branch', '/api/employees']
+  });
 
   // State
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());

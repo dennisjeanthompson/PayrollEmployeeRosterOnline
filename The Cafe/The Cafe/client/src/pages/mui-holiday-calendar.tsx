@@ -6,6 +6,7 @@
 
 import { useState, useMemo, useRef } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useRealtime } from "@/hooks/use-realtime";
 import {
   Box,
   Card,
@@ -102,6 +103,13 @@ export default function MuiHolidayCalendar() {
     isRecurring: false,
     workAllowed: true,
     notes: "",
+  });
+
+  useRealtime({
+    queryKeys: [
+      JSON.stringify(["/api/holidays", { year: selectedYear }]),
+      "/api/holidays"
+    ]
   });
 
   // Fetch holidays
