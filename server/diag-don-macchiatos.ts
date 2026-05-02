@@ -1,8 +1,8 @@
 import 'dotenv/config';
 import { db } from './db';
 import { sql } from 'drizzle-orm';
-import { 
-  branches, users, timeOffRequests, adjustmentLogs, loanRequests, leaveCredits,
+import {
+  branches, users, timeOffRequests, adjustmentLogs, leaveCredits,
   payrollPeriods, payrollEntries
 } from '../shared/schema';
 import { eq } from 'drizzle-orm';
@@ -40,7 +40,7 @@ async function diag() {
   const logs = await db.select().from(adjustmentLogs).where(eq(adjustmentLogs.branchId, branchId));
   console.log(`📊 Total Exception Logs: ${logs.length}`);
 
-  // 5. Count Loans
+  // 5. Count Payroll
   const periods = await db.select().from(payrollPeriods).where(eq(payrollPeriods.branchId, branchId));
   console.log(`\n📅 Payroll Periods (${periods.length}):`);
   periods.forEach(p => {

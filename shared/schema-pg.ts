@@ -209,30 +209,9 @@ export const timeOffPolicy = pgTable("time_off_policy", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
-/**
- * Government Loan Requests (SSS & Pag-IBIG) - DOLE Art. 113 Compliance
- * Tracks employee loan applications, proofs, and Manager/HR approval statuses.
- * Only approved loans are deducted during payroll processing.
- */
-export const loanRequests = pgTable("loan_requests", {
-  id: text("id").primaryKey(),
-  userId: text("user_id").references(() => users.id).notNull(),
-  branchId: text("branch_id").references(() => branches.id).notNull(),
-  loanType: text("loan_type").notNull(), // 'SSS' | 'Pag-IBIG'
-  referenceNumber: text("reference_number").notNull(),
-  accountNumber: text("account_number").notNull(),
-  monthlyAmortization: text("monthly_amortization").notNull(),
-  deductionStartDate: timestamp("deduction_start_date").notNull(),
-  status: text("status").default("pending"), // 'pending' | 'approved' | 'rejected'
-  proofFileUrl: text("proof_file_url"),
-  hrApprovalNote: text("hr_approval_note"),
-  approvedBy: text("approved_by").references(() => users.id),
-  approvedAt: timestamp("approved_at"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
 
 // Insert Schemas
+
 export const insertBranchSchema = createInsertSchema(branches).omit({
   id: true,
   createdAt: true,
@@ -327,13 +306,8 @@ export const insertTimeOffPolicySchema = createInsertSchema(timeOffPolicy).omit(
   updatedAt: true,
 });
 
-export const insertLoanRequestSchema = createInsertSchema(loanRequests).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  deductionStartDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
-});
+
+
 
 export interface DashboardStats {
   stats: {
@@ -358,7 +332,7 @@ export type DeductionRate = typeof deductionRates.$inferSelect;
 export type Holiday = typeof holidays.$inferSelect;
 export type ArchivedPayrollPeriod = typeof archivedPayrollPeriods.$inferSelect;
 export type TimeOffPolicy = typeof timeOffPolicy.$inferSelect;
-export type LoanRequest = typeof loanRequests.$inferSelect;
+
 
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -374,4 +348,4 @@ export type InsertDeductionRate = z.infer<typeof insertDeductionRatesSchema>;
 export type InsertHoliday = z.infer<typeof insertHolidaySchema>;
 export type InsertArchivedPayrollPeriod = z.infer<typeof insertArchivedPayrollPeriodSchema>;
 export type InsertTimeOffPolicy = z.infer<typeof insertTimeOffPolicySchema>;
-export type InsertLoanRequest = z.infer<typeof insertLoanRequestSchema>;
+

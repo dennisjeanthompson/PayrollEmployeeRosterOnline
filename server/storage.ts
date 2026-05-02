@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Branch, type InsertBranch, type Shift, type InsertShift, type ShiftTrade, type InsertShiftTrade, type PayrollPeriod, type InsertPayrollPeriod, type PayrollEntry, type InsertPayrollEntry, type Approval, type InsertApproval, type TimeOffRequest, type InsertTimeOffRequest, type Notification, type InsertNotification, type DeductionSettings, type InsertDeductionSettings, type DeductionRate, type InsertDeductionRate, type AuditLog, type InsertAuditLog, type Holiday, type InsertHoliday, type AdjustmentLog, type InsertAdjustmentLog, type CompanySettings, type InsertCompanySettings, type ArchivedPayrollPeriod, type TimeOffPolicy, type LoanRequest, type InsertLoanRequest } from "@shared/schema";
+import { type User, type InsertUser, type Branch, type InsertBranch, type Shift, type InsertShift, type ShiftTrade, type InsertShiftTrade, type PayrollPeriod, type InsertPayrollPeriod, type PayrollEntry, type InsertPayrollEntry, type Approval, type InsertApproval, type TimeOffRequest, type InsertTimeOffRequest, type Notification, type InsertNotification, type DeductionSettings, type InsertDeductionSettings, type DeductionRate, type InsertDeductionRate, type AuditLog, type InsertAuditLog, type Holiday, type InsertHoliday, type AdjustmentLog, type InsertAdjustmentLog, type CompanySettings, type InsertCompanySettings, type ArchivedPayrollPeriod, type TimeOffPolicy } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 
@@ -156,13 +156,6 @@ export interface IStorage {
   upsertTimeOffPolicy(branchId: string, leaveType: string, minimumAdvanceDays: number): Promise<TimeOffPolicy>;
   initializeDefaultTimeOffPolicies(branchId: string): Promise<void>;
 
-  // Government Loans (Art. 113)
-  createLoanRequest(data: InsertLoanRequest): Promise<LoanRequest>;
-  getLoanRequestsByUser(userId: string): Promise<LoanRequest[]>;
-  getLoanRequestsByBranch(branchId: string): Promise<LoanRequest[]>;
-  getLoanRequest(id: string): Promise<LoanRequest | undefined>;
-  updateLoanRequest(id: string, status: string, hrApprovalNote?: string, approvedBy?: string): Promise<LoanRequest | undefined>;
-  getActiveApprovedLoans(userId: string, targetDate: Date): Promise<LoanRequest[]>;
 }
 
 export class MemStorage implements IStorage {
@@ -181,7 +174,7 @@ export class MemStorage implements IStorage {
   private auditLogs: Map<string, AuditLog> = new Map();
   private adjustmentLogs: Map<string, AdjustmentLog> = new Map();
   private companySettingsStore: Map<string, CompanySettings> = new Map();
-  private loanRequests: Map<string, LoanRequest> = new Map();
+
   private timeOffPolicies: Map<string, TimeOffPolicy> = new Map();
   private archivedPayrollPeriods: Map<string, ArchivedPayrollPeriod> = new Map();
   private setupComplete: boolean = false;
@@ -1258,61 +1251,7 @@ export class MemStorage implements IStorage {
     };
   }
 
-  // Government Loans (Art. 113)
-  async createLoanRequest(data: InsertLoanRequest): Promise<LoanRequest> {
-    const id = randomUUID();
-    const loan: LoanRequest = {
-      ...data,
-      id,
-      status: data.status || 'pending',
-      proofFileUrl: data.proofFileUrl || null,
-      hrApprovalNote: data.hrApprovalNote || null,
-      totalAmount: data.totalAmount || "0",
-      remainingBalance: data.remainingBalance || data.totalAmount || "0",
-      approvedBy: data.approvedBy || null,
-      approvedAt: data.approvedAt || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    this.loanRequests.set(id, loan);
-    return loan;
-  }
 
-  async getLoanRequestsByUser(userId: string): Promise<LoanRequest[]> {
-    return Array.from(this.loanRequests.values()).filter(l => l.userId === userId);
-  }
-
-  async getLoanRequestsByBranch(branchId: string): Promise<LoanRequest[]> {
-    return Array.from(this.loanRequests.values()).filter(l => l.branchId === branchId);
-  }
-
-  async getLoanRequest(id: string): Promise<LoanRequest | undefined> {
-    return this.loanRequests.get(id);
-  }
-
-  async updateLoanRequest(id: string, status: string, hrApprovalNote?: string, approvedBy?: string): Promise<LoanRequest | undefined> {
-    const existing = this.loanRequests.get(id);
-    if (!existing) return undefined;
-    const updated = {
-      ...existing,
-      status,
-      hrApprovalNote: hrApprovalNote ?? existing.hrApprovalNote,
-      approvedBy: approvedBy ?? existing.approvedBy,
-      approvedAt: status === 'approved' ? new Date() : existing.approvedAt,
-      updatedAt: new Date(),
-    };
-    this.loanRequests.set(id, updated);
-    return updated;
-  }
-
-  async getActiveApprovedLoans(userId: string, targetDate: Date): Promise<LoanRequest[]> {
-    return Array.from(this.loanRequests.values()).filter(l =>
-      l.userId === userId &&
-      l.status === 'approved' &&
-      new Date(l.deductionStartDate) <= targetDate &&
-      Number(l.remainingBalance) > 0
-    );
-  }
 
   // Time Off Policy
   async getTimeOffPolicyByBranch(branchId: string): Promise<TimeOffPolicy[]> {

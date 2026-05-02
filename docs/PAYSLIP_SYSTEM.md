@@ -194,8 +194,6 @@ interface PayslipDeduction {
   code: string;
   label: string;
   amount: number;
-  is_loan?: boolean;
-  loan_balance?: number;
 }
 ```
 

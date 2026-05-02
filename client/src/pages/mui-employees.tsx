@@ -128,8 +128,6 @@ interface Employee {
   createdAt: string;
   hoursThisMonth?: number;
   shiftsThisMonth?: number;
-  sssLoanDeduction?: string;
-  pagibigLoanDeduction?: string;
   cashAdvanceDeduction?: string;
   otherDeductions?: string;
   tin?: string;
@@ -191,60 +189,6 @@ const initialFormData: EmployeeFormData = {
   isMwe: false,
 };
 
-// â”€â”€â”€ Sub-component: Read-only display of approved loans from the formal workflow â”€â”€â”€
-function ActiveLoansDisplay({ employeeId }: { employeeId?: string }) {
-  const { data: loans = [] } = useQuery<any[]>({
-    queryKey: ['/api/loans/user', employeeId],
-    queryFn: async () => {
-      if (!employeeId) return [];
-      const res = await fetch(`/api/loans/user/${employeeId}`);
-      if (!res.ok) return [];
-      return res.json();
-    },
-    enabled: !!employeeId,
-  });
-
-  const activeLoans = loans.filter((l: any) => l.status === 'approved');
-  const pendingLoans = loans.filter((l: any) => l.status === 'pending');
-
-  if (activeLoans.length === 0 && pendingLoans.length === 0) {
-    return (
-      <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic', textAlign: 'center', py: 1 }}>
-        No active or pending loan deductions for this employee.
-      </Typography>
-    );
-  }
-
-  return (
-    <Stack spacing={1}>
-      {activeLoans.map((loan: any) => (
-        <Box key={loan.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px solid', borderColor: 'success.light', borderRadius: 1, bgcolor: 'success.50' }}>
-          <Box>
-            <Typography variant="body2" fontWeight={600}>{loan.loanType} Loan</Typography>
-            <Typography variant="caption" color="text.secondary">Ref: {loan.referenceNumber}</Typography>
-          </Box>
-          <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="body2" fontWeight={700} color="primary.main">₱{Number(loan.monthlyAmortization).toFixed(2)}/mo</Typography>
-            <Chip label="ACTIVE" size="small" color="success" sx={{ height: 18, fontSize: '0.6rem' }} />
-          </Box>
-        </Box>
-      ))}
-      {pendingLoans.map((loan: any) => (
-        <Box key={loan.id} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', p: 1, border: '1px dashed', borderColor: 'warning.light', borderRadius: 1 }}>
-          <Box>
-            <Typography variant="body2" fontWeight={600}>{loan.loanType} Loan</Typography>
-            <Typography variant="caption" color="text.secondary">Ref: {loan.referenceNumber}</Typography>
-          </Box>
-          <Box sx={{ textAlign: 'right' }}>
-            <Typography variant="body2" color="text.secondary">₱{Number(loan.monthlyAmortization).toFixed(2)}/mo</Typography>
-            <Chip label="PENDING APPROVAL" size="small" color="warning" sx={{ height: 18, fontSize: '0.6rem' }} />
-          </Box>
-        </Box>
-      ))}
-    </Stack>
-  );
-}
-
 export default function MuiEmployees() {
   const theme = useTheme();
   const { toast } = useToast();
@@ -274,8 +218,6 @@ export default function MuiEmployees() {
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
   const [formData, setFormData] = useState<EmployeeFormData>(initialFormData);
   const [deductionsFormData, setDeductionsFormData] = useState({
-    sssLoanDeduction: "0",
-    pagibigLoanDeduction: "0",
     cashAdvanceDeduction: "0",
     otherDeductions: "0",
   });
@@ -623,8 +565,6 @@ export default function MuiEmployees() {
   const handleOpenDeductionsDialog = useCallback((employee: Employee) => {
     setCurrentEmployee(employee);
     setDeductionsFormData({
-      sssLoanDeduction: employee.sssLoanDeduction || "0",
-      pagibigLoanDeduction: employee.pagibigLoanDeduction || "0",
       cashAdvanceDeduction: employee.cashAdvanceDeduction || "0",
       otherDeductions: employee.otherDeductions || "0",
     });
@@ -1655,30 +1595,10 @@ export default function MuiEmployees() {
                 <Alert severity="warning" sx={{ mb: 2, py: 0.5 }} icon={false}>
                   <Typography variant="caption">
                     These are manually managed per-period deductions (e.g. cash advances, penalties).
-                    Government loan deductions are managed via the Requests Hub above.
                   </Typography>
                 </Alert>
 
                 <Stack spacing={2.5}>
-                  {/* ── Government Loan Deductions — Linked to Approved Loans ── */}
-                  <Box sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 2, bgcolor: alpha(theme.palette.warning.main, 0.04) }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 1.5 }}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                        <SecurityIcon sx={{ fontSize: 18, color: 'warning.main' }} />
-                        <Typography variant="subtitle2" fontWeight={600} color="warning.main">
-                          Government Loan Deductions
-                        </Typography>
-                      </Box>
-                      <Chip label="From Approved Loans" size="small" variant="outlined" color="info" sx={{ height: 22, fontSize: '0.65rem' }} />
-                    </Box>
-                    <Alert severity="info" sx={{ mb: 1.5, py: 0.5 }} icon={false}>
-                      <Typography variant="caption">
-                        Loan deductions are automatically sourced from approved loan records.
-                        To add or change a loan, use <strong>Employee Requests → Loans</strong> tab.
-                      </Typography>
-                    </Alert>
-                    <ActiveLoansDisplay employeeId={currentEmployee?.id} />
-                  </Box>
 
                   <TextField
                     fullWidth

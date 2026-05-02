@@ -3,9 +3,6 @@ import { Box, Tabs, Tab, useTheme, Typography } from '@mui/material';
 import MuiTimeOff from './mui-time-off';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
-import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWallet';
-import AssessmentIcon from '@mui/icons-material/Assessment';
-import GavelIcon from '@mui/icons-material/Gavel';
 
 export default function MuiRequests() {
   const [tabIndex, setTabIndex] = useState(0);
@@ -19,7 +16,7 @@ export default function MuiRequests() {
           <Box>
             <Typography variant="h5" fontWeight="bold">Employee Requests Hub</Typography>
             <Typography variant="body2" color="text.secondary">
-              Review and approve Time Off and Government Loans
+              Review and approve Time Off requests
             </Typography>
           </Box>
         </Box>
@@ -34,11 +31,6 @@ export default function MuiRequests() {
         </Tabs>
       </Box>
 
-      {/* 
-        For the tab panels, we use CSS overrides to gracefully wrap the imported pages.
-        MuiTimeOff and MuiLoans have their own internal paddings and headers, 
-        so we soften them slightly to make it look like a unified interface.
-      */}
       <Box sx={{ 
         display: tabIndex === 0 ? 'block' : 'none', 
         '& > div': { pt: 2, minHeight: 'auto', bgcolor: 'transparent' },
@@ -50,3 +42,4 @@ export default function MuiRequests() {
     </Box>
   );
 }
+

@@ -358,7 +358,7 @@ export default function MuiReports() {
         <CardHeader
           avatar={<ReportIcon color="primary" />}
           title="Government Remittance Tracking (PRN Generation)"
-          subheader="Monthly pending contributions and loan amortizations to be paid to SSS, PhilHealth, and Pag-IBIG"
+          subheader="Monthly pending contributions to be paid to SSS, PhilHealth, and Pag-IBIG"
         />
         {loadingRemittances ? (
             <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress size={24} /></Box>
@@ -369,30 +369,24 @@ export default function MuiReports() {
               <TableRow>
                 <TableCell>Employee</TableCell>
                 <TableCell align="right">SSS Contrib (₱)</TableCell>
-                <TableCell align="right" sx={{ color: 'error.main' }}>SSS Loan (₱)</TableCell>
-                <TableCell align="right">PhilHealth (₱)</TableCell>
-                <TableCell align="right">Pag-IBIG Contrib (₱)</TableCell>
-                <TableCell align="right" sx={{ color: 'error.main' }}>Pag-IBIG Loan (₱)</TableCell>
                 <TableCell align="right">Total Due (₱)</TableCell>
               </TableRow>
             </TableHead>
             <TableBody>
               {remittances.map((row, idx) => {
-                const total = row.sssContribution + row.sssLoan + row.philHealthContribution + row.pagibigContribution + row.pagibigLoan;
+                const total = row.sssContribution + row.philHealthContribution + row.pagibigContribution;
                 return (
                 <TableRow key={idx} hover>
                   <TableCell sx={{ fontWeight: 'bold' }}>{row.employeeName}</TableCell>
                   <TableCell align="right">{row.sssContribution.toFixed(2)}</TableCell>
-                  <TableCell align="right" sx={{ color: 'error.main', fontWeight: 'bold' }}>{row.sssLoan.toFixed(2)}</TableCell>
                   <TableCell align="right">{row.philHealthContribution.toFixed(2)}</TableCell>
                   <TableCell align="right">{row.pagibigContribution.toFixed(2)}</TableCell>
-                  <TableCell align="right" sx={{ color: 'error.main', fontWeight: 'bold' }}>{row.pagibigLoan.toFixed(2)}</TableCell>
                   <TableCell align="right" sx={{ fontWeight: 'bold' }}>{total.toFixed(2)}</TableCell>
                 </TableRow>
               )})}
               {remittances.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3, color: 'text.secondary' }}>No remittance data for this month.</TableCell>
+                  <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>No remittance data for this month.</TableCell>
                 </TableRow>
               )}
             </TableBody>

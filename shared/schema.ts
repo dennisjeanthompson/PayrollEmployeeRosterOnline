@@ -379,31 +379,6 @@ export const leaveCredits = pgTable("leave_credits", {
 
 
 
-/**
- * Government Loan Requests (SSS & Pag-IBIG) - DOLE Art. 113 Compliance
- * Tracks employee loan applications, proofs, and Manager/HR approval statuses.
- * Only approved loans are deducted during payroll processing.
- */
-export const loanRequests = pgTable("loan_requests", {
-  id: text("id").primaryKey(),
-  userId: text("user_id").references(() => users.id).notNull(),
-  branchId: text("branch_id").references(() => branches.id).notNull(),
-  loanType: text("loan_type").notNull(), // 'SSS' | 'Pag-IBIG'
-  referenceNumber: text("reference_number").notNull(),
-  accountNumber: text("account_number").notNull(),
-  totalAmount: text("total_amount").notNull().default("0"),
-  remainingBalance: text("remaining_balance").notNull().default("0"),
-  monthlyAmortization: text("monthly_amortization").notNull(),
-  deductionStartDate: timestamp("deduction_start_date").notNull(),
-  status: text("status").default("pending"), // 'pending' | 'approved' | 'rejected' | 'completed'
-  proofFileUrl: text("proof_file_url"),
-  hrApprovalNote: text("hr_approval_note"),
-  approvedBy: text("approved_by").references(() => users.id),
-  approvedAt: timestamp("approved_at"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
 // ─── Phase 2 Compliance Tables ───────────────────────────────────────────────────
 
 export const sssContributionTable = pgTable("sss_contribution_table", {
@@ -590,14 +565,6 @@ export const insertLeaveCreditsSchema = createInsertSchema(leaveCredits).omit({
 
 
 
-export const insertLoanRequestSchema = createInsertSchema(loanRequests).omit({
-  id: true,
-  createdAt: true,
-  updatedAt: true,
-}).extend({
-  deductionStartDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
-});
-
 export const insertCompanySettingsSchema = createInsertSchema(companySettings).omit({
   id: true,
   createdAt: true,
@@ -654,7 +621,7 @@ export const insertServiceChargePoolSchema = createInsertSchema(serviceChargePoo
   createdAt: true,
 });
 
-export type LoanRequest = typeof loanRequests.$inferSelect;
+
 export type ServiceChargePool = typeof serviceChargePools.$inferSelect;
 
 export type InsertBranch = z.infer<typeof insertBranchSchema>;
@@ -676,7 +643,7 @@ export type InsertAdjustmentLog = z.infer<typeof insertAdjustmentLogSchema>;
 export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
 export type InsertThirteenthMonthLedger = z.infer<typeof insertThirteenthMonthLedgerSchema>;
 export type InsertLeaveCredit = z.infer<typeof insertLeaveCreditsSchema>;
-export type InsertLoanRequest = z.infer<typeof insertLoanRequestSchema>;
+
 export type InsertServiceChargePool = z.infer<typeof insertServiceChargePoolSchema>;
 export type InsertAdjustmentLogComment = z.infer<typeof insertAdjustmentLogCommentSchema>;
 

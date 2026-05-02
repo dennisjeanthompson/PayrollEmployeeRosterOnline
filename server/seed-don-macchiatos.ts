@@ -5,7 +5,7 @@ import {
   users, branches, shifts, shiftTrades,
   payrollPeriods, payrollEntries, timeOffRequests,
   notifications, approvals, thirteenthMonthLedger,
-  leaveCredits, loanRequests, adjustmentLogs, auditLogs,
+  leaveCredits, adjustmentLogs, auditLogs,
   companySettings, deductionSettings
 } from '../shared/schema';
 import { eq, or } from 'drizzle-orm';
@@ -58,7 +58,7 @@ async function main() {
 
   await db.delete(auditLogs).where(sql`user_id IN (${sql.join(seededUserIds.map(id => sql`${id}`), sql`, `)})`);
   await db.delete(adjustmentLogs).where(eq(adjustmentLogs.branchId, branchId));
-  await db.delete(loanRequests).where(eq(loanRequests.branchId, branchId));
+
   await db.delete(thirteenthMonthLedger).where(eq(thirteenthMonthLedger.branchId, branchId));
   await db.delete(payrollEntries).where(sql`payroll_period_id IN (SELECT id FROM payroll_periods WHERE branch_id = ${branchId})`);
   await db.delete(payrollPeriods).where(eq(payrollPeriods.branchId, branchId));
@@ -307,32 +307,6 @@ async function main() {
   }
   console.log('   ✅ Created 4 payroll periods with totals');
 
-  // 6. Seed Loans
-  console.log('🏦 Seeding loan requests...');
-  const loans = [
-    { type: 'SSS', amount: '5000', reason: 'Emergency medical expenses', ref: 'SSS-12345' },
-    { type: 'Pag-IBIG', amount: '10000', reason: 'Home renovation', ref: 'HDMF-67890' },
-    { type: 'SSS', amount: '2000', reason: 'Personal use', ref: 'SSS-99999' }
-  ];
-
-  for (let i = 0; i < loans.length; i++) {
-    const loan = loans[i];
-    const emp = seededEmployees[i + 1]; // Offset from manager
-    await db.insert(loanRequests).values({
-      id: uuid(),
-      userId: emp.id,
-      branchId,
-      loanType: loan.type,
-      referenceNumber: loan.ref,
-      accountNumber: '1234567890',
-      totalAmount: loan.amount,
-      remainingBalance: loan.amount,
-      monthlyAmortization: (parseFloat(loan.amount) / 12).toFixed(2),
-      deductionStartDate: addDays(new Date(), 30),
-      status: 'pending',
-      createdAt: new Date(),
-    });
-  }
 
   // 7. Seed Audit Logs
   console.log('🔒 Seeding audit logs...');

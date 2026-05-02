@@ -35,7 +35,7 @@ import {
   branches, users, shifts, shiftTrades,
   payrollPeriods, payrollEntries, timeOffRequests,
   notifications, approvals, adjustmentLogs, auditLogs,
-  thirteenthMonthLedger, leaveCredits, loanRequests,
+  thirteenthMonthLedger, leaveCredits,
   deductionSettings,
 } from '../shared/schema';
 import bcrypt from 'bcrypt';
@@ -551,71 +551,6 @@ async function seedExceptionLogs() {
   console.log(`   ✅ Created ${count} exception / adjustment logs\n`);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  STEP 7: Loan Requests
-// ═══════════════════════════════════════════════════════════════════════════
-
-async function seedLoans() {
-  console.log('🏦 Step 7 — Seeding loan requests...\n');
-
-  const MGR_ID = 'lu-mgr-001';
-  const now = new Date();
-
-  const loans = [
-    {
-      userId: 'lu-emp-001',
-      loanType: 'SSS',
-      referenceNumber: 'SSS-LU-' + Math.floor(100000 + Math.random() * 900000),
-      accountNumber: '33-1234001-1',
-      totalAmount: '24000.00',
-      remainingBalance: '18000.00',
-      monthlyAmortization: '1000.00',
-      status: 'approved',
-    },
-    {
-      userId: 'lu-emp-003',
-      loanType: 'Pag-IBIG',
-      referenceNumber: 'HDMF-LU-' + Math.floor(100000 + Math.random() * 900000),
-      accountNumber: 'HDMF-LU-103',
-      totalAmount: '15000.00',
-      remainingBalance: '12000.00',
-      monthlyAmortization: '500.00',
-      status: 'approved',
-    },
-    {
-      userId: 'lu-emp-005',
-      loanType: 'SSS',
-      referenceNumber: 'SSS-LU-' + Math.floor(100000 + Math.random() * 900000),
-      accountNumber: '33-1234005-5',
-      totalAmount: '20000.00',
-      remainingBalance: '20000.00',
-      monthlyAmortization: '800.00',
-      status: 'pending',
-    },
-  ];
-
-  let count = 0;
-  for (const loan of loans) {
-    await db.insert(loanRequests).values({
-      id: uuid(),
-      userId: loan.userId,
-      branchId: BRANCH_ID,
-      loanType: loan.loanType,
-      referenceNumber: loan.referenceNumber,
-      accountNumber: loan.accountNumber,
-      totalAmount: loan.totalAmount,
-      remainingBalance: loan.remainingBalance,
-      monthlyAmortization: loan.monthlyAmortization,
-      deductionStartDate: startOfDay(now),
-      status: loan.status,
-      approvedBy: loan.status === 'approved' ? MGR_ID : null,
-      approvedAt: loan.status === 'approved' ? subDays(now, 10) : null,
-    });
-    count++;
-  }
-
-  console.log(`   ✅ Created ${count} loan requests (SSS + Pag-IBIG)\n`);
-}
 
 // ═══════════════════════════════════════════════════════════════════════════
 //  STEP 8: Notifications
@@ -922,7 +857,7 @@ async function main() {
   await seedShifts();
   await seedPayroll();
   await seedExceptionLogs();
-  await seedLoans();
+
   await seedNotifs();
   await seedTimeOff();
   await seedLeaveCredits();
@@ -954,7 +889,7 @@ async function main() {
   console.log('    ✓ Payroll (6 semi-monthly periods, DOLE-compliant)');
   console.log('    ✓ 13th Month Ledger');
   console.log('    ✓ Exception Logs (OT, lateness, undertime, absences)');
-  console.log('    ✓ Loan Requests (SSS + Pag-IBIG)');
+
   console.log('    ✓ Notifications');
   console.log('    ✓ Time-Off Requests');
   console.log('    ✓ Leave Credits (SIL)');

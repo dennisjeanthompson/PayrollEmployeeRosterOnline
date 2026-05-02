@@ -25,7 +25,7 @@ import employeeUploadsRouter from "./routes/employee-uploads";
 import { thirteenthMonthRouter } from "./routes/thirteenth-month";
 import { leaveCreditsRouter } from "./routes/leave-credits";
 
-import loansRouter from "./routes/loans";
+
 import { db } from "./db";
 import { thirteenthMonthLedger, deductionSettings as deductionSettingsTable } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -248,7 +248,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
 
   // Mount API Routers
-  app.use("/api/loans", requireAuth, loansRouter);
+
   app.use(leaveCreditsRouter);
 
   // Setup endpoint (no auth required, only works if setup not complete)
@@ -2237,41 +2237,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Add gross allowances to gross Pay (after basic basicPay computations)
         grossPay += totalAllowanceAmount;
 
-        // ─── Feature 5: DOLE Art. 113 Compliant Government Loan Deductions ───
-        // Only deduct if there is an approved active loan with a start date <= period endDate
-        const activeLoans = await storage.getActiveApprovedLoans(employee.id, new Date(period.endDate));
-        
+        // Government Loans Feature has been removed. 
+        // sssLoan and pagibigLoan are kept at 0 to satisfy database schema requirements.
         let sssLoan = 0;
         let pagibigLoan = 0;
-        
-        const { db: payrollDb } = await import('./db');
-        const { loanRequests: loanReqSchema } = await import('../shared/schema');
-        const { eq: drizzleEq } = await import('drizzle-orm');
-
-        for (const loan of activeLoans) {
-          // If semi-monthly, split the monthly amortization evenly across the two cutoff periods
-          let deduction = Math.round(parseFloat(loan.monthlyAmortization) * periodFraction * 100) / 100;
-          const remaining = parseFloat(loan.remainingBalance || "0");
-          
-          if (deduction > remaining && remaining > 0) {
-            deduction = remaining;
-          }
-
-          if (loan.loanType === 'SSS') {
-            sssLoan += deduction;
-          } else if (loan.loanType === 'Pag-IBIG') {
-            pagibigLoan += deduction;
-          }
-
-          if (deduction > 0) {
-            const newBalance = Math.max(0, remaining - deduction);
-            const newStatus = newBalance <= 0.01 ? 'completed' : loan.status;
-            
-            await payrollDb.update(loanReqSchema)
-              .set({ remainingBalance: newBalance.toFixed(2), status: newStatus })
-              .where(drizzleEq(loanReqSchema.id, loan.id));
-          }
-        }
 
         const advances = parseFloat(employee.cashAdvanceDeduction || '0');
         
@@ -2289,8 +2258,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           philHealthContribution +
           pagibigContribution +
           mweWithholdingTax +
-          sssLoan +
-          pagibigLoan +
           advances +
           otherDeductions;
 

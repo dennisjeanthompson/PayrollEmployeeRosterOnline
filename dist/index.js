@@ -78,7 +78,6 @@ __export(schema_exports, {
   insertEmployeeTaxYtdSchema: () => insertEmployeeTaxYtdSchema,
   insertHolidaySchema: () => insertHolidaySchema,
   insertLeaveCreditsSchema: () => insertLeaveCreditsSchema,
-  insertLoanRequestSchema: () => insertLoanRequestSchema,
   insertNotificationSchema: () => insertNotificationSchema,
   insertPayrollEntrySchema: () => insertPayrollEntrySchema,
   insertPayrollPeriodSchema: () => insertPayrollPeriodSchema,
@@ -93,7 +92,6 @@ __export(schema_exports, {
   insertWageOrderSchema: () => insertWageOrderSchema,
   insertWorkerAllowanceSchema: () => insertWorkerAllowanceSchema,
   leaveCredits: () => leaveCredits,
-  loanRequests: () => loanRequests,
   notifications: () => notifications,
   payrollEntries: () => payrollEntries,
   payrollPeriods: () => payrollPeriods,
@@ -113,7 +111,7 @@ __export(schema_exports, {
 import { pgTable, text, boolean, timestamp, integer, numeric, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var session, branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, companySettings, auditLogs, timeOffPolicy, employeeDocuments, adjustmentLogs, adjustmentLogComments, thirteenthMonthLedger, leaveCredits, loanRequests, sssContributionTable, wageOrders, allowanceTypes, workerAllowances, deMinimisYtd, employeeTaxYtd, insertBranchSchema, insertUserSchema, insertShiftSchema, insertShiftTradeSchema, insertPayrollPeriodSchema, insertPayrollEntrySchema, insertApprovalSchema, insertTimeOffRequestSchema, insertNotificationSchema, insertDeductionSettingsSchema, insertDeductionRatesSchema, insertHolidaySchema, insertArchivedPayrollPeriodSchema, insertAuditLogSchema, insertTimeOffPolicySchema, insertAdjustmentLogSchema, insertAdjustmentLogCommentSchema, insertThirteenthMonthLedgerSchema, insertLeaveCreditsSchema, insertLoanRequestSchema, insertCompanySettingsSchema, serviceChargePools, insertServiceChargePoolSchema, insertSssContributionTableSchema, insertWageOrderSchema, insertAllowanceTypeSchema, insertWorkerAllowanceSchema, insertDeMinimisYtdSchema, insertEmployeeTaxYtdSchema;
+var session, branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, companySettings, auditLogs, timeOffPolicy, employeeDocuments, adjustmentLogs, adjustmentLogComments, thirteenthMonthLedger, leaveCredits, sssContributionTable, wageOrders, allowanceTypes, workerAllowances, deMinimisYtd, employeeTaxYtd, insertBranchSchema, insertUserSchema, insertShiftSchema, insertShiftTradeSchema, insertPayrollPeriodSchema, insertPayrollEntrySchema, insertApprovalSchema, insertTimeOffRequestSchema, insertNotificationSchema, insertDeductionSettingsSchema, insertDeductionRatesSchema, insertHolidaySchema, insertArchivedPayrollPeriodSchema, insertAuditLogSchema, insertTimeOffPolicySchema, insertAdjustmentLogSchema, insertAdjustmentLogCommentSchema, insertThirteenthMonthLedgerSchema, insertLeaveCreditsSchema, insertCompanySettingsSchema, serviceChargePools, insertServiceChargePoolSchema, insertSssContributionTableSchema, insertWageOrderSchema, insertAllowanceTypeSchema, insertWorkerAllowanceSchema, insertDeMinimisYtdSchema, insertEmployeeTaxYtdSchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -505,27 +503,6 @@ var init_schema = __esm({
       updatedAt: timestamp("updated_at").defaultNow(),
       createdAt: timestamp("created_at").defaultNow()
     });
-    loanRequests = pgTable("loan_requests", {
-      id: text("id").primaryKey(),
-      userId: text("user_id").references(() => users.id).notNull(),
-      branchId: text("branch_id").references(() => branches.id).notNull(),
-      loanType: text("loan_type").notNull(),
-      // 'SSS' | 'Pag-IBIG'
-      referenceNumber: text("reference_number").notNull(),
-      accountNumber: text("account_number").notNull(),
-      totalAmount: text("total_amount").notNull().default("0"),
-      remainingBalance: text("remaining_balance").notNull().default("0"),
-      monthlyAmortization: text("monthly_amortization").notNull(),
-      deductionStartDate: timestamp("deduction_start_date").notNull(),
-      status: text("status").default("pending"),
-      // 'pending' | 'approved' | 'rejected' | 'completed'
-      proofFileUrl: text("proof_file_url"),
-      hrApprovalNote: text("hr_approval_note"),
-      approvedBy: text("approved_by").references(() => users.id),
-      approvedAt: timestamp("approved_at"),
-      createdAt: timestamp("created_at").defaultNow(),
-      updatedAt: timestamp("updated_at").defaultNow()
-    });
     sssContributionTable = pgTable("sss_contribution_table", {
       id: serial("id").primaryKey(),
       year: integer("year").notNull(),
@@ -682,13 +659,6 @@ var init_schema = __esm({
       id: true,
       createdAt: true,
       updatedAt: true
-    });
-    insertLoanRequestSchema = createInsertSchema(loanRequests).omit({
-      id: true,
-      createdAt: true,
-      updatedAt: true
-    }).extend({
-      deductionStartDate: z.union([z.date(), z.string().pipe(z.coerce.date())])
     });
     insertCompanySettingsSchema = createInsertSchema(companySettings).omit({
       id: true,
@@ -1742,46 +1712,6 @@ var init_db_storage = __esm({
         const result = await db.select().from(companySettings).where(eq(companySettings.id, id)).limit(1);
         return result[0];
       }
-      // Government Loans (Art. 113 Compliance)
-      async createLoanRequest(data) {
-        const id = randomUUID();
-        const result = await db.insert(loanRequests).values({
-          id,
-          ...data,
-          createdAt: /* @__PURE__ */ new Date(),
-          updatedAt: /* @__PURE__ */ new Date()
-        }).returning();
-        return result[0];
-      }
-      async getLoanRequestsByUser(userId) {
-        return await db.select().from(loanRequests).where(eq(loanRequests.userId, userId)).orderBy(desc(loanRequests.createdAt));
-      }
-      async getLoanRequestsByBranch(branchId) {
-        return await db.select().from(loanRequests).where(eq(loanRequests.branchId, branchId)).orderBy(desc(loanRequests.createdAt));
-      }
-      async getLoanRequest(id) {
-        const result = await db.select().from(loanRequests).where(eq(loanRequests.id, id)).limit(1);
-        return result[0];
-      }
-      async updateLoanRequest(id, status, hrApprovalNote, approvedBy) {
-        const updateData = { status, updatedAt: /* @__PURE__ */ new Date() };
-        if (hrApprovalNote !== void 0) updateData.hrApprovalNote = hrApprovalNote;
-        if (approvedBy) {
-          updateData.approvedBy = approvedBy;
-          updateData.approvedAt = /* @__PURE__ */ new Date();
-        }
-        const result = await db.update(loanRequests).set(updateData).where(eq(loanRequests.id, id)).returning();
-        return result[0];
-      }
-      async getActiveApprovedLoans(userId, targetDate) {
-        return await db.select().from(loanRequests).where(
-          and(
-            eq(loanRequests.userId, userId),
-            eq(loanRequests.status, "approved"),
-            lte(loanRequests.deductionStartDate, targetDate)
-          )
-        );
-      }
     };
     dbStorage = new DatabaseStorage();
   }
@@ -1809,7 +1739,6 @@ var init_storage = __esm({
       auditLogs = /* @__PURE__ */ new Map();
       adjustmentLogs = /* @__PURE__ */ new Map();
       companySettingsStore = /* @__PURE__ */ new Map();
-      loanRequests = /* @__PURE__ */ new Map();
       timeOffPolicies = /* @__PURE__ */ new Map();
       archivedPayrollPeriods = /* @__PURE__ */ new Map();
       setupComplete = false;
@@ -2732,53 +2661,6 @@ var init_storage = __esm({
           timeOffRequests: Array.from(this.timeOffRequests.values()).filter((t) => t.userId === id),
           shiftTrades: Array.from(this.shiftTrades.values()).filter((t) => t.fromUserId === id || t.toUserId === id)
         };
-      }
-      // Government Loans (Art. 113)
-      async createLoanRequest(data) {
-        const id = randomUUID2();
-        const loan = {
-          ...data,
-          id,
-          status: data.status || "pending",
-          proofFileUrl: data.proofFileUrl || null,
-          hrApprovalNote: data.hrApprovalNote || null,
-          totalAmount: data.totalAmount || "0",
-          remainingBalance: data.remainingBalance || data.totalAmount || "0",
-          approvedBy: data.approvedBy || null,
-          approvedAt: data.approvedAt || null,
-          createdAt: /* @__PURE__ */ new Date(),
-          updatedAt: /* @__PURE__ */ new Date()
-        };
-        this.loanRequests.set(id, loan);
-        return loan;
-      }
-      async getLoanRequestsByUser(userId) {
-        return Array.from(this.loanRequests.values()).filter((l) => l.userId === userId);
-      }
-      async getLoanRequestsByBranch(branchId) {
-        return Array.from(this.loanRequests.values()).filter((l) => l.branchId === branchId);
-      }
-      async getLoanRequest(id) {
-        return this.loanRequests.get(id);
-      }
-      async updateLoanRequest(id, status, hrApprovalNote, approvedBy) {
-        const existing = this.loanRequests.get(id);
-        if (!existing) return void 0;
-        const updated = {
-          ...existing,
-          status,
-          hrApprovalNote: hrApprovalNote ?? existing.hrApprovalNote,
-          approvedBy: approvedBy ?? existing.approvedBy,
-          approvedAt: status === "approved" ? /* @__PURE__ */ new Date() : existing.approvedAt,
-          updatedAt: /* @__PURE__ */ new Date()
-        };
-        this.loanRequests.set(id, updated);
-        return updated;
-      }
-      async getActiveApprovedLoans(userId, targetDate) {
-        return Array.from(this.loanRequests.values()).filter(
-          (l) => l.userId === userId && l.status === "approved" && new Date(l.deductionStartDate) <= targetDate && Number(l.remainingBalance) > 0
-        );
       }
       // Time Off Policy
       async getTimeOffPolicyByBranch(branchId) {
@@ -3946,7 +3828,7 @@ import { createServer } from "http";
 import session2 from "express-session";
 import PgSession from "connect-pg-simple";
 import cors from "cors";
-import { z as z5 } from "zod";
+import { z as z4 } from "zod";
 
 // server/routes/branches.ts
 init_db_storage();
@@ -3972,8 +3854,8 @@ var requireAdmin = (req, res, next) => {
   }
   next();
 };
-function registerBranchesRoutes(router13) {
-  router13.get("/api/branches", requireAuth, async (req, res) => {
+function registerBranchesRoutes(router12) {
+  router12.get("/api/branches", requireAuth, async (req, res) => {
     try {
       const allBranches = await dbStorage.getAllBranches();
       res.json({ branches: allBranches });
@@ -3982,7 +3864,7 @@ function registerBranchesRoutes(router13) {
       res.status(500).json({ message: "Failed to fetch branches" });
     }
   });
-  router13.get("/api/branches/:id", requireAuth, async (req, res) => {
+  router12.get("/api/branches/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const branch = await dbStorage.getBranch(id);
@@ -3995,7 +3877,7 @@ function registerBranchesRoutes(router13) {
       res.status(500).json({ message: "Failed to fetch branch" });
     }
   });
-  router13.post("/api/branches", requireAuth, requireAdmin, async (req, res) => {
+  router12.post("/api/branches", requireAuth, requireAdmin, async (req, res) => {
     try {
       console.log("Received request body:", req.body);
       const schema = z2.object({
@@ -4057,9 +3939,9 @@ function registerBranchesRoutes(router13) {
       res.status(500).json({ message: "Failed to update branch" });
     }
   };
-  router13.put("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
-  router13.patch("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
-  router13.delete("/api/branches/:id", requireAuth, requireAdmin, async (req, res) => {
+  router12.put("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
+  router12.patch("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
+  router12.delete("/api/branches/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const updatedBranch = await dbStorage.updateBranch(id, { isActive: false });
@@ -4257,7 +4139,7 @@ async function createAuditLog(params) {
 // server/routes/employees.ts
 var storage = dbStorage;
 function createEmployeeRouter(realTimeManager) {
-  const router13 = Router2();
+  const router12 = Router2();
   const requireAuth10 = (req, res, next) => {
     if (!req.session || !req.session.user) {
       return res.status(401).json({ message: "Authentication required" });
@@ -4277,7 +4159,7 @@ function createEmployeeRouter(realTimeManager) {
     }
     next();
   };
-  router13.get("/api/employees", requireAuth10, async (req, res) => {
+  router12.get("/api/employees", requireAuth10, async (req, res) => {
     try {
       const branchId = req.session.user?.branchId;
       if (!branchId) return res.status(400).json({ message: "Branch ID not found in session" });
@@ -4301,7 +4183,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to fetch employees" });
     }
   });
-  router13.get("/api/employees/all-branches", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router12.get("/api/employees/all-branches", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const allUsers = await storage.getAllUsers();
       const sanitizedEmployees = allUsers.map((emp) => ({
@@ -4320,7 +4202,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to fetch employees" });
     }
   });
-  router13.get("/api/employees/stats", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router12.get("/api/employees/stats", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const branchId = req.session.user?.branchId;
       if (!branchId) return res.status(400).json({ message: "Branch ID not found in session" });
@@ -4387,7 +4269,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to fetch employee stats" });
     }
   });
-  router13.get("/api/employees/performance", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router12.get("/api/employees/performance", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const branchId = req.session.user?.branchId;
       if (!branchId) return res.status(400).json({ message: "Branch ID not found in session" });
@@ -4427,7 +4309,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to fetch employee performance" });
     }
   });
-  router13.get("/api/employees/:id", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router12.get("/api/employees/:id", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const employee = await storage.getUser(id);
@@ -4444,7 +4326,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to fetch employee" });
     }
   });
-  router13.post("/api/employees", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router12.post("/api/employees", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const {
         username,
@@ -4536,7 +4418,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message });
     }
   });
-  router13.put("/api/employees/:id", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router12.put("/api/employees/:id", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const body = req.body;
@@ -4608,7 +4490,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to update employee" });
     }
   });
-  router13.put("/api/employees/:id/deductions", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router12.put("/api/employees/:id/deductions", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const { sssLoanDeduction, pagibigLoanDeduction, cashAdvanceDeduction, otherDeductions } = req.body;
@@ -4659,7 +4541,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to update employee deductions" });
     }
   });
-  router13.patch("/api/employees/:id/status", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router12.patch("/api/employees/:id/status", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const { isActive } = req.body;
@@ -4696,7 +4578,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to update employee status" });
     }
   });
-  router13.get("/api/employees/:id/related-data", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router12.get("/api/employees/:id/related-data", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const relatedData = await storage.employeeHasRelatedData(id);
@@ -4706,7 +4588,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to check related data" });
     }
   });
-  router13.get("/api/employees/:id/export", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router12.get("/api/employees/:id/export", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const exportData = await storage.getEmployeeDataForExport(id);
@@ -4727,7 +4609,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to export employee data" });
     }
   });
-  router13.delete("/api/employees/:id", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router12.delete("/api/employees/:id", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const force = req.query.force === "true";
@@ -4809,7 +4691,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: error.message || "Failed to delete employee" });
     }
   });
-  return router13;
+  return router12;
 }
 
 // server/routes.ts
@@ -8166,136 +8048,6 @@ router11.get("/api/thirteenth-month/export", requireAuth9, requireManagerRole4, 
 
 // server/routes.ts
 init_leave_credits();
-
-// server/routes/loans.ts
-init_db_storage();
-init_schema();
-import { Router as Router13 } from "express";
-import { z as z4 } from "zod";
-var router12 = Router13();
-router12.post("/", async (req, res) => {
-  try {
-    const user = req.user;
-    if (!user) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    const parsedData = insertLoanRequestSchema.parse(req.body);
-    const totalAmount = parseFloat(parsedData.totalAmount || "0");
-    const monthlyAmort = parseFloat(parsedData.monthlyAmortization || "0");
-    if (totalAmount <= 0) {
-      return res.status(400).json({ message: "Total loan amount must be greater than zero." });
-    }
-    if (monthlyAmort <= 0) {
-      return res.status(400).json({ message: "Monthly amortization must be greater than zero." });
-    }
-    if (monthlyAmort > totalAmount) {
-      return res.status(400).json({ message: "Monthly amortization cannot exceed total loan amount." });
-    }
-    const data = {
-      ...parsedData,
-      remainingBalance: parsedData.totalAmount || "0"
-    };
-    if (data.userId !== user.id) {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    const allUserLoans = await dbStorage.getLoanRequestsByUser(user.id);
-    const existingActive = allUserLoans.find(
-      (loan) => loan.loanType === data.loanType && (loan.status === "pending" || loan.status === "approved")
-    );
-    if (existingActive) {
-      return res.status(400).json({
-        message: `You already have an active or pending ${data.loanType} loan in the system. Please wait for it to be fully settled or rejected before applying again.`
-      });
-    }
-    const newLoan = await dbStorage.createLoanRequest(data);
-    res.status(201).json(newLoan);
-  } catch (error) {
-    console.error("Error creating loan request:", error);
-    if (error instanceof z4.ZodError) {
-      return res.status(400).json({ message: "Invalid loan request data", errors: error.errors });
-    }
-    res.status(500).json({ message: "Failed to submit loan request" });
-  }
-});
-router12.get("/my", async (req, res) => {
-  try {
-    const user = req.user;
-    if (!user) {
-      return res.status(401).json({ message: "Unauthorized" });
-    }
-    const loans = await dbStorage.getLoanRequestsByUser(user.id);
-    res.json(loans);
-  } catch (error) {
-    console.error("Error fetching user loans:", error);
-    res.status(500).json({ message: "Failed to fetch loans" });
-  }
-});
-router12.get("/user/:userId", async (req, res) => {
-  try {
-    const user = req.user;
-    if (!user || user.role !== "admin" && user.role !== "manager") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    const loans = await dbStorage.getLoanRequestsByUser(req.params.userId);
-    res.json(loans);
-  } catch (error) {
-    console.error("Error fetching employee loans:", error);
-    res.status(500).json({ message: "Failed to fetch employee loans" });
-  }
-});
-router12.get("/branch", async (req, res) => {
-  try {
-    const user = req.user;
-    if (!user || user.role !== "admin" && user.role !== "manager") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    const branchId = user.branchId;
-    const loans = await dbStorage.getLoanRequestsByBranch(branchId);
-    const users2 = await dbStorage.getAllUsers();
-    const enrichedLoans = loans.map((loan) => {
-      const employee = users2.find((u) => u.id === loan.userId);
-      return {
-        ...loan,
-        employeeName: employee ? `${employee.firstName} ${employee.lastName}` : "Unknown"
-      };
-    });
-    res.json(enrichedLoans);
-  } catch (error) {
-    console.error("Error fetching branch loans:", error);
-    res.status(500).json({ message: "Failed to fetch branch loans" });
-  }
-});
-router12.put("/:id", async (req, res) => {
-  try {
-    const user = req.user;
-    if (!user || user.role !== "admin" && user.role !== "manager") {
-      return res.status(403).json({ message: "Forbidden" });
-    }
-    const { id } = req.params;
-    const { status, hrApprovalNote } = req.body;
-    if (!["approved", "rejected"].includes(status)) {
-      return res.status(400).json({ message: "Invalid status. Must be 'approved' or 'rejected'." });
-    }
-    if (status === "rejected" && (!hrApprovalNote || hrApprovalNote.trim() === "")) {
-      return res.status(400).json({ message: "A reason (Note) is required when rejecting a loan." });
-    }
-    const existingLoan = await dbStorage.getLoanRequest(id);
-    if (!existingLoan) {
-      return res.status(404).json({ message: "Loan request not found" });
-    }
-    if (existingLoan.branchId !== user.branchId && user.role !== "admin") {
-      return res.status(403).json({ message: "Forbidden: Loan belongs to another branch" });
-    }
-    const updated = await dbStorage.updateLoanRequest(id, status, hrApprovalNote, user.id);
-    res.json(updated);
-  } catch (error) {
-    console.error("Error updating loan status:", error);
-    res.status(500).json({ message: "Failed to update loan status" });
-  }
-});
-var loans_default = router12;
-
-// server/routes.ts
 init_db();
 init_schema();
 import { eq as eq7 } from "drizzle-orm";
@@ -10208,7 +9960,6 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to check setup status" });
     }
   }));
-  app2.use("/api/loans", requireAuth10, loans_default);
   app2.use(router2);
   app2.post("/api/setup", asyncHandler(async (req, res) => {
     try {
@@ -10216,19 +9967,19 @@ async function registerRoutes(app2) {
       if (isComplete) {
         return res.status(400).json({ message: "Setup already completed" });
       }
-      const { branch, manager } = z5.object({
-        branch: z5.object({
-          name: z5.string().min(1),
-          address: z5.string().min(1),
-          phone: z5.string().optional()
+      const { branch, manager } = z4.object({
+        branch: z4.object({
+          name: z4.string().min(1),
+          address: z4.string().min(1),
+          phone: z4.string().optional()
         }),
-        manager: z5.object({
-          username: z5.string().min(1),
-          password: z5.string().min(6),
-          firstName: z5.string().min(1),
-          lastName: z5.string().min(1),
-          email: z5.string().email(),
-          hourlyRate: z5.string()
+        manager: z4.object({
+          username: z4.string().min(1),
+          password: z4.string().min(6),
+          firstName: z4.string().min(1),
+          lastName: z4.string().min(1),
+          email: z4.string().email(),
+          hourlyRate: z4.string()
         })
       }).parse(req.body);
       const createdBranch = await storage5.createBranch({
@@ -10263,7 +10014,7 @@ async function registerRoutes(app2) {
       });
     } catch (error) {
       console.error("Setup error:", error);
-      if (error instanceof z5.ZodError) {
+      if (error instanceof z4.ZodError) {
         return res.status(400).json({ message: "Invalid setup data", errors: error.errors });
       }
       res.status(500).json({ message: "Setup failed" });
@@ -10377,9 +10128,9 @@ async function registerRoutes(app2) {
   }));
   app2.post("/api/auth/login", asyncHandler(async (req, res) => {
     try {
-      const { username, password } = z5.object({
-        username: z5.string().min(1),
-        password: z5.string().min(1)
+      const { username, password } = z4.object({
+        username: z4.string().min(1),
+        password: z4.string().min(1)
       }).parse(req.body);
       const user = await storage5.getUserByUsername(username);
       if (!user) {
@@ -11695,33 +11446,12 @@ async function registerRoutes(app2) {
         const monthlyTax = await calculateWithholdingTax2(monthlyTaxableIncome);
         const withholdingTax = Math.round(monthlyTax * periodFraction * 100) / 100;
         grossPay += totalAllowanceAmount;
-        const activeLoans = await storage5.getActiveApprovedLoans(employee.id, new Date(period.endDate));
         let sssLoan = 0;
         let pagibigLoan = 0;
-        const { db: payrollDb } = await Promise.resolve().then(() => (init_db(), db_exports));
-        const { loanRequests: loanReqSchema } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: drizzleEq } = await import("drizzle-orm");
-        for (const loan of activeLoans) {
-          let deduction = Math.round(parseFloat(loan.monthlyAmortization) * periodFraction * 100) / 100;
-          const remaining = parseFloat(loan.remainingBalance || "0");
-          if (deduction > remaining && remaining > 0) {
-            deduction = remaining;
-          }
-          if (loan.loanType === "SSS") {
-            sssLoan += deduction;
-          } else if (loan.loanType === "Pag-IBIG") {
-            pagibigLoan += deduction;
-          }
-          if (deduction > 0) {
-            const newBalance = Math.max(0, remaining - deduction);
-            const newStatus = newBalance <= 0.01 ? "completed" : loan.status;
-            await payrollDb.update(loanReqSchema).set({ remainingBalance: newBalance.toFixed(2), status: newStatus }).where(drizzleEq(loanReqSchema.id, loan.id));
-          }
-        }
         const advances = parseFloat(employee.cashAdvanceDeduction || "0");
         const otherDeductions = parseFloat(employee.otherDeductions || "0") + lateDeduction + undertimeDeduction;
         const mweWithholdingTax = !branchDeductionSettings.deductWithholdingTax || employee.isMwe ? 0 : withholdingTax;
-        const totalDeductions = sssContribution + philHealthContribution + pagibigContribution + mweWithholdingTax + sssLoan + pagibigLoan + advances + otherDeductions;
+        const totalDeductions = sssContribution + philHealthContribution + pagibigContribution + mweWithholdingTax + advances + otherDeductions;
         const netPay = Math.max(0, grossPay - totalDeductions);
         const entry = await storage5.createPayrollEntry({
           userId: employee.id,
