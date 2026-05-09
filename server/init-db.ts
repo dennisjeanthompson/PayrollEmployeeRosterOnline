@@ -37,7 +37,7 @@ export async function resetDatabase() {
       await db.execute(sql`
         DROP TABLE IF EXISTS 
         employee_tax_ytd, de_minimis_ytd, worker_allowances, allowance_types, wage_orders, sss_contribution_table,
-        loan_requests, leave_credits, thirteenth_month_ledger, service_charge_pools, company_settings,
+        loan_requests, leave_credits, service_charge_pools, company_settings,
         audit_logs, archived_payroll_periods, holidays, deduction_rates, deduction_settings, 
         setup_status, notifications, time_off_requests, approvals, payroll_entries, payroll_periods, 
         shift_trades, shifts, users, branches CASCADE
@@ -84,7 +84,6 @@ export async function initializeDatabase() {
         is_active BOOLEAN DEFAULT true,
         sss_loan_deduction TEXT DEFAULT '0',
         pagibig_loan_deduction TEXT DEFAULT '0',
-        cash_advance_deduction TEXT DEFAULT '0',
         philhealth_deduction TEXT DEFAULT '0',
         other_deductions TEXT DEFAULT '0',
         photo_url TEXT,
@@ -113,6 +112,17 @@ export async function initializeDatabase() {
       await db.execute(sql`ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS include_holiday_pay BOOLEAN DEFAULT false`);
     } catch (_) { /* table may not exist yet — will be created below */ }
 
+    // New column migrations for break time, leave payment status, exception logs
+    try {
+      await db.execute(sql`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS break_duration_minutes INTEGER DEFAULT 0`);
+      await db.execute(sql`ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS leave_payment_status TEXT DEFAULT 'paid'`);
+      await db.execute(sql`ALTER TABLE deduction_settings ADD COLUMN IF NOT EXISTS include_exception_logs BOOLEAN DEFAULT true`);
+      await db.execute(sql`ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS has_13th_month BOOLEAN DEFAULT false`);
+      console.log('✅ New column migrations (break time, leave payment, exception logs, 13th month) checked/applied');
+    } catch (err) {
+      console.log('⚠️ Could not apply new column migrations:', err);
+    }
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS shifts (
         id TEXT PRIMARY KEY,
@@ -124,6 +134,7 @@ export async function initializeDatabase() {
         is_recurring BOOLEAN DEFAULT false,
         recurring_pattern TEXT,
         status TEXT DEFAULT 'scheduled',
+        break_duration_minutes INTEGER DEFAULT 0,
         actual_start_time TIMESTAMP,
         actual_end_time TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW()
@@ -181,7 +192,6 @@ export async function initializeDatabase() {
         pagibig_contribution TEXT DEFAULT '0',
         pagibig_loan TEXT DEFAULT '0',
         withholding_tax TEXT DEFAULT '0',
-        advances TEXT DEFAULT '0',
         other_deductions TEXT DEFAULT '0',
         total_deductions TEXT DEFAULT '0',
         deductions TEXT DEFAULT '0',
@@ -189,6 +199,7 @@ export async function initializeDatabase() {
         pay_breakdown TEXT,
         status TEXT DEFAULT 'pending',
         service_charge TEXT DEFAULT '0',
+        has_13th_month BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT NOW(),
         paid_at TIMESTAMP
       )
@@ -219,6 +230,7 @@ export async function initializeDatabase() {
         reason TEXT NOT NULL,
         status TEXT DEFAULT 'pending',
         is_paid BOOLEAN DEFAULT false,
+        leave_payment_status TEXT DEFAULT 'paid',
         requested_at TIMESTAMP DEFAULT NOW(),
         approved_at TIMESTAMP,
         approved_by TEXT REFERENCES users(id),
@@ -241,6 +253,18 @@ export async function initializeDatabase() {
     `);
 
     await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS thirteenth_month_pay (
+        id TEXT PRIMARY KEY,
+        employee_id TEXT NOT NULL REFERENCES users(id),
+        year INTEGER NOT NULL,
+        total_basic_salary TEXT NOT NULL,
+        amount TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        released_at TIMESTAMP,
+        payslip_id TEXT REFERENCES payroll_entries(id),
+        is_taxable BOOLEAN DEFAULT false
+      );
+
       CREATE TABLE IF NOT EXISTS setup_status (
         id TEXT PRIMARY KEY,
         is_setup_complete BOOLEAN DEFAULT false,
@@ -256,6 +280,7 @@ export async function initializeDatabase() {
         deduct_philhealth BOOLEAN DEFAULT false,
         deduct_pagibig BOOLEAN DEFAULT false,
         deduct_withholding_tax BOOLEAN DEFAULT false,
+        include_exception_logs BOOLEAN DEFAULT true,
         updated_at TIMESTAMP DEFAULT NOW(),
         created_at TIMESTAMP DEFAULT NOW()
       )
@@ -478,24 +503,9 @@ export async function initializeDatabase() {
         user_id TEXT REFERENCES users(id) NOT NULL,
         year INTEGER NOT NULL,
         other_benefits_ytd NUMERIC(12, 4) DEFAULT '0',
-        thirteenth_month_ytd NUMERIC(12, 4) DEFAULT '0',
         gross_compensation_ytd NUMERIC(12, 4) DEFAULT '0',
         taxable_compensation_ytd NUMERIC(12, 4) DEFAULT '0',
         tax_withheld_ytd NUMERIC(12, 4) DEFAULT '0'
-      )
-    `);
-
-    await db.execute(sql`
-      CREATE TABLE IF NOT EXISTS thirteenth_month_ledger (
-        id TEXT PRIMARY KEY,
-        user_id TEXT REFERENCES users(id) NOT NULL,
-        branch_id TEXT REFERENCES branches(id) NOT NULL,
-        payroll_period_id TEXT REFERENCES payroll_periods(id) NOT NULL,
-        year INTEGER NOT NULL,
-        basic_pay_earned TEXT NOT NULL,
-        period_start_date TIMESTAMP NOT NULL,
-        period_end_date TIMESTAMP NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW()
       )
     `);
 
@@ -1099,7 +1109,6 @@ export async function seedSampleSchedulesAndPayroll() {
         await db.execute(sql`DELETE FROM adjustment_logs`);
         await db.execute(sql`DELETE FROM archived_payroll_periods`);
         await db.execute(sql`DELETE FROM payroll_entries`);
-        await db.execute(sql`DELETE FROM thirteenth_month_ledger`);
         await db.execute(sql`DELETE FROM payroll_periods`);
       } catch (e) {
         console.warn('  ⚠️ Could not clear payroll data:', e);

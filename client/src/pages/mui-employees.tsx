@@ -128,7 +128,6 @@ interface Employee {
   createdAt: string;
   hoursThisMonth?: number;
   shiftsThisMonth?: number;
-  cashAdvanceDeduction?: string;
   otherDeductions?: string;
   tin?: string;
   sssNumber?: string;
@@ -218,7 +217,6 @@ export default function MuiEmployees() {
   const [currentEmployee, setCurrentEmployee] = useState<Employee | null>(null);
   const [formData, setFormData] = useState<EmployeeFormData>(initialFormData);
   const [deductionsFormData, setDeductionsFormData] = useState({
-    cashAdvanceDeduction: "0",
     otherDeductions: "0",
   });
 
@@ -565,7 +563,6 @@ export default function MuiEmployees() {
   const handleOpenDeductionsDialog = useCallback((employee: Employee) => {
     setCurrentEmployee(employee);
     setDeductionsFormData({
-      cashAdvanceDeduction: employee.cashAdvanceDeduction || "0",
       otherDeductions: employee.otherDeductions || "0",
     });
     setDeductionsDialogOpen(true);
@@ -1594,25 +1591,11 @@ export default function MuiEmployees() {
 
                 <Alert severity="warning" sx={{ mb: 2, py: 0.5 }} icon={false}>
                   <Typography variant="caption">
-                    These are manually managed per-period deductions (e.g. cash advances, penalties).
+                    These are manually managed per-period deductions (e.g. penalties).
                   </Typography>
                 </Alert>
 
                 <Stack spacing={2.5}>
-
-                  <TextField
-                    fullWidth
-                    label="Cash Advance Deduction"
-                    type="number"
-                    size="small"
-                    value={deductionsFormData.cashAdvanceDeduction}
-                    onChange={(e) => setDeductionsFormData({ ...deductionsFormData, cashAdvanceDeduction: e.target.value })}
-                    inputProps={{ min: 0, step: 0.01 }}
-                    InputProps={{
-                      startAdornment: <Typography sx={{ mr: 1, color: 'text.secondary' }}>₱</Typography>,
-                    }}
-                    helperText="Per pay period"
-                  />
 
                   <TextField
                     fullWidth

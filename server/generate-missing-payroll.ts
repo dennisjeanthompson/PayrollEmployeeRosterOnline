@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { dbStorage as storage } from "./db-storage";
 import { calculatePeriodPay } from "./payroll-utils";
 import { db } from "./db";
-import { users, branches, payrollPeriods, payrollEntries, thirteenthMonthLedger } from "@shared/schema";
+import { users, branches, payrollPeriods, payrollEntries } from "@shared/schema";
 import { eq, and, like } from "drizzle-orm";
 import { randomUUID } from "crypto";
 
@@ -122,25 +122,12 @@ async function run() {
         philHealthContribution: phic.toFixed(2),
         pagibigContribution: hdmf.toFixed(2),
         withholdingTax: "0.00",
-        advances: "0.00",
         otherDeductions: "0.00",
         totalDeductions: totalDed.toFixed(2),
         deductions: totalDed.toFixed(2),
         netPay: net.toFixed(2),
         status: "paid",
         payBreakdown: JSON.stringify(pay)
-      });
-      
-      await db.insert(thirteenthMonthLedger).values({
-        id: randomUUID(),
-        userId: employee.id,
-        branchId: branchId,
-        payrollPeriodId: id,
-        year: startDt.getFullYear(),
-        basicPayEarned: pay.basicPay.toFixed(2),
-        periodStartDate: startDt,
-        periodEndDate: endDt,
-        createdAt: new Date(),
       });
       
       entryCount++;

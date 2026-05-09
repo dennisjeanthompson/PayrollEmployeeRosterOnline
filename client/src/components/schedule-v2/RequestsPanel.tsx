@@ -39,8 +39,8 @@ interface RequestsPanelProps {
   isManager: boolean;
   currentUserId: string;
   adjustmentLogs?: any[];
-  onApproveTimeOff: (id: string, useSil?: boolean) => void;
-  onRejectTimeOff: (id: string, reason: string) => void;
+  onApproveTimeOff: (id: string, leavePaymentStatus: 'paid' | 'unpaid') => void;
+  onRejectTimeOff: (id: string, reason: string, leavePaymentStatus: 'unpaid' | 'awol') => void;
   onApproveTrade: (id: string) => void;
   onRejectTrade: (id: string) => void;
   onAcceptTrade: (id: string) => void;
@@ -100,6 +100,7 @@ export default function RequestsPanel({
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [rejectPaymentStatus, setRejectPaymentStatus] = useState<'unpaid' | 'awol'>('unpaid');
 
   // Approve Menu state
   const [approveAnchorEl, setApproveAnchorEl] = useState<null | HTMLElement>(null);
@@ -172,9 +173,9 @@ export default function RequestsPanel({
     return warnings;
   }, [shifts, timeOffRequests, employees]);
 
-  const handleConfirmApprove = (useSil: boolean) => {
+  const handleConfirmApprove = (leavePaymentStatus: 'paid' | 'unpaid') => {
     if (approvingId) {
-      onApproveTimeOff(approvingId, useSil);
+      onApproveTimeOff(approvingId, leavePaymentStatus);
     }
     handleCloseApproveMenu();
   };
@@ -182,12 +183,13 @@ export default function RequestsPanel({
   const handleOpenRejectDialog = (id: string) => {
     setRejectingId(id);
     setRejectionReason('');
+    setRejectPaymentStatus('unpaid');
     setRejectDialogOpen(true);
   };
 
   const handleConfirmReject = () => {
     if (rejectingId) {
-      onRejectTimeOff(rejectingId, rejectionReason.trim());
+      onRejectTimeOff(rejectingId, rejectionReason.trim(), rejectPaymentStatus);
     }
     setRejectDialogOpen(false);
     setRejectingId(null);
@@ -198,6 +200,7 @@ export default function RequestsPanel({
     setRejectDialogOpen(false);
     setRejectingId(null);
     setRejectionReason('');
+    setRejectPaymentStatus('unpaid');
   };
 
   const pendingTimeOff = timeOffRequests.filter(r => r.status === 'pending');
@@ -521,6 +524,34 @@ export default function RequestsPanel({
             inputProps={{ maxLength: 300 }}
             helperText={`${rejectionReason.length}/300`}
           />
+          <Box sx={{ mt: 2 }}>
+            <Typography variant="caption" fontWeight={700} color="text.secondary" sx={{ mb: 1, display: 'block', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              Pay Treatment
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 1 }}>
+              <Button
+                size="small"
+                variant={rejectPaymentStatus === 'unpaid' ? 'contained' : 'outlined'}
+                color="warning"
+                onClick={() => setRejectPaymentStatus('unpaid')}
+                sx={{ flex: 1, textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
+              >
+                Unpaid Leave
+              </Button>
+              <Button
+                size="small"
+                variant={rejectPaymentStatus === 'awol' ? 'contained' : 'outlined'}
+                color="error"
+                onClick={() => setRejectPaymentStatus('awol')}
+                sx={{ flex: 1, textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
+              >
+                AWOL
+              </Button>
+            </Box>
+            <Typography variant="caption" color="text.secondary" sx={{ mt: 0.5, display: 'block' }}>
+              {rejectPaymentStatus === 'awol' ? 'Absence Without Official Leave — affects disciplinary record' : 'Leave Without Pay (LWOP) — standard absence'}
+            </Typography>
+          </Box>
         </DialogContent>
         <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
           <Button onClick={handleCloseRejectDialog} variant="outlined" sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 600 }}>
@@ -545,14 +576,14 @@ export default function RequestsPanel({
         onClose={handleCloseApproveMenu}
         PaperProps={{ sx: { mt: 1, borderRadius: 2, minWidth: 240 } }}
       >
-        <MenuItem onClick={() => handleConfirmApprove(true)} sx={{ py: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <Typography variant="body2" fontWeight={700} color="success.main">Approve as Paid Leave</Typography>
-          <Typography variant="caption" color="text.secondary">Deducts from Leave Balance (SIL/Vacation)</Typography>
+        <MenuItem onClick={() => handleConfirmApprove('paid')} sx={{ py: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <Typography variant="body2" fontWeight={700} color="success.main">Approve as Paid Leave ✓</Typography>
+          <Typography variant="caption" color="text.secondary">Deducts from Leave Balance — Employee gets full pay</Typography>
         </MenuItem>
         <Divider sx={{ my: 0.5 }} />
-        <MenuItem onClick={() => handleConfirmApprove(false)} sx={{ py: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-          <Typography variant="body2" fontWeight={700}>Approve as Unpaid</Typography>
-          <Typography variant="caption" color="text.secondary">Leave Without Pay (LWOP)</Typography>
+        <MenuItem onClick={() => handleConfirmApprove('unpaid')} sx={{ py: 1.5, display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+          <Typography variant="body2" fontWeight={700} color="warning.main">Approve as Unpaid Leave</Typography>
+          <Typography variant="caption" color="text.secondary">Leave Without Pay (LWOP) — No pay for absent days</Typography>
         </MenuItem>
       </Menu>
     </>

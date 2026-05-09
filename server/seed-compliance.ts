@@ -123,47 +123,7 @@ async function main() {
     }
   }
 
-  // ── 4. Back-fill 13th month ledger from payroll entries ──────────────────
-  console.log('\n🗓️ Back-filling 13th month ledger...');
-  const periods = await db.select().from(schema.payrollPeriods);
-  const thisYearPeriods = periods.filter(p => new Date(p.startDate).getFullYear() === currentYear);
-  console.log(`  Found ${thisYearPeriods.length} payroll periods this year`);
-
-  for (const period of thisYearPeriods) {
-    const entries = await db.select().from(schema.payrollEntries)
-      .where(eq(schema.payrollEntries.payrollPeriodId, period.id));
-
-    for (const entry of entries) {
-      const existing = await db.select()
-        .from(schema.thirteenthMonthLedger)
-        .where(
-          and(
-            eq(schema.thirteenthMonthLedger.userId, entry.userId),
-            eq(schema.thirteenthMonthLedger.payrollPeriodId, period.id),
-            eq(schema.thirteenthMonthLedger.year, currentYear),
-          )
-        );
-      if (existing.length > 0) continue;
-
-      const basicPay = parseFloat(String(entry.basicPay || entry.grossPay || 0));
-      if (basicPay <= 0) continue;
-
-      await db.insert(schema.thirteenthMonthLedger).values({
-        id: randomUUID(),
-        userId: entry.userId,
-        branchId: branchId || '',
-        payrollPeriodId: period.id,
-        year: currentYear,
-        basicPayEarned: String(basicPay),
-        periodStartDate: period.startDate,
-        periodEndDate: period.endDate,
-        createdAt: new Date(),
-      });
-      console.log(`  ✅ ${entry.userId.substring(0, 8)} → ₱${basicPay.toFixed(2)} recorded for period ${period.startDate.toISOString().substring(0,10)}`);
-    }
-  }
-
-  // ── 5. Seed extra shifts for this month ──────────────────────────────────
+  // ── 4. Seed extra shifts for this month ──────────────────────────────────
   console.log('\n📅 Seeding extra shifts for March 2026...');
   const today = new Date();
   const year = 2026;

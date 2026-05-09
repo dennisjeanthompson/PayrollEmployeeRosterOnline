@@ -152,7 +152,6 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
       "Pag-IBIG Contribution (PHP)",
       "Pag-IBIG Loan (PHP)",
       "Withholding Tax (PHP)",
-      "Cash Advances (PHP)",
       "Other Deductions (PHP)",
       "Total Deductions (PHP)",
       "Net Pay (PHP)",
@@ -181,7 +180,6 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
         peso(e.pagibigContribution),
         peso(e.pagibigLoan),
         peso(e.withholdingTax),
-        peso(e.advances),
         peso(e.otherDeductions),
         peso(e.totalDeductions),
         peso(e.netPay),
@@ -207,7 +205,6 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
     const totalPagibig = sum("pagibigContribution");
     const totalPagibigLoan = sum("pagibigLoan");
     const totalTax = sum("withholdingTax");
-    const totalAdvances = sum("advances");
     const totalOtherDed = sum("otherDeductions");
     const totalDeductions = sum("totalDeductions");
     const totalNet = sum("netPay");
@@ -219,7 +216,7 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
         peso(totalBasic), peso(totalOTPay), peso(totalNDPay), peso(totalHoliday), peso(totalRestDay),
         peso(totalGross), peso(totalSSS), peso(totalSSSLoan), peso(totalPhilHealth),
         peso(totalPagibig), peso(totalPagibigLoan), peso(totalTax),
-        peso(totalAdvances), peso(totalOtherDed), peso(totalDeductions), peso(totalNet), ""),
+        peso(totalOtherDed), peso(totalDeductions), peso(totalNet), ""),
     ];
 
     const csv = buildCSV([...meta, headers, ...dataRows, ...summaryRows]);
@@ -372,7 +369,6 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
       "Pag-IBIG Contribution (PHP)",
       "Pag-IBIG Loan (PHP)",
       "Withholding Tax (PHP)",
-      "Cash Advances (PHP)",
       "Other Deductions (PHP)",
       "Total Deductions (PHP)",
     );
@@ -392,7 +388,6 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
         peso(e.pagibigContribution),
         peso(e.pagibigLoan),
         peso(e.withholdingTax),
-        peso(e.advances),
         peso(e.otherDeductions),
         peso(e.totalDeductions),
       )
@@ -403,7 +398,6 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
     const totalPhilHealth = enriched.reduce((s, { e }) => s + (parseFloat(String(e.philHealthContribution)) || 0), 0);
     const totalPagibig = enriched.reduce((s, { e }) => s + (parseFloat(String(e.pagibigContribution)) || 0), 0);
     const totalTax = enriched.reduce((s, { e }) => s + (parseFloat(String(e.withholdingTax)) || 0), 0);
-    const totalAdvances = enriched.reduce((s, { e }) => s + (parseFloat(String(e.advances)) || 0), 0);
     const totalOther = enriched.reduce((s, { e }) => s + (parseFloat(String(e.otherDeductions)) || 0), 0);
     const totalDeductions = enriched.reduce((s, { e }) => s + (parseFloat(String(e.totalDeductions)) || 0), 0);
     const totalSSSLoan = enriched.reduce((s, { e }) => s + (parseFloat(String(e.sssLoan)) || 0), 0);
@@ -414,7 +408,7 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
       row("TOTALS", "", "", "", "", "", "",
         peso(totalSSS), peso(totalSSSLoan), peso(totalPhilHealth),
         peso(totalPagibig), peso(totalPagibigLoan),
-        peso(totalTax), peso(totalAdvances), peso(totalOther), peso(totalDeductions)),
+        peso(totalTax), peso(totalOther), peso(totalDeductions)),
     ];
 
     const csv = buildCSV([...meta, headers, ...dataRows, ...summaryRows]);

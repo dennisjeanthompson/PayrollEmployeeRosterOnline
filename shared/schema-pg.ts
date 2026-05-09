@@ -32,7 +32,6 @@ export const users = pgTable("users", {
   isActive: boolean("is_active").default(true),
   sssLoanDeduction: text("sss_loan_deduction").default("0"),
   pagibigLoanDeduction: text("pagibig_loan_deduction").default("0"),
-  cashAdvanceDeduction: text("cash_advance_deduction").default("0"),
   otherDeductions: text("other_deductions").default("0"),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -97,7 +96,6 @@ export const payrollEntries = pgTable("payroll_entries", {
   pagibigContribution: text("pagibig_contribution").default("0"),
   pagibigLoan: text("pagibig_loan").default("0"),
   withholdingTax: text("withholding_tax").default("0"),
-  advances: text("advances").default("0"),
   otherDeductions: text("other_deductions").default("0"),
   totalDeductions: text("total_deductions").default("0"),
   deductions: text("deductions").default("0"),

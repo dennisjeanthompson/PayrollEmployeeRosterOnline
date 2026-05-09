@@ -119,6 +119,7 @@ export default function MuiDeductionSettings() {
     deductPhilHealth: true,
     deductPagibig: true,
     deductWithholdingTax: true,
+    includeExceptionLogs: true,
   });
 
   // Fetch existing deduction settings for this branch
@@ -146,6 +147,7 @@ export default function MuiDeductionSettings() {
         deductPhilHealth: s.deductPhilHealth ?? true,
         deductPagibig: s.deductPagibig ?? true,
         deductWithholdingTax: s.deductWithholdingTax ?? true,
+        includeExceptionLogs: s.includeExceptionLogs ?? true,
       });
     }
   }, [settingsData]);
@@ -410,6 +412,51 @@ export default function MuiDeductionSettings() {
         })}
       </Grid>
 
+      {/* Exception Logs Toggle */}
+      {isManager && (
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: `1px solid ${toggles.includeExceptionLogs ? alpha('#10b981', 0.3) : alpha(theme.palette.divider, 0.15)}`,
+            transition: 'border-color 0.3s, opacity 0.3s',
+            opacity: toggles.includeExceptionLogs ? 1 : 0.75,
+          }}
+        >
+          <CardContent sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                <Box sx={{ width: 44, height: 44, borderRadius: 2.5, bgcolor: alpha('#10b981', 0.12), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <ToggleOn sx={{ color: '#10b981', fontSize: 22 }} />
+                </Box>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={700}>Include Exception Logs in Payroll</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    When enabled, approved overtime, tardiness (lateness), undertime, and absences from the Exception Log
+                    will automatically affect payroll computations. Overtime adds to gross pay; lateness, undertime, and
+                    absences deduct from hours worked.
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+                    <Chip size="small" label="OT → +gross pay" sx={{ bgcolor: alpha('#10b981', 0.1), color: '#10b981', fontWeight: 600 }} />
+                    <Chip size="small" label="Late → -minutes" sx={{ bgcolor: alpha('#f97316', 0.1), color: '#f97316', fontWeight: 600 }} />
+                    <Chip size="small" label="Absent → -day pay" sx={{ bgcolor: alpha('#ef4444', 0.1), color: '#ef4444', fontWeight: 600 }} />
+                    <Chip size="small" label="Undertime → -minutes" sx={{ bgcolor: alpha('#ec4899', 0.1), color: '#ec4899', fontWeight: 600 }} />
+                  </Box>
+                </Box>
+              </Box>
+              <Tooltip title={toggles.includeExceptionLogs ? 'Disable exception log payroll integration' : 'Enable exception log payroll integration'}>
+                <Switch
+                  checked={toggles.includeExceptionLogs ?? true}
+                  onChange={() => handleToggle('includeExceptionLogs')}
+                  color="success"
+                  disabled={saveMutation.isPending}
+                />
+              </Tooltip>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Per-Employee Extra Deductions */}
       <Card
         elevation={0}
@@ -426,7 +473,7 @@ export default function MuiDeductionSettings() {
                 Per-Employee Deductions
               </Typography>
               <Typography variant="body2" color="text.secondary">
-                SSS Loan, Pag-IBIG Loan, Cash Advance, and other recurring deductions are managed per employee under
+                SSS Loan, Pag-IBIG Loan, and other recurring deductions are managed per employee under
                 <strong> Employees → Select Employee → Deductions</strong>.
               </Typography>
             </Box>

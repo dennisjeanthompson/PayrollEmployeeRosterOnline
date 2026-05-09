@@ -482,7 +482,7 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']),
 router.put('/api/employees/:id/deductions', requireAuth, requireRole(['manager', 'admin']), async (req, res) => {
   try {
     const { id } = req.params;
-    const { sssLoanDeduction, pagibigLoanDeduction, cashAdvanceDeduction, otherDeductions } = req.body;
+    const { sssLoanDeduction, pagibigLoanDeduction, otherDeductions } = req.body;
 
     // Get the existing employee
     const existingEmployee = await storage.getUser(id);
@@ -505,7 +505,6 @@ router.put('/api/employees/:id/deductions', requireAuth, requireRole(['manager',
     const updatedEmployee = await storage.updateUser(id, {
       sssLoanDeduction: sssLoanDeduction !== undefined ? String(sssLoanDeduction) : existingEmployee.sssLoanDeduction,
       pagibigLoanDeduction: pagibigLoanDeduction !== undefined ? String(pagibigLoanDeduction) : existingEmployee.pagibigLoanDeduction,
-      cashAdvanceDeduction: cashAdvanceDeduction !== undefined ? String(cashAdvanceDeduction) : existingEmployee.cashAdvanceDeduction,
       otherDeductions: otherDeductions !== undefined ? String(otherDeductions) : existingEmployee.otherDeductions,
     });
 
@@ -527,13 +526,11 @@ router.put('/api/employees/:id/deductions', requireAuth, requireRole(['manager',
       oldValues: {
         sssLoanDeduction: existingEmployee.sssLoanDeduction,
         pagibigLoanDeduction: existingEmployee.pagibigLoanDeduction,
-        cashAdvanceDeduction: existingEmployee.cashAdvanceDeduction,
         otherDeductions: existingEmployee.otherDeductions,
       },
       newValues: {
         sssLoanDeduction: updatedEmployee.sssLoanDeduction,
         pagibigLoanDeduction: updatedEmployee.pagibigLoanDeduction,
-        cashAdvanceDeduction: updatedEmployee.cashAdvanceDeduction,
         otherDeductions: updatedEmployee.otherDeductions,
       },
       ipAddress: req.ip || req.socket?.remoteAddress,

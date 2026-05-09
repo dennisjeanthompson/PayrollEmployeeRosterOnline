@@ -85,7 +85,7 @@ __export(schema_exports, {
   insertShiftSchema: () => insertShiftSchema,
   insertShiftTradeSchema: () => insertShiftTradeSchema,
   insertSssContributionTableSchema: () => insertSssContributionTableSchema,
-  insertThirteenthMonthLedgerSchema: () => insertThirteenthMonthLedgerSchema,
+  insertThirteenthMonthPaySchema: () => insertThirteenthMonthPaySchema,
   insertTimeOffPolicySchema: () => insertTimeOffPolicySchema,
   insertTimeOffRequestSchema: () => insertTimeOffRequestSchema,
   insertUserSchema: () => insertUserSchema,
@@ -101,7 +101,7 @@ __export(schema_exports, {
   shiftTrades: () => shiftTrades,
   shifts: () => shifts,
   sssContributionTable: () => sssContributionTable,
-  thirteenthMonthLedger: () => thirteenthMonthLedger,
+  thirteenthMonthPay: () => thirteenthMonthPay,
   timeOffPolicy: () => timeOffPolicy,
   timeOffRequests: () => timeOffRequests,
   users: () => users,
@@ -111,7 +111,7 @@ __export(schema_exports, {
 import { pgTable, text, boolean, timestamp, integer, numeric, serial } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var session, branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, companySettings, auditLogs, timeOffPolicy, employeeDocuments, adjustmentLogs, adjustmentLogComments, thirteenthMonthLedger, leaveCredits, sssContributionTable, wageOrders, allowanceTypes, workerAllowances, deMinimisYtd, employeeTaxYtd, insertBranchSchema, insertUserSchema, insertShiftSchema, insertShiftTradeSchema, insertPayrollPeriodSchema, insertPayrollEntrySchema, insertApprovalSchema, insertTimeOffRequestSchema, insertNotificationSchema, insertDeductionSettingsSchema, insertDeductionRatesSchema, insertHolidaySchema, insertArchivedPayrollPeriodSchema, insertAuditLogSchema, insertTimeOffPolicySchema, insertAdjustmentLogSchema, insertAdjustmentLogCommentSchema, insertThirteenthMonthLedgerSchema, insertLeaveCreditsSchema, insertCompanySettingsSchema, serviceChargePools, insertServiceChargePoolSchema, insertSssContributionTableSchema, insertWageOrderSchema, insertAllowanceTypeSchema, insertWorkerAllowanceSchema, insertDeMinimisYtdSchema, insertEmployeeTaxYtdSchema;
+var session, branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, companySettings, auditLogs, timeOffPolicy, employeeDocuments, adjustmentLogs, adjustmentLogComments, leaveCredits, sssContributionTable, wageOrders, allowanceTypes, workerAllowances, deMinimisYtd, employeeTaxYtd, thirteenthMonthPay, insertBranchSchema, insertUserSchema, insertShiftSchema, insertShiftTradeSchema, insertPayrollPeriodSchema, insertPayrollEntrySchema, insertApprovalSchema, insertTimeOffRequestSchema, insertNotificationSchema, insertDeductionSettingsSchema, insertDeductionRatesSchema, insertHolidaySchema, insertArchivedPayrollPeriodSchema, insertAuditLogSchema, insertTimeOffPolicySchema, insertAdjustmentLogSchema, insertAdjustmentLogCommentSchema, insertLeaveCreditsSchema, insertCompanySettingsSchema, serviceChargePools, insertServiceChargePoolSchema, insertSssContributionTableSchema, insertWageOrderSchema, insertAllowanceTypeSchema, insertWorkerAllowanceSchema, insertDeMinimisYtdSchema, insertEmployeeTaxYtdSchema, insertThirteenthMonthPaySchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -147,7 +147,6 @@ var init_schema = __esm({
       isActive: boolean("is_active").default(true),
       sssLoanDeduction: text("sss_loan_deduction").default("0"),
       pagibigLoanDeduction: text("pagibig_loan_deduction").default("0"),
-      cashAdvanceDeduction: text("cash_advance_deduction").default("0"),
       philhealthDeduction: text("philhealth_deduction").default("0"),
       otherDeductions: text("other_deductions").default("0"),
       // Cloudinary photo fields
@@ -176,6 +175,8 @@ var init_schema = __esm({
       isRecurring: boolean("is_recurring").default(false),
       recurringPattern: text("recurring_pattern"),
       status: text("status").default("scheduled"),
+      breakDurationMinutes: integer("break_duration_minutes").default(0),
+      // Break time in minutes
       actualStartTime: timestamp("actual_start_time"),
       actualEndTime: timestamp("actual_end_time"),
       createdAt: timestamp("created_at").defaultNow()
@@ -225,7 +226,6 @@ var init_schema = __esm({
       pagibigContribution: text("pagibig_contribution").default("0"),
       pagibigLoan: text("pagibig_loan").default("0"),
       withholdingTax: text("withholding_tax").default("0"),
-      advances: text("advances").default("0"),
       otherDeductions: text("other_deductions").default("0"),
       totalDeductions: text("total_deductions").default("0"),
       deductions: text("deductions").default("0"),
@@ -235,7 +235,8 @@ var init_schema = __esm({
       // RA 11360 — Service Charge share for this employee in this period
       serviceCharge: text("service_charge").default("0"),
       createdAt: timestamp("created_at").defaultNow(),
-      paidAt: timestamp("paid_at")
+      paidAt: timestamp("paid_at"),
+      has13thMonth: boolean("has_13th_month").default(false)
     });
     approvals = pgTable("approvals", {
       id: text("id").primaryKey(),
@@ -258,6 +259,8 @@ var init_schema = __esm({
       reason: text("reason").notNull(),
       status: text("status").default("pending"),
       isPaid: boolean("is_paid").default(false),
+      leavePaymentStatus: text("leave_payment_status").default("paid"),
+      // 'paid', 'unpaid', 'awol'
       requestedAt: timestamp("requested_at").defaultNow(),
       approvedAt: timestamp("approved_at"),
       approvedBy: text("approved_by").references(() => users.id),
@@ -287,6 +290,8 @@ var init_schema = __esm({
       deductPhilHealth: boolean("deduct_philhealth").default(false),
       deductPagibig: boolean("deduct_pagibig").default(false),
       deductWithholdingTax: boolean("deduct_withholding_tax").default(false),
+      includeExceptionLogs: boolean("include_exception_logs").default(true),
+      // Toggle OT/lateness in payroll
       updatedAt: timestamp("updated_at").defaultNow(),
       createdAt: timestamp("created_at").defaultNow()
     });
@@ -472,18 +477,6 @@ var init_schema = __esm({
       message: text("message").notNull(),
       createdAt: timestamp("created_at").defaultNow()
     });
-    thirteenthMonthLedger = pgTable("thirteenth_month_ledger", {
-      id: text("id").primaryKey(),
-      userId: text("user_id").references(() => users.id).notNull(),
-      branchId: text("branch_id").references(() => branches.id).notNull(),
-      payrollPeriodId: text("payroll_period_id").references(() => payrollPeriods.id).notNull(),
-      year: integer("year").notNull(),
-      basicPayEarned: text("basic_pay_earned").notNull(),
-      // Only basic pay — no OT/Holiday/NightDiff
-      periodStartDate: timestamp("period_start_date").notNull(),
-      periodEndDate: timestamp("period_end_date").notNull(),
-      createdAt: timestamp("created_at").defaultNow()
-    });
     leaveCredits = pgTable("leave_credits", {
       id: text("id").primaryKey(),
       userId: text("user_id").references(() => users.id).notNull(),
@@ -548,10 +541,20 @@ var init_schema = __esm({
       userId: text("user_id").references(() => users.id).notNull(),
       year: integer("year").notNull(),
       otherBenefitsYtd: numeric("other_benefits_ytd", { precision: 12, scale: 4 }).default("0"),
-      thirteenthMonthYtd: numeric("thirteenth_month_ytd", { precision: 12, scale: 4 }).default("0"),
       grossCompensationYtd: numeric("gross_compensation_ytd", { precision: 12, scale: 4 }).default("0"),
       taxableCompensationYtd: numeric("taxable_compensation_ytd", { precision: 12, scale: 4 }).default("0"),
       taxWithheldYtd: numeric("tax_withheld_ytd", { precision: 12, scale: 4 }).default("0")
+    });
+    thirteenthMonthPay = pgTable("thirteenth_month_pay", {
+      id: text("id").primaryKey(),
+      employeeId: text("employee_id").references(() => users.id).notNull(),
+      year: integer("year").notNull(),
+      totalBasicSalary: text("total_basic_salary").notNull(),
+      amount: text("amount").notNull(),
+      status: text("status", { enum: ["pending", "released"] }).default("pending"),
+      releasedAt: timestamp("released_at"),
+      payslipId: text("payslip_id").references(() => payrollEntries.id),
+      isTaxable: boolean("is_taxable").default(false)
     });
     insertBranchSchema = createInsertSchema(branches).omit({
       id: true,
@@ -566,7 +569,8 @@ var init_schema = __esm({
       createdAt: true
     }).extend({
       startTime: z.union([z.date(), z.string().pipe(z.coerce.date())]),
-      endTime: z.union([z.date(), z.string().pipe(z.coerce.date())])
+      endTime: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+      breakDurationMinutes: z.number().optional().nullable()
     });
     insertShiftTradeSchema = z.object({
       id: z.string().uuid().optional(),
@@ -602,7 +606,8 @@ var init_schema = __esm({
       approvedAt: true
     }).extend({
       startDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
-      endDate: z.union([z.date(), z.string().pipe(z.coerce.date())])
+      endDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+      leavePaymentStatus: z.enum(["paid", "unpaid", "awol"]).optional().nullable()
     });
     insertNotificationSchema = createInsertSchema(notifications).omit({
       id: true,
@@ -612,6 +617,8 @@ var init_schema = __esm({
       id: true,
       createdAt: true,
       updatedAt: true
+    }).extend({
+      includeExceptionLogs: z.boolean().optional().nullable()
     });
     insertDeductionRatesSchema = createInsertSchema(deductionRates).omit({
       id: true,
@@ -648,13 +655,6 @@ var init_schema = __esm({
       id: true,
       createdAt: true
     });
-    insertThirteenthMonthLedgerSchema = createInsertSchema(thirteenthMonthLedger).omit({
-      id: true,
-      createdAt: true
-    }).extend({
-      periodStartDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
-      periodEndDate: z.union([z.date(), z.string().pipe(z.coerce.date())])
-    });
     insertLeaveCreditsSchema = createInsertSchema(leaveCredits).omit({
       id: true,
       createdAt: true,
@@ -685,6 +685,7 @@ var init_schema = __esm({
     insertWorkerAllowanceSchema = createInsertSchema(workerAllowances).omit({ id: true });
     insertDeMinimisYtdSchema = createInsertSchema(deMinimisYtd).omit({ id: true });
     insertEmployeeTaxYtdSchema = createInsertSchema(employeeTaxYtd).omit({ id: true });
+    insertThirteenthMonthPaySchema = createInsertSchema(thirteenthMonthPay).omit({ id: true });
   }
 });
 
@@ -1712,6 +1713,31 @@ var init_db_storage = __esm({
         const result = await db.select().from(companySettings).where(eq(companySettings.id, id)).limit(1);
         return result[0];
       }
+      // 13th Month Pay
+      async get13thMonthRecords(year) {
+        return db.select().from(thirteenthMonthPay).where(eq(thirteenthMonthPay.year, year));
+      }
+      async get13thMonthRecordByEmployeeAndYear(employeeId, year) {
+        const result = await db.select().from(thirteenthMonthPay).where(
+          and(eq(thirteenthMonthPay.employeeId, employeeId), eq(thirteenthMonthPay.year, year))
+        ).limit(1);
+        return result[0];
+      }
+      async create13thMonthRecord(record) {
+        const id = randomUUID();
+        await db.insert(thirteenthMonthPay).values({
+          id,
+          ...record
+        });
+        const created = await db.select().from(thirteenthMonthPay).where(eq(thirteenthMonthPay.id, id)).limit(1);
+        if (!created[0]) throw new Error("Failed to create 13th month record");
+        return created[0];
+      }
+      async update13thMonthRecord(id, record) {
+        await db.update(thirteenthMonthPay).set(record).where(eq(thirteenthMonthPay.id, id));
+        const result = await db.select().from(thirteenthMonthPay).where(eq(thirteenthMonthPay.id, id)).limit(1);
+        return result[0];
+      }
     };
     dbStorage = new DatabaseStorage();
   }
@@ -1773,7 +1799,6 @@ var init_storage = __esm({
           createdAt: /* @__PURE__ */ new Date(),
           sssLoanDeduction: null,
           pagibigLoanDeduction: null,
-          cashAdvanceDeduction: null,
           otherDeductions: null,
           philhealthDeduction: null,
           photoUrl: null,
@@ -1801,7 +1826,6 @@ var init_storage = __esm({
           createdAt: /* @__PURE__ */ new Date(),
           sssLoanDeduction: null,
           pagibigLoanDeduction: null,
-          cashAdvanceDeduction: null,
           otherDeductions: null,
           philhealthDeduction: null,
           photoUrl: null,
@@ -1829,6 +1853,7 @@ var init_storage = __esm({
           status: "scheduled",
           isRecurring: false,
           recurringPattern: null,
+          breakDurationMinutes: 0,
           createdAt: /* @__PURE__ */ new Date(),
           actualStartTime: null,
           actualEndTime: null
@@ -1846,6 +1871,7 @@ var init_storage = __esm({
           status: "scheduled",
           isRecurring: false,
           recurringPattern: null,
+          breakDurationMinutes: 0,
           createdAt: /* @__PURE__ */ new Date(),
           actualStartTime: null,
           actualEndTime: null
@@ -1863,6 +1889,7 @@ var init_storage = __esm({
           status: "scheduled",
           isRecurring: false,
           recurringPattern: null,
+          breakDurationMinutes: 0,
           createdAt: /* @__PURE__ */ new Date(),
           actualStartTime: null,
           actualEndTime: null
@@ -1885,7 +1912,6 @@ var init_storage = __esm({
           isActive: insertUser.isActive ?? true,
           sssLoanDeduction: null,
           pagibigLoanDeduction: null,
-          cashAdvanceDeduction: null,
           otherDeductions: null,
           philhealthDeduction: null,
           photoUrl: insertUser.photoUrl ?? null,
@@ -1952,6 +1978,7 @@ var init_storage = __esm({
           status: insertShift.status || "scheduled",
           isRecurring: insertShift.isRecurring ?? false,
           recurringPattern: insertShift.recurringPattern || null,
+          breakDurationMinutes: insertShift.breakDurationMinutes ?? 0,
           actualStartTime: null,
           actualEndTime: null
         };
@@ -2073,8 +2100,8 @@ var init_storage = __esm({
           totalDeductions: insertEntry.totalDeductions || "0",
           otherDeductions: insertEntry.otherDeductions || "0",
           deductions: insertEntry.deductions || "0",
-          advances: insertEntry.advances ?? null,
-          payBreakdown: insertEntry.payBreakdown ?? null,
+          payBreakdown: insertEntry.payBreakdown || null,
+          has13thMonth: insertEntry.has13thMonth || false,
           paidAt: insertEntry.paidAt ?? null
         };
         this.payrollEntries.set(id, entry);
@@ -2176,7 +2203,8 @@ var init_storage = __esm({
           status: insertRequest.status || "pending",
           approvedBy: insertRequest.approvedBy || null,
           rejectionReason: insertRequest.rejectionReason ?? null,
-          isPaid: false
+          isPaid: insertRequest.isPaid ?? false,
+          leavePaymentStatus: insertRequest.leavePaymentStatus || "paid"
         };
         this.timeOffRequests.set(id, request);
         return request;
@@ -2264,8 +2292,9 @@ var init_storage = __esm({
           id,
           deductSSS: insertSettings.deductSSS ?? null,
           deductPhilHealth: insertSettings.deductPhilHealth ?? null,
-          deductPagibig: insertSettings.deductPagibig ?? null,
-          deductWithholdingTax: insertSettings.deductWithholdingTax ?? null,
+          deductPagibig: insertSettings.deductPagibig ?? true,
+          deductWithholdingTax: insertSettings.deductWithholdingTax ?? true,
+          includeExceptionLogs: insertSettings.includeExceptionLogs ?? false,
           createdAt: /* @__PURE__ */ new Date(),
           updatedAt: /* @__PURE__ */ new Date()
         };
@@ -2703,6 +2732,18 @@ var init_storage = __esm({
             await this.upsertTimeOffPolicy(branchId, d.leaveType, d.minimumAdvanceDays);
           }
         }
+      }
+      async get13thMonthRecords(year) {
+        return [];
+      }
+      async get13thMonthRecordByEmployeeAndYear(employeeId, year) {
+        return void 0;
+      }
+      async create13thMonthRecord(record) {
+        throw new Error("Method not implemented.");
+      }
+      async update13thMonthRecord(id, record) {
+        throw new Error("Method not implemented.");
       }
     };
     storage2 = new MemStorage();
@@ -3854,8 +3895,8 @@ var requireAdmin = (req, res, next) => {
   }
   next();
 };
-function registerBranchesRoutes(router12) {
-  router12.get("/api/branches", requireAuth, async (req, res) => {
+function registerBranchesRoutes(router11) {
+  router11.get("/api/branches", requireAuth, async (req, res) => {
     try {
       const allBranches = await dbStorage.getAllBranches();
       res.json({ branches: allBranches });
@@ -3864,7 +3905,7 @@ function registerBranchesRoutes(router12) {
       res.status(500).json({ message: "Failed to fetch branches" });
     }
   });
-  router12.get("/api/branches/:id", requireAuth, async (req, res) => {
+  router11.get("/api/branches/:id", requireAuth, async (req, res) => {
     try {
       const { id } = req.params;
       const branch = await dbStorage.getBranch(id);
@@ -3877,7 +3918,7 @@ function registerBranchesRoutes(router12) {
       res.status(500).json({ message: "Failed to fetch branch" });
     }
   });
-  router12.post("/api/branches", requireAuth, requireAdmin, async (req, res) => {
+  router11.post("/api/branches", requireAuth, requireAdmin, async (req, res) => {
     try {
       console.log("Received request body:", req.body);
       const schema = z2.object({
@@ -3939,9 +3980,9 @@ function registerBranchesRoutes(router12) {
       res.status(500).json({ message: "Failed to update branch" });
     }
   };
-  router12.put("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
-  router12.patch("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
-  router12.delete("/api/branches/:id", requireAuth, requireAdmin, async (req, res) => {
+  router11.put("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
+  router11.patch("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
+  router11.delete("/api/branches/:id", requireAuth, requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;
       const updatedBranch = await dbStorage.updateBranch(id, { isActive: false });
@@ -4139,8 +4180,8 @@ async function createAuditLog(params) {
 // server/routes/employees.ts
 var storage = dbStorage;
 function createEmployeeRouter(realTimeManager) {
-  const router12 = Router2();
-  const requireAuth10 = (req, res, next) => {
+  const router11 = Router2();
+  const requireAuth9 = (req, res, next) => {
     if (!req.session || !req.session.user) {
       return res.status(401).json({ message: "Authentication required" });
     }
@@ -4159,7 +4200,7 @@ function createEmployeeRouter(realTimeManager) {
     }
     next();
   };
-  router12.get("/api/employees", requireAuth10, async (req, res) => {
+  router11.get("/api/employees", requireAuth9, async (req, res) => {
     try {
       const branchId = req.session.user?.branchId;
       if (!branchId) return res.status(400).json({ message: "Branch ID not found in session" });
@@ -4183,7 +4224,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to fetch employees" });
     }
   });
-  router12.get("/api/employees/all-branches", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router11.get("/api/employees/all-branches", requireAuth9, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const allUsers = await storage.getAllUsers();
       const sanitizedEmployees = allUsers.map((emp) => ({
@@ -4202,7 +4243,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to fetch employees" });
     }
   });
-  router12.get("/api/employees/stats", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router11.get("/api/employees/stats", requireAuth9, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const branchId = req.session.user?.branchId;
       if (!branchId) return res.status(400).json({ message: "Branch ID not found in session" });
@@ -4269,7 +4310,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to fetch employee stats" });
     }
   });
-  router12.get("/api/employees/performance", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router11.get("/api/employees/performance", requireAuth9, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const branchId = req.session.user?.branchId;
       if (!branchId) return res.status(400).json({ message: "Branch ID not found in session" });
@@ -4309,7 +4350,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to fetch employee performance" });
     }
   });
-  router12.get("/api/employees/:id", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router11.get("/api/employees/:id", requireAuth9, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const employee = await storage.getUser(id);
@@ -4326,7 +4367,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to fetch employee" });
     }
   });
-  router12.post("/api/employees", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router11.post("/api/employees", requireAuth9, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const {
         username,
@@ -4418,7 +4459,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message });
     }
   });
-  router12.put("/api/employees/:id", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router11.put("/api/employees/:id", requireAuth9, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const body = req.body;
@@ -4490,10 +4531,10 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to update employee" });
     }
   });
-  router12.put("/api/employees/:id/deductions", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router11.put("/api/employees/:id/deductions", requireAuth9, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
-      const { sssLoanDeduction, pagibigLoanDeduction, cashAdvanceDeduction, otherDeductions } = req.body;
+      const { sssLoanDeduction, pagibigLoanDeduction, otherDeductions } = req.body;
       const existingEmployee = await storage.getUser(id);
       if (!existingEmployee) {
         return res.status(404).json({ message: "Employee not found" });
@@ -4507,7 +4548,6 @@ function createEmployeeRouter(realTimeManager) {
       const updatedEmployee = await storage.updateUser(id, {
         sssLoanDeduction: sssLoanDeduction !== void 0 ? String(sssLoanDeduction) : existingEmployee.sssLoanDeduction,
         pagibigLoanDeduction: pagibigLoanDeduction !== void 0 ? String(pagibigLoanDeduction) : existingEmployee.pagibigLoanDeduction,
-        cashAdvanceDeduction: cashAdvanceDeduction !== void 0 ? String(cashAdvanceDeduction) : existingEmployee.cashAdvanceDeduction,
         otherDeductions: otherDeductions !== void 0 ? String(otherDeductions) : existingEmployee.otherDeductions
       });
       if (!updatedEmployee) {
@@ -4523,13 +4563,11 @@ function createEmployeeRouter(realTimeManager) {
         oldValues: {
           sssLoanDeduction: existingEmployee.sssLoanDeduction,
           pagibigLoanDeduction: existingEmployee.pagibigLoanDeduction,
-          cashAdvanceDeduction: existingEmployee.cashAdvanceDeduction,
           otherDeductions: existingEmployee.otherDeductions
         },
         newValues: {
           sssLoanDeduction: updatedEmployee.sssLoanDeduction,
           pagibigLoanDeduction: updatedEmployee.pagibigLoanDeduction,
-          cashAdvanceDeduction: updatedEmployee.cashAdvanceDeduction,
           otherDeductions: updatedEmployee.otherDeductions
         },
         ipAddress: req.ip || req.socket?.remoteAddress,
@@ -4541,7 +4579,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to update employee deductions" });
     }
   });
-  router12.patch("/api/employees/:id/status", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router11.patch("/api/employees/:id/status", requireAuth9, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const { isActive } = req.body;
@@ -4578,7 +4616,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to update employee status" });
     }
   });
-  router12.get("/api/employees/:id/related-data", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router11.get("/api/employees/:id/related-data", requireAuth9, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const relatedData = await storage.employeeHasRelatedData(id);
@@ -4588,7 +4626,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to check related data" });
     }
   });
-  router12.get("/api/employees/:id/export", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router11.get("/api/employees/:id/export", requireAuth9, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const exportData = await storage.getEmployeeDataForExport(id);
@@ -4609,7 +4647,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: "Failed to export employee data" });
     }
   });
-  router12.delete("/api/employees/:id", requireAuth10, requireRole3(["manager", "admin"]), async (req, res) => {
+  router11.delete("/api/employees/:id", requireAuth9, requireRole3(["manager", "admin"]), async (req, res) => {
     try {
       const { id } = req.params;
       const force = req.query.force === "true";
@@ -4691,7 +4729,7 @@ function createEmployeeRouter(realTimeManager) {
       res.status(500).json({ message: error.message || "Failed to delete employee" });
     }
   });
-  return router12;
+  return router11;
 }
 
 // server/routes.ts
@@ -5548,7 +5586,6 @@ router4.get("/entry/:entryId", requireAuth5, async (req, res) => {
     const pagibig = parseFloat(String(entry.pagibigContribution || 0));
     const pagibigLoan = parseFloat(String(entry.pagibigLoan || 0));
     const tax = parseFloat(String(entry.withholdingTax || 0));
-    const advances = parseFloat(String(entry.advances || 0));
     const otherDed = parseFloat(String(entry.otherDeductions || 0));
     if (sssContrib > 0) {
       deductions.push({ code: "SSS_EE", label: "SSS (Employee)", amount: sssContrib });
@@ -5567,9 +5604,6 @@ router4.get("/entry/:entryId", requireAuth5, async (req, res) => {
     }
     if (tax > 0) {
       deductions.push({ code: "WHT", label: "Withholding Tax", amount: tax });
-    }
-    if (advances > 0) {
-      deductions.push({ code: "ADV", label: "Cash Advances", amount: advances });
     }
     if (otherDed > 0) {
       deductions.push({ code: "OTHER", label: "Other Deductions", amount: otherDed });
@@ -5707,8 +5741,8 @@ router4.get("/audit-log", requireManagerOrAdmin2, async (req, res) => {
 router4.post("/generate-pdf", requireAuth5, async (req, res) => {
   console.log("[Payslips] POST /generate-pdf called");
   try {
-    const { payslip_data, format: format5 = "pdf", include_qr = true } = req.body;
-    console.log("[Payslips] Received payslip_data:", !!payslip_data, "format:", format5);
+    const { payslip_data, format: format4 = "pdf", include_qr = true } = req.body;
+    console.log("[Payslips] Received payslip_data:", !!payslip_data, "format:", format4);
     if (!payslip_data) {
       return res.status(400).json({
         success: false,
@@ -5743,7 +5777,7 @@ router4.post("/generate-pdf", requireAuth5, async (req, res) => {
       includeVerification: true,
       verificationBaseUrl: `${req.protocol}://${req.get("host")}/api/payslips/verify`
     });
-    if (format5 === "json") {
+    if (format4 === "json") {
       return res.json({
         success: true,
         payslip_id: data.payslip_id,
@@ -6150,7 +6184,6 @@ router6.get("/api/reports/payroll/export", requireAuth7, requireManagerRole2, as
       "Pag-IBIG Contribution (PHP)",
       "Pag-IBIG Loan (PHP)",
       "Withholding Tax (PHP)",
-      "Cash Advances (PHP)",
       "Other Deductions (PHP)",
       "Total Deductions (PHP)",
       "Net Pay (PHP)",
@@ -6177,7 +6210,6 @@ router6.get("/api/reports/payroll/export", requireAuth7, requireManagerRole2, as
         peso(e.pagibigContribution),
         peso(e.pagibigLoan),
         peso(e.withholdingTax),
-        peso(e.advances),
         peso(e.otherDeductions),
         peso(e.totalDeductions),
         peso(e.netPay),
@@ -6201,7 +6233,6 @@ router6.get("/api/reports/payroll/export", requireAuth7, requireManagerRole2, as
     const totalPagibig = sum("pagibigContribution");
     const totalPagibigLoan = sum("pagibigLoan");
     const totalTax = sum("withholdingTax");
-    const totalAdvances = sum("advances");
     const totalOtherDed = sum("otherDeductions");
     const totalDeductions = sum("totalDeductions");
     const totalNet = sum("netPay");
@@ -6227,7 +6258,6 @@ router6.get("/api/reports/payroll/export", requireAuth7, requireManagerRole2, as
         peso(totalPagibig),
         peso(totalPagibigLoan),
         peso(totalTax),
-        peso(totalAdvances),
         peso(totalOtherDed),
         peso(totalDeductions),
         peso(totalNet),
@@ -6360,7 +6390,6 @@ router6.get("/api/reports/deductions/export", requireAuth7, requireManagerRole2,
       "Pag-IBIG Contribution (PHP)",
       "Pag-IBIG Loan (PHP)",
       "Withholding Tax (PHP)",
-      "Cash Advances (PHP)",
       "Other Deductions (PHP)",
       "Total Deductions (PHP)"
     );
@@ -6379,7 +6408,6 @@ router6.get("/api/reports/deductions/export", requireAuth7, requireManagerRole2,
         peso(e.pagibigContribution),
         peso(e.pagibigLoan),
         peso(e.withholdingTax),
-        peso(e.advances),
         peso(e.otherDeductions),
         peso(e.totalDeductions)
       )
@@ -6388,7 +6416,6 @@ router6.get("/api/reports/deductions/export", requireAuth7, requireManagerRole2,
     const totalPhilHealth = enriched.reduce((s, { e }) => s + (parseFloat(String(e.philHealthContribution)) || 0), 0);
     const totalPagibig = enriched.reduce((s, { e }) => s + (parseFloat(String(e.pagibigContribution)) || 0), 0);
     const totalTax = enriched.reduce((s, { e }) => s + (parseFloat(String(e.withholdingTax)) || 0), 0);
-    const totalAdvances = enriched.reduce((s, { e }) => s + (parseFloat(String(e.advances)) || 0), 0);
     const totalOther = enriched.reduce((s, { e }) => s + (parseFloat(String(e.otherDeductions)) || 0), 0);
     const totalDeductions = enriched.reduce((s, { e }) => s + (parseFloat(String(e.totalDeductions)) || 0), 0);
     const totalSSSLoan = enriched.reduce((s, { e }) => s + (parseFloat(String(e.sssLoan)) || 0), 0);
@@ -6409,7 +6436,6 @@ router6.get("/api/reports/deductions/export", requireAuth7, requireManagerRole2,
         peso(totalPagibig),
         peso(totalPagibigLoan),
         peso(totalTax),
-        peso(totalAdvances),
         peso(totalOther),
         peso(totalDeductions)
       )
@@ -7788,7 +7814,7 @@ router10.post("/:id/documents", async (req, res) => {
   if (!await canManageEmployeeData(sessionUser, id)) {
     return res.status(403).json({ error: "Not authorized to upload documents for this user" });
   }
-  const { type, name, publicId, url, format: format5, size } = req.body || {};
+  const { type, name, publicId, url, format: format4, size } = req.body || {};
   if (!type || !name || !publicId || !url) {
     return res.status(400).json({ error: "type, name, publicId, and url are required" });
   }
@@ -7801,7 +7827,7 @@ router10.post("/:id/documents", async (req, res) => {
       name,
       publicId,
       url,
-      format: format5 || null,
+      format: format4 || null,
       size: typeof size === "number" ? size : null,
       uploadedBy: sessionUser?.id || null,
       createdAt: /* @__PURE__ */ new Date()
@@ -7812,7 +7838,7 @@ router10.post("/:id/documents", async (req, res) => {
       name,
       publicId,
       url,
-      format: format5 || null,
+      format: format4 || null,
       size: typeof size === "number" ? size : null,
       uploadedAt: (/* @__PURE__ */ new Date()).toISOString()
     });
@@ -7915,149 +7941,18 @@ router10.delete("/:id/photo", async (req, res) => {
 });
 var employee_uploads_default = router10;
 
-// server/routes/thirteenth-month.ts
-init_db();
-init_schema();
-import { Router as Router12 } from "express";
-import { eq as eq5, and as and3, desc as desc3 } from "drizzle-orm";
-import { format as format3 } from "date-fns";
-var router11 = Router12();
-var requireAuth9 = (req, res, next) => {
-  if (!req.session?.user) return res.status(401).json({ message: "Not authenticated" });
-  req.user = req.session.user;
-  next();
-};
-var requireManagerRole4 = (req, res, next) => {
-  if (req.user?.role !== "manager" && req.user?.role !== "admin") {
-    return res.status(403).json({ message: "Insufficient permissions" });
-  }
-  next();
-};
-router11.get("/api/thirteenth-month/summary", requireAuth9, requireManagerRole4, async (req, res) => {
-  try {
-    const branchId = req.user.branchId;
-    const year = req.query.year ? parseInt(req.query.year) : (/* @__PURE__ */ new Date()).getFullYear();
-    if (isNaN(year) || year < 2020 || year > 2100) {
-      return res.status(400).json({ message: "Invalid year" });
-    }
-    const entries = await db.select().from(thirteenthMonthLedger).where(
-      and3(
-        eq5(thirteenthMonthLedger.branchId, branchId),
-        eq5(thirteenthMonthLedger.year, year)
-      )
-    ).orderBy(desc3(thirteenthMonthLedger.periodStartDate));
-    const byEmployee = /* @__PURE__ */ new Map();
-    for (const entry of entries) {
-      const existing = byEmployee.get(entry.userId);
-      const basicPay = parseFloat(entry.basicPayEarned) || 0;
-      const periodEnd = new Date(entry.periodEndDate);
-      const periodStart = new Date(entry.periodStartDate);
-      if (!existing) {
-        byEmployee.set(entry.userId, {
-          userId: entry.userId,
-          totalBasicPaid: basicPay,
-          periods: 1,
-          earliestPeriod: periodStart,
-          latestPeriod: periodEnd
-        });
-      } else {
-        existing.totalBasicPaid += basicPay;
-        existing.periods += 1;
-        if (!existing.earliestPeriod || periodStart < existing.earliestPeriod) {
-          existing.earliestPeriod = periodStart;
-        }
-        if (!existing.latestPeriod || periodEnd > existing.latestPeriod) {
-          existing.latestPeriod = periodEnd;
-        }
-      }
-    }
-    const branchUsers = await db.select().from(users).where(eq5(users.branchId, branchId));
-    const userMap = new Map(branchUsers.map((u) => [u.id, u]));
-    const summary = Array.from(byEmployee.values()).map((emp) => {
-      const user = userMap.get(emp.userId);
-      const projectedThirteenthMonth = Math.round(emp.totalBasicPaid / 12 * 100) / 100;
-      return {
-        userId: emp.userId,
-        employeeName: user ? `${user.firstName} ${user.lastName}` : "Unknown",
-        position: user?.position || "",
-        year,
-        totalBasicPaid: Math.round(emp.totalBasicPaid * 100) / 100,
-        projectedThirteenthMonth,
-        periodsCount: emp.periods,
-        earliestPeriod: emp.earliestPeriod?.toISOString() || null,
-        latestPeriod: emp.latestPeriod?.toISOString() || null
-      };
-    });
-    summary.sort((a, b) => a.employeeName.localeCompare(b.employeeName));
-    res.json({ summary, year });
-  } catch (error) {
-    console.error("Error fetching 13th month summary:", error);
-    res.status(500).json({ message: error.message || "Failed to fetch 13th month summary" });
-  }
-});
-router11.get("/api/thirteenth-month/export", requireAuth9, requireManagerRole4, async (req, res) => {
-  try {
-    const branchId = req.user.branchId;
-    const year = req.query.year ? parseInt(req.query.year) : (/* @__PURE__ */ new Date()).getFullYear();
-    const entries = await db.select().from(thirteenthMonthLedger).where(
-      and3(
-        eq5(thirteenthMonthLedger.branchId, branchId),
-        eq5(thirteenthMonthLedger.year, year)
-      )
-    );
-    const branchUsers = await db.select().from(users).where(eq5(users.branchId, branchId));
-    const userMap = new Map(branchUsers.map((u) => [u.id, u]));
-    const byEmployee = /* @__PURE__ */ new Map();
-    for (const entry of entries) {
-      const existing = byEmployee.get(entry.userId) || 0;
-      byEmployee.set(entry.userId, existing + (parseFloat(entry.basicPayEarned) || 0));
-    }
-    const escapeCSV2 = (v) => {
-      const str = String(v ?? "");
-      return str.includes(",") || str.includes('"') ? `"${str.replace(/"/g, '""')}"` : str;
-    };
-    const peso2 = (n) => n.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    const headerMeta = [
-      "PERO PAYROLL SYSTEM \u2014 13TH MONTH PAY LEDGER EXPORT",
-      `Year: ${year}`,
-      `Generated: ${format3(/* @__PURE__ */ new Date(), "MMMM d yyyy HH:mm")}`,
-      ""
-    ].join("\n");
-    const header = ["Employee Name", "Position", "TIN", "Total Basic Pay (PHP)", "Projected 13th Month (PHP)"].map(escapeCSV2).join(",");
-    const rows = Array.from(byEmployee.entries()).map(([userId, totalBasicPaid]) => {
-      const user = userMap.get(userId);
-      const projected = totalBasicPaid / 12;
-      return [
-        user ? `${user.firstName} ${user.lastName}` : "Unknown",
-        user?.position || "",
-        user?.tin || "",
-        peso2(Math.round(totalBasicPaid * 100) / 100),
-        peso2(Math.round(projected * 100) / 100)
-      ].map(escapeCSV2).join(",");
-    });
-    const csv = "\uFEFFsep=,\n" + [headerMeta, header, ...rows].join("\n");
-    const filename = `13th_month_${year}_${format3(/* @__PURE__ */ new Date(), "yyyy-MM-dd_HHmmss")}.csv`;
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-    res.end(Buffer.from(csv, "utf8"));
-  } catch (error) {
-    console.error("Error exporting 13th month:", error);
-    res.status(500).json({ message: error.message || "Failed to export 13th month data" });
-  }
-});
-
 // server/routes.ts
 init_leave_credits();
 init_db();
 init_schema();
-import { eq as eq7 } from "drizzle-orm";
+import { eq as eq6 } from "drizzle-orm";
 
 // server/init-db.ts
 init_db();
 init_schema();
 import bcrypt2 from "bcrypt";
 import { randomUUID as randomUUID5 } from "crypto";
-import { eq as eq6, sql as sql4 } from "drizzle-orm";
+import { eq as eq5, sql as sql3 } from "drizzle-orm";
 async function runMigrations() {
   console.log("\u{1F504} Running startup migrations...");
   try {
@@ -8069,15 +7964,15 @@ async function runMigrations() {
 async function resetDatabase() {
   console.log("\u{1F5D1}\uFE0F Resetting database (dropping all tables)...");
   try {
-    await db.execute(sql4`DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;`);
+    await db.execute(sql3`DROP SCHEMA public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO public;`);
     console.log("\u2705 Database reset complete");
   } catch (error) {
     console.error("\u274C Error resetting database:", error);
     try {
-      await db.execute(sql4`
+      await db.execute(sql3`
         DROP TABLE IF EXISTS 
         employee_tax_ytd, de_minimis_ytd, worker_allowances, allowance_types, wage_orders, sss_contribution_table,
-        loan_requests, leave_credits, thirteenth_month_ledger, service_charge_pools, company_settings,
+        loan_requests, leave_credits, service_charge_pools, company_settings,
         audit_logs, archived_payroll_periods, holidays, deduction_rates, deduction_settings, 
         setup_status, notifications, time_off_requests, approvals, payroll_entries, payroll_periods, 
         shift_trades, shifts, users, branches CASCADE
@@ -8092,7 +7987,7 @@ async function resetDatabase() {
 async function initializeDatabase() {
   console.log("\u{1F527} Initializing PostgreSQL database with Neon...");
   try {
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS branches (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -8104,7 +7999,7 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         username TEXT NOT NULL UNIQUE,
@@ -8120,7 +8015,6 @@ async function initializeDatabase() {
         is_active BOOLEAN DEFAULT true,
         sss_loan_deduction TEXT DEFAULT '0',
         pagibig_loan_deduction TEXT DEFAULT '0',
-        cash_advance_deduction TEXT DEFAULT '0',
         philhealth_deduction TEXT DEFAULT '0',
         other_deductions TEXT DEFAULT '0',
         photo_url TEXT,
@@ -8134,19 +8028,28 @@ async function initializeDatabase() {
       )
     `);
     try {
-      await db.execute(sql4`ALTER TABLE users ADD COLUMN IF NOT EXISTS tin TEXT`);
-      await db.execute(sql4`ALTER TABLE users ADD COLUMN IF NOT EXISTS sss_number TEXT`);
-      await db.execute(sql4`ALTER TABLE users ADD COLUMN IF NOT EXISTS philhealth_number TEXT`);
-      await db.execute(sql4`ALTER TABLE users ADD COLUMN IF NOT EXISTS pagibig_number TEXT`);
+      await db.execute(sql3`ALTER TABLE users ADD COLUMN IF NOT EXISTS tin TEXT`);
+      await db.execute(sql3`ALTER TABLE users ADD COLUMN IF NOT EXISTS sss_number TEXT`);
+      await db.execute(sql3`ALTER TABLE users ADD COLUMN IF NOT EXISTS philhealth_number TEXT`);
+      await db.execute(sql3`ALTER TABLE users ADD COLUMN IF NOT EXISTS pagibig_number TEXT`);
       console.log("\u2705 User table migrations (government IDs) checked/applied");
     } catch (err) {
       console.log("\u26A0\uFE0F Could not apply some users table migrations:", err);
     }
     try {
-      await db.execute(sql4`ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS include_holiday_pay BOOLEAN DEFAULT false`);
+      await db.execute(sql3`ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS include_holiday_pay BOOLEAN DEFAULT false`);
     } catch (_) {
     }
-    await db.execute(sql4`
+    try {
+      await db.execute(sql3`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS break_duration_minutes INTEGER DEFAULT 0`);
+      await db.execute(sql3`ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS leave_payment_status TEXT DEFAULT 'paid'`);
+      await db.execute(sql3`ALTER TABLE deduction_settings ADD COLUMN IF NOT EXISTS include_exception_logs BOOLEAN DEFAULT true`);
+      await db.execute(sql3`ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS has_13th_month BOOLEAN DEFAULT false`);
+      console.log("\u2705 New column migrations (break time, leave payment, exception logs, 13th month) checked/applied");
+    } catch (err) {
+      console.log("\u26A0\uFE0F Could not apply new column migrations:", err);
+    }
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS shifts (
         id TEXT PRIMARY KEY,
         user_id TEXT REFERENCES users(id) NOT NULL,
@@ -8157,12 +8060,13 @@ async function initializeDatabase() {
         is_recurring BOOLEAN DEFAULT false,
         recurring_pattern TEXT,
         status TEXT DEFAULT 'scheduled',
+        break_duration_minutes INTEGER DEFAULT 0,
         actual_start_time TIMESTAMP,
         actual_end_time TIMESTAMP,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS shift_trades (
         id TEXT PRIMARY KEY,
         shift_id TEXT REFERENCES shifts(id) NOT NULL,
@@ -8177,7 +8081,7 @@ async function initializeDatabase() {
         approved_by TEXT REFERENCES users(id)
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS payroll_periods (
         id TEXT PRIMARY KEY,
         branch_id TEXT REFERENCES branches(id) NOT NULL,
@@ -8190,7 +8094,7 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS payroll_entries (
         id TEXT PRIMARY KEY,
         user_id TEXT REFERENCES users(id) NOT NULL,
@@ -8211,7 +8115,6 @@ async function initializeDatabase() {
         pagibig_contribution TEXT DEFAULT '0',
         pagibig_loan TEXT DEFAULT '0',
         withholding_tax TEXT DEFAULT '0',
-        advances TEXT DEFAULT '0',
         other_deductions TEXT DEFAULT '0',
         total_deductions TEXT DEFAULT '0',
         deductions TEXT DEFAULT '0',
@@ -8219,11 +8122,12 @@ async function initializeDatabase() {
         pay_breakdown TEXT,
         status TEXT DEFAULT 'pending',
         service_charge TEXT DEFAULT '0',
+        has_13th_month BOOLEAN DEFAULT false,
         created_at TIMESTAMP DEFAULT NOW(),
         paid_at TIMESTAMP
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS approvals (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
@@ -8237,7 +8141,7 @@ async function initializeDatabase() {
         responded_at TIMESTAMP
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS time_off_requests (
         id TEXT PRIMARY KEY,
         user_id TEXT REFERENCES users(id) NOT NULL,
@@ -8247,13 +8151,14 @@ async function initializeDatabase() {
         reason TEXT NOT NULL,
         status TEXT DEFAULT 'pending',
         is_paid BOOLEAN DEFAULT false,
+        leave_payment_status TEXT DEFAULT 'paid',
         requested_at TIMESTAMP DEFAULT NOW(),
         approved_at TIMESTAMP,
         approved_by TEXT REFERENCES users(id),
         rejection_reason TEXT
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS notifications (
         id TEXT PRIMARY KEY,
         user_id TEXT REFERENCES users(id) NOT NULL,
@@ -8266,14 +8171,26 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
+      CREATE TABLE IF NOT EXISTS thirteenth_month_pay (
+        id TEXT PRIMARY KEY,
+        employee_id TEXT NOT NULL REFERENCES users(id),
+        year INTEGER NOT NULL,
+        total_basic_salary TEXT NOT NULL,
+        amount TEXT NOT NULL,
+        status TEXT DEFAULT 'pending',
+        released_at TIMESTAMP,
+        payslip_id TEXT REFERENCES payroll_entries(id),
+        is_taxable BOOLEAN DEFAULT false
+      );
+
       CREATE TABLE IF NOT EXISTS setup_status (
         id TEXT PRIMARY KEY,
         is_setup_complete BOOLEAN DEFAULT false,
         setup_completed_at TIMESTAMP
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS deduction_settings (
         id TEXT PRIMARY KEY,
         branch_id TEXT REFERENCES branches(id) NOT NULL,
@@ -8281,11 +8198,12 @@ async function initializeDatabase() {
         deduct_philhealth BOOLEAN DEFAULT false,
         deduct_pagibig BOOLEAN DEFAULT false,
         deduct_withholding_tax BOOLEAN DEFAULT false,
+        include_exception_logs BOOLEAN DEFAULT true,
         updated_at TIMESTAMP DEFAULT NOW(),
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS deduction_rates (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
@@ -8299,7 +8217,7 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS holidays (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -8313,23 +8231,23 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       ALTER TABLE holidays ADD COLUMN IF NOT EXISTS work_allowed BOOLEAN DEFAULT true
     `).catch(() => {
     });
-    await db.execute(sql4`
+    await db.execute(sql3`
       ALTER TABLE holidays ADD COLUMN IF NOT EXISTS notes TEXT
     `).catch(() => {
     });
-    await db.execute(sql4`
+    await db.execute(sql3`
       ALTER TABLE holidays ADD COLUMN IF NOT EXISTS premium_override TEXT
     `).catch(() => {
     });
-    await db.execute(sql4`
+    await db.execute(sql3`
       ALTER TABLE users ADD COLUMN IF NOT EXISTS philhealth_deduction TEXT DEFAULT '0'
     `).catch(() => {
     });
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS archived_payroll_periods (
         id TEXT PRIMARY KEY,
         original_period_id TEXT NOT NULL,
@@ -8344,7 +8262,7 @@ async function initializeDatabase() {
         entries_snapshot TEXT
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS audit_logs (
         id TEXT PRIMARY KEY,
         action TEXT NOT NULL,
@@ -8359,7 +8277,7 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS time_off_policy (
         id TEXT PRIMARY KEY,
         branch_id TEXT REFERENCES branches(id) NOT NULL,
@@ -8370,7 +8288,7 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS employee_documents (
         id TEXT PRIMARY KEY,
         user_id TEXT REFERENCES users(id) NOT NULL,
@@ -8384,7 +8302,7 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS adjustment_logs (
         id TEXT PRIMARY KEY,
         employee_id TEXT REFERENCES users(id) NOT NULL,
@@ -8407,19 +8325,19 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS is_included BOOLEAN DEFAULT true
     `).catch(() => {
     });
-    await db.execute(sql4`
+    await db.execute(sql3`
       ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS dispute_reason TEXT
     `).catch(() => {
     });
-    await db.execute(sql4`
+    await db.execute(sql3`
       ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS disputed_at TIMESTAMP
     `).catch(() => {
     });
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS adjustment_log_comments (
         id TEXT PRIMARY KEY,
         adjustment_log_id TEXT REFERENCES adjustment_logs(id) NOT NULL,
@@ -8428,7 +8346,7 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS sss_contribution_table (
         id SERIAL PRIMARY KEY,
         year INTEGER NOT NULL,
@@ -8440,7 +8358,7 @@ async function initializeDatabase() {
         ec_contribution NUMERIC(12, 4) NOT NULL
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS wage_orders (
         id SERIAL PRIMARY KEY,
         region TEXT NOT NULL,
@@ -8449,7 +8367,7 @@ async function initializeDatabase() {
         is_active BOOLEAN DEFAULT true
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS allowance_types (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -8458,7 +8376,7 @@ async function initializeDatabase() {
         ceiling_value NUMERIC(12, 4)
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS worker_allowances (
         id TEXT PRIMARY KEY,
         user_id TEXT REFERENCES users(id) NOT NULL,
@@ -8467,7 +8385,7 @@ async function initializeDatabase() {
         is_active BOOLEAN DEFAULT true
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS de_minimis_ytd (
         id TEXT PRIMARY KEY,
         user_id TEXT REFERENCES users(id) NOT NULL,
@@ -8477,32 +8395,18 @@ async function initializeDatabase() {
         amount_given_ytd NUMERIC(12, 4) DEFAULT '0'
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS employee_tax_ytd (
         id TEXT PRIMARY KEY,
         user_id TEXT REFERENCES users(id) NOT NULL,
         year INTEGER NOT NULL,
         other_benefits_ytd NUMERIC(12, 4) DEFAULT '0',
-        thirteenth_month_ytd NUMERIC(12, 4) DEFAULT '0',
         gross_compensation_ytd NUMERIC(12, 4) DEFAULT '0',
         taxable_compensation_ytd NUMERIC(12, 4) DEFAULT '0',
         tax_withheld_ytd NUMERIC(12, 4) DEFAULT '0'
       )
     `);
-    await db.execute(sql4`
-      CREATE TABLE IF NOT EXISTS thirteenth_month_ledger (
-        id TEXT PRIMARY KEY,
-        user_id TEXT REFERENCES users(id) NOT NULL,
-        branch_id TEXT REFERENCES branches(id) NOT NULL,
-        payroll_period_id TEXT REFERENCES payroll_periods(id) NOT NULL,
-        year INTEGER NOT NULL,
-        basic_pay_earned TEXT NOT NULL,
-        period_start_date TIMESTAMP NOT NULL,
-        period_end_date TIMESTAMP NOT NULL,
-        created_at TIMESTAMP DEFAULT NOW()
-      )
-    `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS leave_credits (
         id TEXT PRIMARY KEY,
         user_id TEXT REFERENCES users(id) NOT NULL,
@@ -8518,7 +8422,7 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS loan_requests (
         id TEXT PRIMARY KEY,
         user_id TEXT REFERENCES users(id) NOT NULL,
@@ -8539,7 +8443,7 @@ async function initializeDatabase() {
         updated_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS service_charge_pools (
         id TEXT PRIMARY KEY,
         branch_id TEXT REFERENCES branches(id) NOT NULL,
@@ -8550,7 +8454,7 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS company_settings (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -8584,7 +8488,7 @@ async function initializeDatabase() {
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS "session" (
         "sid" VARCHAR NOT NULL COLLATE "default",
         "sess" JSON NOT NULL,
@@ -8592,7 +8496,7 @@ async function initializeDatabase() {
         CONSTRAINT "session_pkey" PRIMARY KEY ("sid")
       )
     `);
-    await db.execute(sql4`
+    await db.execute(sql3`
       CREATE INDEX IF NOT EXISTS "IDX_session_expire" ON "session" ("expire")
     `);
     console.log("\u2705 All database tables created successfully");
@@ -8604,7 +8508,7 @@ async function initializeDatabase() {
 async function createAdminAccount() {
   console.log("\u{1F464} Checking for admin account...");
   try {
-    const existingAdmin = await db.select().from(users).where(eq6(users.username, "admin")).limit(1);
+    const existingAdmin = await db.select().from(users).where(eq5(users.username, "admin")).limit(1);
     if (existingAdmin.length > 0) {
       console.log("\u2705 Admin account already exists");
       return;
@@ -8670,7 +8574,7 @@ async function seedDeductionRates() {
         isActive: true
       });
     }
-    const existingSSSBrackets = await db.select().from(sssContributionTable).where(eq6(sssContributionTable.year, 2026)).limit(1);
+    const existingSSSBrackets = await db.select().from(sssContributionTable).where(eq5(sssContributionTable.year, 2026)).limit(1);
     if (existingSSSBrackets.length === 0) {
       console.log("\u{1F4C8} Seeding SSS Contribution Table (2026)...");
       for (const b of sss2026Brackets2) {
@@ -8850,7 +8754,7 @@ async function seedPhilippineHolidays() {
 async function seedSampleUsers() {
   console.log("\u{1F465} Checking sample users...");
   try {
-    const existingEmployees = await db.select().from(users).where(eq6(users.role, "employee")).limit(1);
+    const existingEmployees = await db.select().from(users).where(eq5(users.role, "employee")).limit(1);
     if (existingEmployees.length > 0) {
       console.log("\u2705 Sample employees already exist");
       return;
@@ -8991,7 +8895,7 @@ async function seedSampleUsers() {
       }
     ];
     for (const user of sampleUsers) {
-      const existing = await db.select().from(users).where(eq6(users.username, user.username));
+      const existing = await db.select().from(users).where(eq5(users.username, user.username));
       if (existing.length > 0) {
         console.log(`   Skipping ${user.username} (already exists)`);
         continue;
@@ -9042,11 +8946,10 @@ async function seedSampleSchedulesAndPayroll() {
     if (existingPayroll.length > 0) {
       console.log("  \u{1F9F9} Clearing orphaned payroll data (shifts were cleared by migration)...");
       try {
-        await db.execute(sql4`DELETE FROM adjustment_logs`);
-        await db.execute(sql4`DELETE FROM archived_payroll_periods`);
-        await db.execute(sql4`DELETE FROM payroll_entries`);
-        await db.execute(sql4`DELETE FROM thirteenth_month_ledger`);
-        await db.execute(sql4`DELETE FROM payroll_periods`);
+        await db.execute(sql3`DELETE FROM adjustment_logs`);
+        await db.execute(sql3`DELETE FROM archived_payroll_periods`);
+        await db.execute(sql3`DELETE FROM payroll_entries`);
+        await db.execute(sql3`DELETE FROM payroll_periods`);
       } catch (e) {
         console.warn("  \u26A0\uFE0F Could not clear payroll data:", e);
       }
@@ -9312,7 +9215,7 @@ async function seedSampleSchedulesAndPayroll() {
           paidAt: period.status === "closed" ? getPaymentDate(period.endDate) : null
         });
       }
-      await db.update(payrollPeriods).set({ totalPay: periodTotalPay.toFixed(2) }).where(eq6(payrollPeriods.id, period.id));
+      await db.update(payrollPeriods).set({ totalPay: periodTotalPay.toFixed(2) }).where(eq5(payrollPeriods.id, period.id));
     }
     console.log("   \u2705 Created 6 payroll periods (Jan\u2013Mar 2026) with DOLE-compliant deductions");
     const timeOffRequests_data = [
@@ -9411,7 +9314,7 @@ async function markSetupComplete() {
   try {
     const existing = await db.select().from(setupStatus).limit(1);
     if (existing.length > 0) {
-      await db.update(setupStatus).set({ isSetupComplete: true, setupCompletedAt: /* @__PURE__ */ new Date() }).where(eq6(setupStatus.id, existing[0].id));
+      await db.update(setupStatus).set({ isSetupComplete: true, setupCompletedAt: /* @__PURE__ */ new Date() }).where(eq5(setupStatus.id, existing[0].id));
     } else {
       await db.insert(setupStatus).values({
         id: randomUUID5(),
@@ -9433,7 +9336,7 @@ async function seedSampleShiftTrades() {
       console.log("\u2705 Shift trades already exist");
       return;
     }
-    const allEmps = await db.select().from(users).where(eq6(users.role, "employee"));
+    const allEmps = await db.select().from(users).where(eq5(users.role, "employee"));
     const allBranches = await db.select().from(branches);
     if (allEmps.length < 4) {
       console.log("\u26A0\uFE0F Not enough employees for trades");
@@ -9491,7 +9394,7 @@ async function seedSampleShiftTrades() {
       requestedAt: approvedTime,
       approvedAt: /* @__PURE__ */ new Date()
     });
-    await db.update(shifts).set({ userId: allEmps[4].id }).where(eq6(shifts.id, tradeShiftIds[2]));
+    await db.update(shifts).set({ userId: allEmps[4].id }).where(eq5(shifts.id, tradeShiftIds[2]));
     console.log("   \u2705 Created 3 sample shift trades (Pending, Open/Urgent, Approved)");
   } catch (error) {
     console.error("\u274C Error seeding shift trades:", error);
@@ -9501,7 +9404,7 @@ async function seedSampleShiftTrades() {
 // server/routes.ts
 init_payroll_utils();
 import bcrypt3 from "bcrypt";
-import { format as format4 } from "date-fns";
+import { format as format3 } from "date-fns";
 import crypto3 from "crypto";
 import { Pool as Pool2, neonConfig as neonConfig2 } from "@neondatabase/serverless";
 import ws2 from "ws";
@@ -9844,7 +9747,7 @@ async function registerRoutes(app2) {
   const getAuthenticatedUser = (req) => {
     return isAuthenticated(req) ? req.session.user : null;
   };
-  const requireAuth10 = (req, res, next) => {
+  const requireAuth9 = (req, res, next) => {
     const user = getAuthenticatedUser(req);
     if (!user) {
       return res.status(401).json({ message: "Authentication required" });
@@ -10030,7 +9933,7 @@ async function registerRoutes(app2) {
   app2.get("/healthz", (req, res) => {
     res.status(200).send("OK");
   });
-  app2.post("/api/admin/fix-passwords", requireAuth10, requireRole3(["admin"]), asyncHandler(async (req, res) => {
+  app2.post("/api/admin/fix-passwords", requireAuth9, requireRole3(["admin"]), asyncHandler(async (req, res) => {
     try {
       const { defaultPassword } = req.body;
       const passwordToHash = defaultPassword || "password123";
@@ -10063,7 +9966,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fix passwords" });
     }
   }));
-  app2.post("/api/admin/reset-password", requireAuth10, requireRole3(["admin", "manager"]), asyncHandler(async (req, res) => {
+  app2.post("/api/admin/reset-password", requireAuth9, requireRole3(["admin", "manager"]), asyncHandler(async (req, res) => {
     try {
       const { userId, newPassword } = req.body;
       if (!userId || !newPassword) {
@@ -10093,7 +9996,7 @@ async function registerRoutes(app2) {
     }
   }));
   const clientDebugReports = [];
-  app2.post("/api/client-debug", requireAuth10, asyncHandler(async (req, res) => {
+  app2.post("/api/client-debug", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const payload = req.body || {};
       const entry = {
@@ -10111,7 +10014,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to record client debug report" });
     }
   }));
-  app2.get("/api/client-debug", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/client-debug", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const rows = clientDebugReports.slice(0, 100).map((r, idx) => {
         const p = JSON.stringify(r.payload, null, 2).replace(/</g, "&lt;");
@@ -10232,7 +10135,7 @@ async function registerRoutes(app2) {
       });
     }
   }));
-  app2.get("/api/auth/me", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/auth/me", requireAuth9, asyncHandler(async (req, res) => {
     try {
       if (!req.user) {
         return res.status(401).json({ message: "Not authenticated" });
@@ -10252,7 +10155,7 @@ async function registerRoutes(app2) {
       });
     }
   }));
-  app2.put("/api/auth/switch-branch", requireAuth10, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app2.put("/api/auth/switch-branch", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { branchId } = req.body;
       if (!branchId || typeof branchId !== "string") {
@@ -10284,7 +10187,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to switch branch" });
     }
   }));
-  app2.get("/api/shifts", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/shifts", requireAuth9, asyncHandler(async (req, res) => {
     const { startDate, endDate, userId: queryUserId } = req.query;
     const currentUser = req.user;
     const targetUserId = queryUserId || currentUser.id;
@@ -10302,7 +10205,7 @@ async function registerRoutes(app2) {
     }));
     res.json({ shifts: enrichedShifts });
   }));
-  app2.get("/api/shifts/branch", requireAuth10, requireRole3(["manager", "employee", "admin"]), asyncHandler(async (req, res) => {
+  app2.get("/api/shifts/branch", requireAuth9, requireRole3(["manager", "employee", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { startDate, endDate } = req.query;
       const branchId = req.user.branchId;
@@ -10332,7 +10235,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch shifts" });
     }
   }));
-  app2.post("/api/shifts", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.post("/api/shifts", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const shiftData = insertShiftSchema.parse(req.body);
       if (shiftData.branchId !== req.user.branchId) {
@@ -10399,7 +10302,7 @@ async function registerRoutes(app2) {
       }
     }
   }));
-  app2.put("/api/shifts/:id", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/shifts/:id", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const updateData = insertShiftSchema.partial().parse(req.body);
@@ -10466,7 +10369,7 @@ async function registerRoutes(app2) {
       res.status(400).json({ message: "Invalid shift data" });
     }
   }));
-  app2.delete("/api/shifts/:id", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.delete("/api/shifts/:id", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const shift = await storage5.getShift(id);
@@ -10496,7 +10399,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to delete shift" });
     }
   }));
-  app2.get("/api/employees/stats", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.get("/api/employees/stats", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user.branchId;
     const users2 = await storage5.getUsersByBranch(branchId);
     const { startDate, endDate } = req.query;
@@ -10559,7 +10462,7 @@ async function registerRoutes(app2) {
       averagePerformance
     });
   }));
-  app2.get("/api/employees/performance", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.get("/api/employees/performance", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user.branchId;
     const users2 = await storage5.getUsersByBranch(branchId);
     const now = /* @__PURE__ */ new Date();
@@ -10593,7 +10496,7 @@ async function registerRoutes(app2) {
     }));
     res.json(performanceData);
   }));
-  app2.post("/api/employees/bulk-activate", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.post("/api/employees/bulk-activate", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const { employeeIds } = req.body;
     const managerBranchId = req.user.branchId;
     if (!Array.isArray(employeeIds)) {
@@ -10615,7 +10518,7 @@ async function registerRoutes(app2) {
       updatedCount: updatedEmployees.length
     });
   }));
-  app2.post("/api/employees/bulk-deactivate", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.post("/api/employees/bulk-deactivate", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const { employeeIds } = req.body;
     const managerBranchId = req.user.branchId;
     if (!Array.isArray(employeeIds)) {
@@ -10637,7 +10540,7 @@ async function registerRoutes(app2) {
       updatedCount: updatedEmployees.length
     });
   }));
-  app2.use("/api/employees", requireAuth10, employee_uploads_default);
+  app2.use("/api/employees", requireAuth9, employee_uploads_default);
   app2.use(createEmployeeRouter(realTimeManager));
   app2.use(router3);
   app2.use("/api/payslips", payslips_default);
@@ -10646,9 +10549,8 @@ async function registerRoutes(app2) {
   app2.use(router6);
   app2.use(router7);
   app2.use(router8);
-  app2.use(router11);
   app2.use(router2);
-  app2.post("/api/adjustment-logs", requireAuth10, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app2.post("/api/adjustment-logs", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { employeeId, date, type, value, remarks } = req.body;
       const loggedBy = req.user.id;
@@ -10711,7 +10613,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to create adjustment log" });
     }
   }));
-  app2.get("/api/adjustment-logs/branch", requireAuth10, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app2.get("/api/adjustment-logs/branch", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
       const { startDate, endDate } = req.query;
@@ -10737,7 +10639,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to get adjustment logs" });
     }
   }));
-  app2.get("/api/adjustment-logs/mine", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/adjustment-logs/mine", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const userId = req.user.id;
       const logs = await storage5.getAdjustmentLogsByEmployee(userId);
@@ -10749,7 +10651,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to get adjustment logs" });
     }
   }));
-  app2.post("/api/adjustment-logs/request", requireAuth10, asyncHandler(async (req, res) => {
+  app2.post("/api/adjustment-logs/request", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const userId = req.user.id;
       const { startDate, endDate, type, value, remarks } = req.body;
@@ -10782,7 +10684,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to submit exception request" });
     }
   }));
-  app2.put("/api/adjustment-logs/:id/verify", requireAuth10, asyncHandler(async (req, res) => {
+  app2.put("/api/adjustment-logs/:id/verify", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
@@ -10807,7 +10709,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to verify adjustment log" });
     }
   }));
-  app2.put("/api/adjustment-logs/:id/approve", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/adjustment-logs/:id/approve", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const approvedBy = req.user.id;
@@ -10830,7 +10732,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to approve adjustment log" });
     }
   }));
-  app2.put("/api/adjustment-logs/:id/reject", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/adjustment-logs/:id/reject", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const log2 = await storage5.getAdjustmentLog(id);
@@ -10848,7 +10750,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to reject adjustment log" });
     }
   }));
-  app2.delete("/api/adjustment-logs/:id", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.delete("/api/adjustment-logs/:id", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const log2 = await storage5.getAdjustmentLog(id);
@@ -10862,7 +10764,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to delete adjustment log" });
     }
   }));
-  app2.put("/api/adjustment-logs/:id", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/adjustment-logs/:id", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const log2 = await storage5.getAdjustmentLog(id);
@@ -10877,7 +10779,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to update adjustment log" });
     }
   }));
-  app2.put("/api/adjustment-logs/:id/toggle-included", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/adjustment-logs/:id/toggle-included", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const log2 = await storage5.getAdjustmentLog(id);
@@ -10894,7 +10796,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to toggle adjustment log inclusion" });
     }
   }));
-  app2.put("/api/adjustment-logs/:id/dispute", requireAuth10, asyncHandler(async (req, res) => {
+  app2.put("/api/adjustment-logs/:id/dispute", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
@@ -10933,7 +10835,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to dispute adjustment log" });
     }
   }));
-  app2.get("/api/adjustment-logs/:id/comments", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/adjustment-logs/:id/comments", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const log2 = await storage5.getAdjustmentLog(id);
@@ -10959,7 +10861,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to get comments" });
     }
   }));
-  app2.post("/api/adjustment-logs/:id/comments", requireAuth10, asyncHandler(async (req, res) => {
+  app2.post("/api/adjustment-logs/:id/comments", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
@@ -11002,7 +10904,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to post comment" });
     }
   }));
-  app2.get("/api/dashboard/stats/manager", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.get("/api/dashboard/stats/manager", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
       const now = /* @__PURE__ */ new Date();
@@ -11082,23 +10984,23 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to fetch dashboard stats" });
     }
   }));
-  app2.get("/api/deduction-settings", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/deduction-settings", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
-      const rows = await db.select().from(deductionSettings).where(eq7(deductionSettings.branchId, branchId)).limit(1);
+      const rows = await db.select().from(deductionSettings).where(eq6(deductionSettings.branchId, branchId)).limit(1);
       if (rows.length === 0) {
-        return res.json({ settings: { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: true } });
+        return res.json({ settings: { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: true, includeExceptionLogs: true } });
       }
       res.json({ settings: rows[0] });
     } catch (error) {
       res.status(500).json({ message: error.message || "Failed to fetch deduction settings" });
     }
   }));
-  app2.put("/api/deduction-settings", requireAuth10, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app2.put("/api/deduction-settings", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
-      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax } = req.body;
-      const existing = await db.select().from(deductionSettings).where(eq7(deductionSettings.branchId, branchId)).limit(1);
+      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs } = req.body;
+      const existing = await db.select().from(deductionSettings).where(eq6(deductionSettings.branchId, branchId)).limit(1);
       if (existing.length === 0) {
         await db.insert(deductionSettings).values({
           id: crypto3.randomUUID(),
@@ -11107,6 +11009,7 @@ async function registerRoutes(app2) {
           deductPhilHealth: deductPhilHealth ?? true,
           deductPagibig: deductPagibig ?? true,
           deductWithholdingTax: deductWithholdingTax ?? true,
+          includeExceptionLogs: includeExceptionLogs ?? true,
           updatedAt: /* @__PURE__ */ new Date()
         });
       } else {
@@ -11115,16 +11018,17 @@ async function registerRoutes(app2) {
           deductPhilHealth: deductPhilHealth ?? true,
           deductPagibig: deductPagibig ?? true,
           deductWithholdingTax: deductWithholdingTax ?? true,
+          includeExceptionLogs: includeExceptionLogs ?? true,
           updatedAt: /* @__PURE__ */ new Date()
-        }).where(eq7(deductionSettings.branchId, branchId));
+        }).where(eq6(deductionSettings.branchId, branchId));
       }
-      const updated = await db.select().from(deductionSettings).where(eq7(deductionSettings.branchId, branchId)).limit(1);
+      const updated = await db.select().from(deductionSettings).where(eq6(deductionSettings.branchId, branchId)).limit(1);
       res.json({ settings: updated[0] });
     } catch (error) {
       res.status(500).json({ message: error.message || "Failed to update deduction settings" });
     }
   }));
-  app2.get("/api/payroll", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/payroll", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const userId = req.user.id;
       const entries = await storage5.getPayrollEntriesByUser(userId);
@@ -11149,7 +11053,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to fetch payroll entries" });
     }
   }));
-  app2.get("/api/payroll/periods", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.get("/api/payroll/periods", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
       const periods = await storage5.getPayrollPeriodsByBranch(branchId);
@@ -11159,7 +11063,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to fetch payroll periods" });
     }
   }));
-  app2.get("/api/payroll/periods/current", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/payroll/periods/current", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
       const period = await storage5.getCurrentPayrollPeriod(branchId);
@@ -11169,7 +11073,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to fetch current payroll period" });
     }
   }));
-  app2.post("/api/payroll/periods", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.post("/api/payroll/periods", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { startDate, endDate, payDate } = req.body;
       const branchId = req.user.branchId;
@@ -11221,7 +11125,7 @@ async function registerRoutes(app2) {
       });
     }
   }));
-  app2.delete("/api/payroll/periods/:id", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.delete("/api/payroll/periods/:id", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const branchId = req.user.branchId;
@@ -11246,7 +11150,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to delete payroll period" });
     }
   }));
-  app2.post("/api/payroll/periods/:id/process", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.post("/api/payroll/periods/:id/process", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const createdEntryIds = [];
     try {
       const { id } = req.params;
@@ -11265,6 +11169,18 @@ async function registerRoutes(app2) {
       for (const entry of existingEntries) {
         await storage5.deletePayrollEntry(entry.id);
       }
+      if (new Date(period.endDate).getMonth() === 11) {
+        const periodYear = new Date(period.endDate).getFullYear();
+        const pending13thMonth = await storage5.get13thMonthRecords(periodYear);
+        const branchEmployees = await storage5.getUsersByBranch(branchId);
+        const branchEmpIds = new Set(branchEmployees.map((e) => e.id));
+        const pendingForBranch = pending13thMonth.filter((r) => branchEmpIds.has(r.employeeId) && r.status !== "released");
+        if (pendingForBranch.length > 0) {
+          return res.status(400).json({
+            message: `${pendingForBranch.length} employees have unreleased 13th month pay for ${periodYear}. Please release before generating payroll.`
+          });
+        }
+      }
       const employees = await storage5.getUsersByBranch(branchId);
       const payrollEntries2 = [];
       let totalHours = 0;
@@ -11273,12 +11189,13 @@ async function registerRoutes(app2) {
         new Date(period.startDate),
         new Date(period.endDate)
       );
-      const dsRows = await db.select().from(deductionSettings).where(eq7(deductionSettings.branchId, branchId)).limit(1);
+      const dsRows = await db.select().from(deductionSettings).where(eq6(deductionSettings.branchId, branchId)).limit(1);
       const branchDeductionSettings = dsRows[0] || {
         deductSSS: true,
         deductPhilHealth: true,
         deductPagibig: true,
-        deductWithholdingTax: true
+        deductWithholdingTax: true,
+        includeExceptionLogs: true
       };
       const companySettings2 = await storage5.getCompanySettings();
       const globalHolidayPayEnabled = companySettings2 ? companySettings2.includeHolidayPay : false;
@@ -11298,7 +11215,7 @@ async function registerRoutes(app2) {
         );
         const timeOffRequests2 = await storage5.getTimeOffRequestsByUser(employee.id);
         const approvedLeaves = timeOffRequests2.filter(
-          (req2) => req2.status === "approved" && ["vacation", "sick", "personal"].includes(req2.type) && new Date(req2.startDate) <= new Date(period.endDate) && new Date(req2.endDate) >= new Date(period.startDate)
+          (req2) => req2.status === "approved" && req2.leavePaymentStatus === "paid" && new Date(req2.startDate) <= new Date(period.endDate) && new Date(req2.endDate) >= new Date(period.startDate)
         );
         if (shifts2.length === 0 && approvedLeaves.length === 0) continue;
         const hourlyRate = parseFloat(employee.hourlyRate);
@@ -11343,6 +11260,7 @@ async function registerRoutes(app2) {
         let totalLateMinutes = 0;
         let undertimeDeduction = 0;
         for (const adj of employeeAdjustments) {
+          if (!branchDeductionSettings.includeExceptionLogs) continue;
           if (adj.status !== "approved" && adj.status !== "employee_verified") continue;
           if (adj.isIncluded === false) continue;
           const adjValue = parseFloat(adj.value);
@@ -11416,7 +11334,7 @@ async function registerRoutes(app2) {
         const philHealthContribution = Math.round(mandatoryBreakdown.philHealthContribution * periodFraction * 100) / 100;
         const pagibigContribution = Math.round(mandatoryBreakdown.pagibigContribution * periodFraction * 100) / 100;
         const { workerAllowances: workerAllowances2, allowanceTypes: allowanceTypes2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq8, and: and4 } = await import("drizzle-orm");
+        const { eq: eq7, and: and3 } = await import("drizzle-orm");
         const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         let totalAllowanceAmount = 0;
         let taxableAllowanceExcess = 0;
@@ -11424,7 +11342,7 @@ async function registerRoutes(app2) {
           amount: workerAllowances2.amount,
           ceiling: allowanceTypes2.ceilingValue,
           isDeMinimis: allowanceTypes2.isDeMinimis
-        }).from(workerAllowances2).innerJoin(allowanceTypes2, eq8(workerAllowances2.allowanceTypeId, allowanceTypes2.id)).where(and4(eq8(workerAllowances2.userId, employee.id), eq8(workerAllowances2.isActive, true)));
+        }).from(workerAllowances2).innerJoin(allowanceTypes2, eq7(workerAllowances2.allowanceTypeId, allowanceTypes2.id)).where(and3(eq7(workerAllowances2.userId, employee.id), eq7(workerAllowances2.isActive, true)));
         for (const al of empAllowances) {
           const periodAllowance = Math.round(parseFloat(al.amount) * periodFraction * 100) / 100;
           const periodCeiling = al.ceiling ? Math.round(parseFloat(al.ceiling) * periodFraction * 100) / 100 : null;
@@ -11448,11 +11366,20 @@ async function registerRoutes(app2) {
         grossPay += totalAllowanceAmount;
         let sssLoan = 0;
         let pagibigLoan = 0;
-        const advances = parseFloat(employee.cashAdvanceDeduction || "0");
         const otherDeductions = parseFloat(employee.otherDeductions || "0") + lateDeduction + undertimeDeduction;
         const mweWithholdingTax = !branchDeductionSettings.deductWithholdingTax || employee.isMwe ? 0 : withholdingTax;
-        const totalDeductions = sssContribution + philHealthContribution + pagibigContribution + mweWithholdingTax + advances + otherDeductions;
+        const totalDeductions = sssContribution + philHealthContribution + pagibigContribution + mweWithholdingTax + otherDeductions;
         const netPay = Math.max(0, grossPay - totalDeductions);
+        let has13thMonth = false;
+        let thirteentMonthRecord = null;
+        if (new Date(period.endDate).getMonth() === 11) {
+          const periodYear = new Date(period.endDate).getFullYear();
+          const emp13thMonth = await storage5.get13thMonthRecordByEmployeeAndYear(employee.id, periodYear);
+          if (emp13thMonth && emp13thMonth.status === "released") {
+            has13thMonth = true;
+            thirteentMonthRecord = emp13thMonth;
+          }
+        }
         const entry = await storage5.createPayrollEntry({
           userId: employee.id,
           payrollPeriodId: id,
@@ -11472,29 +11399,16 @@ async function registerRoutes(app2) {
           pagibigContribution: pagibigContribution.toString(),
           pagibigLoan: pagibigLoan.toString(),
           withholdingTax: mweWithholdingTax.toString(),
-          advances: advances.toString(),
           otherDeductions: otherDeductions.toString(),
           totalDeductions: totalDeductions.toString(),
           deductions: totalDeductions.toString(),
           // For backward compatibility
           netPay: netPay.toString(),
+          has13thMonth,
           status: "pending"
         });
-        try {
-          const periodYear = new Date(period.startDate).getFullYear();
-          await db2.insert(thirteenthMonthLedger).values({
-            id: crypto3.randomUUID(),
-            userId: employee.id,
-            branchId,
-            payrollPeriodId: id,
-            year: periodYear,
-            basicPayEarned: basicPay.toFixed(2),
-            periodStartDate: new Date(period.startDate),
-            periodEndDate: new Date(period.endDate),
-            createdAt: /* @__PURE__ */ new Date()
-          });
-        } catch (ledgerErr) {
-          console.warn("13th month ledger insert skipped (table may not exist yet):", ledgerErr.message);
+        if (thirteentMonthRecord) {
+          await storage5.update13thMonthRecord(thirteentMonthRecord.id, { payslipId: entry.id });
         }
         payrollEntries2.push(entry);
         createdEntryIds.push(entry.id);
@@ -11504,7 +11418,7 @@ async function registerRoutes(app2) {
           userId: employee.id,
           type: "payroll",
           title: "Payroll Slip Available",
-          message: `Your payroll slip for ${format4(new Date(period.startDate), "MMM d")} - ${format4(new Date(period.endDate), "MMM d, yyyy")} is now available. Net Pay: \u20B1${netPay.toFixed(2)}`,
+          message: `Your payroll slip for ${format3(new Date(period.startDate), "MMM d")} - ${format3(new Date(period.endDate), "MMM d, yyyy")} is now available. Net Pay: \u20B1${netPay.toFixed(2)}`,
           data: JSON.stringify({
             entryId: entry.id,
             periodId: id,
@@ -11557,7 +11471,7 @@ async function registerRoutes(app2) {
       });
     }
   }));
-  app2.get("/api/payroll/entries/branch", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.get("/api/payroll/entries/branch", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
       const { periodId } = req.query;
@@ -11612,7 +11526,7 @@ async function registerRoutes(app2) {
       });
     }
   }));
-  app2.put("/api/payroll/entries/:id/approve", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/payroll/entries/:id/approve", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const existing = await storage5.getPayrollEntry(id);
@@ -11642,7 +11556,7 @@ async function registerRoutes(app2) {
       });
     }
   }));
-  app2.put("/api/payroll/entries/:id/paid", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/payroll/entries/:id/paid", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const existing = await storage5.getPayrollEntry(id);
@@ -11675,7 +11589,7 @@ async function registerRoutes(app2) {
       });
     }
   }));
-  app2.get("/api/payroll/payslip/:entryId", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/payroll/payslip/:entryId", requireAuth9, asyncHandler(async (req, res) => {
     const { entryId } = req.params;
     const userId = req.user.id;
     const entry = await storage5.getPayrollEntry(entryId);
@@ -11703,19 +11617,19 @@ async function registerRoutes(app2) {
     let includedExceptions = [];
     try {
       const { payrollPeriods: payrollPeriods2, adjustmentLogs: adjustmentLogs2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq8, and: and4, gte: gte3, lte: lte3, inArray } = await import("drizzle-orm");
+      const { eq: eq7, and: and3, gte: gte2, lte: lte2, inArray } = await import("drizzle-orm");
       const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
-      const periods = await db2.select().from(payrollPeriods2).where(eq8(payrollPeriods2.id, entry.payrollPeriodId)).limit(1);
+      const periods = await db2.select().from(payrollPeriods2).where(eq7(payrollPeriods2.id, entry.payrollPeriodId)).limit(1);
       if (periods.length > 0) {
         const period = periods[0];
         periodStart = period.startDate instanceof Date ? period.startDate.toISOString() : String(period.startDate);
         periodEnd = period.endDate instanceof Date ? period.endDate.toISOString() : String(period.endDate);
         payDate = period.payDate ? period.payDate instanceof Date ? period.payDate.toISOString() : String(period.payDate) : null;
         const logs = await db2.select().from(adjustmentLogs2).where(
-          and4(
-            eq8(adjustmentLogs2.employeeId, entry.userId),
-            gte3(adjustmentLogs2.startDate, new Date(periodStart)),
-            lte3(adjustmentLogs2.startDate, new Date(periodEnd)),
+          and3(
+            eq7(adjustmentLogs2.employeeId, entry.userId),
+            gte2(adjustmentLogs2.startDate, new Date(periodStart)),
+            lte2(adjustmentLogs2.startDate, new Date(periodEnd)),
             inArray(adjustmentLogs2.status, ["employee_verified", "approved"])
           )
         );
@@ -11760,7 +11674,6 @@ async function registerRoutes(app2) {
       pagibigContribution: entry.pagibigContribution || 0,
       pagibigLoan: entry.pagibigLoan || 0,
       withholdingTax: entry.withholdingTax || 0,
-      advances: entry.advances || 0,
       otherDeductions: entry.otherDeductions || 0,
       totalDeductions: entry.totalDeductions || entry.deductions || 0,
       deductions: entry.deductions,
@@ -11778,11 +11691,23 @@ async function registerRoutes(app2) {
       employeePhilhealth: user.philhealthNumber || null,
       employeePagibig: user.pagibigNumber || null,
       // Included adjustments/exceptions
-      includedExceptions
+      includedExceptions,
+      // 13th Month Pay
+      thirteenthMonthAmount: "0",
+      has13thMonth: false
     };
+    if (entry.has13thMonth) {
+      const records = await storage5.get13thMonthRecords(new Date(periodEnd || entry.createdAt).getFullYear());
+      const empRecord = records.find((r) => r.payslipId === entry.id || r.employeeId === entry.userId && r.status === "released");
+      if (empRecord) {
+        payslipData.has13thMonth = true;
+        payslipData.thirteenthMonthAmount = empRecord.amount;
+        payslipData.netPay = (parseFloat(payslipData.netPay) + parseFloat(empRecord.amount)).toString();
+      }
+    }
     res.json({ payslip: payslipData });
   }));
-  app2.post("/api/payroll/entries/:entryId/send", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.post("/api/payroll/entries/:entryId/send", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { entryId } = req.params;
       const branchId = req.user.branchId;
@@ -11820,7 +11745,7 @@ async function registerRoutes(app2) {
     }
   }));
   app2.use("/api/holidays", holidays_default);
-  app2.get("/api/payroll/archived", requireAuth10, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app2.get("/api/payroll/archived", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
       const archivedPeriods = await storage5.getArchivedPayrollPeriods(branchId);
@@ -11830,7 +11755,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to get archived payroll" });
     }
   }));
-  app2.post("/api/payroll/periods/:id/archive", requireAuth10, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app2.post("/api/payroll/periods/:id/archive", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
@@ -11853,7 +11778,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to archive payroll period" });
     }
   }));
-  app2.get("/api/payroll/archived/:id", requireAuth10, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app2.get("/api/payroll/archived/:id", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const archived = await storage5.getArchivedPayrollPeriod(id);
@@ -11870,7 +11795,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to get archived period" });
     }
   }));
-  app2.get("/api/shift-trades", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/shift-trades", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const userId = req.user.id;
       const branchId = req.user.branchId;
@@ -11924,7 +11849,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to fetch shift trades" });
     }
   }));
-  app2.get("/api/shift-trades/available", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/shift-trades/available", requireAuth9, asyncHandler(async (req, res) => {
     const branchId = req.user.branchId;
     const userId = req.user.id;
     const trades = await storage5.getAvailableShiftTrades(branchId);
@@ -11959,7 +11884,7 @@ async function registerRoutes(app2) {
     );
     res.json({ trades: tradesWithDetails });
   }));
-  app2.get("/api/shift-trades/pending", requireAuth10, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app2.get("/api/shift-trades/pending", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     const branchId = req.user.branchId;
     const trades = await storage5.getPendingShiftTrades(branchId);
     const tradesWithDetails = await Promise.all(
@@ -11995,7 +11920,7 @@ async function registerRoutes(app2) {
     );
     res.json({ trades: tradesWithDetails });
   }));
-  app2.post("/api/shift-trades", requireAuth10, asyncHandler(async (req, res) => {
+  app2.post("/api/shift-trades", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const tradeData = insertShiftTradeSchema.parse(req.body);
       const shift = await storage5.getShift(tradeData.shiftId);
@@ -12038,7 +11963,7 @@ async function registerRoutes(app2) {
       };
       const requester = await storage5.getUser(fromUserId);
       const requesterName = requester ? `${requester.firstName} ${requester.lastName}` : "An employee";
-      const shiftDate = shift?.startTime ? format4(new Date(shift.startTime), "MMM d") : "a shift";
+      const shiftDate = shift?.startTime ? format3(new Date(shift.startTime), "MMM d") : "a shift";
       const branchUsers = await storage5.getUsersByBranch(req.user.branchId);
       const notifiedUserIds = /* @__PURE__ */ new Set();
       if (trade.toUserId) {
@@ -12096,7 +12021,7 @@ async function registerRoutes(app2) {
       res.status(400).json({ message: error.message || "Invalid trade data" });
     }
   }));
-  app2.patch("/api/shift-trades/:id", requireAuth10, asyncHandler(async (req, res) => {
+  app2.patch("/api/shift-trades/:id", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const { status } = req.body;
@@ -12150,7 +12075,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to respond to trade" });
     }
   }));
-  app2.patch("/api/shift-trades/:id/approve", requireAuth10, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app2.patch("/api/shift-trades/:id/approve", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const { status } = req.body;
@@ -12183,7 +12108,7 @@ async function registerRoutes(app2) {
         approvedAt: /* @__PURE__ */ new Date()
       });
       const shift = await storage5.getShift(trade.shiftId);
-      const shiftDate = shift?.startTime ? format4(new Date(shift.startTime), "MMM d") : "a shift";
+      const shiftDate = shift?.startTime ? format3(new Date(shift.startTime), "MMM d") : "a shift";
       const enrichedTrade = {
         ...updatedTrade,
         shift: shift ? {
@@ -12264,7 +12189,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to process trade" });
     }
   }));
-  app2.put("/api/shift-trades/:id/take", requireAuth10, asyncHandler(async (req, res) => {
+  app2.put("/api/shift-trades/:id/take", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
@@ -12310,7 +12235,7 @@ async function registerRoutes(app2) {
       };
       const taker = await storage5.getUser(userId);
       const takerName = taker ? `${taker.firstName} ${taker.lastName}` : "Another employee";
-      const shiftDate = shift?.startTime ? format4(new Date(shift.startTime), "MMM d") : "a shift";
+      const shiftDate = shift?.startTime ? format3(new Date(shift.startTime), "MMM d") : "a shift";
       const notificationRequester = await storage5.createNotification({
         userId: trade.fromUserId,
         type: "shift_trade",
@@ -12346,7 +12271,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to take shift" });
     }
   }));
-  app2.put("/api/shift-trades/:id/approve", requireAuth10, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app2.put("/api/shift-trades/:id/approve", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const managerId = req.user.id;
@@ -12381,7 +12306,7 @@ async function registerRoutes(app2) {
         approvedAt: /* @__PURE__ */ new Date()
       });
       const shift = await storage5.getShift(trade.shiftId);
-      const shiftDate = shift?.startTime ? format4(new Date(shift.startTime), "MMM d") : "a shift";
+      const shiftDate = shift?.startTime ? format3(new Date(shift.startTime), "MMM d") : "a shift";
       const notificationRequester = await storage5.createNotification({
         userId: trade.fromUserId,
         type: "shift_trade",
@@ -12429,7 +12354,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to approve trade" });
     }
   }));
-  app2.put("/api/shift-trades/:id/reject", requireAuth10, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app2.put("/api/shift-trades/:id/reject", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const managerId = req.user.id;
@@ -12447,7 +12372,7 @@ async function registerRoutes(app2) {
         approvedAt: /* @__PURE__ */ new Date()
       });
       const shift = await storage5.getShift(trade.shiftId);
-      const shiftDate = shift?.startTime ? format4(new Date(shift.startTime), "MMM d") : "a shift";
+      const shiftDate = shift?.startTime ? format3(new Date(shift.startTime), "MMM d") : "a shift";
       const notificationRequester = await storage5.createNotification({
         userId: trade.fromUserId,
         type: "shift_trade",
@@ -12483,7 +12408,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to reject trade" });
     }
   }));
-  app2.delete("/api/shift-trades/:id", requireAuth10, asyncHandler(async (req, res) => {
+  app2.delete("/api/shift-trades/:id", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
@@ -12529,7 +12454,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to cancel trade" });
     }
   }));
-  app2.get("/api/admin/deduction-rates", requireAuth10, requireRole3(["admin"]), asyncHandler(async (req, res) => {
+  app2.get("/api/admin/deduction-rates", requireAuth9, requireRole3(["admin"]), asyncHandler(async (req, res) => {
     try {
       const rates = await storage5.getAllDeductionRates();
       res.json({ rates });
@@ -12538,7 +12463,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to get deduction rates" });
     }
   }));
-  app2.post("/api/admin/deduction-rates", requireAuth10, requireRole3(["admin"]), asyncHandler(async (req, res) => {
+  app2.post("/api/admin/deduction-rates", requireAuth9, requireRole3(["admin"]), asyncHandler(async (req, res) => {
     try {
       const { type, minSalary, maxSalary, employeeRate, employeeContribution, description } = req.body;
       const rate = await storage5.createDeductionRate({
@@ -12565,7 +12490,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to create deduction rate" });
     }
   }));
-  app2.put("/api/admin/deduction-rates/:id", requireAuth10, requireRole3(["admin"]), asyncHandler(async (req, res) => {
+  app2.put("/api/admin/deduction-rates/:id", requireAuth9, requireRole3(["admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const { type, minSalary, maxSalary, employeeRate, employeeContribution, description } = req.body;
@@ -12595,7 +12520,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to update deduction rate" });
     }
   }));
-  app2.delete("/api/admin/deduction-rates/:id", requireAuth10, requireRole3(["admin"]), asyncHandler(async (req, res) => {
+  app2.delete("/api/admin/deduction-rates/:id", requireAuth9, requireRole3(["admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const success = await storage5.deleteDeductionRate(id);
@@ -12616,7 +12541,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to delete deduction rate" });
     }
   }));
-  app2.get("/api/deduction-settings", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.get("/api/deduction-settings", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
       let settings = await storage5.getDeductionSettings(branchId);
@@ -12635,7 +12560,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to get deduction settings" });
     }
   }));
-  app2.put("/api/deduction-settings/:id", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/deduction-settings/:id", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax } = req.body;
@@ -12663,7 +12588,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to update deduction settings" });
     }
   }));
-  app2.get("/api/approvals", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.get("/api/approvals", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user.branchId;
     const approvals3 = await storage5.getPendingApprovals(branchId);
     const approvalsWithUsers = await Promise.all(
@@ -12674,7 +12599,7 @@ async function registerRoutes(app2) {
     );
     res.json({ approvals: approvalsWithUsers });
   }));
-  app2.put("/api/approvals/:id", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/approvals/:id", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { status, reason } = req.body;
     if (!["approved", "rejected"].includes(status)) {
@@ -12691,7 +12616,7 @@ async function registerRoutes(app2) {
     res.json({ approval });
   }));
   registerBranchesRoutes(app2);
-  app2.get("/api/reports/payroll", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.get("/api/reports/payroll", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user.branchId;
     const now = /* @__PURE__ */ new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -12714,7 +12639,7 @@ async function registerRoutes(app2) {
     }
     res.json({ totalPayroll: Number(totalPayroll.toFixed(2)) });
   }));
-  app2.get("/api/reports/attendance", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.get("/api/reports/attendance", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user.branchId;
     const now = /* @__PURE__ */ new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -12730,7 +12655,7 @@ async function registerRoutes(app2) {
     }
     res.json({ totalHours: Number(totalHours.toFixed(2)) });
   }));
-  app2.get("/api/reports/shifts", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.get("/api/reports/shifts", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user.branchId;
     const now = /* @__PURE__ */ new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -12743,7 +12668,7 @@ async function registerRoutes(app2) {
       cancelledShifts: shifts2.filter((s) => s.status === "cancelled").length
     });
   }));
-  app2.get("/api/reports/employees", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.get("/api/reports/employees", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user.branchId;
     const users2 = await storage5.getUsersByBranch(branchId);
     res.json({
@@ -12752,7 +12677,7 @@ async function registerRoutes(app2) {
       inactiveCount: users2.filter((u) => !u.isActive).length
     });
   }));
-  app2.get("/api/dashboard/stats", requireAuth10, requireRole3(["manager"]), apiCache(60), asyncHandler(async (req, res) => {
+  app2.get("/api/dashboard/stats", requireAuth9, requireRole3(["manager"]), apiCache(60), asyncHandler(async (req, res) => {
     const branchId = req.user.branchId;
     const now = /* @__PURE__ */ new Date();
     const phtOffset = 8 * 60 * 60 * 1e3;
@@ -12802,7 +12727,7 @@ async function registerRoutes(app2) {
       }
     });
   }));
-  app2.get("/api/dashboard/employee-status", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.get("/api/dashboard/employee-status", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const branchId = req.user.branchId;
     const now = /* @__PURE__ */ new Date();
     const phtOffset = 8 * 60 * 60 * 1e3;
@@ -12821,15 +12746,15 @@ async function registerRoutes(app2) {
         if (todayShift) {
           if (todayShift.status === "in-progress") {
             status = "Active";
-            statusInfo = todayShift.actualStartTime ? `Since ${format4(new Date(todayShift.actualStartTime), "h:mm a")}` : `Scheduled ${format4(new Date(todayShift.startTime), "h:mm a")}`;
+            statusInfo = todayShift.actualStartTime ? `Since ${format3(new Date(todayShift.actualStartTime), "h:mm a")}` : `Scheduled ${format3(new Date(todayShift.startTime), "h:mm a")}`;
           } else if (todayShift.status === "completed") {
             status = "Completed";
-            const start = todayShift.actualStartTime ? format4(new Date(todayShift.actualStartTime), "h:mm a") : format4(new Date(todayShift.startTime), "h:mm a");
-            const end = todayShift.actualEndTime ? format4(new Date(todayShift.actualEndTime), "h:mm a") : format4(new Date(todayShift.endTime), "h:mm a");
+            const start = todayShift.actualStartTime ? format3(new Date(todayShift.actualStartTime), "h:mm a") : format3(new Date(todayShift.startTime), "h:mm a");
+            const end = todayShift.actualEndTime ? format3(new Date(todayShift.actualEndTime), "h:mm a") : format3(new Date(todayShift.endTime), "h:mm a");
             statusInfo = `Worked ${start} - ${end}`;
           } else if (todayShift.status === "scheduled") {
             status = "Scheduled";
-            statusInfo = `${format4(new Date(todayShift.startTime), "h:mm a")} - ${format4(new Date(todayShift.endTime), "h:mm a")}`;
+            statusInfo = `${format3(new Date(todayShift.startTime), "h:mm a")} - ${format3(new Date(todayShift.endTime), "h:mm a")}`;
           }
         }
         return {
@@ -12846,7 +12771,7 @@ async function registerRoutes(app2) {
     );
     res.json({ employeeStatus });
   }));
-  app2.get("/api/time-off-requests", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/time-off-requests", requireAuth9, asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const userRole = req.user.role;
     const branchId = req.user.branchId;
@@ -12870,7 +12795,7 @@ async function registerRoutes(app2) {
     );
     res.json({ requests: requestsWithUsers });
   }));
-  app2.get("/api/employee/performance", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/employee/performance", requireAuth9, asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const user = await storage5.getUser(userId);
     if (!user) {
@@ -12918,7 +12843,7 @@ async function registerRoutes(app2) {
       }
     });
   }));
-  app2.get("/api/time-off-balance", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/time-off-balance", requireAuth9, asyncHandler(async (req, res) => {
     const userId = req.user.id;
     const requests = await storage5.getTimeOffRequestsByUser(userId);
     const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
@@ -12964,7 +12889,7 @@ async function registerRoutes(app2) {
       }
     });
   }));
-  app2.get("/api/time-off-policy", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/time-off-policy", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
       await storage5.initializeDefaultTimeOffPolicies(branchId);
@@ -12982,7 +12907,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to fetch time off policy" });
     }
   }));
-  app2.put("/api/time-off-policy", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/time-off-policy", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
       const { leaveType, minimumAdvanceDays } = req.body;
@@ -13004,7 +12929,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to update time off policy" });
     }
   }));
-  app2.post("/api/time-off-requests", requireAuth10, asyncHandler(async (req, res) => {
+  app2.post("/api/time-off-requests", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const startDate = new Date(req.body.startDate);
       const endDate = new Date(req.body.endDate);
@@ -13068,13 +12993,13 @@ async function registerRoutes(app2) {
           userId: manager.id,
           type: "time_off",
           title: shortNotice ? "\u26A0\uFE0F Short Notice Time Off Request" : "New Time Off Request",
-          message: `${employee?.firstName} ${employee?.lastName} has requested time off from ${format4(new Date(request.startDate), "MMM d")} to ${format4(new Date(request.endDate), "MMM d, yyyy")} (${requestPayload.type})${shortNoticeText}`,
+          message: `${employee?.firstName} ${employee?.lastName} has requested time off from ${format3(new Date(request.startDate), "MMM d")} to ${format3(new Date(request.endDate), "MMM d, yyyy")} (${requestPayload.type})${shortNoticeText}`,
           isRead: false,
           data: JSON.stringify({
             employeeName: `${employee?.firstName} ${employee?.lastName}`,
             type: requestPayload.type,
-            startDate: format4(new Date(request.startDate), "MMM d, yyyy"),
-            endDate: format4(new Date(request.endDate), "MMM d, yyyy"),
+            startDate: format3(new Date(request.startDate), "MMM d, yyyy"),
+            endDate: format3(new Date(request.endDate), "MMM d, yyyy"),
             advanceDays,
             status: "pending"
           })
@@ -13103,7 +13028,7 @@ async function registerRoutes(app2) {
       }
     }
   }));
-  app2.put("/api/time-off-requests/:id/approve", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/time-off-requests/:id/approve", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
     const existing = await storage5.getTimeOffRequest(id);
     if (!existing) {
@@ -13116,9 +13041,13 @@ async function registerRoutes(app2) {
     if (!employee || employee.branchId !== req.user.branchId) {
       return res.status(403).json({ message: "Not authorized for this branch" });
     }
+    const { leavePaymentStatus } = req.body;
+    const validStatuses = ["paid", "unpaid", "awol"];
+    const paymentStatus = validStatuses.includes(leavePaymentStatus) ? leavePaymentStatus : "paid";
     const request = await storage5.updateTimeOffRequest(id, {
       status: "approved",
-      approvedBy: req.user.id
+      approvedBy: req.user.id,
+      leavePaymentStatus: paymentStatus
     });
     if (!request) {
       return res.status(404).json({ message: "Time off request not found" });
@@ -13144,9 +13073,9 @@ async function registerRoutes(app2) {
     try {
       const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { leaveCredits: leaveCredits2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq8, and: and4 } = await import("drizzle-orm");
+      const { eq: eq7, and: and3 } = await import("drizzle-orm");
       const specificBalance = await db2.select().from(leaveCredits2).where(
-        and4(eq8(leaveCredits2.userId, request.userId), eq8(leaveCredits2.year, startD.getFullYear()), eq8(leaveCredits2.leaveType, request.type))
+        and3(eq7(leaveCredits2.userId, request.userId), eq7(leaveCredits2.year, startD.getFullYear()), eq7(leaveCredits2.leaveType, request.type))
       ).limit(1);
       let deductedFrom = null;
       if (specificBalance[0] && parseFloat(specificBalance[0].remainingCredits) > 0) {
@@ -13159,7 +13088,11 @@ async function registerRoutes(app2) {
     } catch (deductionErr) {
       console.error("Leave deduction error:", deductionErr);
     }
-    await storage5.updateTimeOffRequest(id, { isPaid });
+    const finalIsPaid = paymentStatus === "paid" && isPaid;
+    await storage5.updateTimeOffRequest(id, { isPaid: finalIsPaid, leavePaymentStatus: paymentStatus });
+    if (paymentStatus === "awol") {
+      console.log(`[Time-Off] ${request.userId} marked AWOL for ${request.startDate}\u2013${request.endDate}`);
+    }
     try {
       const pendingApprovals = await storage5.getPendingApprovals(req.user.branchId);
       const relatedApproval = pendingApprovals.find((a) => a.requestId === id && a.type === "time_off");
@@ -13177,12 +13110,12 @@ async function registerRoutes(app2) {
       userId: request.userId,
       type: "time_off_approved",
       title: "Time Off Request Approved",
-      message: `Your time off request from ${format4(new Date(request.startDate), "MMM d")} to ${format4(new Date(request.endDate), "MMM d, yyyy")} has been approved`,
+      message: `Your time off request from ${format3(new Date(request.startDate), "MMM d")} to ${format3(new Date(request.endDate), "MMM d, yyyy")} has been approved`,
       isRead: false,
       data: JSON.stringify({
         status: "approved",
-        startDate: format4(new Date(request.startDate), "MMM d, yyyy"),
-        endDate: format4(new Date(request.endDate), "MMM d, yyyy"),
+        startDate: format3(new Date(request.startDate), "MMM d, yyyy"),
+        endDate: format3(new Date(request.endDate), "MMM d, yyyy"),
         type: request.type
       })
     });
@@ -13199,9 +13132,11 @@ async function registerRoutes(app2) {
     });
     res.json({ request });
   }));
-  app2.put("/api/time-off-requests/:id/reject", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/time-off-requests/:id/reject", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { rejectionReason } = req.body;
+    const { rejectionReason, leavePaymentStatus } = req.body;
+    const validStatuses = ["paid", "unpaid", "awol"];
+    const paymentStatus = validStatuses.includes(leavePaymentStatus) ? leavePaymentStatus : "unpaid";
     const existing = await storage5.getTimeOffRequest(id);
     if (!existing) {
       return res.status(404).json({ message: "Time off request not found" });
@@ -13216,7 +13151,8 @@ async function registerRoutes(app2) {
     const request = await storage5.updateTimeOffRequest(id, {
       status: "rejected",
       approvedBy: req.user.id,
-      rejectionReason: rejectionReason || null
+      rejectionReason: rejectionReason || null,
+      leavePaymentStatus: paymentStatus
     });
     if (!request) {
       return res.status(404).json({ message: "Time off request not found" });
@@ -13239,12 +13175,12 @@ async function registerRoutes(app2) {
       userId: request.userId,
       type: "time_off_rejected",
       title: "Time Off Request Rejected",
-      message: `Your time off request from ${format4(new Date(request.startDate), "MMM d")} to ${format4(new Date(request.endDate), "MMM d, yyyy")} has been rejected.${reasonNote}`,
+      message: `Your time off request from ${format3(new Date(request.startDate), "MMM d")} to ${format3(new Date(request.endDate), "MMM d, yyyy")} has been rejected.${reasonNote}`,
       isRead: false,
       data: JSON.stringify({
         status: "rejected",
-        startDate: format4(new Date(request.startDate), "MMM d, yyyy"),
-        endDate: format4(new Date(request.endDate), "MMM d, yyyy"),
+        startDate: format3(new Date(request.startDate), "MMM d, yyyy"),
+        endDate: format3(new Date(request.endDate), "MMM d, yyyy"),
         type: request.type,
         rejectionReason: rejectionReason || null
       })
@@ -13262,7 +13198,7 @@ async function registerRoutes(app2) {
     });
     res.json({ request });
   }));
-  app2.put("/api/time-off-requests/:id", requireAuth10, asyncHandler(async (req, res) => {
+  app2.put("/api/time-off-requests/:id", requireAuth9, asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { type, startDate, endDate, reason } = req.body;
     const userId = req.user.id;
@@ -13284,7 +13220,7 @@ async function registerRoutes(app2) {
     });
     res.json({ request: updated });
   }));
-  app2.put("/api/time-off-requests/:id/toggle-paid", requireAuth10, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+  app2.put("/api/time-off-requests/:id/toggle-paid", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
     const { isPaid } = req.body;
     const existing = await storage5.getTimeOffRequest(id);
@@ -13305,9 +13241,9 @@ async function registerRoutes(app2) {
       try {
         const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const { leaveCredits: leaveCredits2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq8, and: and4 } = await import("drizzle-orm");
+        const { eq: eq7, and: and3 } = await import("drizzle-orm");
         const specificBalance = await db2.select().from(leaveCredits2).where(
-          and4(eq8(leaveCredits2.userId, existing.userId), eq8(leaveCredits2.year, startD.getFullYear()), eq8(leaveCredits2.leaveType, existing.type))
+          and3(eq7(leaveCredits2.userId, existing.userId), eq7(leaveCredits2.year, startD.getFullYear()), eq7(leaveCredits2.leaveType, existing.type))
         ).limit(1);
         let deductedFrom = null;
         if (specificBalance[0] && parseFloat(specificBalance[0].remainingCredits) > 0) {
@@ -13330,7 +13266,7 @@ async function registerRoutes(app2) {
     const updated = await storage5.updateTimeOffRequest(id, { isPaid });
     res.json({ request: updated });
   }));
-  app2.delete("/api/time-off-requests/:id", requireAuth10, asyncHandler(async (req, res) => {
+  app2.delete("/api/time-off-requests/:id", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const actor = req.user;
@@ -13379,12 +13315,12 @@ async function registerRoutes(app2) {
         branchId: requestOwner.branchId,
         type: "time_off_cancelled",
         title: "Time Off Request Cancelled",
-        message: `Your ${existingRequest.type} request from ${format4(new Date(existingRequest.startDate), "MMM d")} to ${format4(new Date(existingRequest.endDate), "MMM d, yyyy")} was cancelled by ${cancelledByLabel}.`,
+        message: `Your ${existingRequest.type} request from ${format3(new Date(existingRequest.startDate), "MMM d")} to ${format3(new Date(existingRequest.endDate), "MMM d, yyyy")} was cancelled by ${cancelledByLabel}.`,
         isRead: false,
         data: JSON.stringify({
           status: "cancelled",
-          startDate: format4(new Date(existingRequest.startDate), "MMM d, yyyy"),
-          endDate: format4(new Date(existingRequest.endDate), "MMM d, yyyy"),
+          startDate: format3(new Date(existingRequest.startDate), "MMM d, yyyy"),
+          endDate: format3(new Date(existingRequest.endDate), "MMM d, yyyy"),
           type: existingRequest.type,
           cancelledBy: actor.id
         })
@@ -13421,7 +13357,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to cancel request" });
     }
   }));
-  app2.get("/api/notifications", requireAuth10, asyncHandler(async (req, res) => {
+  app2.get("/api/notifications", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const userId = req.user.id;
       const activeBranchId = req.user.branchId;
@@ -13434,7 +13370,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to fetch notifications" });
     }
   }));
-  app2.patch("/api/notifications/:id/read", requireAuth10, asyncHandler(async (req, res) => {
+  app2.patch("/api/notifications/:id/read", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
@@ -13445,7 +13381,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to mark notification as read" });
     }
   }));
-  app2.patch("/api/notifications/read-all", requireAuth10, asyncHandler(async (req, res) => {
+  app2.patch("/api/notifications/read-all", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const userId = req.user.id;
       await storage5.markAllNotificationsRead(userId);
@@ -13455,7 +13391,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to mark all notifications as read" });
     }
   }));
-  app2.delete("/api/notifications/:id", requireAuth10, asyncHandler(async (req, res) => {
+  app2.delete("/api/notifications/:id", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
@@ -13469,7 +13405,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to delete notification" });
     }
   }));
-  app2.post("/api/admin/seed-sample-data", requireAuth10, requireRole3(["admin", "manager"]), asyncHandler(async (req, res) => {
+  app2.post("/api/admin/seed-sample-data", requireAuth9, requireRole3(["admin", "manager"]), asyncHandler(async (req, res) => {
     try {
       const user = getAuthenticatedUser(req);
       if (!user) {
@@ -13668,7 +13604,7 @@ async function registerRoutes(app2) {
       });
     }
   }));
-  app2.put("/api/auth/profile", requireAuth10, asyncHandler(async (req, res) => {
+  app2.put("/api/auth/profile", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { email, password, newPassword, firstName, lastName, tin, sssNumber, philhealthNumber, pagibigNumber } = req.body;
       const userId = req.user.id;
@@ -13729,7 +13665,7 @@ async function registerRoutes(app2) {
       });
     }
   }));
-  app2.post("/api/debug/seed", requireAuth10, asyncHandler(async (req, res) => {
+  app2.post("/api/debug/seed", requireAuth9, asyncHandler(async (req, res) => {
     try {
       if (!["admin", "manager"].includes(req.user.role)) {
         return res.status(403).json({
@@ -13751,7 +13687,7 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Seeding failed", error: String(error) });
     }
   }));
-  app2.post("/api/debug/reset-and-reseed", requireAuth10, requireRole3(["admin"]), asyncHandler(async (req, res) => {
+  app2.post("/api/debug/reset-and-reseed", requireAuth9, requireRole3(["admin"]), asyncHandler(async (req, res) => {
     try {
       await resetDatabase();
       await initializeDatabase();
@@ -13771,6 +13707,72 @@ async function registerRoutes(app2) {
       console.error("\u274C Reset and reseed error:", error);
       res.status(500).json({ message: "Reset failed", error: String(error) });
     }
+  }));
+  app2.get("/api/13th-month/:year", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+    const year = parseInt(req.params.year);
+    if (isNaN(year)) return res.status(400).json({ message: "Invalid year" });
+    const records = await storage5.get13thMonthRecords(year);
+    const employees = await storage5.getUsersByBranch(req.user.branchId);
+    const employeeIds = new Set(employees.map((e) => e.id));
+    const branchRecords = records.filter((r) => employeeIds.has(r.employeeId));
+    const enrichedRecords = branchRecords.map((r) => {
+      const emp = employees.find((e) => e.id === r.employeeId);
+      return {
+        ...r,
+        employeeName: emp ? `${emp.firstName} ${emp.lastName}` : "Unknown"
+      };
+    });
+    res.json(enrichedRecords);
+  }));
+  app2.post("/api/13th-month/compute", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+    const { year } = req.body;
+    if (!year || isNaN(parseInt(year))) return res.status(400).json({ message: "Invalid year" });
+    const numYear = parseInt(year);
+    const employees = await storage5.getUsersByBranch(req.user.branchId);
+    let computedCount = 0;
+    for (const employee of employees) {
+      const payrolls = await storage5.getPayrollEntriesByUser(employee.id);
+      let totalBasic = 0;
+      for (const p of payrolls) {
+        const period = await storage5.getPayrollPeriod(p.payrollPeriodId);
+        if (period && new Date(period.startDate).getFullYear() === numYear) {
+          totalBasic += parseFloat(p.basicPay || "0");
+        }
+      }
+      if (totalBasic > 0) {
+        const amount = totalBasic / 12;
+        let record = await storage5.get13thMonthRecordByEmployeeAndYear(employee.id, numYear);
+        if (record) {
+          if (record.status !== "released") {
+            await storage5.update13thMonthRecord(record.id, {
+              totalBasicSalary: totalBasic.toFixed(2),
+              amount: amount.toFixed(2),
+              isTaxable: amount > 9e4
+            });
+            computedCount++;
+          }
+        } else {
+          await storage5.create13thMonthRecord({
+            employeeId: employee.id,
+            year: numYear,
+            totalBasicSalary: totalBasic.toFixed(2),
+            amount: amount.toFixed(2),
+            status: "pending",
+            isTaxable: amount > 9e4
+          });
+          computedCount++;
+        }
+      }
+    }
+    res.json({ message: "13th month computed successfully", count: computedCount });
+  }));
+  app2.put("/api/13th-month/release", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: "ids array is required" });
+    for (const id of ids) {
+      await storage5.update13thMonthRecord(id, { status: "released", releasedAt: /* @__PURE__ */ new Date() });
+    }
+    res.json({ message: "Records released successfully" });
   }));
   return httpServer;
 }

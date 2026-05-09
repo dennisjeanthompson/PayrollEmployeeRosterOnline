@@ -4,7 +4,7 @@ import { sql } from 'drizzle-orm';
 import {
   users, branches, shifts, shiftTrades,
   payrollPeriods, payrollEntries, timeOffRequests,
-  notifications, approvals, thirteenthMonthLedger,
+  notifications, approvals,
   leaveCredits, adjustmentLogs, auditLogs,
   companySettings, deductionSettings
 } from '../shared/schema';
@@ -59,7 +59,6 @@ async function main() {
   await db.delete(auditLogs).where(sql`user_id IN (${sql.join(seededUserIds.map(id => sql`${id}`), sql`, `)})`);
   await db.delete(adjustmentLogs).where(eq(adjustmentLogs.branchId, branchId));
 
-  await db.delete(thirteenthMonthLedger).where(eq(thirteenthMonthLedger.branchId, branchId));
   await db.delete(payrollEntries).where(sql`payroll_period_id IN (SELECT id FROM payroll_periods WHERE branch_id = ${branchId})`);
   await db.delete(payrollPeriods).where(eq(payrollPeriods.branchId, branchId));
   await db.delete(shifts).where(eq(shifts.branchId, branchId));
@@ -158,7 +157,6 @@ async function main() {
       isActive: true,
       sssLoanDeduction: emp.id === 'user-don-emp-kaye' ? '150.00' : '0.00',
       pagibigLoanDeduction: emp.id === 'user-don-emp-ryan' ? '200.00' : '0.00',
-      cashAdvanceDeduction: emp.id === 'user-don-emp-jenny' ? '500.00' : '0.00',
     }).onConflictDoUpdate({
       target: [users.id],
       set: { 
@@ -168,7 +166,6 @@ async function main() {
         isActive: true,
         sssLoanDeduction: emp.id === 'user-don-emp-kaye' ? '150.00' : '0.00',
         pagibigLoanDeduction: emp.id === 'user-don-emp-ryan' ? '200.00' : '0.00',
-        cashAdvanceDeduction: emp.id === 'user-don-emp-jenny' ? '500.00' : '0.00',
       }
     });
     seededEmployees.push(emp);
@@ -284,17 +281,6 @@ async function main() {
       periodTotalHours += totalHours;
       periodTotalPay += pay.totalGrossPay;
 
-      // 13th Month Ledger
-      await db.insert(thirteenthMonthLedger).values({
-        id: uuid(),
-        userId: emp.id,
-        branchId,
-        payrollPeriodId: periodId,
-        year: startDt.getFullYear(),
-        basicPayEarned: pay.totalGrossPay.toFixed(2),
-        periodStartDate: startDt,
-        periodEndDate: endDt,
-      });
     }
 
     // Update the period with totals

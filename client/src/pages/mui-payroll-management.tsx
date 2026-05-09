@@ -228,7 +228,7 @@ export default function MuiPayrollManagement() {
     const { start, end } = getCurrentSemiMonthlyDates();
     setStartDate(start);
     setEndDate(end);
-    setPayDate(end);
+    setPayDate(addDays(end, 5));
     setPeriodType('semi-monthly');
     setIsCreateDialogOpen(true);
   };
@@ -243,11 +243,11 @@ export default function MuiPayrollManagement() {
       const { start, end } = getCurrentSemiMonthlyDates();
       setStartDate(start);
       setEndDate(end);
-      setPayDate(end);
+      setPayDate(addDays(end, 5));
     } else if (type === 'month') {
       setStartDate(startOfMonth(today));
       setEndDate(endOfMonth(today));
-      setPayDate(endOfMonth(today));
+      setPayDate(addDays(endOfMonth(today), 5));
     }
     // For 'custom', don't change dates - let user pick
   };
@@ -583,7 +583,7 @@ export default function MuiPayrollManagement() {
 
     setStartDate(start);
     setEndDate(end);
-    setPayDate(end);
+    setPayDate(addDays(end, 5));
     setIsCreateDialogOpen(true);
   };
 
@@ -775,6 +775,72 @@ export default function MuiPayrollManagement() {
         </Grid>
       </Grid>
 
+      {/* Persistent Deduction Profile Info Bar */}
+      <Card
+        elevation={0}
+        sx={{
+          borderRadius: 3,
+          border: `1px solid ${alpha(theme.palette.info.main, 0.15)}`,
+          mb: 3,
+          background: `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.04)} 0%, ${alpha(theme.palette.info.main, 0.01)} 100%)`,
+        }}
+      >
+        <CardContent sx={{ py: 1.5, px: 2.5, '&:last-child': { pb: 1.5 } }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+              <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ mr: 0.5 }}>
+                Deduction Profile:
+              </Typography>
+              {[
+                { key: 'deductSSS', label: 'SSS' },
+                { key: 'deductPhilHealth', label: 'PhilHealth' },
+                { key: 'deductPagibig', label: 'Pag-IBIG' },
+                { key: 'deductWithholdingTax', label: 'Tax' },
+              ].map(item => {
+                const isActive = deductionProfile ? (deductionProfile as any)[item.key] : true;
+                return (
+                  <Chip
+                    key={item.key}
+                    icon={isActive ? <CheckCircle sx={{ fontSize: 16 }} /> : <Cancel sx={{ fontSize: 16 }} />}
+                    label={item.label}
+                    size="small"
+                    color={isActive ? 'success' : 'default'}
+                    variant={isActive ? 'filled' : 'outlined'}
+                    sx={{
+                      fontWeight: 700,
+                      fontSize: '0.75rem',
+                      opacity: isActive ? 1 : 0.6,
+                    }}
+                  />
+                );
+              })}
+              <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+              <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ mr: 0.5 }}>
+                Holiday Pay:
+              </Typography>
+              <Chip
+                icon={companySettings?.includeHolidayPay ? <CheckCircle sx={{ fontSize: 16 }} /> : <Cancel sx={{ fontSize: 16 }} />}
+                label={companySettings?.includeHolidayPay ? 'Enabled' : 'Disabled'}
+                size="small"
+                color={companySettings?.includeHolidayPay ? 'success' : 'default'}
+                variant={companySettings?.includeHolidayPay ? 'filled' : 'outlined'}
+                sx={{ fontWeight: 700, fontSize: '0.75rem', opacity: companySettings?.includeHolidayPay ? 1 : 0.6 }}
+              />
+            </Box>
+            <Button
+              variant="contained"
+              color="info"
+              size="small"
+              startIcon={<SettingsIcon sx={{ fontSize: 16 }} />}
+              onClick={() => startTransition(() => setLocation('/deduction-settings'))}
+              sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
+            >
+              Configure
+            </Button>
+          </Box>
+        </CardContent>
+      </Card>
+
       {/* Tab Navigation */}
       <Box sx={{ mb: 3 }}>
         <Tabs
@@ -939,6 +1005,11 @@ export default function MuiPayrollManagement() {
                             color={getStatusColor(period.status) as any}
                             sx={{ fontWeight: 600, textTransform: "capitalize" }}
                           />
+                          {parseFloat(String(period.totalHours || 0)) === 0 && parseFloat(String(period.totalPay || 0)) > 0 && (
+                            <Tooltip title="Warning: Zero hours logged but non-zero payout">
+                              <Warning color="warning" sx={{ fontSize: 18 }} />
+                            </Tooltip>
+                          )}
                           {period.totalHours && (
                             <Typography variant="body2" color="text.secondary">
                               {parseFloat(String(period.totalHours)).toFixed(1)}h
@@ -1063,69 +1134,6 @@ export default function MuiPayrollManagement() {
       ) : activeTab === 1 ? (
         /* Entries Tab */
         <>
-        {/* Deduction Profile Info Bar */}
-        <Card
-          elevation={0}
-          sx={{
-            borderRadius: 3,
-            border: `1px solid ${alpha(theme.palette.info.main, 0.15)}`,
-            mb: 2,
-            background: `linear-gradient(135deg, ${alpha(theme.palette.info.main, 0.04)} 0%, ${alpha(theme.palette.info.main, 0.01)} 100%)`,
-          }}
-        >
-          <CardContent sx={{ py: 1.5, px: 2.5, '&:last-child': { pb: 1.5 } }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
-                <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ mr: 0.5 }}>
-                  Deduction Profile:
-                </Typography>
-                {[
-                  { key: 'deductSSS', label: 'SSS' },
-                  { key: 'deductPhilHealth', label: 'PhilHealth' },
-                  { key: 'deductPagibig', label: 'Pag-IBIG' },
-                  { key: 'deductWithholdingTax', label: 'Tax' },
-                ].map(item => {
-                  const isActive = deductionProfile ? (deductionProfile as any)[item.key] : true;
-                  return (
-                    <Chip
-                      key={item.key}
-                      icon={isActive ? <CheckCircle sx={{ fontSize: 16 }} /> : <Cancel sx={{ fontSize: 16 }} />}
-                      label={item.label}
-                      size="small"
-                      color={isActive ? 'success' : 'default'}
-                      variant={isActive ? 'filled' : 'outlined'}
-                      sx={{
-                        fontWeight: 700,
-                        fontSize: '0.75rem',
-                        opacity: isActive ? 1 : 0.6,
-                      }}
-                    />
-                  );
-                })}
-                <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
-                <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ mr: 0.5 }}>
-                  Holiday Pay:
-                </Typography>
-                <Chip
-                  icon={companySettings?.includeHolidayPay ? <CheckCircle sx={{ fontSize: 16 }} /> : <Cancel sx={{ fontSize: 16 }} />}
-                  label={companySettings?.includeHolidayPay ? 'Enabled' : 'Disabled'}
-                  size="small"
-                  color={companySettings?.includeHolidayPay ? 'success' : 'default'}
-                  variant={companySettings?.includeHolidayPay ? 'filled' : 'outlined'}
-                  sx={{ fontWeight: 700, fontSize: '0.75rem', opacity: companySettings?.includeHolidayPay ? 1 : 0.6 }}
-                />
-              </Box>
-              <Button
-                size="small"
-                startIcon={<SettingsIcon sx={{ fontSize: 16 }} />}
-                onClick={() => startTransition(() => setLocation('/deduction-settings'))}
-                sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}
-              >
-                Configure
-              </Button>
-            </Box>
-          </CardContent>
-        </Card>
 
         <Card
           elevation={0}
@@ -1796,22 +1804,29 @@ export default function MuiPayrollManagement() {
               </Box>
 
               {startDate && endDate && payDate && (
-                <Paper
-                  elevation={0}
-                  sx={{
-                    p: 2,
-                    borderRadius: 2,
-                    bgcolor: alpha(theme.palette.success.main, 0.08),
-                    border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
-                  }}
-                >
-                  <Stack direction="row" alignItems="center" spacing={1}>
-                    <CheckCircle sx={{ color: "success.main", fontSize: 20 }} />
-                    <Typography variant="body2" color="success.main" fontWeight={500}>
-                      Period: {format(startDate, "MMM d, yyyy")} - {format(endDate, "MMM d, yyyy")} | Pays on {format(payDate, "MMM d")}
-                    </Typography>
-                  </Stack>
-                </Paper>
+                <>
+                  {periods.some((p: any) => p.status === 'open' && new Date(p.startDate) <= endDate && new Date(p.endDate) >= startDate) && (
+                    <Alert severity="warning" sx={{ borderRadius: 2 }}>
+                      Warning: This date range overlaps with an existing open payroll period.
+                    </Alert>
+                  )}
+                  <Paper
+                    elevation={0}
+                    sx={{
+                      p: 2,
+                      borderRadius: 2,
+                      bgcolor: alpha(theme.palette.success.main, 0.08),
+                      border: `1px solid ${alpha(theme.palette.success.main, 0.2)}`,
+                    }}
+                  >
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <CheckCircle sx={{ color: "success.main", fontSize: 20 }} />
+                      <Typography variant="body2" color="success.main" fontWeight={500}>
+                        Period: {format(startDate, "MMM d, yyyy")} - {format(endDate, "MMM d, yyyy")} | Pays on {format(payDate, "MMM d")}
+                      </Typography>
+                    </Stack>
+                  </Paper>
+                </>
               )}
             </Stack>
           </LocalizationProvider>

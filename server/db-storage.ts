@@ -1,7 +1,7 @@
 import { db } from './db';
-import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, auditLogs, timeOffPolicy, adjustmentLogs, employeeDocuments, companySettings } from '@shared/schema';
+import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, auditLogs, timeOffPolicy, adjustmentLogs, employeeDocuments, companySettings, thirteenthMonthPay } from '@shared/schema';
 import type { IStorage } from './storage';
-import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftTrade, InsertShiftTrade, PayrollPeriod, InsertPayrollPeriod, PayrollEntry, InsertPayrollEntry, Approval, InsertApproval, TimeOffRequest, InsertTimeOffRequest, Notification, InsertNotification, DeductionSettings, InsertDeductionSettings, DeductionRate, InsertDeductionRate, Holiday, InsertHoliday, ArchivedPayrollPeriod, InsertArchivedPayrollPeriod, TimeOffPolicy, InsertTimeOffPolicy, AuditLog, InsertAuditLog, AdjustmentLog, InsertAdjustmentLog, CompanySettings, InsertCompanySettings } from '@shared/schema';
+import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftTrade, InsertShiftTrade, PayrollPeriod, InsertPayrollPeriod, PayrollEntry, InsertPayrollEntry, Approval, InsertApproval, TimeOffRequest, InsertTimeOffRequest, Notification, InsertNotification, DeductionSettings, InsertDeductionSettings, DeductionRate, InsertDeductionRate, Holiday, InsertHoliday, ArchivedPayrollPeriod, InsertArchivedPayrollPeriod, TimeOffPolicy, InsertTimeOffPolicy, AuditLog, InsertAuditLog, AdjustmentLog, InsertAdjustmentLog, CompanySettings, InsertCompanySettings, ThirteenthMonthPay, InsertThirteenthMonthPay } from '@shared/schema';
 import { eq, and, gte, lte, gt, lt, ne, desc, or, sql, isNull } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcrypt';
@@ -1356,6 +1356,35 @@ export class DatabaseStorage implements IStorage {
   async updateCompanySettings(id: string, settings: Partial<InsertCompanySettings>): Promise<CompanySettings | undefined> {
     await db.update(companySettings).set({ ...settings, updatedAt: new Date() }).where(eq(companySettings.id, id));
     const result = await db.select().from(companySettings).where(eq(companySettings.id, id)).limit(1);
+    return result[0];
+  }
+
+  // 13th Month Pay
+  async get13thMonthRecords(year: number): Promise<ThirteenthMonthPay[]> {
+    return db.select().from(thirteenthMonthPay).where(eq(thirteenthMonthPay.year, year));
+  }
+
+  async get13thMonthRecordByEmployeeAndYear(employeeId: string, year: number): Promise<ThirteenthMonthPay | undefined> {
+    const result = await db.select().from(thirteenthMonthPay).where(
+      and(eq(thirteenthMonthPay.employeeId, employeeId), eq(thirteenthMonthPay.year, year))
+    ).limit(1);
+    return result[0];
+  }
+
+  async create13thMonthRecord(record: InsertThirteenthMonthPay): Promise<ThirteenthMonthPay> {
+    const id = randomUUID();
+    await db.insert(thirteenthMonthPay).values({
+      id,
+      ...record
+    });
+    const created = await db.select().from(thirteenthMonthPay).where(eq(thirteenthMonthPay.id, id)).limit(1);
+    if (!created[0]) throw new Error('Failed to create 13th month record');
+    return created[0];
+  }
+
+  async update13thMonthRecord(id: string, record: Partial<InsertThirteenthMonthPay>): Promise<ThirteenthMonthPay | undefined> {
+    await db.update(thirteenthMonthPay).set(record).where(eq(thirteenthMonthPay.id, id));
+    const result = await db.select().from(thirteenthMonthPay).where(eq(thirteenthMonthPay.id, id)).limit(1);
     return result[0];
   }
 

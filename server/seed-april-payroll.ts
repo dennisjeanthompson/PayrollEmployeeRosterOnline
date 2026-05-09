@@ -12,7 +12,7 @@
 
 import 'dotenv/config';
 import { db } from './db';
-import { users, branches, shifts, payrollPeriods, payrollEntries, thirteenthMonthLedger } from '../shared/schema';
+import { users, branches, shifts, payrollPeriods, payrollEntries } from '../shared/schema';
 import { eq, and, sql } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 
@@ -172,17 +172,6 @@ async function main() {
           paidAt: tp.status === 'closed' ? new Date(end.getTime() + 5 * 24 * 60 * 60 * 1000) : null,
         });
 
-        await db.insert(thirteenthMonthLedger).values({
-          id: randomUUID(),
-          userId: emp.id,
-          branchId: branch.id,
-          payrollPeriodId: newPeriodId,
-          year: new Date(tp.startDate).getFullYear(),
-          basicPayEarned: basicPay.toFixed(2),
-          periodStartDate: new Date(tp.startDate),
-          periodEndDate: new Date(tp.endDate),
-          createdAt: new Date(),
-        });
       }
 
       // Update period totalPay
@@ -337,17 +326,6 @@ async function main() {
           paidAt: pd.status === 'closed' ? new Date(endDt.getTime() + 5 * 24 * 60 * 60 * 1000) : null,
         });
 
-        await db.insert(thirteenthMonthLedger).values({
-          id: randomUUID(),
-          userId: emp.id,
-          branchId: branch.id,
-          payrollPeriodId: pd.id,
-          year: startDt.getFullYear(),
-          basicPayEarned: basicPay.toFixed(2),
-          periodStartDate: startDt,
-          periodEndDate: endDt,
-          createdAt: new Date(),
-        });
       }
 
       await db.update(payrollPeriods)

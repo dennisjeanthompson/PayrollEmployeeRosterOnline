@@ -35,7 +35,6 @@ export const users = pgTable("users", {
   isActive: boolean("is_active").default(true),
   sssLoanDeduction: text("sss_loan_deduction").default("0"),
   pagibigLoanDeduction: text("pagibig_loan_deduction").default("0"),
-  cashAdvanceDeduction: text("cash_advance_deduction").default("0"),
   philhealthDeduction: text("philhealth_deduction").default("0"),
   otherDeductions: text("other_deductions").default("0"),
   // Cloudinary photo fields
@@ -62,6 +61,7 @@ export const shifts = pgTable("shifts", {
   isRecurring: boolean("is_recurring").default(false),
   recurringPattern: text("recurring_pattern"),
   status: text("status").default("scheduled"),
+  breakDurationMinutes: integer("break_duration_minutes").default(0), // Break time in minutes
   actualStartTime: timestamp("actual_start_time"),
   actualEndTime: timestamp("actual_end_time"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -113,7 +113,6 @@ export const payrollEntries = pgTable("payroll_entries", {
   pagibigContribution: text("pagibig_contribution").default("0"),
   pagibigLoan: text("pagibig_loan").default("0"),
   withholdingTax: text("withholding_tax").default("0"),
-  advances: text("advances").default("0"),
   otherDeductions: text("other_deductions").default("0"),
   totalDeductions: text("total_deductions").default("0"),
   deductions: text("deductions").default("0"),
@@ -124,6 +123,7 @@ export const payrollEntries = pgTable("payroll_entries", {
   serviceCharge: text("service_charge").default("0"),
   createdAt: timestamp("created_at").defaultNow(),
   paidAt: timestamp("paid_at"),
+  has13thMonth: boolean("has_13th_month").default(false),
 });
 
 export const approvals = pgTable("approvals", {
@@ -148,6 +148,7 @@ export const timeOffRequests = pgTable("time_off_requests", {
   reason: text("reason").notNull(),
   status: text("status").default("pending"),
   isPaid: boolean("is_paid").default(false),
+  leavePaymentStatus: text("leave_payment_status").default("paid"), // 'paid', 'unpaid', 'awol'
   requestedAt: timestamp("requested_at").defaultNow(),
   approvedAt: timestamp("approved_at"),
   approvedBy: text("approved_by").references(() => users.id),
@@ -179,6 +180,7 @@ export const deductionSettings = pgTable("deduction_settings", {
   deductPhilHealth: boolean("deduct_philhealth").default(false),
   deductPagibig: boolean("deduct_pagibig").default(false),
   deductWithholdingTax: boolean("deduct_withholding_tax").default(false),
+  includeExceptionLogs: boolean("include_exception_logs").default(true), // Toggle OT/lateness in payroll
   updatedAt: timestamp("updated_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -338,23 +340,6 @@ export const adjustmentLogComments = pgTable("adjustment_log_comments", {
 
 // ─── PH Compliance Tables ───────────────────────────────────────────────────
 
-/**
- * 13th Month Pay Ledger (RA 7641 / Presidential Decree 851)
- * Each processed payroll period adds a row per employee recording basicPay only
- * (OT, Holiday, Night Diff excluded per BIR rules).
- * Year-end 13th month = SUM(basicPayEarned for year) / 12
- */
-export const thirteenthMonthLedger = pgTable("thirteenth_month_ledger", {
-  id: text("id").primaryKey(),
-  userId: text("user_id").references(() => users.id).notNull(),
-  branchId: text("branch_id").references(() => branches.id).notNull(),
-  payrollPeriodId: text("payroll_period_id").references(() => payrollPeriods.id).notNull(),
-  year: integer("year").notNull(),
-  basicPayEarned: text("basic_pay_earned").notNull(), // Only basic pay — no OT/Holiday/NightDiff
-  periodStartDate: timestamp("period_start_date").notNull(),
-  periodEndDate: timestamp("period_end_date").notNull(),
-  createdAt: timestamp("created_at").defaultNow(),
-});
 
 /**
  * Leave Credits / Leave Balance (DOLE Labor Standards)
@@ -430,10 +415,21 @@ export const employeeTaxYtd = pgTable("employee_tax_ytd", {
   userId: text("user_id").references(() => users.id).notNull(),
   year: integer("year").notNull(),
   otherBenefitsYtd: numeric("other_benefits_ytd", { precision: 12, scale: 4 }).default("0"),
-  thirteenthMonthYtd: numeric("thirteenth_month_ytd", { precision: 12, scale: 4 }).default("0"),
   grossCompensationYtd: numeric("gross_compensation_ytd", { precision: 12, scale: 4 }).default("0"),
   taxableCompensationYtd: numeric("taxable_compensation_ytd", { precision: 12, scale: 4 }).default("0"),
   taxWithheldYtd: numeric("tax_withheld_ytd", { precision: 12, scale: 4 }).default("0"),
+});
+
+export const thirteenthMonthPay = pgTable("thirteenth_month_pay", {
+  id: text("id").primaryKey(),
+  employeeId: text("employee_id").references(() => users.id).notNull(),
+  year: integer("year").notNull(),
+  totalBasicSalary: text("total_basic_salary").notNull(),
+  amount: text("amount").notNull(),
+  status: text("status", { enum: ['pending', 'released'] }).default('pending'),
+  releasedAt: timestamp("released_at"),
+  payslipId: text("payslip_id").references(() => payrollEntries.id),
+  isTaxable: boolean("is_taxable").default(false),
 });
 
 // Insert Schemas
@@ -453,6 +449,7 @@ export const insertShiftSchema = createInsertSchema(shifts).omit({
 }).extend({
   startTime: z.union([z.date(), z.string().pipe(z.coerce.date())]),
   endTime: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+  breakDurationMinutes: z.number().optional().nullable(),
 });
 
 export const insertShiftTradeSchema = z.object({
@@ -494,6 +491,7 @@ export const insertTimeOffRequestSchema = createInsertSchema(timeOffRequests).om
 }).extend({
   startDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
   endDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+  leavePaymentStatus: z.enum(['paid', 'unpaid', 'awol']).optional().nullable(),
 });
 
 export const insertNotificationSchema = createInsertSchema(notifications).omit({
@@ -505,6 +503,8 @@ export const insertDeductionSettingsSchema = createInsertSchema(deductionSetting
   id: true,
   createdAt: true,
   updatedAt: true,
+}).extend({
+  includeExceptionLogs: z.boolean().optional().nullable(),
 });
 
 export const insertDeductionRatesSchema = createInsertSchema(deductionRates).omit({
@@ -547,14 +547,6 @@ export const insertAdjustmentLogSchema = createInsertSchema(adjustmentLogs).omit
 export const insertAdjustmentLogCommentSchema = createInsertSchema(adjustmentLogComments).omit({
   id: true,
   createdAt: true,
-});
-
-export const insertThirteenthMonthLedgerSchema = createInsertSchema(thirteenthMonthLedger).omit({
-  id: true,
-  createdAt: true,
-}).extend({
-  periodStartDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
-  periodEndDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
 });
 
 export const insertLeaveCreditsSchema = createInsertSchema(leaveCredits).omit({
@@ -604,7 +596,6 @@ export type EmployeeDocument = typeof employeeDocuments.$inferSelect;
 export type AdjustmentLog = typeof adjustmentLogs.$inferSelect;
 export type AdjustmentLogComment = typeof adjustmentLogComments.$inferSelect;
 export type CompanySettings = typeof companySettings.$inferSelect;
-export type ThirteenthMonthLedger = typeof thirteenthMonthLedger.$inferSelect;
 export type LeaveCredit = typeof leaveCredits.$inferSelect;
 export const serviceChargePools = pgTable("service_charge_pools", {
   id: text("id").primaryKey(),
@@ -641,7 +632,6 @@ export type InsertAuditLog = z.infer<typeof insertAuditLogSchema>;
 export type InsertTimeOffPolicy = z.infer<typeof insertTimeOffPolicySchema>;
 export type InsertAdjustmentLog = z.infer<typeof insertAdjustmentLogSchema>;
 export type InsertCompanySettings = z.infer<typeof insertCompanySettingsSchema>;
-export type InsertThirteenthMonthLedger = z.infer<typeof insertThirteenthMonthLedgerSchema>;
 export type InsertLeaveCredit = z.infer<typeof insertLeaveCreditsSchema>;
 
 export type InsertServiceChargePool = z.infer<typeof insertServiceChargePoolSchema>;
@@ -654,6 +644,7 @@ export const insertAllowanceTypeSchema = createInsertSchema(allowanceTypes).omit
 export const insertWorkerAllowanceSchema = createInsertSchema(workerAllowances).omit({ id: true });
 export const insertDeMinimisYtdSchema = createInsertSchema(deMinimisYtd).omit({ id: true });
 export const insertEmployeeTaxYtdSchema = createInsertSchema(employeeTaxYtd).omit({ id: true });
+export const insertThirteenthMonthPaySchema = createInsertSchema(thirteenthMonthPay).omit({ id: true });
 
 export type SssContributionTable = typeof sssContributionTable.$inferSelect;
 export type WageOrder = typeof wageOrders.$inferSelect;
@@ -661,6 +652,7 @@ export type AllowanceType = typeof allowanceTypes.$inferSelect;
 export type WorkerAllowance = typeof workerAllowances.$inferSelect;
 export type DeMinimisYtd = typeof deMinimisYtd.$inferSelect;
 export type EmployeeTaxYtd = typeof employeeTaxYtd.$inferSelect;
+export type ThirteenthMonthPay = typeof thirteenthMonthPay.$inferSelect;
 
 export type InsertSssContributionTable = z.infer<typeof insertSssContributionTableSchema>;
 export type InsertWageOrder = z.infer<typeof insertWageOrderSchema>;
@@ -668,3 +660,4 @@ export type InsertAllowanceType = z.infer<typeof insertAllowanceTypeSchema>;
 export type InsertWorkerAllowance = z.infer<typeof insertWorkerAllowanceSchema>;
 export type InsertDeMinimisYtd = z.infer<typeof insertDeMinimisYtdSchema>;
 export type InsertEmployeeTaxYtd = z.infer<typeof insertEmployeeTaxYtdSchema>;
+export type InsertThirteenthMonthPay = z.infer<typeof insertThirteenthMonthPaySchema>;

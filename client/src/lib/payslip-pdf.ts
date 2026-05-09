@@ -51,7 +51,6 @@ export interface PayslipData {
   // Custom Deductions
   sssLoan: number;
   pagibigLoan: number;
-  cashAdvance: number;
   otherDeductions: number;
 
   // Totals
@@ -62,7 +61,6 @@ export interface PayslipData {
   ytdGross?: number;
   ytdDeductions?: number;
   ytdNet?: number;
-  thirteenthMonthAccrued?: number;
 
   // Compliance
   minWageCompliant?: boolean;
@@ -274,10 +272,9 @@ export function generatePayslipPDF(data: PayslipData): jsPDF {
   const customDeductions: string[][] = [];
   if (data.sssLoan > 0) customDeductions.push(['SSS Loan Repayment', `₱${data.sssLoan.toFixed(2)}`]);
   if (data.pagibigLoan > 0) customDeductions.push(['Pag-IBIG Loan Repayment', `₱${data.pagibigLoan.toFixed(2)}`]);
-  if (data.cashAdvance > 0) customDeductions.push(['Cash Advance', `₱${data.cashAdvance.toFixed(2)}`]);
   if (data.otherDeductions > 0) customDeductions.push(['Other Deductions', `₱${data.otherDeductions.toFixed(2)}`]);
 
-  const customTotal = data.sssLoan + data.pagibigLoan + data.cashAdvance + data.otherDeductions;
+  const customTotal = data.sssLoan + data.pagibigLoan + data.otherDeductions;
 
   if (customDeductions.length > 0) {
     autoTable(doc, {
@@ -341,22 +338,15 @@ export function generatePayslipPDF(data: PayslipData): jsPDF {
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 3 },
       headStyles: { fillColor: headerBg, textColor: [255, 255, 255] },
-      head: [['Gross YTD', 'Deductions YTD', 'Net YTD', '13th Month Accrued']],
+      head: [['Gross YTD', 'Deductions YTD', 'Net YTD']],
       body: [[
         `₱${(data.ytdGross || 0).toLocaleString()}`,
         `₱${(data.ytdDeductions || 0).toLocaleString()}`,
-        `₱${(data.ytdNet || 0).toLocaleString()}`,
-        `₱${(data.thirteenthMonthAccrued || 0).toLocaleString()}`,
+        `₱${(data.ytdNet || 0).toLocaleString()}`
       ]],
     });
 
     y = (doc as any).lastAutoTable.finalY + 5;
-
-    // 13th month note
-    doc.setFontSize(8);
-    doc.setFont('helvetica', 'italic');
-    doc.text('* 13th Month Pay: 1/12 of annual basic salary, tax-exempt up to ₱90,000 total bonuses', margin, y);
-    y += 4;
 
     // Min wage compliance
     if (data.minWageCompliant !== undefined) {

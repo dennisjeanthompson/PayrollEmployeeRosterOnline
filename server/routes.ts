@@ -22,12 +22,12 @@ import { forecastRouter } from "./routes/forecast";
 import { seedRatesRouter } from "./routes/seed-rates";
 import holidaysRouter from "./routes/holidays";
 import employeeUploadsRouter from "./routes/employee-uploads";
-import { thirteenthMonthRouter } from "./routes/thirteenth-month";
+
 import { leaveCreditsRouter } from "./routes/leave-credits";
 
 
 import { db } from "./db";
-import { thirteenthMonthLedger, deductionSettings as deductionSettingsTable } from "@shared/schema";
+import { deductionSettings as deductionSettingsTable } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID as _randomUUID } from "crypto";
 import { resetDatabase, initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll, seedSampleShiftTrades, markSetupComplete } from "./init-db";
@@ -1173,7 +1173,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use(seedRatesRouter);
   
   // Register Philippine compliance routes
-  app.use(thirteenthMonthRouter);
   app.use(leaveCreditsRouter);
 
 
@@ -1729,7 +1728,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rows = await db.select().from(deductionSettingsTable).where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
       if (rows.length === 0) {
         // Return defaults (all enabled)
-        return res.json({ settings: { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: true } });
+        return res.json({ settings: { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: true, includeExceptionLogs: true } });
       }
       res.json({ settings: rows[0] });
     } catch (error: any) {
@@ -1740,7 +1739,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/deduction-settings", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
-      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax } = req.body;
+      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs } = req.body;
 
       const existing = await db.select().from(deductionSettingsTable).where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
 
@@ -1753,6 +1752,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           deductPhilHealth: deductPhilHealth ?? true,
           deductPagibig: deductPagibig ?? true,
           deductWithholdingTax: deductWithholdingTax ?? true,
+          includeExceptionLogs: includeExceptionLogs ?? true,
           updatedAt: new Date(),
         });
       } else {
@@ -1762,6 +1762,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           deductPhilHealth: deductPhilHealth ?? true,
           deductPagibig: deductPagibig ?? true,
           deductWithholdingTax: deductWithholdingTax ?? true,
+          includeExceptionLogs: includeExceptionLogs ?? true,
           updatedAt: new Date(),
         }).where(eq(deductionSettingsTable.branchId, branchId));
       }
@@ -1953,6 +1954,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         await storage.deletePayrollEntry(entry.id);
       }
 
+      // 13th Month Validation for December Payroll
+      if (new Date(period.endDate).getMonth() === 11) { // 11 is December (0-indexed)
+        const periodYear = new Date(period.endDate).getFullYear();
+        const pending13thMonth = await storage.get13thMonthRecords(periodYear);
+        const branchEmployees = await storage.getUsersByBranch(branchId);
+        const branchEmpIds = new Set(branchEmployees.map(e => e.id));
+        const pendingForBranch = pending13thMonth.filter(r => branchEmpIds.has(r.employeeId) && r.status !== 'released');
+        
+        if (pendingForBranch.length > 0) {
+           return res.status(400).json({ 
+             message: `${pendingForBranch.length} employees have unreleased 13th month pay for ${periodYear}. Please release before generating payroll.` 
+           });
+        }
+      }
+
       // Get all employees in the branch
       const employees = await storage.getUsersByBranch(branchId);
       const payrollEntries = [];
@@ -1970,7 +1986,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
       const branchDeductionSettings = dsRows[0] || {
         deductSSS: true, deductPhilHealth: true,
-        deductPagibig: true, deductWithholdingTax: true
+        deductPagibig: true, deductWithholdingTax: true, includeExceptionLogs: true
       };
 
       // --- Pre-fetch static branch & company data to prevent N+1 Queries ---
@@ -2005,9 +2021,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Get approved paid leave (SIL/Vacation/Sick)
         const timeOffRequests = await storage.getTimeOffRequestsByUser(employee.id);
-        const approvedLeaves = timeOffRequests.filter(req => 
+        const approvedLeaves = timeOffRequests.filter((req: any) => 
           req.status === 'approved' && 
-          ['vacation', 'sick', 'personal'].includes(req.type) &&
+          req.leavePaymentStatus === 'paid' &&
           new Date(req.startDate) <= new Date(period.endDate) &&
           new Date(req.endDate) >= new Date(period.startDate)
         );
@@ -2076,6 +2092,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let undertimeDeduction = 0;
 
         for (const adj of employeeAdjustments) {
+          // Skip if branch settings disabled exception log inclusion
+          if (!branchDeductionSettings.includeExceptionLogs) continue;
+
           // Only process approved or employee-verified adjustments
           if (adj.status !== 'approved' && adj.status !== 'employee_verified') continue;
 
@@ -2237,12 +2256,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Add gross allowances to gross Pay (after basic basicPay computations)
         grossPay += totalAllowanceAmount;
 
-        // Government Loans Feature has been removed. 
         // sssLoan and pagibigLoan are kept at 0 to satisfy database schema requirements.
         let sssLoan = 0;
         let pagibigLoan = 0;
-
-        const advances = parseFloat(employee.cashAdvanceDeduction || '0');
         
         // Include lateness, absences (stored in lateDeduction), and undertime in otherDeductions
         // so they are explicitly visible as deductions on the payslip.
@@ -2258,11 +2274,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
           philHealthContribution +
           pagibigContribution +
           mweWithholdingTax +
-          advances +
           otherDeductions;
 
         // Ensure Employee Net Pay does not drop below 0 due to excessive combined deductions 
         const netPay = Math.max(0, grossPay - totalDeductions);
+
+        // Check if employee has released 13th month pay for this year to link it
+        let has13thMonth = false;
+        let thirteentMonthRecord = null;
+        if (new Date(period.endDate).getMonth() === 11) {
+          const periodYear = new Date(period.endDate).getFullYear();
+          const emp13thMonth = await storage.get13thMonthRecordByEmployeeAndYear(employee.id, periodYear);
+          if (emp13thMonth && emp13thMonth.status === 'released') {
+             has13thMonth = true;
+             thirteentMonthRecord = emp13thMonth;
+          }
+        }
 
         // Create payroll entry with detailed breakdown
         const entry = await storage.createPayrollEntry({
@@ -2284,33 +2311,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
           pagibigContribution: pagibigContribution.toString(),
           pagibigLoan: pagibigLoan.toString(),
           withholdingTax: mweWithholdingTax.toString(),
-          advances: advances.toString(),
           otherDeductions: otherDeductions.toString(),
           totalDeductions: totalDeductions.toString(),
           deductions: totalDeductions.toString(), // For backward compatibility
           netPay: netPay.toString(),
+          has13thMonth,
           status: 'pending'
         });
 
-        // ─── Feature 2: 13th Month Ledger (PD 851) ──────────────────────────
-        // Record the basicPay only — OT/Holiday/NightDiff excluded per BIR rules
-        try {
-          const periodYear = new Date(period.startDate).getFullYear();
-          await db.insert(thirteenthMonthLedger).values({
-            id: crypto.randomUUID(),
-            userId: employee.id,
-            branchId: branchId,
-            payrollPeriodId: id,
-            year: periodYear,
-            basicPayEarned: basicPay.toFixed(2),
-            periodStartDate: new Date(period.startDate),
-            periodEndDate: new Date(period.endDate),
-            createdAt: new Date(),
-          });
-        } catch (ledgerErr) {
-          // Non-blocking: if table not yet migrated, log but don't fail payroll
-          console.warn('13th month ledger insert skipped (table may not exist yet):', (ledgerErr as any).message);
+        // Link payslip to 13th month record
+        if (thirteentMonthRecord) {
+           await storage.update13thMonthRecord(thirteentMonthRecord.id, { payslipId: entry.id });
         }
+
+
 
         payrollEntries.push(entry);
         createdEntryIds.push(entry.id);
@@ -2653,7 +2667,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       pagibigContribution: entry.pagibigContribution || 0,
       pagibigLoan: entry.pagibigLoan || 0,
       withholdingTax: entry.withholdingTax || 0,
-      advances: entry.advances || 0,
       otherDeductions: entry.otherDeductions || 0,
       totalDeductions: entry.totalDeductions || entry.deductions || 0,
       deductions: entry.deductions,
@@ -2672,7 +2685,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       employeePagibig: user.pagibigNumber || null,
       // Included adjustments/exceptions
       includedExceptions,
+      // 13th Month Pay
+      thirteenthMonthAmount: "0",
+      has13thMonth: false,
     };
+
+    if ((entry as any).has13thMonth) {
+      const records = await storage.get13thMonthRecords(new Date(periodEnd || entry.createdAt!).getFullYear());
+      const empRecord = records.find(r => r.payslipId === entry.id || (r.employeeId === entry.userId && r.status === 'released'));
+      if (empRecord) {
+        payslipData.has13thMonth = true;
+        payslipData.thirteenthMonthAmount = empRecord.amount;
+        
+        // Add to netPay (13th month is usually not added to gross pay to keep it separate from standard computations, but added directly to net pay)
+        payslipData.netPay = (parseFloat(payslipData.netPay as string) + parseFloat(empRecord.amount)).toString();
+      }
+    }
 
     res.json({ payslip: payslipData });
   }));
@@ -4443,9 +4471,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(403).json({ message: "Not authorized for this branch" });
     }
 
+    const { leavePaymentStatus } = req.body;
+    // Validate leavePaymentStatus
+    const validStatuses = ['paid', 'unpaid', 'awol'];
+    const paymentStatus = validStatuses.includes(leavePaymentStatus) ? leavePaymentStatus : 'paid';
+
     const request = await storage.updateTimeOffRequest(id, {
       status: "approved",
       approvedBy: req.user!.id,
+      leavePaymentStatus: paymentStatus,
     });
 
     if (!request) {
@@ -4498,8 +4532,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('Leave deduction error:', deductionErr);
     }
 
-    // Mark the request as paid or unpaid
-    await storage.updateTimeOffRequest(id, { isPaid } as any);
+    // Mark the request as paid or unpaid based on leavePaymentStatus override
+    const finalIsPaid = paymentStatus === 'paid' && isPaid;
+    await storage.updateTimeOffRequest(id, { isPaid: finalIsPaid, leavePaymentStatus: paymentStatus } as any);
+    // Audit note if marked as AWOL/unpaid
+    if (paymentStatus === 'awol') {
+      console.log(`[Time-Off] ${request.userId} marked AWOL for ${request.startDate}–${request.endDate}`);
+    }
 
     // Sync with approvals table
     try {
@@ -4550,7 +4589,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/time-off-requests/:id/reject", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
-    const { rejectionReason } = req.body;
+    const { rejectionReason, leavePaymentStatus } = req.body;
+    const validStatuses = ['paid', 'unpaid', 'awol'];
+    const paymentStatus = validStatuses.includes(leavePaymentStatus) ? leavePaymentStatus : 'unpaid';
 
     const existing = await storage.getTimeOffRequest(id);
     if (!existing) {
@@ -4570,6 +4611,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       status: "rejected",
       approvedBy: req.user!.id,
       rejectionReason: rejectionReason || null,
+      leavePaymentStatus: paymentStatus,
     });
 
     if (!request) {
@@ -5309,6 +5351,85 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error('❌ Reset and reseed error:', error);
       res.status(500).json({ message: "Reset failed", error: String(error) });
     }
+  }));
+
+  // --- 13th Month Pay ---
+  app.get("/api/13th-month/:year", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+    const year = parseInt(req.params.year);
+    if (isNaN(year)) return res.status(400).json({ message: "Invalid year" });
+    const records = await storage.get13thMonthRecords(year);
+    
+    const employees = await storage.getUsersByBranch(req.user!.branchId);
+    const employeeIds = new Set(employees.map(e => e.id));
+    const branchRecords = records.filter(r => employeeIds.has(r.employeeId));
+    
+    const enrichedRecords = branchRecords.map(r => {
+      const emp = employees.find(e => e.id === r.employeeId);
+      return {
+        ...r,
+        employeeName: emp ? `${emp.firstName} ${emp.lastName}` : "Unknown"
+      };
+    });
+    
+    res.json(enrichedRecords);
+  }));
+
+  app.post("/api/13th-month/compute", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+    const { year } = req.body;
+    if (!year || isNaN(parseInt(year))) return res.status(400).json({ message: "Invalid year" });
+    const numYear = parseInt(year);
+    
+    // Prorate for resignees/new hires by calculating for ANY employee who had payroll in that year
+    const employees = await storage.getUsersByBranch(req.user!.branchId);
+    let computedCount = 0;
+    
+    for (const employee of employees) {
+      const payrolls = await storage.getPayrollEntriesByUser(employee.id);
+      let totalBasic = 0;
+      
+      for (const p of payrolls) {
+        const period = await storage.getPayrollPeriod(p.payrollPeriodId);
+        if (period && new Date(period.startDate).getFullYear() === numYear) {
+           totalBasic += parseFloat(p.basicPay || "0");
+        }
+      }
+      
+      if (totalBasic > 0) {
+        const amount = totalBasic / 12;
+        let record = await storage.get13thMonthRecordByEmployeeAndYear(employee.id, numYear);
+        if (record) {
+           if (record.status !== 'released') {
+              await storage.update13thMonthRecord(record.id, { 
+                totalBasicSalary: totalBasic.toFixed(2), 
+                amount: amount.toFixed(2),
+                isTaxable: amount > 90000 
+              });
+              computedCount++;
+           }
+        } else {
+           await storage.create13thMonthRecord({
+             employeeId: employee.id,
+             year: numYear,
+             totalBasicSalary: totalBasic.toFixed(2),
+             amount: amount.toFixed(2),
+             status: 'pending',
+             isTaxable: amount > 90000
+           });
+           computedCount++;
+        }
+      }
+    }
+    res.json({ message: "13th month computed successfully", count: computedCount });
+  }));
+
+  app.put("/api/13th-month/release", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+    const { ids } = req.body;
+    if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: "ids array is required" });
+    
+    for (const id of ids) {
+       await storage.update13thMonthRecord(id, { status: 'released', releasedAt: new Date() });
+    }
+    res.json({ message: "Records released successfully" });
   }));
 
   return httpServer;

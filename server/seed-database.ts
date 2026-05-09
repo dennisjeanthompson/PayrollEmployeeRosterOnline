@@ -33,7 +33,7 @@ import { sql } from 'drizzle-orm';
 import {
   users, branches, shifts, shiftTrades,
   payrollPeriods, payrollEntries, timeOffRequests,
-  notifications, approvals, thirteenthMonthLedger,
+  notifications, approvals,
   leaveCredits, adjustmentLogs, auditLogs,
 } from '../shared/schema';
 import { eq } from 'drizzle-orm';
@@ -54,7 +54,6 @@ async function cleanTransactionalData() {
     'audit_logs',
     'adjustment_logs',
     'service_charge_distributions',
-    'thirteenth_month_ledger',
     'archived_payroll_periods',
     'payroll_entries',
     'payroll_periods',
@@ -248,27 +247,12 @@ async function seedPayroll(branchId: string, employees: any[]) {
         philHealthContribution: phic.toFixed(2),
         pagibigContribution: hdmf.toFixed(2),
         withholdingTax: tax.toFixed(2),
-        advances: '0.00',
         otherDeductions: '0.00',
         totalDeductions: totalDed.toFixed(2),
         deductions: totalDed.toFixed(2),
         netPay: net.toFixed(2),
         status: def.status === 'open' ? 'pending' : 'paid',
         payBreakdown: JSON.stringify(pay),
-      });
-
-      // Inject 13th Month Ledger record (based ONLY on basic pay)
-      const periodYear = startDt.getFullYear();
-      await db.insert(thirteenthMonthLedger).values({
-        id: uuid(),
-        userId: emp.id,
-        branchId,
-        payrollPeriodId: def.id,
-        year: periodYear,
-        basicPayEarned: pay.basicPay.toFixed(2),
-        periodStartDate: startDt,
-        periodEndDate: endDt,
-        createdAt: new Date(),
       });
 
       totalEntries++;

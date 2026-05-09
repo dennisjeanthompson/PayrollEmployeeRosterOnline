@@ -146,8 +146,8 @@ export default function ScheduleV2() {
   ];
 
   // Form data
-  const [newShift, setNewShift] = useState({ employeeId: '', startTime: null as Date | null, endTime: null as Date | null, notes: '' });
-  const [editForm, setEditForm] = useState({ startTime: null as Date | null, endTime: null as Date | null, notes: '' });
+  const [newShift, setNewShift] = useState({ employeeId: '', startTime: null as Date | null, endTime: null as Date | null, notes: '', breakDurationMinutes: 30 });
+  const [editForm, setEditForm] = useState({ startTime: null as Date | null, endTime: null as Date | null, notes: '', breakDurationMinutes: 30 });
   const [timeOffForm, setTimeOffForm] = useState({ type: 'vacation', startDate: new Date() as Date | null, endDate: new Date() as Date | null, reason: '' });
   const [tradeForm, setTradeForm] = useState({ shiftId: '', targetUserId: '', reason: '' });
   const [actionsMenuAnchor, setActionsMenuAnchor] = useState<null | HTMLElement>(null);
@@ -393,7 +393,7 @@ export default function ScheduleV2() {
 
   // â”€â”€â”€ MUTATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   const createShiftMutation = useMutation({
-    mutationFn: async (payload: { userId: string; startTime: string; endTime: string; branchId: string; position: string; notes?: string }) => {
+    mutationFn: async (payload: { userId: string; startTime: string; endTime: string; branchId: string; position: string; notes?: string; breakDurationMinutes?: number }) => {
       const res = await apiRequest('POST', '/api/shifts', payload);
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to create shift'); }
       return res.json();
@@ -402,13 +402,13 @@ export default function ScheduleV2() {
       queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
       toast.success('Shift created');
       setCreateModalOpen(false);
-      setNewShift({ employeeId: '', startTime: null, endTime: null, notes: '' });
+      setNewShift({ employeeId: '', startTime: null, endTime: null, notes: '', breakDurationMinutes: 30 });
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
   const updateShiftMutation = useMutation({
-    mutationFn: async (payload: { id: string; startTime?: string; endTime?: string; notes?: string }) => {
+    mutationFn: async (payload: { id: string; startTime?: string; endTime?: string; notes?: string; breakDurationMinutes?: number }) => {
       const { id, ...data } = payload;
       const res = await apiRequest('PUT', `/api/shifts/${id}`, data);
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to update shift'); }
@@ -550,12 +550,13 @@ export default function ScheduleV2() {
   });
 
   const approveTimeOffMutation = useMutation({
-    mutationFn: async ({ id, status, rejectionReason, useSil }: { id: string; status: string; rejectionReason?: string; useSil?: boolean }) => {
-      // Server has separate /approve and /reject endpoints
+    mutationFn: async ({ id, status, rejectionReason, leavePaymentStatus }: { id: string; status: string; rejectionReason?: string; leavePaymentStatus?: string }) => {
       const endpoint = status === 'approved'
         ? `/api/time-off-requests/${id}/approve`
         : `/api/time-off-requests/${id}/reject`;
-      const body = status === 'rejected' ? { status, rejectionReason } : { status, useSil };
+      const body = status === 'rejected'
+        ? { status, rejectionReason, leavePaymentStatus: leavePaymentStatus || 'unpaid' }
+        : { status, leavePaymentStatus: leavePaymentStatus || 'paid' };
       const res = await apiRequest('PUT', endpoint, body);
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
       return res.json();
@@ -793,6 +794,7 @@ export default function ScheduleV2() {
       startTime: new Date(shift.startTime),
       endTime: new Date(shift.endTime),
       notes: shift.notes || '',
+      breakDurationMinutes: (shift as any).breakDurationMinutes ?? 30,
     });
     setEditModalOpen(true);
   }, [isManager]);
@@ -1197,8 +1199,8 @@ export default function ScheduleV2() {
               isManager={isManager}
               currentUserId={currentUser?.id || ''}
               adjustmentLogs={adjustmentLogs}
-              onApproveTimeOff={(id, useSil) => approveTimeOffMutation.mutate({ id, status: 'approved', useSil })}
-              onRejectTimeOff={(id, reason) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason })}
+              onApproveTimeOff={(id, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'approved', leavePaymentStatus })}
+              onRejectTimeOff={(id, reason, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason, leavePaymentStatus })}
               onApproveTrade={(id) => approveTradeMutation.mutate({ id, status: 'approved' })}
               onRejectTrade={(id) => approveTradeMutation.mutate({ id, status: 'rejected' })}
               onAcceptTrade={(id) => respondTradeMutation.mutate({ id, status: 'accepted' })}
@@ -1275,8 +1277,8 @@ export default function ScheduleV2() {
           isManager={isManager}
           currentUserId={currentUser?.id || ''}
           adjustmentLogs={adjustmentLogs}
-          onApproveTimeOff={(id, useSil) => approveTimeOffMutation.mutate({ id, status: 'approved', useSil })}
-          onRejectTimeOff={(id, reason) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason })}
+          onApproveTimeOff={(id, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'approved', leavePaymentStatus })}
+          onRejectTimeOff={(id, reason, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason, leavePaymentStatus })}
           onApproveTrade={(id) => approveTradeMutation.mutate({ id, status: 'approved' })}
           onRejectTrade={(id) => approveTradeMutation.mutate({ id, status: 'rejected' })}
           onAcceptTrade={(id) => respondTradeMutation.mutate({ id, status: 'accepted' })}
@@ -1317,6 +1319,15 @@ export default function ScheduleV2() {
               />
             </LocalizationProvider>
             <TextField label="Notes" multiline rows={2} value={newShift.notes} onChange={e => setNewShift(p => ({ ...p, notes: e.target.value }))} fullWidth />
+            <TextField
+              label="Break Duration (minutes)"
+              type="number"
+              fullWidth
+              value={newShift.breakDurationMinutes}
+              onChange={e => setNewShift(p => ({ ...p, breakDurationMinutes: Math.max(0, parseInt(e.target.value) || 0) }))}
+              InputProps={{ inputProps: { min: 0, max: 120, step: 5 }, endAdornment: <InputAdornment position="end">min</InputAdornment> }}
+              helperText={newShift.breakDurationMinutes > 0 ? `${newShift.breakDurationMinutes} min unpaid break deducted from hours` : 'No break'}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
@@ -1344,6 +1355,7 @@ export default function ScheduleV2() {
                 startTime: newShift.startTime.toISOString(),
                 endTime: newShift.endTime.toISOString(),
                 notes: newShift.notes,
+                breakDurationMinutes: newShift.breakDurationMinutes,
               });
             }}
           >
@@ -1416,6 +1428,15 @@ export default function ScheduleV2() {
                 onChange={e => setEditForm(p => ({ ...p, notes: e.target.value }))}
                 fullWidth
               />
+              <TextField
+                label="Break Duration (minutes)"
+                type="number"
+                fullWidth
+                value={editForm.breakDurationMinutes}
+                onChange={e => setEditForm(p => ({ ...p, breakDurationMinutes: Math.max(0, parseInt(e.target.value) || 0) }))}
+                InputProps={{ inputProps: { min: 0, max: 120, step: 5 }, endAdornment: <InputAdornment position="end">min</InputAdornment> }}
+                helperText={editForm.breakDurationMinutes > 0 ? `${editForm.breakDurationMinutes} min unpaid break` : 'No break scheduled'}
+              />
             </Stack>
           )}
         </DialogContent>
@@ -1456,7 +1477,7 @@ export default function ScheduleV2() {
                   return;
                 }
 
-                updateShiftMutation.mutate({ id: selectedShift.id, startTime: editForm.startTime.toISOString(), endTime: editForm.endTime.toISOString(), notes: editForm.notes });
+                updateShiftMutation.mutate({ id: selectedShift.id, startTime: editForm.startTime.toISOString(), endTime: editForm.endTime.toISOString(), notes: editForm.notes, breakDurationMinutes: editForm.breakDurationMinutes });
               }
             }}
           >

@@ -1,4 +1,4 @@
-import { type User, type InsertUser, type Branch, type InsertBranch, type Shift, type InsertShift, type ShiftTrade, type InsertShiftTrade, type PayrollPeriod, type InsertPayrollPeriod, type PayrollEntry, type InsertPayrollEntry, type Approval, type InsertApproval, type TimeOffRequest, type InsertTimeOffRequest, type Notification, type InsertNotification, type DeductionSettings, type InsertDeductionSettings, type DeductionRate, type InsertDeductionRate, type AuditLog, type InsertAuditLog, type Holiday, type InsertHoliday, type AdjustmentLog, type InsertAdjustmentLog, type CompanySettings, type InsertCompanySettings, type ArchivedPayrollPeriod, type TimeOffPolicy } from "@shared/schema";
+import { type User, type InsertUser, type Branch, type InsertBranch, type Shift, type InsertShift, type ShiftTrade, type InsertShiftTrade, type PayrollPeriod, type InsertPayrollPeriod, type PayrollEntry, type InsertPayrollEntry, type Approval, type InsertApproval, type TimeOffRequest, type InsertTimeOffRequest, type Notification, type InsertNotification, type DeductionSettings, type InsertDeductionSettings, type DeductionRate, type InsertDeductionRate, type AuditLog, type InsertAuditLog, type Holiday, type InsertHoliday, type AdjustmentLog, type InsertAdjustmentLog, type CompanySettings, type InsertCompanySettings, type ArchivedPayrollPeriod, type TimeOffPolicy, type ThirteenthMonthPay, type InsertThirteenthMonthPay } from "@shared/schema";
 import { randomUUID } from "crypto";
 
 
@@ -156,6 +156,11 @@ export interface IStorage {
   upsertTimeOffPolicy(branchId: string, leaveType: string, minimumAdvanceDays: number): Promise<TimeOffPolicy>;
   initializeDefaultTimeOffPolicies(branchId: string): Promise<void>;
 
+  // 13th Month Pay
+  get13thMonthRecords(year: number): Promise<ThirteenthMonthPay[]>;
+  get13thMonthRecordByEmployeeAndYear(employeeId: string, year: number): Promise<ThirteenthMonthPay | undefined>;
+  create13thMonthRecord(record: InsertThirteenthMonthPay): Promise<ThirteenthMonthPay>;
+  update13thMonthRecord(id: string, record: Partial<InsertThirteenthMonthPay>): Promise<ThirteenthMonthPay | undefined>;
 }
 
 export class MemStorage implements IStorage {
@@ -215,7 +220,6 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       sssLoanDeduction: null,
       pagibigLoanDeduction: null,
-      cashAdvanceDeduction: null,
       otherDeductions: null,
       philhealthDeduction: null,
       photoUrl: null,
@@ -245,7 +249,6 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       sssLoanDeduction: null,
       pagibigLoanDeduction: null,
-      cashAdvanceDeduction: null,
       otherDeductions: null,
       philhealthDeduction: null,
       photoUrl: null,
@@ -275,6 +278,7 @@ export class MemStorage implements IStorage {
       status: "scheduled",
       isRecurring: false,
       recurringPattern: null,
+      breakDurationMinutes: 0,
       createdAt: new Date(),
       actualStartTime: null,
       actualEndTime: null,
@@ -292,6 +296,7 @@ export class MemStorage implements IStorage {
       status: "scheduled",
       isRecurring: false,
       recurringPattern: null,
+      breakDurationMinutes: 0,
       createdAt: new Date(),
       actualStartTime: null,
       actualEndTime: null,
@@ -309,6 +314,7 @@ export class MemStorage implements IStorage {
       status: "scheduled",
       isRecurring: false,
       recurringPattern: null,
+      breakDurationMinutes: 0,
       createdAt: new Date(),
       actualStartTime: null,
       actualEndTime: null,
@@ -334,7 +340,6 @@ export class MemStorage implements IStorage {
       isActive: insertUser.isActive ?? true,
       sssLoanDeduction: null,
       pagibigLoanDeduction: null,
-      cashAdvanceDeduction: null,
       otherDeductions: null,
       philhealthDeduction: null,
       photoUrl: insertUser.photoUrl ?? null,
@@ -412,6 +417,7 @@ export class MemStorage implements IStorage {
       status: insertShift.status || 'scheduled',
       isRecurring: insertShift.isRecurring ?? false,
       recurringPattern: insertShift.recurringPattern || null,
+      breakDurationMinutes: insertShift.breakDurationMinutes ?? 0,
       actualStartTime: null,
       actualEndTime: null,
     };
@@ -550,8 +556,8 @@ export class MemStorage implements IStorage {
       totalDeductions: insertEntry.totalDeductions || '0',
       otherDeductions: insertEntry.otherDeductions || '0',
       deductions: insertEntry.deductions || '0',
-      advances: (insertEntry.advances ?? null) as string | null,
-      payBreakdown: (insertEntry.payBreakdown ?? null) as string | null,
+      payBreakdown: insertEntry.payBreakdown || null,
+      has13thMonth: insertEntry.has13thMonth || false,
       paidAt: insertEntry.paidAt ?? null,
     };
     this.payrollEntries.set(id, entry);
@@ -675,7 +681,8 @@ export class MemStorage implements IStorage {
       status: insertRequest.status || 'pending',
       approvedBy: insertRequest.approvedBy || null,
       rejectionReason: insertRequest.rejectionReason ?? null,
-      isPaid: false
+      isPaid: insertRequest.isPaid ?? false,
+      leavePaymentStatus: insertRequest.leavePaymentStatus || "paid",
     };
     this.timeOffRequests.set(id, request);
     return request;
@@ -785,8 +792,9 @@ export class MemStorage implements IStorage {
       id,
       deductSSS: insertSettings.deductSSS ?? null,
       deductPhilHealth: insertSettings.deductPhilHealth ?? null,
-      deductPagibig: insertSettings.deductPagibig ?? null,
-      deductWithholdingTax: insertSettings.deductWithholdingTax ?? null,
+      deductPagibig: insertSettings.deductPagibig ?? true,
+      deductWithholdingTax: insertSettings.deductWithholdingTax ?? true,
+      includeExceptionLogs: insertSettings.includeExceptionLogs ?? false,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -1298,6 +1306,10 @@ export class MemStorage implements IStorage {
       }
     }
   }
+  async get13thMonthRecords(year: number): Promise<ThirteenthMonthPay[]> { return []; }
+  async get13thMonthRecordByEmployeeAndYear(employeeId: string, year: number): Promise<ThirteenthMonthPay | undefined> { return undefined; }
+  async create13thMonthRecord(record: InsertThirteenthMonthPay): Promise<ThirteenthMonthPay> { throw new Error("Method not implemented."); }
+  async update13thMonthRecord(id: string, record: Partial<InsertThirteenthMonthPay>): Promise<ThirteenthMonthPay | undefined> { throw new Error("Method not implemented."); }
 }
 
 export const storage = new MemStorage();

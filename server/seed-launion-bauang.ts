@@ -35,7 +35,7 @@ import {
   branches, users, shifts, shiftTrades,
   payrollPeriods, payrollEntries, timeOffRequests,
   notifications, approvals, adjustmentLogs, auditLogs,
-  thirteenthMonthLedger, leaveCredits,
+  leaveCredits,
   deductionSettings,
 } from '../shared/schema';
 import bcrypt from 'bcrypt';
@@ -462,24 +462,11 @@ async function seedPayroll() {
         pagibigContribution: pagibigContribution.toFixed(2),
         pagibigLoan: '0.00',
         withholdingTax: withholdingTax.toFixed(2),
-        advances: '0.00',
         otherDeductions: '0.00',
         totalDeductions: totalDeductions.toFixed(2),
         deductions: totalDeductions.toFixed(2),
         netPay: netPay.toFixed(2),
         status: def.status === 'open' ? 'pending' : 'paid',
-      });
-
-      // 13th Month Ledger entry
-      await db.insert(thirteenthMonthLedger).values({
-        id: uuid(),
-        userId: emp.id,
-        branchId: BRANCH_ID,
-        payrollPeriodId: def.id,
-        year: startDt.getFullYear(),
-        basicPayEarned: basicPay.toFixed(2),
-        periodStartDate: startDt,
-        periodEndDate: endDt,
       });
 
       totalEntries++;

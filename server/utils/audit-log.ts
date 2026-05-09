@@ -67,24 +67,20 @@ export async function logDeductionChange(params: {
   oldValues: {
     sssLoanDeduction?: string;
     pagibigLoanDeduction?: string;
-    cashAdvanceDeduction?: string;
     otherDeductions?: string;
   };
   newValues: {
     sssLoanDeduction?: string;
     pagibigLoanDeduction?: string;
-    cashAdvanceDeduction?: string;
     otherDeductions?: string;
   };
   reason?: string;
   ipAddress?: string;
   userAgent?: string;
 }): Promise<void> {
-  // Only log if something actually changed
-  const hasChanges = 
+  const hasChanges =
     params.oldValues.sssLoanDeduction !== params.newValues.sssLoanDeduction ||
     params.oldValues.pagibigLoanDeduction !== params.newValues.pagibigLoanDeduction ||
-    params.oldValues.cashAdvanceDeduction !== params.newValues.cashAdvanceDeduction ||
     params.oldValues.otherDeductions !== params.newValues.otherDeductions;
 
   if (!hasChanges) return;

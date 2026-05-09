@@ -71,13 +71,12 @@ async function reseedPayrollDeductions() {
       const monthlyTax = isMwe ? 0 : await calculateWithholdingTax(monthlyTaxableIncome);
       const withholdingTax = Math.round(monthlyTax * periodFraction * 100) / 100;
 
-      // Preserve existing loan deductions, advances, etc.
+      // Preserve existing loan deductions, etc.
       const sssLoan = parseFloat(entry.sssLoan || "0");
       const pagibigLoan = parseFloat(entry.pagibigLoan || "0");
-      const advances = parseFloat(entry.advances || "0");
       const otherDeductions = parseFloat(entry.otherDeductions || "0");
 
-      const totalDeductions = sssContribution + philHealthContribution + pagibigContribution + withholdingTax + sssLoan + pagibigLoan + advances + otherDeductions;
+      const totalDeductions = sssContribution + philHealthContribution + pagibigContribution + withholdingTax + sssLoan + pagibigLoan + otherDeductions;
       const grossPay = parseFloat(entry.grossPay || "0");
       const netPay = grossPay - totalDeductions;
 

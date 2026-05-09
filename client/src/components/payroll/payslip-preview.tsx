@@ -66,7 +66,6 @@ interface PayslipData {
   pagibigContribution: number;
   pagibigLoan: number;
   withholdingTax: number;
-  advances: number;
   otherDeductions: number;
   totalDeductions: number;
   
@@ -87,6 +86,10 @@ interface PayslipData {
 
   // Audit Trailing
   includedExceptions?: any[];
+
+  // 13th Month Pay
+  has13thMonth?: boolean;
+  thirteenthMonthAmount?: string;
 }
 
 interface PayslipPreviewProps {
@@ -554,6 +557,9 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     earnings.push({ label: "Holiday Pay:", value: formatCurrency(payslipData.holidayPay) });
     const restDay = safeNumber(payslipData.restDayPay);
     earnings.push({ label: "Rest Day Premium:", value: formatCurrency(restDay) });
+    if (payslipData.has13thMonth) {
+      earnings.push({ label: "13th Month Pay:", value: formatCurrency(parseFloat(payslipData.thirteenthMonthAmount || "0")) });
+    }
 
     // BIR-compliant deductions — always show statutory deductions even at ₱0
     const deductions: Array<{ label: string; value: string }> = [];
@@ -563,7 +569,6 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     deductions.push({ label: "BIR Tax (Annualized):", value: formatCurrency(payslipData.withholdingTax) });
     if (payslipData.sssLoan > 0) deductions.push({ label: "SSS Loan:", value: formatCurrency(payslipData.sssLoan) });
     if (payslipData.pagibigLoan > 0) deductions.push({ label: "Pag-IBIG Loan:", value: formatCurrency(payslipData.pagibigLoan) });
-    if (payslipData.advances > 0) deductions.push({ label: "Cash Advances:", value: formatCurrency(payslipData.advances) });
     if (payslipData.otherDeductions > 0) deductions.push({ label: "Other Deductions:", value: formatCurrency(payslipData.otherDeductions) });
 
     const maxRows = Math.max(earnings.length, deductions.length);
@@ -719,6 +724,7 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     { label: `Night Differential (${ndHrsDisplay.toFixed(1)}h × +10%)`, value: payslip.nightDifferential, isMoney: true },
     { label: "Holiday Pay", value: payslip.holidayPay, isMoney: true },
     { label: "Rest Day Premium", value: safeNumber(payslip.restDayPay), isMoney: true },
+    ...(payslip.has13thMonth ? [{ label: "13th Month Pay", value: parseFloat(payslip.thirteenthMonthAmount || "0"), isMoney: true }] : []),
   ];
 
   // Always show all statutory deductions (BIR / TRAIN Law compliance)
@@ -729,7 +735,6 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     { label: "BIR Tax (Annualized)", value: payslip.withholdingTax },
     ...(payslip.sssLoan > 0 ? [{ label: "SSS Loan", value: payslip.sssLoan }] : []),
     ...(payslip.pagibigLoan > 0 ? [{ label: "Pag-IBIG Loan", value: payslip.pagibigLoan }] : []),
-    ...(payslip.advances > 0 ? [{ label: "Cash Advances", value: payslip.advances }] : []),
     ...(payslip.otherDeductions > 0 ? [{ label: "Other Deductions", value: payslip.otherDeductions }] : []),
   ];
 

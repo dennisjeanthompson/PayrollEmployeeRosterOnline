@@ -214,7 +214,6 @@ const ratesEffectiveFrom = deductionRates.length > 0 && deductionRates[0].create
     const pagibig = parseFloat(String(entry.pagibigContribution || 0));
     const pagibigLoan = parseFloat(String(entry.pagibigLoan || 0));
     const tax = parseFloat(String(entry.withholdingTax || 0));
-    const advances = parseFloat(String(entry.advances || 0));
     const otherDed = parseFloat(String(entry.otherDeductions || 0));
     
     if (sssContrib > 0) {
@@ -234,9 +233,6 @@ const ratesEffectiveFrom = deductionRates.length > 0 && deductionRates[0].create
     }
     if (tax > 0) {
       deductions.push({ code: 'WHT', label: 'Withholding Tax', amount: tax });
-    }
-    if (advances > 0) {
-      deductions.push({ code: 'ADV', label: 'Cash Advances', amount: advances });
     }
     if (otherDed > 0) {
       deductions.push({ code: 'OTHER', label: 'Other Deductions', amount: otherDed });

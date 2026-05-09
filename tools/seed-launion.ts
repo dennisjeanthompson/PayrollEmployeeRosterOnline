@@ -13,7 +13,7 @@ import { db } from '../server/db';
 import {
   branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries,
   timeOffRequests, notifications, adjustmentLogs, auditLogs,
-  thirteenthMonthLedger, loanRequests, leaveCredits, approvals,
+  loanRequests, leaveCredits, approvals,
   deductionSettings,
 } from '../shared/schema';
 import { eq, and } from 'drizzle-orm';
@@ -99,7 +99,6 @@ const EMPLOYEES = [
     position: 'Kitchen Staff',
     hourlyRate: '80.00',
     branchId: BRANCH_ID,
-    cashAdvanceDeduction: '500',
     tin: '333-444-555',
     sssNumber: '07-3333333-3',
     philhealthNumber: '07-333333333-3',
@@ -317,11 +316,7 @@ async function main() {
       const tax = Math.round(monthlyTax * periodFraction * 100) / 100;
 
       // Loans
-      const sssLoan = parseFloat((emp as any).sssLoanDeduction || '0') * periodFraction;
-      const pagibigLoan = parseFloat((emp as any).pagibigLoanDeduction || '0') * periodFraction;
-      const cashAdvance = parseFloat((emp as any).cashAdvanceDeduction || '0') * periodFraction;
-
-      const totalDeductions = sss + ph + pi + tax + sssLoan + pagibigLoan + cashAdvance;
+      const totalDeductions = sss + ph + pi + tax + sssLoan + pagibigLoan;
       const netPay = Math.round((grossPay - totalDeductions) * 100) / 100;
 
       await db.insert(payrollEntries).values({
@@ -344,7 +339,6 @@ async function main() {
         pagibigContribution: pi.toFixed(2),
         pagibigLoan: pagibigLoan.toFixed(2),
         withholdingTax: tax.toFixed(2),
-        advances: cashAdvance.toFixed(2),
         otherDeductions: '0',
         totalDeductions: totalDeductions.toFixed(2),
         netPay: netPay.toFixed(2),
@@ -362,28 +356,7 @@ async function main() {
     console.log(`   ✅ ${period.id}: ${ALL_STAFF.length} entries, total ₱${periodTotal.toFixed(2)}`);
   }
 
-  // ── 6. 13TH MONTH LEDGER ─────────────────────────────────
-  console.log('\n🎄 Seeding 13th month ledger...');
-  for (const period of PERIODS) {
-    for (const emp of ALL_STAFF) {
-      const rate = parseFloat(emp.hourlyRate);
-      const days = getDaysInRange(period.start, period.end).length;
-      const basicPay = days * 8 * rate;
-      await db.insert(thirteenthMonthLedger).values({
-        id: randomUUID(),
-        userId: emp.id,
-        branchId: BRANCH_ID,
-        payrollPeriodId: period.id,
-        year: 2026,
-        basicPayEarned: basicPay.toFixed(2),
-        periodStartDate: new Date(period.start),
-        periodEndDate: new Date(period.end),
-      });
-    }
-  }
-  console.log(`   ✅ ${PERIODS.length * ALL_STAFF.length} ledger rows (Jan–Mar 2026)`);
-
-  // ── 7. LEAVE CREDITS ──────────────────────────────────────
+  // ── 6. LEAVE CREDITS ──────────────────────────────────────
   console.log('\n🏖️  Seeding leave credits...');
   const leaveTypes = [
     { type: 'sil', total: '5.00' },
