@@ -1,0 +1,414 @@
+import { useState, useMemo, useCallback } from "react";
+import { getInitials } from "@/lib/utils";
+import {
+  DataGrid,
+  GridColDef,
+  GridFilterModel,
+  GridRenderCellParams,
+  GridRowSelectionModel,
+  getGridStringOperators,
+  getGridNumericOperators,
+  GridFilterOperator,
+  GridToolbar,
+} from "@mui/x-data-grid";
+import { ThemeProvider, createTheme, alpha } from "@mui/material/styles";
+import { Box, Chip, Avatar, IconButton, Tooltip, useTheme } from "@mui/material";
+import { Eye, Pencil, Receipt, Trash2, CheckCircle, XCircle } from "lucide-react";
+
+interface Employee {
+  id: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  role: 'employee' | 'manager' | 'admin';
+  position: string;
+  hourlyRate: string;
+  branchId: string;
+  isActive: boolean;
+  hoursThisMonth?: number;
+  shiftsThisMonth?: number;
+  createdAt: string;
+}
+
+interface EmployeeDataGridProps {
+  employees: Employee[];
+  loading: boolean;
+  onView: (employee: Employee) => void;
+  onEdit: (employee: Employee) => void;
+  onDeductions: (employee: Employee) => void;
+  onDelete: (id: string) => void;
+  selectedIds: string[];
+  onSelectionChange: (ids: string[]) => void;
+  darkMode?: boolean;
+}
+
+// Custom "between" operator for hourly rate filtering
+const betweenOperator: GridFilterOperator = {
+  label: 'Between',
+  value: 'between',
+  getApplyFilterFn: (filterItem) => {
+    if (!filterItem.value || !Array.isArray(filterItem.value)) {
+      return null;
+    }
+    const [min, max] = filterItem.value;
+    return (value) => {
+      if (value == null) return false;
+      const numValue = parseFloat(String(value));
+      return numValue >= min && numValue <= max;
+    };
+  },
+  InputComponent: () => null, // We'll handle this with quick filters
+};
+
+// Custom "greater than" with custom label
+const greaterThanOperator: GridFilterOperator = {
+  label: 'Rate Above',
+  value: 'rateAbove',
+  getApplyFilterFn: (filterItem) => {
+    if (!filterItem.value) return null;
+    const threshold = parseFloat(filterItem.value);
+    return (value) => {
+      if (value == null) return false;
+      return parseFloat(String(value)) > threshold;
+    };
+  },
+};
+
+// Custom "less than" with custom label  
+const lessThanOperator: GridFilterOperator = {
+  label: 'Rate Below',
+  value: 'rateBelow',
+  getApplyFilterFn: (filterItem) => {
+    if (!filterItem.value) return null;
+    const threshold = parseFloat(filterItem.value);
+    return (value) => {
+      if (value == null) return false;
+      return parseFloat(String(value)) < threshold;
+    };
+  },
+};
+
+export function EmployeeDataGrid({
+  employees,
+  loading,
+  onView,
+  onEdit,
+  onDeductions,
+  onDelete,
+  selectedIds,
+  onSelectionChange,
+  darkMode = true,
+}: EmployeeDataGridProps) {
+  const [filterModel, setFilterModel] = useState<GridFilterModel>({ items: [] });
+
+  // Create MUI theme that matches our app theme
+  const theme = useMemo(
+    () =>
+      createTheme({
+        palette: {
+          mode: darkMode ? 'dark' : 'light',
+          primary: {
+            main: '#10b981', // emerald-500
+          },
+          background: {
+            default: darkMode ? '#0a0a0a' : '#ffffff',
+            paper: darkMode ? '#171717' : '#ffffff',
+          },
+        },
+      }),
+    [darkMode]
+  );
+
+  // DataGrid custom styles - ALL BORDERS REMOVED
+  const dataGridSx = useMemo(() => ({
+    border: 'none',
+    borderRadius: '16px',
+    '& .MuiDataGrid-cell': {
+      border: 'none', // No cell borders
+    },
+    '& .MuiDataGrid-columnHeaders': {
+      backgroundColor: darkMode ? '#171717' : '#f5f5f5',
+      border: 'none', // No header borders
+    },
+    '& .MuiDataGrid-footerContainer': {
+      backgroundColor: darkMode ? '#171717' : '#f5f5f5',
+      border: 'none', // No footer borders
+    },
+    '& .MuiDataGrid-toolbarContainer': {
+      padding: '12px 16px',
+      gap: '8px',
+      backgroundColor: darkMode ? '#171717' : '#f5f5f5',
+      border: 'none', // No toolbar borders
+    },
+    '& .MuiDataGrid-row:hover': {
+      backgroundColor: darkMode ? '#1f1f1f' : '#fafafa',
+    },
+    '& .MuiDataGrid-row.Mui-selected': {
+      backgroundColor: darkMode ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.08)',
+      '&:hover': {
+        backgroundColor: darkMode ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.12)',
+      },
+    },
+    '& .MuiDataGrid-cell:focus': {
+      outline: 'none',
+    },
+    '& .MuiDataGrid-columnHeader:focus': {
+      outline: 'none',
+    },
+    '& .MuiDataGrid-columnSeparator': {
+      display: 'none', // Hide column separators
+    },
+    '& .MuiDataGrid-withBorderColor': {
+      borderColor: 'transparent', // Make any remaining borders transparent
+    },
+  }), [darkMode]);
+
+  // Handle selection change with proper type conversion
+  const handleSelectionChange = useCallback((newSelection: GridRowSelectionModel) => {
+    // Convert GridRowId array to string array
+    const ids = Array.from(newSelection.ids || []).map(id => String(id));
+    onSelectionChange(ids);
+  }, [onSelectionChange]);
+
+  // Extended string operators with custom ones
+  const extendedStringOperators = [
+    ...getGridStringOperators(),
+  ];
+
+  // Extended numeric operators with custom rate filters
+  const rateOperators = [
+    ...getGridNumericOperators(),
+    greaterThanOperator,
+    lessThanOperator,
+  ];
+
+  const columns: GridColDef[] = useMemo(
+    () => [
+      {
+        field: 'employee',
+        headerName: 'Employee',
+        flex: 1.5,
+        minWidth: 250,
+        filterOperators: extendedStringOperators,
+        valueGetter: (value, row) => `${row.firstName || ''} ${row.lastName || ''}`.trim(),
+        renderCell: (params: GridRenderCellParams<Employee>) => {
+          const appTheme = useTheme();
+          return (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, py: 1 }}>
+            <Avatar
+              sx={{
+                width: 40,
+                height: 40,
+                bgcolor: params.row.role === 'manager' ? appTheme.palette.primary.main : 
+                         params.row.role === 'admin' ? appTheme.palette.secondary.main : appTheme.palette.info.main,
+                color: '#fff',
+                fontSize: '0.875rem',
+                fontWeight: 600,
+              }}
+            >
+              {getInitials(params.row.firstName, params.row.lastName)}
+            </Avatar>
+            <Box>
+              <Box sx={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                {params.row.firstName} {params.row.lastName}
+              </Box>
+              <Box sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                {params.row.email}
+              </Box>
+            </Box>
+          </Box>
+          );
+        },
+      },
+      {
+        field: 'position',
+        headerName: 'Position',
+        flex: 1,
+        minWidth: 150,
+        filterOperators: extendedStringOperators,
+        renderCell: (params: GridRenderCellParams<Employee>) => {
+          const appTheme = useTheme();
+          return (
+          <Box>
+            <Box>{params.row.position}</Box>
+            <Chip
+              label={params.row.role}
+              size="small"
+              sx={{
+                mt: 0.5,
+                height: 20,
+                fontSize: '0.65rem',
+                fontWeight: 600,
+                textTransform: 'capitalize',
+                bgcolor: params.row.role === 'manager' ? alpha(appTheme.palette.primary.main, 0.1) :
+                         params.row.role === 'admin' ? alpha(appTheme.palette.secondary.main, 0.1) : alpha(appTheme.palette.info.main, 0.1),
+                color: params.row.role === 'manager' ? appTheme.palette.primary.main :
+                       params.row.role === 'admin' ? appTheme.palette.secondary.main : appTheme.palette.info.main,
+              }}
+            />
+          </Box>
+        )
+      }},
+      {
+        field: 'hourlyRate',
+        headerName: 'Rate',
+        width: 100,
+        type: 'number',
+        filterOperators: rateOperators,
+        valueGetter: (value) => parseFloat(value || '0'),
+        renderCell: (params: GridRenderCellParams<Employee>) => (
+          <Box sx={{ fontWeight: 600, fontFamily: 'monospace' }}>
+            ₱{parseFloat(params.row.hourlyRate || '0').toFixed(0)}/hr
+          </Box>
+        ),
+      },
+      {
+        field: 'hoursThisMonth',
+        headerName: 'Hours',
+        width: 100,
+        type: 'number',
+        filterOperators: getGridNumericOperators(),
+        renderCell: (params: GridRenderCellParams<Employee>) => (
+          <Box>
+            <Box sx={{ fontWeight: 600 }}>
+              {(params.row.hoursThisMonth || 0).toFixed(1)}h
+            </Box>
+            <Box sx={{ fontSize: '0.7rem', color: 'text.secondary' }}>
+              {params.row.shiftsThisMonth || 0} shifts
+            </Box>
+          </Box>
+        ),
+      },
+      {
+        field: 'isActive',
+        headerName: 'Status',
+        width: 100,
+        type: 'boolean',
+        renderCell: (params: GridRenderCellParams<Employee>) => {
+          const appTheme = useTheme();
+          return (
+          <Chip
+            icon={params.row.isActive ? <CheckCircle size={14} /> : <XCircle size={14} />}
+            label={params.row.isActive ? 'Active' : 'Inactive'}
+            size="small"
+            sx={{
+              height: 24,
+              fontSize: '0.7rem',
+              fontWeight: 600,
+              bgcolor: params.row.isActive ? alpha(appTheme.palette.success.main, 0.1) : alpha(appTheme.palette.error.main, 0.1),
+              color: params.row.isActive ? appTheme.palette.success.main : appTheme.palette.error.main,
+              '& .MuiChip-icon': {
+                color: 'inherit',
+              },
+            }}
+          />
+        )
+      }},
+      {
+        field: 'actions',
+        headerName: 'Actions',
+        width: 160,
+        sortable: false,
+        filterable: false,
+        renderCell: (params: GridRenderCellParams<Employee>) => (
+          <Box sx={{ display: 'flex', gap: 0.5 }}>
+            <Tooltip title="View Details">
+              <IconButton
+                size="small"
+                onClick={() => onView(params.row)}
+                sx={{ 
+                  color: 'text.secondary',
+                  '&:hover': { color: 'primary.main', bgcolor: 'rgba(16, 185, 129, 0.1)' }
+                }}
+              >
+                <Eye size={16} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Edit">
+              <IconButton
+                size="small"
+                onClick={() => onEdit(params.row)}
+                sx={{ 
+                  color: 'text.secondary',
+                  '&:hover': { color: '#3b82f6', bgcolor: 'rgba(59, 130, 246, 0.1)' }
+                }}
+              >
+                <Pencil size={16} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Deductions">
+              <IconButton
+                size="small"
+                onClick={() => onDeductions(params.row)}
+                sx={{ 
+                  color: 'text.secondary',
+                  '&:hover': { color: '#8b5cf6', bgcolor: 'rgba(139, 92, 246, 0.1)' }
+                }}
+              >
+                <Receipt size={16} />
+              </IconButton>
+            </Tooltip>
+            <Tooltip title="Delete">
+              <IconButton
+                size="small"
+                onClick={() => onDelete(params.row.id)}
+                sx={{ 
+                  color: 'text.secondary',
+                  '&:hover': { color: '#ef4444', bgcolor: 'rgba(239, 68, 68, 0.1)' }
+                }}
+              >
+                <Trash2 size={16} />
+              </IconButton>
+            </Tooltip>
+          </Box>
+        ),
+      },
+    ],
+    [onView, onEdit, onDeductions, onDelete]
+  );
+
+  return (
+    <ThemeProvider theme={theme}>
+      <Box
+        sx={{
+          height: 600,
+          width: '100%',
+          '& .MuiDataGrid-root': {
+            bgcolor: 'background.paper',
+          },
+        }}
+      >
+        <DataGrid
+          rows={employees}
+          columns={columns}
+          loading={loading}
+          checkboxSelection
+          disableRowSelectionOnClick
+          onRowSelectionModelChange={handleSelectionChange}
+          filterModel={filterModel}
+          onFilterModelChange={setFilterModel}
+          slots={{
+            toolbar: GridToolbar,
+          }}
+          slotProps={{
+            toolbar: {
+              showQuickFilter: true,
+              quickFilterProps: { debounceMs: 300 },
+            },
+          }}
+          initialState={{
+            pagination: {
+              paginationModel: { pageSize: 10 },
+            },
+            sorting: {
+              sortModel: [{ field: 'employee', sort: 'asc' }],
+            },
+          }}
+          pageSizeOptions={[5, 10, 25, 50]}
+          sx={dataGridSx}
+        />
+      </Box>
+    </ThemeProvider>
+  );
+}

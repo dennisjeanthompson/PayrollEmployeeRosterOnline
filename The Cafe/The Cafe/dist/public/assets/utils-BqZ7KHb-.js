@@ -1,0 +1,1 @@
+import{el as c,o as i}from"./vendor-CjYT3bAM.js";function s(...t){return c(i(t))}function p(t){return t?t.charAt(0).toUpperCase()+t.slice(1):""}function u(t,r,e){if(!t&&!r)return e?e.charAt(0).toUpperCase():"U";const n=t?.charAt(0)?.toUpperCase()||"",a=r?.charAt(0)?.toUpperCase()||"";return n+a}export{s as a,p as c,u as g};

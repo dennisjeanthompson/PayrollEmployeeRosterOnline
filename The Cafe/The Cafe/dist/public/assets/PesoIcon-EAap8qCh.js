@@ -1,0 +1,1 @@
+import{Q as e,dD as r}from"./vendor-CjYT3bAM.js";function i(o){return e.jsx(r,{...o,viewBox:"0 0 100 100",children:e.jsx("text",{y:"0.9em",x:"0.1em",fontSize:"90",fontFamily:"Arial, sans-serif",fill:"currentColor",children:"₱"})})}export{i as P};
