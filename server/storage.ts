@@ -522,7 +522,6 @@ export class MemStorage implements IStorage {
       status: insertPeriod.status || 'open',
       totalHours: insertPeriod.totalHours || null,
       totalPay: insertPeriod.totalPay || null,
-      payDate: insertPeriod.payDate || null,
     };
     this.payrollPeriods.set(id, period);
     this.payrollPeriods.set(id, period);

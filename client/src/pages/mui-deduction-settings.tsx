@@ -9,6 +9,7 @@ import React, { useState, useEffect, startTransition } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { getCurrentUser } from "@/lib/auth";
+import { useToast } from "@/hooks/use-toast";
 import {
   Box,
   Card,
@@ -37,6 +38,7 @@ import {
   AutoAwesome,
   ToggleOn,
   ToggleOff,
+  CalendarMonth,
 } from "@mui/icons-material";
 import { useLocation } from "wouter";
 
@@ -111,9 +113,25 @@ export default function MuiDeductionSettings() {
   const theme = useTheme();
   const [, setLocation] = useLocation();
   const queryClient = useQueryClient();
+  const { toast } = useToast();
   useRealtime({ queryKeys: ["deduction-settings"] });
   const currentUser = getCurrentUser();
   const isManager = currentUser?.role === 'manager' || currentUser?.role === 'admin';
+
+  const { data: companySettingsData } = useQuery({
+    queryKey: ["company-settings"],
+    queryFn: async () => {
+      try {
+        const res = await apiRequest("GET", "/api/company-settings");
+        return res.json();
+      } catch {
+        return null;
+      }
+    },
+    staleTime: 10 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
 
   // State for toggle switches
   const [toggles, setToggles] = useState<Record<string, boolean>>({
@@ -123,6 +141,7 @@ export default function MuiDeductionSettings() {
     deductWithholdingTax: true,
     includeExceptionLogs: true,
   });
+  const [includeHolidayPay, setIncludeHolidayPay] = useState(false);
 
   // Fetch existing deduction settings for this branch
   const { data: settingsData, isLoading: settingsLoading } = useQuery({
@@ -154,10 +173,16 @@ export default function MuiDeductionSettings() {
     }
   }, [settingsData]);
 
-  // Save mutation
-  const saveMutation = useMutation({
-    mutationFn: async (newToggles: Record<string, boolean>) => {
-      const res = await apiRequest("PUT", "/api/deduction-settings", newToggles);
+  useEffect(() => {
+    if (companySettingsData?.settings) {
+      setIncludeHolidayPay(companySettingsData.settings.includeHolidayPay ?? false);
+    }
+  }, [companySettingsData]);
+
+  // Save mutation for the branch deduction switches only
+  const saveDeductionMutation = useMutation({
+    mutationFn: async (deductionToggles: Record<string, boolean>) => {
+      const res = await apiRequest("PUT", "/api/deduction-settings", deductionToggles);
       return res.json();
     },
     onSuccess: () => {
@@ -165,11 +190,58 @@ export default function MuiDeductionSettings() {
     },
   });
 
+  // Holiday pay is stored in company settings, so save it through its own endpoint flow.
+  const saveHolidayPayMutation = useMutation({
+    mutationFn: async (nextValue: boolean) => {
+      let companySettingsId = companySettingsData?.settings?.id;
+
+      if (!companySettingsId) {
+        const fullSettingsRes = await apiRequest("GET", "/api/company-settings/full");
+        const fullSettingsResult = await fullSettingsRes.json();
+        companySettingsId = fullSettingsResult?.settings?.id;
+      }
+
+      if (!companySettingsId) {
+        // Automatically create a base company setting if one doesn't exist
+        const defaultCreated = await apiRequest("POST", "/api/company-settings", {
+          name: "My Company",
+          address: "Company Address",
+          tin: "000-000-000-000",
+          includeHolidayPay: nextValue,
+        });
+        return defaultCreated.json();
+      }
+
+      const res = await apiRequest("PUT", `/api/company-settings/${companySettingsId}`, {
+        includeHolidayPay: nextValue,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["company-settings"] });
+    },
+    onError: (error: Error, nextValue) => {
+      setIncludeHolidayPay(!nextValue);
+      toast({
+        title: "Update Failed",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
   const handleToggle = (field: string) => {
     if (!isManager) return;
     const newToggles = { ...toggles, [field]: !toggles[field] };
     setToggles(newToggles);
-    saveMutation.mutate(newToggles);
+    saveDeductionMutation.mutate(newToggles);
+  };
+
+  const handleHolidayPayToggle = () => {
+    if (!isManager) return;
+    const nextValue = !includeHolidayPay;
+    setIncludeHolidayPay(nextValue);
+    saveHolidayPayMutation.mutate(nextValue);
   };
 
   if (settingsLoading) {
@@ -300,7 +372,7 @@ export default function MuiDeductionSettings() {
                             onChange={() => handleToggle(item.dbField)}
                             color="success"
                             size="small"
-                            disabled={saveMutation.isPending}
+                            disabled={saveDeductionMutation.isPending}
                           />
                         </Tooltip>
                       ) : (
@@ -414,6 +486,48 @@ export default function MuiDeductionSettings() {
         })}
       </Grid>
 
+      {/* Holiday Pay Toggle */}
+      {isManager && (
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: `1px solid ${includeHolidayPay ? alpha(theme.palette.success.main, 0.3) : alpha(theme.palette.divider, 0.15)}`,
+            transition: 'border-color 0.3s, opacity 0.3s',
+            opacity: includeHolidayPay ? 1 : 0.75,
+          }}
+        >
+          <CardContent sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                <Box sx={{ width: 44, height: 44, borderRadius: 2.5, bgcolor: alpha(theme.palette.success.main, 0.12), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <CalendarMonth sx={{ color: theme.palette.success.main, fontSize: 22 }} />
+                </Box>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={700}>Include Holiday Pay in Payroll</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    When enabled, holiday pay premiums are included in payroll computations for this branch.
+                    Disable it to exclude holiday pay from payroll runs.
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+                    <Chip size="small" label="Holiday premiums included" sx={{ bgcolor: alpha(theme.palette.success.main, 0.1), color: theme.palette.success.main, fontWeight: 600 }} />
+                    <Chip size="small" label="Payroll impact only" sx={{ bgcolor: alpha(theme.palette.info.main, 0.1), color: theme.palette.info.main, fontWeight: 600 }} />
+                  </Box>
+                </Box>
+              </Box>
+              <Tooltip title={includeHolidayPay ? 'Disable holiday pay integration' : 'Enable holiday pay integration'}>
+                <Switch
+                  checked={includeHolidayPay}
+                  onChange={handleHolidayPayToggle}
+                  color="success"
+                  disabled={saveHolidayPayMutation.isPending}
+                />
+              </Tooltip>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Exception Logs Toggle */}
       {isManager && (
         <Card
@@ -451,7 +565,7 @@ export default function MuiDeductionSettings() {
                   checked={toggles.includeExceptionLogs ?? true}
                   onChange={() => handleToggle('includeExceptionLogs')}
                   color="success"
-                  disabled={saveMutation.isPending}
+                  disabled={saveDeductionMutation.isPending}
                 />
               </Tooltip>
             </Box>

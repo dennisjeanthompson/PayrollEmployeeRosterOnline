@@ -49,7 +49,6 @@ import {
 import { format, parseISO } from "date-fns";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { useRealtime } from "@/hooks/use-realtime";
 
 // ── Types ──────────────────────────────────────────────
 

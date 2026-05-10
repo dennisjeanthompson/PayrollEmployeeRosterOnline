@@ -199,8 +199,7 @@ var init_schema = __esm({
       branchId: text("branch_id").references(() => branches.id).notNull(),
       startDate: timestamp("start_date").notNull(),
       endDate: timestamp("end_date").notNull(),
-      payDate: timestamp("pay_date"),
-      // Pay Date for DOLE 16-day limit
+      runType: text("run_type").default("regular").notNull(),
       status: text("status").default("open"),
       totalHours: text("total_hours"),
       totalPay: text("total_pay"),
@@ -2067,8 +2066,7 @@ var init_storage = __esm({
           createdAt: /* @__PURE__ */ new Date(),
           status: insertPeriod.status || "open",
           totalHours: insertPeriod.totalHours || null,
-          totalPay: insertPeriod.totalPay || null,
-          payDate: insertPeriod.payDate || null
+          totalPay: insertPeriod.totalPay || null
         };
         this.payrollPeriods.set(id, period);
         this.payrollPeriods.set(id, period);
@@ -3624,11 +3622,13 @@ __export(deductions_exports, {
   calculateSSS: () => calculateSSS,
   calculateWithholdingTax: () => calculateWithholdingTax
 });
-import { eq as eq3 } from "drizzle-orm";
+import { eq as eq3, desc as desc3 } from "drizzle-orm";
 async function calculateSSS(monthlyBasicSalary) {
   try {
-    const brackets = await db.select().from(sssContributionTable).where(eq3(sssContributionTable.year, 2026));
-    console.log(`[SSS DEBUG] Monthly salary: \u20B1${monthlyBasicSalary.toFixed(2)}, Total brackets found: ${brackets.length}`);
+    const latestBrackets = await db.select().from(sssContributionTable).orderBy(desc3(sssContributionTable.year)).limit(1);
+    const activeYear = latestBrackets.length > 0 ? latestBrackets[0].year : (/* @__PURE__ */ new Date()).getFullYear();
+    const brackets = await db.select().from(sssContributionTable).where(eq3(sssContributionTable.year, activeYear));
+    console.log(`[SSS DEBUG] Monthly salary: \u20B1${monthlyBasicSalary.toFixed(2)}, Active Year: ${activeYear}, Total brackets found: ${brackets.length}`);
     for (const b of brackets) {
       if (monthlyBasicSalary >= parseFloat(b.minCompensation) && monthlyBasicSalary <= parseFloat(b.maxCompensation)) {
         const share = parseFloat(b.employeeShare);
@@ -7195,75 +7195,8 @@ router7.get("/api/forecast/staffing", requireAuth8, requireManagerRole3, async (
 
 // server/routes/seed-rates.ts
 init_db_storage();
+init_sss_2026_rates();
 import { Router as Router9 } from "express";
-
-// shared/sss-2025-rates.ts
-var sss2025Brackets = [
-  { minSalary: 0, maxSalary: 5249.99, regularSSMSC: 5e3, mpfMSC: 0, totalMSC: 5e3, regularSSER: 500, mpfER: 0, ecER: 10, totalER: 510, regularSSEE: 250, mpfEE: 0, totalEE: 250, totalContributions: 760 },
-  { minSalary: 5250, maxSalary: 5749.99, regularSSMSC: 5500, mpfMSC: 0, totalMSC: 5500, regularSSER: 550, mpfER: 0, ecER: 10, totalER: 560, regularSSEE: 275, mpfEE: 0, totalEE: 275, totalContributions: 835 },
-  { minSalary: 5750, maxSalary: 6249.99, regularSSMSC: 6e3, mpfMSC: 0, totalMSC: 6e3, regularSSER: 600, mpfER: 0, ecER: 10, totalER: 610, regularSSEE: 300, mpfEE: 0, totalEE: 300, totalContributions: 910 },
-  { minSalary: 6250, maxSalary: 6749.99, regularSSMSC: 6500, mpfMSC: 0, totalMSC: 6500, regularSSER: 650, mpfER: 0, ecER: 10, totalER: 660, regularSSEE: 325, mpfEE: 0, totalEE: 325, totalContributions: 985 },
-  { minSalary: 6750, maxSalary: 7249.99, regularSSMSC: 7e3, mpfMSC: 0, totalMSC: 7e3, regularSSER: 700, mpfER: 0, ecER: 10, totalER: 710, regularSSEE: 350, mpfEE: 0, totalEE: 350, totalContributions: 1060 },
-  { minSalary: 7250, maxSalary: 7749.99, regularSSMSC: 7500, mpfMSC: 0, totalMSC: 7500, regularSSER: 750, mpfER: 0, ecER: 10, totalER: 760, regularSSEE: 375, mpfEE: 0, totalEE: 375, totalContributions: 1135 },
-  { minSalary: 7750, maxSalary: 8249.99, regularSSMSC: 8e3, mpfMSC: 0, totalMSC: 8e3, regularSSER: 800, mpfER: 0, ecER: 10, totalER: 810, regularSSEE: 400, mpfEE: 0, totalEE: 400, totalContributions: 1210 },
-  { minSalary: 8250, maxSalary: 8749.99, regularSSMSC: 8500, mpfMSC: 0, totalMSC: 8500, regularSSER: 850, mpfER: 0, ecER: 10, totalER: 860, regularSSEE: 425, mpfEE: 0, totalEE: 425, totalContributions: 1285 },
-  { minSalary: 8750, maxSalary: 9249.99, regularSSMSC: 9e3, mpfMSC: 0, totalMSC: 9e3, regularSSER: 900, mpfER: 0, ecER: 10, totalER: 910, regularSSEE: 450, mpfEE: 0, totalEE: 450, totalContributions: 1360 },
-  { minSalary: 9250, maxSalary: 9749.99, regularSSMSC: 9500, mpfMSC: 0, totalMSC: 9500, regularSSER: 950, mpfER: 0, ecER: 10, totalER: 960, regularSSEE: 475, mpfEE: 0, totalEE: 475, totalContributions: 1435 },
-  { minSalary: 9750, maxSalary: 10249.99, regularSSMSC: 1e4, mpfMSC: 0, totalMSC: 1e4, regularSSER: 1e3, mpfER: 0, ecER: 10, totalER: 1010, regularSSEE: 500, mpfEE: 0, totalEE: 500, totalContributions: 1510 },
-  { minSalary: 10250, maxSalary: 10749.99, regularSSMSC: 10500, mpfMSC: 0, totalMSC: 10500, regularSSER: 1050, mpfER: 0, ecER: 10, totalER: 1060, regularSSEE: 525, mpfEE: 0, totalEE: 525, totalContributions: 1585 },
-  { minSalary: 10750, maxSalary: 11249.99, regularSSMSC: 11e3, mpfMSC: 0, totalMSC: 11e3, regularSSER: 1100, mpfER: 0, ecER: 10, totalER: 1110, regularSSEE: 550, mpfEE: 0, totalEE: 550, totalContributions: 1660 },
-  { minSalary: 11250, maxSalary: 11749.99, regularSSMSC: 11500, mpfMSC: 0, totalMSC: 11500, regularSSER: 1150, mpfER: 0, ecER: 10, totalER: 1160, regularSSEE: 575, mpfEE: 0, totalEE: 575, totalContributions: 1735 },
-  { minSalary: 11750, maxSalary: 12249.99, regularSSMSC: 12e3, mpfMSC: 0, totalMSC: 12e3, regularSSER: 1200, mpfER: 0, ecER: 10, totalER: 1210, regularSSEE: 600, mpfEE: 0, totalEE: 600, totalContributions: 1810 },
-  { minSalary: 12250, maxSalary: 12749.99, regularSSMSC: 12500, mpfMSC: 0, totalMSC: 12500, regularSSER: 1250, mpfER: 0, ecER: 10, totalER: 1260, regularSSEE: 625, mpfEE: 0, totalEE: 625, totalContributions: 1885 },
-  { minSalary: 12750, maxSalary: 13249.99, regularSSMSC: 13e3, mpfMSC: 0, totalMSC: 13e3, regularSSER: 1300, mpfER: 0, ecER: 10, totalER: 1310, regularSSEE: 650, mpfEE: 0, totalEE: 650, totalContributions: 1960 },
-  { minSalary: 13250, maxSalary: 13749.99, regularSSMSC: 13500, mpfMSC: 0, totalMSC: 13500, regularSSER: 1350, mpfER: 0, ecER: 10, totalER: 1360, regularSSEE: 675, mpfEE: 0, totalEE: 675, totalContributions: 2035 },
-  { minSalary: 13750, maxSalary: 14249.99, regularSSMSC: 14e3, mpfMSC: 0, totalMSC: 14e3, regularSSER: 1400, mpfER: 0, ecER: 10, totalER: 1410, regularSSEE: 700, mpfEE: 0, totalEE: 700, totalContributions: 2110 },
-  { minSalary: 14250, maxSalary: 14749.99, regularSSMSC: 14500, mpfMSC: 0, totalMSC: 14500, regularSSER: 1450, mpfER: 0, ecER: 10, totalER: 1460, regularSSEE: 725, mpfEE: 0, totalEE: 725, totalContributions: 2185 },
-  { minSalary: 14750, maxSalary: 15249.99, regularSSMSC: 15e3, mpfMSC: 0, totalMSC: 15e3, regularSSER: 1500, mpfER: 0, ecER: 30, totalER: 1530, regularSSEE: 750, mpfEE: 0, totalEE: 750, totalContributions: 2280 },
-  { minSalary: 15250, maxSalary: 15749.99, regularSSMSC: 15500, mpfMSC: 0, totalMSC: 15500, regularSSER: 1550, mpfER: 0, ecER: 30, totalER: 1580, regularSSEE: 775, mpfEE: 0, totalEE: 775, totalContributions: 2355 },
-  { minSalary: 15750, maxSalary: 16249.99, regularSSMSC: 16e3, mpfMSC: 0, totalMSC: 16e3, regularSSER: 1600, mpfER: 0, ecER: 30, totalER: 1630, regularSSEE: 800, mpfEE: 0, totalEE: 800, totalContributions: 2430 },
-  { minSalary: 16250, maxSalary: 16749.99, regularSSMSC: 16500, mpfMSC: 0, totalMSC: 16500, regularSSER: 1650, mpfER: 0, ecER: 30, totalER: 1680, regularSSEE: 825, mpfEE: 0, totalEE: 825, totalContributions: 2505 },
-  { minSalary: 16750, maxSalary: 17249.99, regularSSMSC: 17e3, mpfMSC: 0, totalMSC: 17e3, regularSSER: 1700, mpfER: 0, ecER: 30, totalER: 1730, regularSSEE: 850, mpfEE: 0, totalEE: 850, totalContributions: 2580 },
-  { minSalary: 17250, maxSalary: 17749.99, regularSSMSC: 17500, mpfMSC: 0, totalMSC: 17500, regularSSER: 1750, mpfER: 0, ecER: 30, totalER: 1780, regularSSEE: 875, mpfEE: 0, totalEE: 875, totalContributions: 2655 },
-  { minSalary: 17750, maxSalary: 18249.99, regularSSMSC: 18e3, mpfMSC: 0, totalMSC: 18e3, regularSSER: 1800, mpfER: 0, ecER: 30, totalER: 1830, regularSSEE: 900, mpfEE: 0, totalEE: 900, totalContributions: 2730 },
-  { minSalary: 18250, maxSalary: 18749.99, regularSSMSC: 18500, mpfMSC: 0, totalMSC: 18500, regularSSER: 1850, mpfER: 0, ecER: 30, totalER: 1880, regularSSEE: 925, mpfEE: 0, totalEE: 925, totalContributions: 2805 },
-  { minSalary: 18750, maxSalary: 19249.99, regularSSMSC: 19e3, mpfMSC: 0, totalMSC: 19e3, regularSSER: 1900, mpfER: 0, ecER: 30, totalER: 1930, regularSSEE: 950, mpfEE: 0, totalEE: 950, totalContributions: 2880 },
-  { minSalary: 19250, maxSalary: 19749.99, regularSSMSC: 19500, mpfMSC: 0, totalMSC: 19500, regularSSER: 1950, mpfER: 0, ecER: 30, totalER: 1980, regularSSEE: 975, mpfEE: 0, totalEE: 975, totalContributions: 2955 },
-  { minSalary: 19750, maxSalary: 20249.99, regularSSMSC: 2e4, mpfMSC: 0, totalMSC: 2e4, regularSSER: 2e3, mpfER: 0, ecER: 30, totalER: 2030, regularSSEE: 1e3, mpfEE: 0, totalEE: 1e3, totalContributions: 3030 },
-  // MPF brackets start (salary above ₱20,000)
-  { minSalary: 20250, maxSalary: 20749.99, regularSSMSC: 2e4, mpfMSC: 500, totalMSC: 20500, regularSSER: 2e3, mpfER: 50, ecER: 30, totalER: 2080, regularSSEE: 1e3, mpfEE: 25, totalEE: 1025, totalContributions: 3105 },
-  { minSalary: 20750, maxSalary: 21249.99, regularSSMSC: 2e4, mpfMSC: 1e3, totalMSC: 21e3, regularSSER: 2e3, mpfER: 100, ecER: 30, totalER: 2130, regularSSEE: 1e3, mpfEE: 50, totalEE: 1050, totalContributions: 3180 },
-  { minSalary: 21250, maxSalary: 21749.99, regularSSMSC: 2e4, mpfMSC: 1500, totalMSC: 21500, regularSSER: 2e3, mpfER: 150, ecER: 30, totalER: 2180, regularSSEE: 1e3, mpfEE: 75, totalEE: 1075, totalContributions: 3255 },
-  { minSalary: 21750, maxSalary: 22249.99, regularSSMSC: 2e4, mpfMSC: 2e3, totalMSC: 22e3, regularSSER: 2e3, mpfER: 200, ecER: 30, totalER: 2230, regularSSEE: 1e3, mpfEE: 100, totalEE: 1100, totalContributions: 3330 },
-  { minSalary: 22250, maxSalary: 22749.99, regularSSMSC: 2e4, mpfMSC: 2500, totalMSC: 22500, regularSSER: 2e3, mpfER: 250, ecER: 30, totalER: 2280, regularSSEE: 1e3, mpfEE: 125, totalEE: 1125, totalContributions: 3405 },
-  { minSalary: 22750, maxSalary: 23249.99, regularSSMSC: 2e4, mpfMSC: 3e3, totalMSC: 23e3, regularSSER: 2e3, mpfER: 300, ecER: 30, totalER: 2330, regularSSEE: 1e3, mpfEE: 150, totalEE: 1150, totalContributions: 3480 },
-  { minSalary: 23250, maxSalary: 23749.99, regularSSMSC: 2e4, mpfMSC: 3500, totalMSC: 23500, regularSSER: 2e3, mpfER: 350, ecER: 30, totalER: 2380, regularSSEE: 1e3, mpfEE: 175, totalEE: 1175, totalContributions: 3555 },
-  { minSalary: 23750, maxSalary: 24249.99, regularSSMSC: 2e4, mpfMSC: 4e3, totalMSC: 24e3, regularSSER: 2e3, mpfER: 400, ecER: 30, totalER: 2430, regularSSEE: 1e3, mpfEE: 200, totalEE: 1200, totalContributions: 3630 },
-  { minSalary: 24250, maxSalary: 24749.99, regularSSMSC: 2e4, mpfMSC: 4500, totalMSC: 24500, regularSSER: 2e3, mpfER: 450, ecER: 30, totalER: 2480, regularSSEE: 1e3, mpfEE: 225, totalEE: 1225, totalContributions: 3705 },
-  { minSalary: 24750, maxSalary: 25249.99, regularSSMSC: 2e4, mpfMSC: 5e3, totalMSC: 25e3, regularSSER: 2e3, mpfER: 500, ecER: 30, totalER: 2530, regularSSEE: 1e3, mpfEE: 250, totalEE: 1250, totalContributions: 3780 },
-  { minSalary: 25250, maxSalary: 25749.99, regularSSMSC: 2e4, mpfMSC: 5500, totalMSC: 25500, regularSSER: 2e3, mpfER: 550, ecER: 30, totalER: 2580, regularSSEE: 1e3, mpfEE: 275, totalEE: 1275, totalContributions: 3855 },
-  { minSalary: 25750, maxSalary: 26249.99, regularSSMSC: 2e4, mpfMSC: 6e3, totalMSC: 26e3, regularSSER: 2e3, mpfER: 600, ecER: 30, totalER: 2630, regularSSEE: 1e3, mpfEE: 300, totalEE: 1300, totalContributions: 3930 },
-  { minSalary: 26250, maxSalary: 26749.99, regularSSMSC: 2e4, mpfMSC: 6500, totalMSC: 26500, regularSSER: 2e3, mpfER: 650, ecER: 30, totalER: 2680, regularSSEE: 1e3, mpfEE: 325, totalEE: 1325, totalContributions: 4005 },
-  { minSalary: 26750, maxSalary: 27249.99, regularSSMSC: 2e4, mpfMSC: 7e3, totalMSC: 27e3, regularSSER: 2e3, mpfER: 700, ecER: 30, totalER: 2730, regularSSEE: 1e3, mpfEE: 350, totalEE: 1350, totalContributions: 4080 },
-  { minSalary: 27250, maxSalary: 27749.99, regularSSMSC: 2e4, mpfMSC: 7500, totalMSC: 27500, regularSSER: 2e3, mpfER: 750, ecER: 30, totalER: 2780, regularSSEE: 1e3, mpfEE: 375, totalEE: 1375, totalContributions: 4155 },
-  { minSalary: 27750, maxSalary: 28249.99, regularSSMSC: 2e4, mpfMSC: 8e3, totalMSC: 28e3, regularSSER: 2e3, mpfER: 800, ecER: 30, totalER: 2830, regularSSEE: 1e3, mpfEE: 400, totalEE: 1400, totalContributions: 4230 },
-  { minSalary: 28250, maxSalary: 28749.99, regularSSMSC: 2e4, mpfMSC: 8500, totalMSC: 28500, regularSSER: 2e3, mpfER: 850, ecER: 30, totalER: 2880, regularSSEE: 1e3, mpfEE: 425, totalEE: 1425, totalContributions: 4305 },
-  { minSalary: 28750, maxSalary: 29249.99, regularSSMSC: 2e4, mpfMSC: 9e3, totalMSC: 29e3, regularSSER: 2e3, mpfER: 900, ecER: 30, totalER: 2930, regularSSEE: 1e3, mpfEE: 450, totalEE: 1450, totalContributions: 4380 },
-  { minSalary: 29250, maxSalary: 29749.99, regularSSMSC: 2e4, mpfMSC: 9500, totalMSC: 29500, regularSSER: 2e3, mpfER: 950, ecER: 30, totalER: 2980, regularSSEE: 1e3, mpfEE: 475, totalEE: 1475, totalContributions: 4455 },
-  { minSalary: 29750, maxSalary: 30249.99, regularSSMSC: 2e4, mpfMSC: 1e4, totalMSC: 3e4, regularSSER: 2e3, mpfER: 1e3, ecER: 30, totalER: 3030, regularSSEE: 1e3, mpfEE: 500, totalEE: 1500, totalContributions: 4530 },
-  { minSalary: 30250, maxSalary: 30749.99, regularSSMSC: 2e4, mpfMSC: 10500, totalMSC: 30500, regularSSER: 2e3, mpfER: 1050, ecER: 30, totalER: 3080, regularSSEE: 1e3, mpfEE: 525, totalEE: 1525, totalContributions: 4605 },
-  { minSalary: 30750, maxSalary: 31249.99, regularSSMSC: 2e4, mpfMSC: 11e3, totalMSC: 31e3, regularSSER: 2e3, mpfER: 1100, ecER: 30, totalER: 3130, regularSSEE: 1e3, mpfEE: 550, totalEE: 1550, totalContributions: 4680 },
-  { minSalary: 31250, maxSalary: 31749.99, regularSSMSC: 2e4, mpfMSC: 11500, totalMSC: 31500, regularSSER: 2e3, mpfER: 1150, ecER: 30, totalER: 3180, regularSSEE: 1e3, mpfEE: 575, totalEE: 1575, totalContributions: 4755 },
-  { minSalary: 31750, maxSalary: 32249.99, regularSSMSC: 2e4, mpfMSC: 12e3, totalMSC: 32e3, regularSSER: 2e3, mpfER: 1200, ecER: 30, totalER: 3230, regularSSEE: 1e3, mpfEE: 600, totalEE: 1600, totalContributions: 4830 },
-  { minSalary: 32250, maxSalary: 32749.99, regularSSMSC: 2e4, mpfMSC: 12500, totalMSC: 32500, regularSSER: 2e3, mpfER: 1250, ecER: 30, totalER: 3280, regularSSEE: 1e3, mpfEE: 625, totalEE: 1625, totalContributions: 4905 },
-  { minSalary: 32750, maxSalary: 33249.99, regularSSMSC: 2e4, mpfMSC: 13e3, totalMSC: 33e3, regularSSER: 2e3, mpfER: 1300, ecER: 30, totalER: 3330, regularSSEE: 1e3, mpfEE: 650, totalEE: 1650, totalContributions: 4980 },
-  { minSalary: 33250, maxSalary: 33749.99, regularSSMSC: 2e4, mpfMSC: 13500, totalMSC: 33500, regularSSER: 2e3, mpfER: 1350, ecER: 30, totalER: 3380, regularSSEE: 1e3, mpfEE: 675, totalEE: 1675, totalContributions: 5055 },
-  { minSalary: 33750, maxSalary: 34249.99, regularSSMSC: 2e4, mpfMSC: 14e3, totalMSC: 34e3, regularSSER: 2e3, mpfER: 1400, ecER: 30, totalER: 3430, regularSSEE: 1e3, mpfEE: 700, totalEE: 1700, totalContributions: 5130 },
-  { minSalary: 34250, maxSalary: 34749.99, regularSSMSC: 2e4, mpfMSC: 14500, totalMSC: 34500, regularSSER: 2e3, mpfER: 1450, ecER: 30, totalER: 3480, regularSSEE: 1e3, mpfEE: 725, totalEE: 1725, totalContributions: 5205 },
-  { minSalary: 34750, maxSalary: null, regularSSMSC: 2e4, mpfMSC: 15e3, totalMSC: 35e3, regularSSER: 2e3, mpfER: 1500, ecER: 30, totalER: 3530, regularSSEE: 1e3, mpfEE: 750, totalEE: 1750, totalContributions: 5280 }
-];
-
-// server/routes/seed-rates.ts
 var router8 = Router9();
 var requireAdmin2 = (req, res, next) => {
   if (!req.session?.user) {
@@ -7284,9 +7217,9 @@ router8.post("/api/admin/seed-sss-rates", requireAdmin2, async (req, res) => {
     for (const rate of sssRates) {
       await dbStorage.deleteDeductionRate(rate.id);
     }
-    console.log(`[SSS Seed] Inserting ${sss2025Brackets.length} new SSS brackets...`);
+    console.log(`[SSS Seed] Inserting ${sss2026Brackets.length} new SSS brackets...`);
     const insertedRates = [];
-    for (const bracket of sss2025Brackets) {
+    for (const bracket of sss2026Brackets) {
       const rate = await dbStorage.createDeductionRate({
         type: "sss",
         minSalary: bracket.minSalary.toString(),
@@ -7418,7 +7351,7 @@ router8.post("/api/admin/seed-all-rates", requireAdmin2, async (req, res) => {
     for (const rate of existingRates) {
       await dbStorage.deleteDeductionRate(rate.id);
     }
-    for (const bracket of sss2025Brackets) {
+    for (const bracket of sss2026Brackets) {
       await dbStorage.createDeductionRate({
         type: "sss",
         minSalary: bracket.minSalary.toString(),
@@ -9777,12 +9710,21 @@ async function registerRoutes(app2) {
     // local dev (same origin)
     "http://localhost:5173",
     // Vite dev server
-    "http://localhost:3000"
+    "http://localhost:3000",
     // alternative local
+    "https://localhost:5000",
+    // https localhost
+    "https://localhost:5173"
+    // https Vite dev server
   ].filter(Boolean);
   app2.use(cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
+      if (process.env.NODE_ENV === "development") {
+        if (origin.includes("localhost") || origin.includes("127.0.0.1") || origin.includes(".github.dev")) {
+          return callback(null, true);
+        }
+      }
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -10989,7 +10931,7 @@ async function registerRoutes(app2) {
       const branchId = req.user.branchId;
       const rows = await db.select().from(deductionSettings).where(eq6(deductionSettings.branchId, branchId)).limit(1);
       if (rows.length === 0) {
-        return res.json({ settings: { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: true, includeExceptionLogs: true } });
+        return res.json({ settings: { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: true, includeExceptionLogs: true, includeHolidayPay: false } });
       }
       res.json({ settings: rows[0] });
     } catch (error) {
@@ -10999,7 +10941,7 @@ async function registerRoutes(app2) {
   app2.put("/api/deduction-settings", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
-      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs } = req.body;
+      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs, includeHolidayPay } = req.body;
       const existing = await db.select().from(deductionSettings).where(eq6(deductionSettings.branchId, branchId)).limit(1);
       if (existing.length === 0) {
         await db.insert(deductionSettings).values({
@@ -11010,6 +10952,7 @@ async function registerRoutes(app2) {
           deductPagibig: deductPagibig ?? true,
           deductWithholdingTax: deductWithholdingTax ?? true,
           includeExceptionLogs: includeExceptionLogs ?? true,
+          includeHolidayPay: includeHolidayPay ?? false,
           updatedAt: /* @__PURE__ */ new Date()
         });
       } else {
@@ -11019,6 +10962,7 @@ async function registerRoutes(app2) {
           deductPagibig: deductPagibig ?? true,
           deductWithholdingTax: deductWithholdingTax ?? true,
           includeExceptionLogs: includeExceptionLogs ?? true,
+          includeHolidayPay: includeHolidayPay ?? false,
           updatedAt: /* @__PURE__ */ new Date()
         }).where(eq6(deductionSettings.branchId, branchId));
       }
@@ -11075,46 +11019,31 @@ async function registerRoutes(app2) {
   }));
   app2.post("/api/payroll/periods", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
-      const { startDate, endDate, payDate } = req.body;
+      const { startDate, endDate, runType = "regular" } = req.body;
       const branchId = req.user.branchId;
-      if (!startDate || !endDate || !payDate) {
-        return res.status(400).json({ message: "Start date, end date, and pay date are required" });
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "Start date and end date are required" });
       }
       const parsedStart = new Date(startDate);
       const parsedEnd = new Date(endDate);
-      const parsedPayDate = new Date(payDate);
       if (parsedEnd <= parsedStart) {
         return res.status(400).json({ message: "End date must be after start date" });
       }
       const existingPeriods = await storage5.getPayrollPeriodsByBranch(branchId);
-      const sortedPeriods = [...existingPeriods].sort(
-        (a, b) => new Date(b.payDate || b.endDate).getTime() - new Date(a.payDate || a.endDate).getTime()
-      );
-      const lastPeriod = sortedPeriods[0];
-      if (lastPeriod) {
-        const lastPayDate = new Date(lastPeriod.payDate || lastPeriod.endDate);
-        const msPerDay = 1e3 * 60 * 60 * 24;
-        const gapDays = Math.ceil((parsedPayDate.getTime() - lastPayDate.getTime()) / msPerDay);
-        if (gapDays > 16) {
-          return res.status(400).json({
-            message: `DOLE Violation: Maximum interval between successive pay dates cannot exceed 16 days. Gap is ${gapDays} days from previous period's pay date.`
-          });
-        }
-      }
       const hasOverlap = existingPeriods.some((p) => {
         const pStart = new Date(p.startDate);
         const pEnd = new Date(p.endDate);
-        return parsedStart < pEnd && parsedEnd > pStart;
+        const isSameDateRange = parsedStart.getTime() === pStart.getTime() && parsedEnd.getTime() === pEnd.getTime();
+        return isSameDateRange && p.runType === runType;
       });
       if (hasOverlap) {
-        return res.status(400).json({ message: "This period overlaps with an existing payroll period" });
+        return res.status(400).json({ message: "A payroll period with this date range and run type already exists" });
       }
       const period = await storage5.createPayrollPeriod({
         branchId,
         startDate: parsedStart,
         endDate: parsedEnd,
-        payDate: parsedPayDate,
-        status: "open"
+        runType
       });
       res.json({ period });
       realTimeManager.broadcastPayrollPeriodCreated(period);
@@ -11321,10 +11250,11 @@ async function registerRoutes(app2) {
         const monthlyBasicSalary = hourlyRate * MONTHLY_WORKING_HOURS;
         const { calculateAllDeductions: calculateAllDeductions2, calculateWithholdingTax: calculateWithholdingTax2 } = await Promise.resolve().then(() => (init_deductions(), deductions_exports));
         const isSemiMonthly = daysInPeriod < 28;
+        const skipStatutory = ["bonus", "13th_month", "final_pay", "correction", "off_cycle"].includes(period.runType || "");
         const mandatorySettings = {
-          deductSSS: branchDeductionSettings.deductSSS ?? true,
-          deductPhilHealth: branchDeductionSettings.deductPhilHealth ?? true,
-          deductPagibig: branchDeductionSettings.deductPagibig ?? true,
+          deductSSS: skipStatutory ? false : branchDeductionSettings.deductSSS ?? true,
+          deductPhilHealth: skipStatutory ? false : branchDeductionSettings.deductPhilHealth ?? true,
+          deductPagibig: skipStatutory ? false : branchDeductionSettings.deductPagibig ?? true,
           deductWithholdingTax: false
           // Tax computed separately below using branchDeductionSettings
         };
@@ -11613,7 +11543,7 @@ async function registerRoutes(app2) {
     }
     let periodStart = null;
     let periodEnd = null;
-    let payDate = null;
+    let runType = null;
     let includedExceptions = [];
     try {
       const { payrollPeriods: payrollPeriods2, adjustmentLogs: adjustmentLogs2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
@@ -11624,7 +11554,7 @@ async function registerRoutes(app2) {
         const period = periods[0];
         periodStart = period.startDate instanceof Date ? period.startDate.toISOString() : String(period.startDate);
         periodEnd = period.endDate instanceof Date ? period.endDate.toISOString() : String(period.endDate);
-        payDate = period.payDate ? period.payDate instanceof Date ? period.payDate.toISOString() : String(period.payDate) : null;
+        runType = period.runType ? period.runType instanceof Date ? period.runType.toISOString() : String(period.runType) : null;
         const logs = await db2.select().from(adjustmentLogs2).where(
           and3(
             eq7(adjustmentLogs2.employeeId, entry.userId),
@@ -11653,7 +11583,7 @@ async function registerRoutes(app2) {
       period: entry.createdAt,
       periodStart,
       periodEnd,
-      payDate,
+      runType,
       regularHours: entry.regularHours,
       overtimeHours: entry.overtimeHours,
       nightDiffHours: entry.nightDiffHours || 0,

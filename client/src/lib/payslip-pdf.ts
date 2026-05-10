@@ -17,7 +17,7 @@ export interface PayslipData {
   // Period Info
   periodStart: string;
   periodEnd: string;
-  payDate: string;
+  runType: string;
 
   // Employee Info
   employeeName: string;
@@ -118,7 +118,7 @@ export function generatePayslipPDF(data: PayslipData): jsPDF {
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   doc.text(`Payroll Period: ${data.periodStart} – ${data.periodEnd}`, margin + 3, y + 5.5);
-  doc.text(`Pay Date: ${data.payDate}`, pageWidth - margin - 3, y + 5.5, { align: 'right' });
+  doc.text(`Run Type: ${data.runType || "Regular"}`, pageWidth - margin - 3, y + 5.5, { align: "right" });
   
   y += 12;
 

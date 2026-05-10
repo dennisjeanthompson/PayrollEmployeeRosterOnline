@@ -47,7 +47,7 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   FormControl, InputLabel, Select, MenuItem, Stack, Tooltip, Avatar,
   CircularProgress, useTheme, useMediaQuery, Divider, ButtonGroup,
-  InputAdornment, Menu
+  InputAdornment, Menu, FormControlLabel, Switch
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import {
@@ -77,7 +77,7 @@ import { getCurrentUser, isManager as checkIsManager } from '@/lib/auth';
 import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, setHours, setMinutes, differenceInHours, isValid, areIntervalsOverlapping, eachDayOfInterval, isSameDay } from 'date-fns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { DateTimePicker, DatePicker } from '@mui/x-date-pickers';
+import { DateTimePicker, DatePicker, TimePicker } from '@mui/x-date-pickers';
 import { getRoleColor, getUniqueRoleColors } from '@/lib/schedule-theme';
 import { useRealtime } from '@/hooks/use-realtime';
 import { toast } from 'react-toastify';
@@ -146,7 +146,19 @@ export default function ScheduleV2() {
   ];
 
   // Form data
-  const [newShift, setNewShift] = useState({ employeeId: '', startTime: null as Date | null, endTime: null as Date | null, notes: '', breakDurationMinutes: 30 });
+  const [newShift, setNewShift] = useState({ 
+    employeeId: '', 
+    startTime: null as Date | null, 
+    endTime: null as Date | null, 
+    notes: '', 
+    breakDurationMinutes: 30,
+    isBulk: false,
+    bulkStartDate: null as Date | null,
+    bulkEndDate: null as Date | null,
+    bulkDays: [1,2,3,4,5] as number[], // Mon-Fri
+    bulkStartTime: null as Date | null,
+    bulkEndTime: null as Date | null,
+  });
   const [editForm, setEditForm] = useState({ startTime: null as Date | null, endTime: null as Date | null, notes: '', breakDurationMinutes: 30 });
   const [timeOffForm, setTimeOffForm] = useState({ type: 'vacation', startDate: new Date() as Date | null, endDate: new Date() as Date | null, reason: '' });
   const [tradeForm, setTradeForm] = useState({ shiftId: '', targetUserId: '', reason: '' });
@@ -783,6 +795,13 @@ export default function ScheduleV2() {
       startTime: start,
       endTime: end,
       notes: '',
+      breakDurationMinutes: 30,
+      isBulk: false,
+      bulkStartDate: startOfDay(date),
+      bulkEndDate: startOfDay(addWeeks(date, 1)),
+      bulkDays: [1,2,3,4,5],
+      bulkStartTime: start,
+      bulkEndTime: end,
     });
     setCreateModalOpen(true);
   }, []);
@@ -1303,21 +1322,60 @@ export default function ScheduleV2() {
                 ))}
               </Select>
             </FormControl>
+
+            <FormControlLabel
+              control={<Switch checked={newShift.isBulk} onChange={(e) => setNewShift(p => ({ ...p, isBulk: e.target.checked }))} />}
+              label="Schedule multiple days (Recurring)"
+            />
+
             <LocalizationProvider dateAdapter={AdapterDateFns}>
-              <DateTimePicker
-                label="Start Time"
-                value={newShift.startTime}
-                onChange={(val) => setNewShift(p => ({ ...p, startTime: val }))}
-                slotProps={{ textField: { fullWidth: true } }}
-              />
-              <DateTimePicker
-                label="End Time"
-                value={newShift.endTime}
-                onChange={(val) => setNewShift(p => ({ ...p, endTime: val }))}
-                slotProps={{ textField: { fullWidth: true } }}
-                minDateTime={newShift.startTime || undefined}
-              />
+              {!newShift.isBulk ? (
+                <>
+                  <DateTimePicker
+                    label="Start Time"
+                    value={newShift.startTime}
+                    onChange={(val) => setNewShift(p => ({ ...p, startTime: val }))}
+                    slotProps={{ textField: { fullWidth: true } }}
+                  />
+                  <DateTimePicker
+                    label="End Time"
+                    value={newShift.endTime}
+                    onChange={(val) => setNewShift(p => ({ ...p, endTime: val }))}
+                    slotProps={{ textField: { fullWidth: true } }}
+                    minDateTime={newShift.startTime || undefined}
+                  />
+                </>
+              ) : (
+                <Stack spacing={2} sx={{ p: 2, bgcolor: 'background.paper', border: '1px solid', borderColor: 'divider', borderRadius: 2 }}>
+                  <Typography variant="subtitle2">Date Range</Typography>
+                  <Stack direction="row" spacing={2}>
+                    <DatePicker label="Start Date" value={newShift.bulkStartDate} onChange={(val) => setNewShift(p => ({ ...p, bulkStartDate: val }))} slotProps={{ textField: { fullWidth: true } }} />
+                    <DatePicker label="End Date" value={newShift.bulkEndDate} onChange={(val) => setNewShift(p => ({ ...p, bulkEndDate: val }))} slotProps={{ textField: { fullWidth: true } }} minDate={newShift.bulkStartDate || undefined} />
+                  </Stack>
+                  <Typography variant="subtitle2" sx={{ mt: 1 }}>Weekly Schedule</Typography>
+                  <Stack direction="row" spacing={1} flexWrap="wrap">
+                    {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map((day, idx) => (
+                      <Chip
+                        key={day}
+                        label={day}
+                        clickable
+                        color={newShift?.bulkDays?.includes(idx) ? 'primary' : 'default'}
+                        onClick={() => {
+                          const hasDay = newShift?.bulkDays?.includes(idx);
+                          setNewShift(p => ({ ...p, bulkDays: hasDay ? (p.bulkDays || []).filter(d => d !== idx) : [...(p.bulkDays || []), idx] }));
+                        }}
+                      />
+                    ))}
+                  </Stack>
+                  <Typography variant="subtitle2" sx={{ mt: 1 }}>Work Hours</Typography>
+                  <Stack direction="row" spacing={2}>
+                    <TimePicker label="Start Time" value={newShift.bulkStartTime} onChange={(val) => setNewShift(p => ({ ...p, bulkStartTime: val }))} slotProps={{ textField: { fullWidth: true } }} />
+                    <TimePicker label="End Time" value={newShift.bulkEndTime} onChange={(val) => setNewShift(p => ({ ...p, bulkEndTime: val }))} slotProps={{ textField: { fullWidth: true } }} />
+                  </Stack>
+                </Stack>
+              )}
             </LocalizationProvider>
+
             <TextField label="Notes" multiline rows={2} value={newShift.notes} onChange={e => setNewShift(p => ({ ...p, notes: e.target.value }))} fullWidth />
             <TextField
               label="Break Duration (minutes)"

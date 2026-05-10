@@ -160,12 +160,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
     'http://localhost:5000',            // local dev (same origin)
     'http://localhost:5173',            // Vite dev server
     'http://localhost:3000',            // alternative local
+    'https://localhost:5000',           // https localhost
+    'https://localhost:5173',           // https Vite dev server
   ].filter(Boolean) as string[];
 
   app.use(cors({
     origin: (origin, callback) => {
       // Allow requests with no origin (mobile apps, curl, server-to-server)
       if (!origin) return callback(null, true);
+      
+      // In development, be more lenient
+      if (process.env.NODE_ENV === 'development') {
+        // Allow localhost and GitHub Codespaces
+        if (origin.includes('localhost') || origin.includes('127.0.0.1') || origin.includes('.github.dev')) {
+          return callback(null, true);
+        }
+      }
+      
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -1728,7 +1739,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const rows = await db.select().from(deductionSettingsTable).where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
       if (rows.length === 0) {
         // Return defaults (all enabled)
-        return res.json({ settings: { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: true, includeExceptionLogs: true } });
+        return res.json({ settings: { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: true, includeExceptionLogs: true, includeHolidayPay: false } });
       }
       res.json({ settings: rows[0] });
     } catch (error: any) {
@@ -1739,7 +1750,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/deduction-settings", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
-      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs } = req.body;
+      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs, includeHolidayPay } = req.body;
 
       const existing = await db.select().from(deductionSettingsTable).where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
 
@@ -1753,6 +1764,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           deductPagibig: deductPagibig ?? true,
           deductWithholdingTax: deductWithholdingTax ?? true,
           includeExceptionLogs: includeExceptionLogs ?? true,
+          includeHolidayPay: includeHolidayPay ?? false,
           updatedAt: new Date(),
         });
       } else {
@@ -1763,6 +1775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           deductPagibig: deductPagibig ?? true,
           deductWithholdingTax: deductWithholdingTax ?? true,
           includeExceptionLogs: includeExceptionLogs ?? true,
+          includeHolidayPay: includeHolidayPay ?? false,
           updatedAt: new Date(),
         }).where(eq(deductionSettingsTable.branchId, branchId));
       }
@@ -1831,56 +1844,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create payroll period (Manager only)
   app.post("/api/payroll/periods", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
-      const { startDate, endDate, payDate } = req.body;
-      const branchId = req.user!.branchId;
+        const { startDate, endDate, runType = 'regular' } = req.body;
+        const branchId = req.user!.branchId;
 
-      if (!startDate || !endDate || !payDate) {
-        return res.status(400).json({ message: "Start date, end date, and pay date are required" });
-      }
-
-      const parsedStart = new Date(startDate);
-      const parsedEnd = new Date(endDate);
-      const parsedPayDate = new Date(payDate);
-
-      if (parsedEnd <= parsedStart) {
-        return res.status(400).json({ message: "End date must be after start date" });
-      }
-
-      // Check for overlapping periods
-      const existingPeriods = await storage.getPayrollPeriodsByBranch(branchId);
-      
-      // ─── Feature 1: DOLE 16-Day Enforcement ───
-      const sortedPeriods = [...existingPeriods].sort((a, b) => 
-        new Date(b.payDate || b.endDate).getTime() - new Date(a.payDate || a.endDate).getTime()
-      );
-      const lastPeriod = sortedPeriods[0];
-      
-      if (lastPeriod) {
-        const lastPayDate = new Date(lastPeriod.payDate || lastPeriod.endDate);
-        const msPerDay = 1000 * 60 * 60 * 24;
-        const gapDays = Math.ceil((parsedPayDate.getTime() - lastPayDate.getTime()) / msPerDay);
-        
-        if (gapDays > 16) {
-          return res.status(400).json({ 
-            message: `DOLE Violation: Maximum interval between successive pay dates cannot exceed 16 days. Gap is ${gapDays} days from previous period's pay date.` 
-          });
+        if (!startDate || !endDate) {
+          return res.status(400).json({ message: "Start date and end date are required" });
         }
-      }
-      const hasOverlap = existingPeriods.some(p => {
-        const pStart = new Date(p.startDate);
-        const pEnd = new Date(p.endDate);
-        return parsedStart < pEnd && parsedEnd > pStart;
-      });
-      if (hasOverlap) {
-        return res.status(400).json({ message: "This period overlaps with an existing payroll period" });
-      }
 
-      const period = await storage.createPayrollPeriod({
-        branchId,
-        startDate: parsedStart,
-        endDate: parsedEnd,
-        payDate: parsedPayDate,
-        status: 'open'
+        const parsedStart = new Date(startDate);
+        const parsedEnd = new Date(endDate);
+
+        if (parsedEnd <= parsedStart) {
+          return res.status(400).json({ message: "End date must be after start date" });
+        }
+
+        // Check for overlapping periods
+        const existingPeriods = await storage.getPayrollPeriodsByBranch(branchId);
+        
+        // Block if same date range + same run type already exists
+        const hasOverlap = existingPeriods.some(p => {
+          const pStart = new Date(p.startDate);
+          const pEnd = new Date(p.endDate);
+          const isSameDateRange = parsedStart.getTime() === pStart.getTime() && parsedEnd.getTime() === pEnd.getTime();
+          return isSameDateRange && p.runType === runType;
+        });
+        if (hasOverlap) {
+          return res.status(400).json({ message: "A payroll period with this date range and run type already exists" });
+        }
+
+        const period = await storage.createPayrollPeriod({
+          branchId,
+          startDate: parsedStart,
+          endDate: parsedEnd,
+          runType: runType,
       });
 
       res.json({ period });
@@ -2189,10 +2185,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Step 1: Calculate SSS, PhilHealth, Pag-IBIG on monthly basis
         // Uses actual branch deduction settings from DB (loaded above the loop)
-        const mandatorySettings = {
-          deductSSS: branchDeductionSettings.deductSSS ?? true,
-          deductPhilHealth: branchDeductionSettings.deductPhilHealth ?? true,
-          deductPagibig: branchDeductionSettings.deductPagibig ?? true,
+        const skipStatutory = ["bonus", "13th_month", "final_pay", "correction", "off_cycle"].includes(period.runType || "");
+          const mandatorySettings = {
+          deductSSS: skipStatutory ? false : (branchDeductionSettings.deductSSS ?? true),
+          deductPhilHealth: skipStatutory ? false : (branchDeductionSettings.deductPhilHealth ?? true),
+          deductPagibig: skipStatutory ? false : (branchDeductionSettings.deductPagibig ?? true),
           deductWithholdingTax: false, // Tax computed separately below using branchDeductionSettings
         };
         const mandatoryBreakdown = await calculateAllDeductions(monthlyBasicSalary, mandatorySettings);
@@ -2589,7 +2586,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Retrieve the pay period so the payslip shows the correct date range
     let periodStart: string | null = null;
     let periodEnd: string | null = null;
-    let payDate: string | null = null;
+    let runType: string | null = null;
     
     let includedExceptions: any[] = [];
     try {
@@ -2606,8 +2603,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         periodEnd = period.endDate instanceof Date
           ? period.endDate.toISOString()
           : String(period.endDate);
-        payDate = period.payDate
-          ? (period.payDate instanceof Date ? period.payDate.toISOString() : String(period.payDate))
+        runType = period.runType
+          ? (period.runType instanceof Date ? period.runType.toISOString() : String(period.runType))
           : null;
 
         // Fetch verified/approved exception logs within this period for this user
@@ -2646,7 +2643,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       period: entry.createdAt!,
       periodStart,
       periodEnd,
-      payDate,
+      runType,
       regularHours: entry.regularHours,
       overtimeHours: entry.overtimeHours,
       nightDiffHours: (entry as any).nightDiffHours || 0,

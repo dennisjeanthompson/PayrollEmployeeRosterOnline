@@ -39,7 +39,7 @@ interface PayslipData {
   period: string;
   periodStart: string;
   periodEnd: string;
-  payDate?: string;
+  runType?: string;
   
   // Hours
   regularHours: number;
@@ -468,15 +468,15 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
 
     const dateStart = payslipData.periodStart ? format(new Date(payslipData.periodStart), "MMMM d") : "";
     const dateEnd = payslipData.periodEnd ? format(new Date(payslipData.periodEnd), "MMMM d, yyyy") : "";
-    let payDate = "";
-    if (payslipData.payDate) {
-      payDate = format(new Date(payslipData.payDate), "MMMM d, yyyy");
+    let runTypeStr = "";
+    if (payslipData.runType) {
+      runTypeStr = String(payslipData.runType);
     } else if (payslipData.periodEnd) {
-      payDate = format(getPaymentDate(payslipData.periodEnd), "MMMM d, yyyy");
+      runTypeStr = "Regular";
     }
     
     y = drawInfoRow(y, "EMPLOYEE:", payslipData.employeeName, "PERIOD:", `${dateStart} - ${dateEnd}`);
-    y = drawInfoRow(y, "POSITION:", payslipData.position, "PAY DATE:", payDate);
+    y = drawInfoRow(y, "POSITION:", payslipData.position, "RUN TYPE:", runTypeStr);
     y = drawInfoRow(y, "EMP ID:", payslipData.employeeId || "N/A", "DEPT:", payslipData.department || "Operations");
     y = drawInfoRow(y, "TIN:", payslipData.employeeTin || "—", "SSS No.:", payslipData.employeeSss || "—");
     y = drawInfoRow(y, "PhilHealth:", payslipData.employeePhilhealth || "—", "Pag-IBIG:", payslipData.employeePagibig || "—");

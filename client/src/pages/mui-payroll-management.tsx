@@ -144,7 +144,7 @@ export default function MuiPayrollManagement() {
   const [selectedPeriod, setSelectedPeriod] = useState<PayrollPeriod | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
-  const [payDate, setPayDate] = useState<Date | null>(null);
+  const [runType, setRunType] = useState<string>('regular');
   const [periodType, setPeriodType] = useState<PeriodType>('semi-monthly');
   
   // Digital payslip viewer state
@@ -292,7 +292,7 @@ export default function MuiPayrollManagement() {
 
   // Mutations
   const createPeriodMutation = useMutation({
-    mutationFn: async (data: { startDate: string; endDate: string; payDate: string }) => {
+    mutationFn: async (data: { startDate: string; endDate: string; runType: string }) => {
       const response = await apiRequest("POST", "/api/payroll/periods", data);
       return response.json();
     },
@@ -549,14 +549,14 @@ export default function MuiPayrollManagement() {
   const adjLogs = adjustmentLogsData?.logs || [];
 
   const handleCreatePeriod = () => {
-    if (!startDate || !endDate || !payDate) {
-      toast({ title: "Missing Dates", description: "Please select start, end, and pay dates", variant: "destructive" });
+    if (!startDate || !endDate) {
+      toast({ title: "Missing Dates", description: "Please select start and end dates", variant: "destructive" });
       return;
     }
     createPeriodMutation.mutate({ 
       startDate: format(startDate, "yyyy-MM-dd"), 
       endDate: format(endDate, "yyyy-MM-dd"),
-      payDate: format(payDate, "yyyy-MM-dd")
+      runType
     });
   };
 
@@ -1761,49 +1761,31 @@ export default function MuiPayrollManagement() {
                 }}
               >
                 <Typography variant="subtitle2" color="warning.main" fontWeight={600} sx={{ mb: 2 }}>
-                  💰 Expected Pay Date
+                  ⚙️ Run Type
                 </Typography>
-                <DatePicker
-                  value={payDate}
-                  onChange={(newValue) => setPayDate(newValue)}
-                  minDate={endDate || undefined}
-                  slotProps={{
-                    textField: {
-                      fullWidth: true,
-                      sx: {
-                        "& .MuiOutlinedInput-root": {
-                          borderRadius: 2,
-                          bgcolor: "background.paper",
-                          fontSize: "1.1rem",
-                          fontWeight: 500,
-                          "& input": {
-                            padding: "14px 16px",
-                          },
-                          "&:hover": {
-                            bgcolor: alpha(theme.palette.warning.main, 0.02),
-                          },
-                          "& .MuiOutlinedInput-notchedOutline": {
-                            borderColor: alpha(theme.palette.warning.main, 0.2),
-                          },
-                          "&:hover .MuiOutlinedInput-notchedOutline": {
-                            borderColor: theme.palette.warning.main,
-                          },
-                        },
-                      },
-                    },
-                    popper: {
-                      sx: {
-                        "& .MuiPaper-root": {
-                          borderRadius: 3,
-                          boxShadow: `0 8px 32px ${alpha(theme.palette.warning.main, 0.15)}`,
-                        },
-                      },
-                    },
+                <Select
+                  fullWidth
+                  value={runType}
+                  onChange={(e) => setRunType(e.target.value)}
+                  sx={{
+                    borderRadius: 2,
+                    bgcolor: "background.paper",
+                    fontSize: "1.1rem",
                   }}
-                />
+                >
+                  <MenuItem value="regular">Regular (Full Deductions)</MenuItem>
+                  <MenuItem value="bonus">Bonus (No Statutory)</MenuItem>
+                  <MenuItem value="13th_month">13th Month (No Statutory)</MenuItem>
+                  <MenuItem value="final_pay">Final Pay (Custom)</MenuItem>
+                  <MenuItem value="correction">Correction</MenuItem>
+                  <MenuItem value="off_cycle">Off-Cycle</MenuItem>
+                </Select>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
+                  Run types automatically handle deduction profiles (e.g. skipping SSS for bonuses).
+                </Typography>
               </Box>
 
-              {startDate && endDate && payDate && (
+              {startDate && endDate && (
                 <>
                   {periods.some((p: any) => p.status === 'open' && new Date(p.startDate) <= endDate && new Date(p.endDate) >= startDate) && (
                     <Alert severity="warning" sx={{ borderRadius: 2 }}>
@@ -1822,7 +1804,7 @@ export default function MuiPayrollManagement() {
                     <Stack direction="row" alignItems="center" spacing={1}>
                       <CheckCircle sx={{ color: "success.main", fontSize: 20 }} />
                       <Typography variant="body2" color="success.main" fontWeight={500}>
-                        Period: {format(startDate, "MMM d, yyyy")} - {format(endDate, "MMM d, yyyy")} | Pays on {format(payDate, "MMM d")}
+                        Period: {format(startDate, "MMM d, yyyy")} - {format(endDate, "MMM d, yyyy")} | Type: {runType}
                       </Typography>
                     </Stack>
                   </Paper>
@@ -1841,7 +1823,7 @@ export default function MuiPayrollManagement() {
           <Button
             variant="contained"
             onClick={handleCreatePeriod}
-            disabled={!startDate || !endDate || !payDate || createPeriodMutation.isPending}
+            disabled={!startDate || !endDate || createPeriodMutation.isPending}
             sx={{ 
               borderRadius: 2, 
               textTransform: "none", 

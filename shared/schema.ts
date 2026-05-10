@@ -86,7 +86,7 @@ export const payrollPeriods = pgTable("payroll_periods", {
   branchId: text("branch_id").references(() => branches.id).notNull(),
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
-  payDate: timestamp("pay_date"), // Pay Date for DOLE 16-day limit
+  runType: text("run_type").default("regular").notNull(),
   status: text("status").default("open"),
   totalHours: text("total_hours"),
   totalPay: text("total_pay"),
