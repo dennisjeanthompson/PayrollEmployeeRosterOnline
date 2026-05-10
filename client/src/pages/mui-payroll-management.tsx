@@ -228,7 +228,6 @@ export default function MuiPayrollManagement() {
     const { start, end } = getCurrentSemiMonthlyDates();
     setStartDate(start);
     setEndDate(end);
-    setPayDate(addDays(end, 5));
     setPeriodType('semi-monthly');
     setIsCreateDialogOpen(true);
   };
@@ -243,11 +242,9 @@ export default function MuiPayrollManagement() {
       const { start, end } = getCurrentSemiMonthlyDates();
       setStartDate(start);
       setEndDate(end);
-      setPayDate(addDays(end, 5));
     } else if (type === 'month') {
       setStartDate(startOfMonth(today));
       setEndDate(endOfMonth(today));
-      setPayDate(addDays(endOfMonth(today), 5));
     }
     // For 'custom', don't change dates - let user pick
   };
@@ -583,7 +580,6 @@ export default function MuiPayrollManagement() {
 
     setStartDate(start);
     setEndDate(end);
-    setPayDate(addDays(end, 5));
     setIsCreateDialogOpen(true);
   };
 
