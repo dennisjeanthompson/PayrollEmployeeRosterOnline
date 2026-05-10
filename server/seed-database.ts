@@ -201,7 +201,7 @@ async function seedPayroll(branchId: string, employees: any[]) {
       const hourlyRate = parseFloat(String(emp.hourlyRate));
       if (isNaN(hourlyRate) || hourlyRate <= 0) continue;
 
-      const pay = calculatePeriodPay(empShifts, hourlyRate, periodHolidays, 0, false);
+      const pay = calculatePeriodPay(empShifts, hourlyRate, periodHolidays, -1, false);
 
       const totalHours = pay.breakdown.reduce((s, d) => s + d.regularHours + d.overtimeHours, 0);
       const regularHours = pay.breakdown.reduce((s, d) => s + d.regularHours, 0);

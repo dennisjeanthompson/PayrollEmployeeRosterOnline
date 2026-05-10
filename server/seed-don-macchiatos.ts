@@ -236,7 +236,7 @@ async function main() {
       if (empShifts.length === 0) continue;
 
       const rate = parseFloat(emp.hourlyRate);
-      const pay = calculatePeriodPay(empShifts, rate, holidays, 0, false);
+      const pay = calculatePeriodPay(empShifts, rate, holidays, -1, false);
       
       const totalHours = pay.breakdown.reduce((s, d) => s + d.regularHours + d.overtimeHours, 0);
       const regularHours = pay.breakdown.reduce((s, d) => s + d.regularHours, 0);

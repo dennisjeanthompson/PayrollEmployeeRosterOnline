@@ -640,15 +640,6 @@ export default function MuiEmployees() {
         <Box sx={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: 0.5, py: 0.5 }}>
           <Typography variant="body2" sx={{ fontWeight: 500, lineHeight: 1.2 }}>
             {params.row.position}
-            {params.row.isMwe && (
-              <Chip
-                size="small"
-                label="MWE"
-                color="secondary"
-                sx={{ height: 16, fontSize: "0.6rem", ml: 1, fontWeight: "bold" }}
-                title="Minimum Wage Earner (Tax Exempt)"
-              />
-            )}
           </Typography>
           <Chip
             size="small"
@@ -1203,23 +1194,6 @@ export default function MuiEmployees() {
                     }
                     label="Active Employee"
                   />
-                  <FormControlLabel
-                    control={
-                      <Switch
-                        checked={formData.isMwe}
-                        onChange={(e) => setFormData({ ...formData, isMwe: e.target.checked })}
-                        color="secondary"
-                      />
-                    }
-                    label={
-                      <Box>
-                        MWE Exemption
-                        <Typography variant="caption" color="text.secondary" display="block">
-                          Tax exempt for Minimum Wage Earners
-                        </Typography>
-                      </Box>
-                    }
-                  />
                 </Stack>
 
                 <Divider sx={{ my: 2 }} />
@@ -1597,19 +1571,7 @@ export default function MuiEmployees() {
 
                 <Stack spacing={2.5}>
 
-                  <TextField
-                    fullWidth
-                    label="Other Recurring Deductions"
-                    type="number"
-                    size="small"
-                    value={deductionsFormData.otherDeductions}
-                    onChange={(e) => setDeductionsFormData({ ...deductionsFormData, otherDeductions: e.target.value })}
-                    inputProps={{ min: 0, step: 0.01 }}
-                    InputProps={{
-                      startAdornment: <Typography sx={{ mr: 1, color: 'text.secondary' }}>₱</Typography>,
-                    }}
-                    helperText="Per pay period (e.g., uniform, penalties)"
-                  />
+
                 </Stack>
               </Box>
             </DialogContent>

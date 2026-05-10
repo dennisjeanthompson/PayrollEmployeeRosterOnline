@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, boolean, timestamp, integer, numeric, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, integer, numeric, serial, json } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -65,6 +65,10 @@ export const shifts = pgTable("shifts", {
   actualStartTime: timestamp("actual_start_time"),
   actualEndTime: timestamp("actual_end_time"),
   createdAt: timestamp("created_at").defaultNow(),
+  isDeleted: boolean("is_deleted").default(false),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: text("deleted_by").references(() => users.id),
+  deletionReason: text("deletion_reason"),
 });
 
 export const shiftTrades = pgTable("shift_trades", {
@@ -87,6 +91,7 @@ export const payrollPeriods = pgTable("payroll_periods", {
   startDate: timestamp("start_date").notNull(),
   endDate: timestamp("end_date").notNull(),
   runType: text("run_type").default("regular").notNull(),
+  periodConfig: json("period_config"), // Stores per-period toggles
   status: text("status").default("open"),
   totalHours: text("total_hours"),
   totalPay: text("total_pay"),
@@ -153,6 +158,7 @@ export const timeOffRequests = pgTable("time_off_requests", {
   approvedAt: timestamp("approved_at"),
   approvedBy: text("approved_by").references(() => users.id),
   rejectionReason: text("rejection_reason"),
+  isOrphaned: boolean("is_orphaned").default(false),
 });
 
 export const notifications = pgTable("notifications", {
@@ -181,6 +187,7 @@ export const deductionSettings = pgTable("deduction_settings", {
   deductPagibig: boolean("deduct_pagibig").default(false),
   deductWithholdingTax: boolean("deduct_withholding_tax").default(false),
   includeExceptionLogs: boolean("include_exception_logs").default(true), // Toggle OT/lateness in payroll
+  includeNightDiff: boolean("include_night_diff").default(true), // Toggle Night Diff in payroll
   updatedAt: timestamp("updated_at").defaultNow(),
   createdAt: timestamp("created_at").defaultNow(),
 });
@@ -327,6 +334,10 @@ export const adjustmentLogs = pgTable("adjustment_logs", {
   calculatedAmount: text("calculated_amount"), // Positive for OT, negative for late deduction
   isIncluded: boolean("is_included").default(true), // Toggle on/off for payroll inclusion
   createdAt: timestamp("created_at").defaultNow(),
+  isDeleted: boolean("is_deleted").default(false),
+  deletedAt: timestamp("deleted_at"),
+  deletedBy: text("deleted_by").references(() => users.id),
+  deletionReason: text("deletion_reason"),
 });
 
 // Per-log comment thread for manager-employee communication on exception logs
@@ -471,6 +482,10 @@ export const insertShiftTradeSchema = z.object({
 export const insertPayrollPeriodSchema = createInsertSchema(payrollPeriods).omit({
   id: true,
   createdAt: true,
+}).extend({
+  startDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+  endDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+  periodConfig: z.any().optional(),
 });
 
 export const insertPayrollEntrySchema = createInsertSchema(payrollEntries).omit({
@@ -505,6 +520,7 @@ export const insertDeductionSettingsSchema = createInsertSchema(deductionSetting
   updatedAt: true,
 }).extend({
   includeExceptionLogs: z.boolean().optional().nullable(),
+  includeNightDiff: z.boolean().optional().nullable(),
 });
 
 export const insertDeductionRatesSchema = createInsertSchema(deductionRates).omit({

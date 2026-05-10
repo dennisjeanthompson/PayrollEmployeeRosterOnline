@@ -9,6 +9,7 @@ import { networkInterfaces } from "os";
 import { initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll, resetDatabase, markSetupComplete, seedSampleShiftTrades, runMigrations } from "./init-db";
 import { promptDatabaseChoice, deleteDatabaseFile, displayDatabaseStats, loadSampleData } from "./db-manager";
 import { recreateConnection } from "./db";
+import { setupCronJobs } from "./cron";
 
 const app = express();
 
@@ -120,6 +121,8 @@ app.get('/api/health', (req, res) => {
   // Mark setup as complete since we have seeded data
   await markSetupComplete();
   console.log('✅ Setup marked as complete');
+
+  setupCronJobs();
 
   const server = await registerRoutes(app);
 

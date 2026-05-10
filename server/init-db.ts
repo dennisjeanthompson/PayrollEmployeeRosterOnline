@@ -123,6 +123,24 @@ export async function initializeDatabase() {
       console.log('⚠️ Could not apply new column migrations:', err);
     }
 
+    // Migrations for soft delete / bulk delete stabilization
+    try {
+      await db.execute(sql`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false`);
+      await db.execute(sql`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`);
+      await db.execute(sql`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS deleted_by TEXT`);
+      await db.execute(sql`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS deletion_reason TEXT`);
+      
+      await db.execute(sql`ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false`);
+      await db.execute(sql`ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`);
+      await db.execute(sql`ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS deleted_by TEXT`);
+      await db.execute(sql`ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS deletion_reason TEXT`);
+      
+      await db.execute(sql`ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS is_orphaned BOOLEAN DEFAULT false`);
+      console.log('✅ Soft-delete and orphaned migrations checked/applied');
+    } catch (err) {
+      console.log('⚠️ Could not apply soft delete migrations:', err);
+    }
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS shifts (
         id TEXT PRIMARY KEY,
@@ -137,6 +155,10 @@ export async function initializeDatabase() {
         break_duration_minutes INTEGER DEFAULT 0,
         actual_start_time TIMESTAMP,
         actual_end_time TIMESTAMP,
+        is_deleted BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP,
+        deleted_by TEXT,
+        deletion_reason TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
@@ -231,6 +253,7 @@ export async function initializeDatabase() {
         status TEXT DEFAULT 'pending',
         is_paid BOOLEAN DEFAULT false,
         leave_payment_status TEXT DEFAULT 'paid',
+        is_orphaned BOOLEAN DEFAULT false,
         requested_at TIMESTAMP DEFAULT NOW(),
         approved_at TIMESTAMP,
         approved_by TEXT REFERENCES users(id),
@@ -415,6 +438,10 @@ export async function initializeDatabase() {
         payroll_period_id TEXT REFERENCES payroll_periods(id),
         calculated_amount TEXT,
         is_included BOOLEAN DEFAULT true,
+        is_deleted BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP,
+        deleted_by TEXT,
+        deletion_reason TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);

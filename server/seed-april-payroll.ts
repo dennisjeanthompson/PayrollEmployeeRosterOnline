@@ -22,7 +22,7 @@ function getWorkingDays(year: number, month: number, startDay: number, endDay: n
   const days: Date[] = [];
   for (let d = startDay; d <= endDay; d++) {
     const dt = new Date(Date.UTC(year, month, d));
-    if (dt.getUTCDay() === 0) continue; // Skip Sundays
+    // Employees can work any day including weekends — no day skipping
     const dateStr = dt.toISOString().slice(0, 10);
     if (holidayDates.includes(dateStr)) continue;
     days.push(dt);
@@ -98,7 +98,7 @@ async function main() {
       // Count working days (Mon-Sat)
       let workingDays = 0;
       for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-        if (d.getDay() !== 0) workingDays++; // Skip Sunday
+        if (d.getDay() !== undefined) workingDays++; // All days are potential working days
       }
 
       let periodTotalPay = 0;

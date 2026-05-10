@@ -342,6 +342,7 @@ export class DatabaseStorage implements IStorage {
   async checkShiftOverlap(userId: string, startTime: Date, endTime: Date, excludeShiftId?: string): Promise<Shift | null> {
     const conditions = [
       eq(shifts.userId, userId),
+      eq(shifts.isDeleted, false),
       // Shift overlaps if: new_start < existing_end AND new_end > existing_start
       and(
         lt(shifts.startTime, endTime),
@@ -371,6 +372,7 @@ export class DatabaseStorage implements IStorage {
     
     const conditions = [
       eq(shifts.userId, userId),
+      eq(shifts.isDeleted, false),
       gte(shifts.startTime, dayStart),
       lte(shifts.startTime, dayEnd)
     ];
@@ -413,6 +415,7 @@ export class DatabaseStorage implements IStorage {
       return db.select().from(shifts).where(
         and(
           eq(shifts.userId, userId),
+          eq(shifts.isDeleted, false),
           gte(shifts.startTime, startDate),
           lte(shifts.startTime, endDate)
         )
@@ -420,7 +423,12 @@ export class DatabaseStorage implements IStorage {
     }
     
     return db.select().from(shifts)
-      .where(eq(shifts.userId, userId))
+      .where(
+        and(
+          eq(shifts.userId, userId),
+          eq(shifts.isDeleted, false)
+        )
+      )
       .orderBy(shifts.startTime);
   }
 
@@ -429,17 +437,25 @@ export class DatabaseStorage implements IStorage {
       return db.select().from(shifts).where(
         and(
           eq(shifts.branchId, branchId),
+          eq(shifts.isDeleted, false),
           gte(shifts.startTime, startDate),
           lte(shifts.startTime, endDate)
         )
       );
     }
     
-    return db.select().from(shifts).where(eq(shifts.branchId, branchId));
+    return db.select().from(shifts).where(
+      and(
+        eq(shifts.branchId, branchId),
+        eq(shifts.isDeleted, false)
+      )
+    );
   }
 
-  async deleteShift(id: string): Promise<boolean> {
-    await db.delete(shifts).where(eq(shifts.id, id));
+  async deleteShift(id: string, deletedBy?: string, deletionReason?: string): Promise<boolean> {
+    await db.update(shifts)
+      .set({ isDeleted: true, deletedAt: new Date(), deletedBy, deletionReason })
+      .where(eq(shifts.id, id));
     return true;
   }
 
@@ -1287,6 +1303,10 @@ export class DatabaseStorage implements IStorage {
       disputeReason: null,
       disputedAt: null,
       isIncluded: log.isIncluded ?? true,
+      isDeleted: false,
+      deletedAt: null,
+      deletedBy: null,
+      deletionReason: null,
       createdAt: new Date(),
     };
     await db.insert(adjustmentLogs).values(adjustmentLog);

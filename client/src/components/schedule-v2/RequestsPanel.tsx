@@ -116,10 +116,9 @@ export default function RequestsPanel({
     setApprovingId(null);
   };
 
-  const complianceWarnings = React.useMemo(() => {
+  const scheduleAlerts = React.useMemo(() => {
     if (!shifts || shifts.length === 0 || !employees) return [];
     
-    // NOTE: simple week approximation
     const now = new Date();
     const day = now.getDay(); 
     const diff = now.getDate() - day + (day === 0 ? -6 : 1);
@@ -134,25 +133,45 @@ export default function RequestsPanel({
       return start >= thisWeekStart && start <= thisWeekEnd;
     });
 
-    const hoursMap: Record<string, number> = {};
+    const alerts: { type: 'error' | 'warning', message: string }[] = [];
+    
+    // Group shifts by employee for conflict/zero shift/rest day checks
+    const shiftsByEmp: Record<string, typeof currentWeekShifts> = {};
+    employees.forEach(emp => { shiftsByEmp[emp.id] = []; });
+    
     currentWeekShifts.forEach(shift => {
-      const e = new Date(shift.endTime).getTime();
-      const s = new Date(shift.startTime).getTime();
-      const diffHrs = (e - s) / 1000 / 3600;
-      hoursMap[shift.userId] = (hoursMap[shift.userId] || 0) + diffHrs;
+      if (!shiftsByEmp[shift.userId]) shiftsByEmp[shift.userId] = [];
+      shiftsByEmp[shift.userId].push(shift);
     });
 
-    const warnings: string[] = [];
-    Object.keys(hoursMap).forEach(userId => {
-      // 48 hours is the legal DOLE limit. Anything STRICTLY OVER 48 hours is overtime/non-compliant.
-      if (hoursMap[userId] > 48) {
-        const empName = getEmployeeName(employees, userId);
-        warnings.push(`${empName} is scheduled for ${hoursMap[userId].toFixed(1)} hours this week (> 48h limit).`);
+    Object.keys(shiftsByEmp).forEach(userId => {
+      const empShifts = shiftsByEmp[userId];
+      const empName = getEmployeeName(employees, userId);
+      
+      // Yellow: Employee with zero shifts this week
+      if (empShifts.length === 0) {
+        alerts.push({ type: 'warning', message: `${empName} has zero shifts assigned this week.` });
+        return;
+      }
+
+      // Red: Overlapping shifts for the same employee
+      empShifts.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      for (let i = 0; i < empShifts.length - 1; i++) {
+        if (new Date(empShifts[i].endTime) > new Date(empShifts[i+1].startTime)) {
+          alerts.push({ type: 'error', message: `${empName} has overlapping shifts on ${safeFormat(empShifts[i].startTime, 'MMM d')}.` });
+          break; // Avoid spamming multiple for the same user
+        }
+      }
+
+      // Red: No rest day all week (7 distinct days of shifts)
+      const daysWorked = new Set(empShifts.map(s => safeFormat(s.startTime, 'yyyy-MM-dd')));
+      if (daysWorked.size >= 7) {
+        alerts.push({ type: 'error', message: `${empName} is scheduled for 7 days this week (No rest day DOLE violation).` });
       }
     });
 
-    // Also check pending leave overlap with scheduled shifts
-    timeOffRequests.filter(r => r.status === 'pending').forEach(req => {
+    // Red: Pending leave overlap with scheduled shifts
+    timeOffRequests.filter(r => r.status === 'pending' || r.status === 'approved').forEach(req => {
       const reqStart = new Date(req.startDate);
       reqStart.setHours(0,0,0,0);
       const reqEnd = new Date(req.endDate);
@@ -166,12 +185,22 @@ export default function RequestsPanel({
       
       if (overlappingShifts.length > 0) {
         const empName = getEmployeeName(employees, req.userId);
-        warnings.push(`${empName} has a pending leave request but is scheduled for ${overlappingShifts.length} shift(s) during that time.`);
+        alerts.push({ type: 'error', message: `${empName} has approved/pending leave but is scheduled for ${overlappingShifts.length} shift(s) during that time.` });
+      }
+    });
+
+    // Yellow: Pending shift trade over 48 hours unresolved
+    shiftTrades.filter(t => t.status === 'pending' && !(t.shift?.startTime && new Date(t.shift.startTime) < now)).forEach(trade => {
+      const created = new Date(trade.createdAt || new Date());
+      const ageHours = (now.getTime() - created.getTime()) / (1000 * 60 * 60);
+      if (ageHours > 48) {
+        const requesterName = trade.requester?.firstName || trade.fromUser?.firstName || 'Unknown';
+        alerts.push({ type: 'warning', message: `Pending shift trade request from ${requesterName} is older than 48 hours.` });
       }
     });
     
-    return warnings;
-  }, [shifts, timeOffRequests, employees]);
+    return alerts;
+  }, [shifts, timeOffRequests, employees, shiftTrades]);
 
   const handleConfirmApprove = (leavePaymentStatus: 'paid' | 'unpaid') => {
     if (approvingId) {
@@ -204,7 +233,12 @@ export default function RequestsPanel({
   };
 
   const pendingTimeOff = timeOffRequests.filter(r => r.status === 'pending');
-  const pendingTrades = shiftTrades.filter(t => t.status === 'pending' || t.status === 'accepted');
+  const pendingTrades = shiftTrades.filter(t => {
+    if (t.status !== 'pending' && t.status !== 'accepted') return false;
+    // Auto-expire past shifts
+    if (t.shift?.startTime && new Date(t.shift.startTime) < new Date()) return false;
+    return true;
+  });
   const recentResolved = [
     ...timeOffRequests.filter(r => r.status !== 'pending'),
     ...shiftTrades.filter(t => t.status !== 'pending' && t.status !== 'accepted'),
@@ -256,14 +290,21 @@ export default function RequestsPanel({
             </Box>
           ) : (
             <Stack spacing={1.5}>
-              {pendingTimeOff.map(req => (
+              {pendingTimeOff.map(req => {
+                const reqStart = new Date(req.startDate);
+                reqStart.setHours(0, 0, 0, 0);
+                const now = new Date();
+                now.setHours(0, 0, 0, 0);
+                const isOverdue = reqStart < now;
+
+                return (
                 <Card
                   key={req.id}
                   variant="outlined"
                   sx={{
-                    borderColor: isDark ? '#3D3228' : '#FDE68A',
-                    borderLeft: '4px solid #F59E0B',
-                    bgcolor: isDark ? '#342A1E' : '#FFFBEB',
+                    borderColor: isDark ? (isOverdue ? '#451A1A' : '#3D3228') : (isOverdue ? '#FECACA' : '#FDE68A'),
+                    borderLeft: `4px solid ${isOverdue ? '#EF4444' : '#F59E0B'}`,
+                    bgcolor: isDark ? (isOverdue ? '#2A1212' : '#342A1E') : (isOverdue ? '#FEF2F2' : '#FFFBEB'),
                   }}
                 >
                   <CardContent sx={{ py: 1.5, px: 2, '&:last-child': { pb: 1.5 } }}>
@@ -271,7 +312,10 @@ export default function RequestsPanel({
                       <Typography variant="body2" fontWeight={700}>
                         {req.userName || getEmployeeName(employees, req.userId)}
                       </Typography>
-                      <StatusChip status={req.status} />
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        {isOverdue && <Chip label="Overdue" size="small" color="error" variant="outlined" sx={{ height: 20, fontSize: '0.6rem' }} />}
+                        <StatusChip status={req.status} />
+                      </Box>
                     </Box>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
                       <strong>{req.type}</strong> · {safeFormat(req.startDate, 'MMM d')} – {safeFormat(req.endDate, 'MMM d, yyyy')}
@@ -307,7 +351,8 @@ export default function RequestsPanel({
                     )}
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </Stack>
           )}
           </AccordionDetails>
@@ -432,10 +477,16 @@ export default function RequestsPanel({
                         )}
 
                         {/* Anyone can take an open trade */}
-                        {isOpenTrade && isPending && !isRequester && (
+                        {isOpenTrade && isPending && !isRequester && !isManager && (
                           <Button size="small" variant="contained" color="primary"
                             onClick={() => onTakeOpenTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
                             Take This Shift
+                          </Button>
+                        )}
+                        {isOpenTrade && isPending && isManager && (
+                          <Button size="small" variant="outlined" color="error" startIcon={<DeleteIcon />}
+                            onClick={() => onCancelTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                            Delete Trade
                           </Button>
                         )}
 
@@ -456,8 +507,8 @@ export default function RequestsPanel({
           </AccordionDetails>
         </Accordion>
 
-        {/* Compliance Warnings (Managers only) */}
-        {isManager && complianceWarnings?.length > 0 && (
+        {/* Schedule Alerts (Managers only) */}
+        {isManager && scheduleAlerts?.length > 0 && (
           <>
             <Divider sx={{ borderColor: isDark ? '#3D3228' : '#E8E0D4' }} />
             <Accordion 
@@ -474,18 +525,19 @@ export default function RequestsPanel({
                 sx={{ px: 0, minHeight: 40, '& .MuiAccordionSummary-content': { my: 0 } }}
               >
                 <Typography variant="caption" fontWeight={600} color="error" sx={{ textTransform: 'uppercase', letterSpacing: '0.05em', display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <AssignmentLateIcon fontSize="small" /> Compliance Warnings
+                  <AssignmentLateIcon fontSize="small" /> Schedule Alerts
                 </Typography>
               </AccordionSummary>
               <AccordionDetails sx={{ px: 0, pt: 0, pb: 2 }}>
                 <Stack spacing={1}>
-                  {complianceWarnings.map((warning: string, i: number) => (
+                  {scheduleAlerts.map((alert, i: number) => (
                     <Box key={i} sx={{ 
                       p: 1.5, borderRadius: 2,
-                      bgcolor: alpha('#EF4444', 0.1), border: `1px solid ${alpha('#EF4444', 0.2)}`,
+                      bgcolor: alert.type === 'error' ? alpha('#EF4444', 0.1) : alpha('#F59E0B', 0.1), 
+                      border: `1px solid ${alert.type === 'error' ? alpha('#EF4444', 0.2) : alpha('#F59E0B', 0.2)}`,
                     }}>
-                      <Typography variant="caption" color="error.dark" fontWeight={600}>
-                        {warning}
+                      <Typography variant="caption" color={alert.type === 'error' ? "error.dark" : "warning.dark"} fontWeight={600}>
+                        {alert.type === 'error' ? '🔴 ' : '🟡 '} {alert.message}
                       </Typography>
                     </Box>
                   ))}

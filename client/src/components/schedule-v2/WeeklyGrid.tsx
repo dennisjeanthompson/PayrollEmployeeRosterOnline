@@ -66,48 +66,6 @@ function getWeekDays(weekStart: Date): Date[] {
   return Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
 }
 
-/** Get shifts for a specific employee on a specific date */
-function getShiftsForCell(shifts: Shift[], employeeId: string, date: Date): Shift[] {
-  const dateStr = format(date, 'yyyy-MM-dd');
-  return shifts.filter(
-    s => String(s.userId) === String(employeeId) && toDateStr(s.startTime) === dateStr
-  );
-}
-
-/** Find holiday on a given date */
-function getHoliday(holidays: Holiday[], date: Date): Holiday | undefined {
-  const dateStr = format(date, 'yyyy-MM-dd');
-  return holidays.find(h => format(new Date(h.date), 'yyyy-MM-dd') === dateStr);
-}
-
-/** Get time-off requests that overlap a specific date for an employee */
-function getTimeOffForCell(requests: TimeOffRequest[], employeeId: string, date: Date): TimeOffRequest[] {
-  const dateStr = format(date, 'yyyy-MM-dd');
-  return requests.filter(r => {
-    if (String(r.userId) !== String(employeeId)) return false;
-    const start = toDateStr(r.startDate);
-    const end = toDateStr(r.endDate);
-    return dateStr >= start && dateStr <= end;
-  });
-}
-
-/** Get shift trades for shifts on a specific date for an employee */
-function getTradesForCell(trades: ShiftTrade[], shifts: Shift[], employeeId: string, date: Date): ShiftTrade[] {
-  const dateStr = format(date, 'yyyy-MM-dd');
-  const shiftIds = shifts
-    .filter(s => String(s.userId) === String(employeeId) && toDateStr(s.startTime) === dateStr)
-    .map(s => s.id);
-  return trades.filter(t =>
-    shiftIds.includes(t.shiftId) &&
-    (t.status === 'pending' || t.status === 'accepted')
-  );
-}
-
-/** Check if a shift has a pending/accepted trade */
-function getTradeForShift(trades: ShiftTrade[], shiftId: string): ShiftTrade | undefined {
-  return trades.find(t => t.shiftId === shiftId && (t.status === 'pending' || t.status === 'accepted'));
-}
-
 const TIME_OFF_STATUS_CONFIG = {
   pending: { color: '#F59E0B', bgColor: '#FEF3C7', borderColor: '#FDE68A', icon: PendingIcon, label: 'Pending' },
   approved: { color: '#10B981', bgColor: '#DCFCE7', borderColor: '#A7F3D0', icon: ApprovedIcon, label: 'Approved' },
@@ -197,7 +155,7 @@ function TradeBadge({ trade }: { trade: ShiftTrade }) {
 }
 
 // Shift pill — the colored chip inside each cell
-function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, onLogAdjustment }: { shift: Shift; onClick?: () => void; trade?: ShiftTrade; isSelectionMode?: boolean; isSelected?: boolean; onLogAdjustment?: () => void }) {
+function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, isOvertime, onLogAdjustment }: { shift: Shift; onClick?: () => void; trade?: ShiftTrade; isSelectionMode?: boolean; isSelected?: boolean; isOvertime?: boolean; onLogAdjustment?: () => void }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const rc = getRoleColor(shift.position, shift.user?.role);
@@ -270,8 +228,13 @@ function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, onLogAd
             </Box>
           )}
           {hasTrade && <TradeBadge trade={trade} />}
-          <Box component="span" sx={{ flex: 1, minWidth: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+          <Box component="span" sx={{ flex: 1, minWidth: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 0.5 }}>
             {startStr}-{endStr}
+            {isOvertime && (
+              <Tooltip title="Pushes employee >48h (OT)" arrow placement="top">
+                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#F97316', flexShrink: 0, boxShadow: '0 0 0 1px #FFF' }} />
+              </Tooltip>
+            )}
           </Box>
         </Box>
       </Tooltip>
@@ -302,7 +265,6 @@ function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, onLogAd
     </Box>
   );
 }
-
 /** Get adjustment logs for an employee on a specific date */
 export function getAdjustmentsForCell(logs: any[], employeeId: string, date: Date): any[] {
   const dateStr = format(date, 'yyyy-MM-dd');
@@ -310,6 +272,7 @@ export function getAdjustmentsForCell(logs: any[], employeeId: string, date: Dat
     l => String(l.employeeId) === String(employeeId) && toDateStr(l.startDate || l.date) === dateStr && l.status !== 'rejected'
   );
 }
+
 
 const ADJ_TYPE_CONFIG: Record<string, { label: string, color: string, bgColor: string }> = {
   late: { label: 'Late', color: '#c2410c', bgColor: '#ffedd5' }, // orange
@@ -414,7 +377,7 @@ export function AdjustmentBadge({ log, isSelectionMode, isSelected, onClick }: {
   );
 }
 
-export default function WeeklyGrid({
+function WeeklyGridComponent({
   employees,
   shifts,
   weekStart,
@@ -456,15 +419,105 @@ export default function WeeklyGrid({
   const allVisibleTimeOff = [...visibleTimeOff, ...recentRejections];
 
   // Active trades (pending or accepted)
-  const activeTrades = shiftTrades.filter(t => t.status === 'pending' || t.status === 'accepted');
+  const activeTrades = React.useMemo(() => shiftTrades.filter(t => t.status === 'pending' || t.status === 'accepted'), [shiftTrades]);
+  
+  const tradesByShift = React.useMemo(() => {
+    const map: Record<string, ShiftTrade> = {};
+    activeTrades.forEach(t => map[t.shiftId] = t);
+    return map;
+  }, [activeTrades]);
+
+  // --- PERFORMANCE OPTIMIZATION: Pre-calculate lookup dictionaries for O(1) cell rendering ---
+  const shiftsByCell = React.useMemo(() => {
+    const map: Record<string, Shift[]> = {};
+    shifts.forEach(s => {
+      const key = `${s.userId}_${toDateStr(s.startTime)}`;
+      if (!map[key]) map[key] = [];
+      map[key].push(s);
+    });
+    return map;
+  }, [shifts]);
+
+  const shiftsByDate = React.useMemo(() => {
+    const map: Record<string, Shift[]> = {};
+    shifts.forEach(s => {
+      const key = toDateStr(s.startTime);
+      if (!map[key]) map[key] = [];
+      map[key].push(s);
+    });
+    return map;
+  }, [shifts]);
+
+  const overtimeShiftIds = React.useMemo(() => {
+    const ids = new Set<string>();
+    const shiftsByEmp: Record<string, Shift[]> = {};
+    
+    shifts.forEach(s => {
+      if (!shiftsByEmp[s.userId]) shiftsByEmp[s.userId] = [];
+      shiftsByEmp[s.userId].push(s);
+    });
+
+    Object.values(shiftsByEmp).forEach(empShifts => {
+      empShifts.sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
+      let cumulativeHours = 0;
+      for (const s of empShifts) {
+        const hrs = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / (1000 * 60 * 60);
+        if (cumulativeHours + hrs > 48) {
+          ids.add(s.id);
+        }
+        cumulativeHours += hrs;
+      }
+    });
+    
+    return ids;
+  }, [shifts]);
+
+  const timeOffByCell = React.useMemo(() => {
+    const map: Record<string, TimeOffRequest[]> = {};
+    allVisibleTimeOff.forEach(r => {
+      const startD = toDate(r.startDate);
+      const endD = toDate(r.endDate);
+      let cur = startD;
+      // Safety limit to prevent infinite loops on bad data
+      let safety = 0;
+      while (cur <= endD && safety < 100) {
+        const key = `${r.userId}_${format(cur, 'yyyy-MM-dd')}`;
+        if (!map[key]) map[key] = [];
+        map[key].push(r);
+        cur = addDays(cur, 1);
+        safety++;
+      }
+    });
+    return map;
+  }, [allVisibleTimeOff]);
+
+  const adjustmentsByCell = React.useMemo(() => {
+    const map: Record<string, any[]> = {};
+    adjustmentLogs.forEach(l => {
+      if (l.status === 'rejected') return;
+      const key = `${l.employeeId}_${toDateStr(l.startDate || l.date)}`;
+      if (!map[key]) map[key] = [];
+      map[key].push(l);
+    });
+    return map;
+  }, [adjustmentLogs]);
+
+  const holidaysByDate = React.useMemo(() => {
+    const map: Record<string, Holiday> = {};
+    holidays.forEach(h => {
+      map[format(new Date(h.date), 'yyyy-MM-dd')] = h;
+    });
+    return map;
+  }, [holidays]);
 
   // On mobile, render a vertical card layout instead of a wide table
   if (isMobile) {
     return (
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
         {weekDays.map(date => {
-          const holiday = getHoliday(holidays, date);
-          const dayShifts = shifts.filter(s => toDateStr(s.startTime) === format(date, 'yyyy-MM-dd'));
+          const dateStr = format(date, 'yyyy-MM-dd');
+          const holiday = holidaysByDate[dateStr];
+          const dayShifts = shiftsByDate[dateStr] || [];
           const today = isToday(date);
 
           return (
@@ -514,8 +567,8 @@ export default function WeeklyGrid({
 
               <Box sx={{ p: 1.5, display: 'flex', flexDirection: 'column', gap: 1 }}>
                 {employees.map(emp => {
-                  const dayTimeOff = getTimeOffForCell(allVisibleTimeOff, emp.id, date);
-                  const dayAdjustments = getAdjustmentsForCell(adjustmentLogs, emp.id, date);
+                  const dayTimeOff = timeOffByCell[`${emp.id}_${dateStr}`] || [];
+                  const dayAdjustments = adjustmentsByCell[`${emp.id}_${dateStr}`] || [];
                   if (dayTimeOff.length === 0 && dayAdjustments.length === 0) return null;
 
                   return (
@@ -540,7 +593,7 @@ export default function WeeklyGrid({
                   );
                 })}
 
-                {dayShifts.length === 0 && employees.every(emp => getTimeOffForCell(allVisibleTimeOff, emp.id, date).length === 0) ? (
+                {dayShifts.length === 0 && employees.every(emp => (timeOffByCell[`${emp.id}_${dateStr}`] || []).length === 0) ? (
                   <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', py: 2, fontStyle: 'italic' }}>
                     No shifts scheduled
                   </Typography>
@@ -549,7 +602,7 @@ export default function WeeklyGrid({
                     const emp = employees.find(e => e.id === shift.userId);
                     const rc = getRoleColor(shift.position, emp?.role);
                     const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
-                    const trade = getTradeForShift(activeTrades, shift.id);
+                    const trade = tradesByShift[shift.id];
 
                     return (
                       <Box
@@ -665,8 +718,9 @@ export default function WeeklyGrid({
             </Box>
             {/* Day columns */}
             {weekDays.map(date => {
+              const dateStr = format(date, 'yyyy-MM-dd');
               const today = isToday(date);
-              const holiday = getHoliday(holidays, date);
+              const holiday = holidaysByDate[dateStr];
               return (
                 <Box
                   key={date.toISOString()}
@@ -739,7 +793,7 @@ export default function WeeklyGrid({
             const rc = getRoleColor(emp.position, emp.role);
             const isInactive = emp.isActive === false;
             const weekHours = weekDays.reduce((sum, date) => {
-              const cellShifts = getShiftsForCell(shifts, emp.id, date);
+              const cellShifts = shiftsByCell[`${emp.id}_${format(date, 'yyyy-MM-dd')}`] || [];
               return sum + cellShifts.reduce((s, sh) => s + differenceInHours(new Date(sh.endTime), new Date(sh.startTime)), 0);
             }, 0);
 
@@ -794,12 +848,15 @@ export default function WeeklyGrid({
 
                 {/* Shift cells for each day */}
                 {weekDays.map(date => {
-                  const cellShifts = getShiftsForCell(shifts, emp.id, date);
+                  const dateStr = format(date, 'yyyy-MM-dd');
+                  const cellKey = `${emp.id}_${dateStr}`;
+                  const cellShifts = shiftsByCell[cellKey] || [];
                   const today = isToday(date);
-                  const holiday = getHoliday(holidays, date);
+                  const holiday = holidaysByDate[dateStr];
                   const isBlocked = holiday && !holiday.workAllowed;
-                  const cellTimeOff = getTimeOffForCell(allVisibleTimeOff, emp.id, date);
-                  const cellAdjustments = getAdjustmentsForCell(adjustmentLogs, emp.id, date);
+                  
+                  const cellTimeOff = timeOffByCell[cellKey] || [];
+                  const cellAdjustments = adjustmentsByCell[cellKey] || [];
                   const hasTimeOff = cellTimeOff.length > 0;
                   const hasApprovedTimeOff = cellTimeOff.some(r => r.status === 'approved');
 
@@ -834,7 +891,7 @@ export default function WeeklyGrid({
                       }}>
                         {/* Shift pills with trade badge overlay FIRST for perfect horizontal alignment */}
                         {cellShifts.map(shift => {
-                          const trade = getTradeForShift(activeTrades, shift.id);
+                          const trade = tradesByShift[shift.id];
                           return (
                             <ShiftPill 
                               key={shift.id} 
@@ -842,6 +899,7 @@ export default function WeeklyGrid({
                               trade={trade}
                               isSelectionMode={isSelectionMode}
                               isSelected={isSelectionMode && selectedShifts?.has(shift.id)}
+                              isOvertime={overtimeShiftIds.has(shift.id)}
                               onLogAdjustment={isManager && !isSelectionMode && onLogAdjustment ? () => onLogAdjustment(shift) : undefined}
                               onClick={() => {
                                 if (isSelectionMode && onToggleShiftSelection) {
@@ -955,3 +1013,20 @@ export default function WeeklyGrid({
     </Box>
   );
 }
+
+export default React.memo(WeeklyGridComponent, (prevProps, nextProps) => {
+  return (
+    prevProps.weekStart.getTime() === nextProps.weekStart.getTime() &&
+    prevProps.shifts === nextProps.shifts &&
+    prevProps.employees === nextProps.employees &&
+    prevProps.timeOffRequests === nextProps.timeOffRequests &&
+    prevProps.adjustmentLogs === nextProps.adjustmentLogs &&
+    prevProps.holidays === nextProps.holidays &&
+    prevProps.shiftTrades === nextProps.shiftTrades &&
+    prevProps.isManager === nextProps.isManager &&
+    prevProps.isSelectionMode === nextProps.isSelectionMode &&
+    prevProps.selectedShifts === nextProps.selectedShifts &&
+    prevProps.selectedLogs === nextProps.selectedLogs
+  );
+});
+

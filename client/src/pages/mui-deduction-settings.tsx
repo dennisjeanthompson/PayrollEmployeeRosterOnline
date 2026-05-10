@@ -169,6 +169,7 @@ export default function MuiDeductionSettings() {
         deductPagibig: s.deductPagibig ?? true,
         deductWithholdingTax: s.deductWithholdingTax ?? true,
         includeExceptionLogs: s.includeExceptionLogs ?? true,
+        includeNightDiff: s.includeNightDiff ?? true,
       });
     }
   }, [settingsData]);
@@ -565,6 +566,46 @@ export default function MuiDeductionSettings() {
                   checked={toggles.includeExceptionLogs ?? true}
                   onChange={() => handleToggle('includeExceptionLogs')}
                   color="success"
+                  disabled={saveDeductionMutation.isPending}
+                />
+              </Tooltip>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
+            {/* Night Diff Toggle */}
+      {isManager && (
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: `1px solid ${toggles.includeNightDiff ? alpha('#8b5cf6', 0.3) : alpha(theme.palette.divider, 0.15)}`,
+            transition: 'border-color 0.3s, opacity 0.3s',
+            opacity: toggles.includeNightDiff ? 1 : 0.75,
+          }}
+        >
+          <CardContent sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                <Box sx={{ width: 44, height: 44, borderRadius: 2.5, bgcolor: alpha('#8b5cf6', 0.12), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <ToggleOn sx={{ color: '#8b5cf6', fontSize: 22 }} />
+                </Box>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={700}>Include Night Differential</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    When enabled, shifts overlapping 10:00 PM to 6:00 AM automatically receive a 10% premium.
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+                    <Chip size="small" label="Night Diff   +10% hourly" sx={{ bgcolor: alpha('#8b5cf6', 0.1), color: '#8b5cf6', fontWeight: 600 }} />
+                  </Box>
+                </Box>
+              </Box>
+              <Tooltip title={toggles.includeNightDiff ? 'Disable night differential' : 'Enable night differential'}>
+                <Switch
+                  checked={toggles.includeNightDiff ?? true}
+                  onChange={() => handleToggle('includeNightDiff')}
+                  color="secondary"
                   disabled={saveDeductionMutation.isPending}
                 />
               </Tooltip>

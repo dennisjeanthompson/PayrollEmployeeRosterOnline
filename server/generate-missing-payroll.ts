@@ -82,7 +82,7 @@ async function run() {
       if (isNaN(hourlyRate) || hourlyRate <= 0) continue;
 
       // CORRECTLY using the returned properties from calculatePeriodPay
-      const pay = calculatePeriodPay(shifts, hourlyRate, periodHolidays, 0, false);
+      const pay = calculatePeriodPay(shifts, hourlyRate, periodHolidays, -1, false);
 
       const gross = pay.totalGrossPay;
       const { calculateAllDeductions } = await import('./utils/deductions.js');

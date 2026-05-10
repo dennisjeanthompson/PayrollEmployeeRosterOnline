@@ -131,6 +131,7 @@ export default function MuiTimeOff() {
     onEvent: (event: string) => {
       if (event.startsWith('time-off:') || event === 'notification:created') {
         queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats/manager"] });
       }
     },
   });
@@ -193,6 +194,7 @@ export default function MuiTimeOff() {
     },
     onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats/manager"] });
       
       // Use react-toastify for conditional feedback based on leave type and advance notice
       if (editingRequest) {
@@ -232,6 +234,7 @@ export default function MuiTimeOff() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats/manager"] });
       toast({
         title: "Success",
         description: "Time off request cancelled",
@@ -259,6 +262,7 @@ export default function MuiTimeOff() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["time-off-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats/manager"] });
       toast({
         title: "Success",
         description: "Request status updated",

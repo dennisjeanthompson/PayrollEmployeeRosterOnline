@@ -43,6 +43,7 @@ import {
   ListItemIcon,
   ListItemText,
   Switch as MuiSwitch,
+  FormControlLabel,
 } from "@mui/material";
 import {
   Add as AddIcon,
@@ -144,7 +145,16 @@ export default function MuiPayrollManagement() {
   const [selectedPeriod, setSelectedPeriod] = useState<PayrollPeriod | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
-  const [runType, setRunType] = useState<string>('regular');
+  // Per-period payroll configuration (pre-filled from deduction settings)
+  const [periodConfig, setPeriodConfig] = useState({
+    deductSSS: true,
+    deductPhilHealth: true,
+    deductPagibig: true,
+    deductWithholdingTax: true,
+    includeHolidayPay: true,
+    includeNightDiff: true,
+    includeExceptionLogs: true,
+  });
   const [periodType, setPeriodType] = useState<PeriodType>('semi-monthly');
   
   // Digital payslip viewer state
@@ -229,6 +239,16 @@ export default function MuiPayrollManagement() {
     setStartDate(start);
     setEndDate(end);
     setPeriodType('semi-monthly');
+    // Pre-fill toggles from global deduction settings
+    setPeriodConfig({
+      deductSSS: deductionProfile?.deductSSS ?? true,
+      deductPhilHealth: deductionProfile?.deductPhilHealth ?? true,
+      deductPagibig: deductionProfile?.deductPagibig ?? true,
+      deductWithholdingTax: deductionProfile?.deductWithholdingTax ?? true,
+      includeHolidayPay: companySettings?.includeHolidayPay ?? true,
+      includeNightDiff: deductionProfile?.includeNightDiff ?? true,
+      includeExceptionLogs: deductionProfile?.includeExceptionLogs ?? true,
+    });
     setIsCreateDialogOpen(true);
   };
 
@@ -289,7 +309,7 @@ export default function MuiPayrollManagement() {
 
   // Mutations
   const createPeriodMutation = useMutation({
-    mutationFn: async (data: { startDate: string; endDate: string; runType: string }) => {
+    mutationFn: async (data: { startDate: string; endDate: string; runType?: string; periodConfig?: any }) => {
       const response = await apiRequest("POST", "/api/payroll/periods", data);
       return response.json();
     },
@@ -465,6 +485,20 @@ export default function MuiPayrollManagement() {
     },
   });
 
+  const deleteAdjustmentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("DELETE", `/api/adjustment-logs/${id}`);
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["adjustment-logs-branch"] });
+      toast({ title: "Deleted", description: "Exception log entry removed" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message || "Failed to delete exception log", variant: "destructive" });
+    },
+  });
+
   // Fetch branch deduction settings for the info bar
   const { data: deductionSettingsData } = useQuery({
     queryKey: ["deduction-settings"],
@@ -533,11 +567,7 @@ export default function MuiPayrollManagement() {
   };
 
   const adjustmentTypeOptions = [
-    { value: "overtime", label: "Regular OT (125%)", color: "#10b981" },
-    { value: "rest_day_ot", label: "Rest Day OT (169%)", color: "#3b82f6" },
-    { value: "special_holiday_ot", label: "Special Holiday OT (169%)", color: "#f59e0b" },
-    { value: "regular_holiday_ot", label: "Regular Holiday OT (260%)", color: "#ef4444" },
-    { value: "night_diff", label: "Night Differential (+10%)", color: "#8b5cf6" },
+    { value: "overtime", label: "Overtime (hours)", color: "#10b981" },
     { value: "late", label: "Tardiness (minutes)", color: "#f97316" },
     { value: "undertime", label: "Undertime (minutes)", color: "#ec4899" },
     { value: "absent", label: "Absent (days)", color: "#dc2626" },
@@ -550,10 +580,20 @@ export default function MuiPayrollManagement() {
       toast({ title: "Missing Dates", description: "Please select start and end dates", variant: "destructive" });
       return;
     }
+    // Check for overlapping periods
+    const overlapping = periods.filter((p: any) => {
+      const pStart = new Date(p.startDate);
+      const pEnd = new Date(p.endDate);
+      return startDate <= pEnd && endDate >= pStart;
+    });
+    if (overlapping.length > 0 && !confirm(`\u26a0\ufe0f A period already exists for these dates (${overlapping.map((p: any) => `${format(new Date(p.startDate), "MMM d")}\u2013${format(new Date(p.endDate), "MMM d")}`).join(", ")}). Create anyway?`)) {
+      return;
+    }
     createPeriodMutation.mutate({ 
       startDate: format(startDate, "yyyy-MM-dd"), 
       endDate: format(endDate, "yyyy-MM-dd"),
-      runType
+      runType: "regular",
+      periodConfig,
     });
   };
 
@@ -821,6 +861,30 @@ export default function MuiPayrollManagement() {
                 color={companySettings?.includeHolidayPay ? 'success' : 'default'}
                 variant={companySettings?.includeHolidayPay ? 'filled' : 'outlined'}
                 sx={{ fontWeight: 700, fontSize: '0.75rem', opacity: companySettings?.includeHolidayPay ? 1 : 0.6 }}
+              />
+              <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+              <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ mr: 0.5 }}>
+                Night Diff:
+              </Typography>
+              <Chip
+                icon={deductionProfile?.includeNightDiff ?? true ? <CheckCircle sx={{ fontSize: 16 }} /> : <Cancel sx={{ fontSize: 16 }} />}
+                label={deductionProfile?.includeNightDiff ?? true ? 'Enabled' : 'Disabled'}
+                size="small"
+                color={deductionProfile?.includeNightDiff ?? true ? 'secondary' : 'default'}
+                variant={deductionProfile?.includeNightDiff ?? true ? 'filled' : 'outlined'}
+                sx={{ fontWeight: 700, fontSize: '0.75rem', opacity: deductionProfile?.includeNightDiff ?? true ? 1 : 0.6 }}
+              />
+              <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+              <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ mr: 0.5 }}>
+                Exceptions:
+              </Typography>
+              <Chip
+                icon={deductionProfile?.includeExceptionLogs ?? true ? <CheckCircle sx={{ fontSize: 16 }} /> : <Cancel sx={{ fontSize: 16 }} />}
+                label={deductionProfile?.includeExceptionLogs ?? true ? 'Enabled' : 'Disabled'}
+                size="small"
+                color={deductionProfile?.includeExceptionLogs ?? true ? 'warning' : 'default'}
+                variant={deductionProfile?.includeExceptionLogs ?? true ? 'filled' : 'outlined'}
+                sx={{ fontWeight: 700, fontSize: '0.75rem', opacity: deductionProfile?.includeExceptionLogs ?? true ? 1 : 0.6 }}
               />
             </Box>
             <Button
@@ -1236,7 +1300,7 @@ export default function MuiPayrollManagement() {
                       <TableCell align="right">Gross Pay</TableCell>
                       <TableCell align="right">Deductions</TableCell>
                       <TableCell align="right">Net Pay</TableCell>
-                      <TableCell>Status</TableCell>
+                      
                       <TableCell align="right">Actions</TableCell>
                     </TableRow>
                   </TableHead>
@@ -1467,29 +1531,15 @@ export default function MuiPayrollManagement() {
                             {log.remarks || '—'}
                           </Typography>
                         </TableCell>
-                        <TableCell>
-                          <Chip
-                            label={log.status === 'disputed' ? '⚠️ Disputed' : log.status?.replace('_', ' ')}
-                            size="small"
-                            color={
-                              log.status === 'approved' ? 'success' :
-                              log.status === 'employee_verified' ? 'info' :
-                              log.status === 'rejected' ? 'error' :
-                              log.status === 'disputed' ? 'error' :
-                              'warning'
-                            }
-                            variant={log.status === 'disputed' ? 'outlined' : 'filled'}
-                            sx={{ fontWeight: 600, textTransform: "capitalize" }}
-                          />
-                        </TableCell>
+
                         <TableCell align="center">
-                          <Tooltip title={log.status !== 'approved' ? 'Cannot include pending/disputed/rejected logs' : logIncluded ? 'Included — will affect next payroll run' : 'Excluded — will be skipped during payroll'} arrow>
+                          <Tooltip title={logIncluded ? 'Included — will affect next payroll run' : 'Excluded — will be skipped during payroll'} arrow>
                             <span>
                               <MuiSwitch
                                 size="small"
                                 checked={logIncluded}
                                 onChange={() => toggleIncludedMutation.mutate(log.id)}
-                                disabled={toggleIncludedMutation.isPending || log.status !== 'approved'}
+                                disabled={toggleIncludedMutation.isPending}
                                 color="success"
                               />
                             </span>
@@ -1506,37 +1556,25 @@ export default function MuiPayrollManagement() {
                               {isDeduction ? '-' : '+'}₱{Math.abs(parseFloat(log.calculatedAmount)).toLocaleString(undefined, { minimumFractionDigits: 2 })}
                             </Typography>
                           ) : (
-                            <Typography variant="caption" color="text.disabled">Pending</Typography>
+                            <Typography variant="caption" color="text.disabled">—</Typography>
                           )}
                         </TableCell>
                         <TableCell align="right">
                           <Stack direction="row" spacing={0.5} justifyContent="flex-end">
-                            {(log.status === 'pending' || log.status === 'employee_verified') && (
-                              <>
-                                <Tooltip title="Approve">
-                                  <IconButton
-                                    size="small"
-                                    color="success"
-                                    disabled={approveAdjustmentMutation.isPending}
-                                    onClick={() => approveAdjustmentMutation.mutate(log.id)}
-                                  >
-                                    <CheckCircle fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                                <Tooltip title="Reject">
-                                  <IconButton
-                                    size="small"
-                                    color="error"
-                                    onClick={() => {
-                                      setRejectLogId(log.id);
-                                      setRejectReason("");
-                                    }}
-                                  >
-                                    <Cancel fontSize="small" />
-                                  </IconButton>
-                                </Tooltip>
-                              </>
-                            )}
+                            <Tooltip title="Delete entry">
+                              <IconButton
+                                size="small"
+                                color="error"
+                                disabled={deleteAdjustmentMutation.isPending}
+                                onClick={() => {
+                                  if (window.confirm('Delete this exception log entry? This cannot be undone.')) {
+                                    deleteAdjustmentMutation.mutate(log.id);
+                                  }
+                                }}
+                              >
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            </Tooltip>
                           </Stack>
                         </TableCell>
                       </TableRow>
@@ -1752,32 +1790,60 @@ export default function MuiPayrollManagement() {
                 sx={{
                   p: 3,
                   borderRadius: 3,
-                  bgcolor: alpha(theme.palette.warning.main, 0.04),
-                  border: `1px solid ${alpha(theme.palette.warning.main, 0.1)}`,
+                  bgcolor: alpha(theme.palette.info.main, 0.04),
+                  border: `1px solid ${alpha(theme.palette.info.main, 0.1)}`,
                 }}
               >
-                <Typography variant="subtitle2" color="warning.main" fontWeight={600} sx={{ mb: 2 }}>
-                  ⚙️ Run Type
+                <Typography variant="subtitle2" color="info.main" fontWeight={600} sx={{ mb: 2 }}>
+                  ⚙️ Payroll Configuration
                 </Typography>
-                <Select
-                  fullWidth
-                  value={runType}
-                  onChange={(e) => setRunType(e.target.value)}
-                  sx={{
-                    borderRadius: 2,
-                    bgcolor: "background.paper",
-                    fontSize: "1.1rem",
-                  }}
-                >
-                  <MenuItem value="regular">Regular (Full Deductions)</MenuItem>
-                  <MenuItem value="bonus">Bonus (No Statutory)</MenuItem>
-                  <MenuItem value="13th_month">13th Month (No Statutory)</MenuItem>
-                  <MenuItem value="final_pay">Final Pay (Custom)</MenuItem>
-                  <MenuItem value="correction">Correction</MenuItem>
-                  <MenuItem value="off_cycle">Off-Cycle</MenuItem>
-                </Select>
-                <Typography variant="caption" color="text.secondary" sx={{ mt: 1, display: 'block' }}>
-                  Run types automatically handle deduction profiles (e.g. skipping SSS for bonuses).
+                
+                <Grid container spacing={2}>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <FormControlLabel
+                      control={<MuiSwitch size="small" checked={periodConfig.deductSSS} onChange={(e) => setPeriodConfig({...periodConfig, deductSSS: e.target.checked})} />}
+                      label={<Typography variant="body2">SSS</Typography>}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <FormControlLabel
+                      control={<MuiSwitch size="small" checked={periodConfig.deductPhilHealth} onChange={(e) => setPeriodConfig({...periodConfig, deductPhilHealth: e.target.checked})} />}
+                      label={<Typography variant="body2">PhilHealth</Typography>}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <FormControlLabel
+                      control={<MuiSwitch size="small" checked={periodConfig.deductPagibig} onChange={(e) => setPeriodConfig({...periodConfig, deductPagibig: e.target.checked})} />}
+                      label={<Typography variant="body2">Pag-IBIG</Typography>}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <FormControlLabel
+                      control={<MuiSwitch size="small" checked={periodConfig.deductWithholdingTax} onChange={(e) => setPeriodConfig({...periodConfig, deductWithholdingTax: e.target.checked})} />}
+                      label={<Typography variant="body2">Tax</Typography>}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <FormControlLabel
+                      control={<MuiSwitch size="small" checked={periodConfig.includeHolidayPay} onChange={(e) => setPeriodConfig({...periodConfig, includeHolidayPay: e.target.checked})} />}
+                      label={<Typography variant="body2">Holiday Pay</Typography>}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <FormControlLabel
+                      control={<MuiSwitch size="small" checked={periodConfig.includeNightDiff} onChange={(e) => setPeriodConfig({...periodConfig, includeNightDiff: e.target.checked})} />}
+                      label={<Typography variant="body2">Night Diff</Typography>}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <FormControlLabel
+                      control={<MuiSwitch size="small" checked={periodConfig.includeExceptionLogs} onChange={(e) => setPeriodConfig({...periodConfig, includeExceptionLogs: e.target.checked})} />}
+                      label={<Typography variant="body2">Include Exception Logs (OT, Late, Absent)</Typography>}
+                    />
+                  </Grid>
+                </Grid>
+                <Typography variant="caption" color="text.secondary" sx={{ mt: 1.5, display: 'block' }}>
+                  Defaults loaded from Deduction Settings. Changes here apply to this period only.
                 </Typography>
               </Box>
 
@@ -1800,7 +1866,7 @@ export default function MuiPayrollManagement() {
                     <Stack direction="row" alignItems="center" spacing={1}>
                       <CheckCircle sx={{ color: "success.main", fontSize: 20 }} />
                       <Typography variant="body2" color="success.main" fontWeight={500}>
-                        Period: {format(startDate, "MMM d, yyyy")} - {format(endDate, "MMM d, yyyy")} | Type: {runType}
+                        Period: {format(startDate, "MMM d, yyyy")} - {format(endDate, "MMM d, yyyy")}
                       </Typography>
                     </Stack>
                   </Paper>
@@ -2019,36 +2085,6 @@ export default function MuiPayrollManagement() {
         </DialogActions>
       </Dialog>
 
-      {/* Reject Exception Dialog */}
-      <Dialog open={!!rejectLogId} onClose={() => setRejectLogId(null)} maxWidth="sm" fullWidth>
-        <DialogTitle>Reject Exception Log</DialogTitle>
-        <DialogContent dividers>
-          <Typography variant="body2" sx={{ mb: 2 }}>
-            Please provide a reason for rejecting this exception log. This will be visible to the employee.
-          </Typography>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Rejection Reason"
-            fullWidth
-            multiline
-            rows={3}
-            value={rejectReason}
-            onChange={(e) => setRejectReason(e.target.value)}
-          />
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2 }}>
-          <Button onClick={() => setRejectLogId(null)}>Cancel</Button>
-          <Button
-            onClick={() => rejectLogId && rejectAdjustmentMutation.mutate({ id: rejectLogId, reason: rejectReason })}
-            color="error"
-            variant="contained"
-            disabled={!rejectReason.trim() || rejectAdjustmentMutation.isPending}
-          >
-            {rejectAdjustmentMutation.isPending ? "Rejecting..." : "Reject"}
-          </Button>
-        </DialogActions>
-      </Dialog>
 
       {/* Period Context Menu (3-dot menu) */}
       <Menu

@@ -356,10 +356,13 @@ export function calculateSegmentHours(start: Date, end: Date): number {
 }
 
 /**
- * Check if a date is the employee's rest day
- * Default rest day is Sunday (0), can be configured per employee
+ * Check if a date is the employee's rest day.
+ * Default is -1 (no automatic rest day). Rest days should be explicitly
+ * configured per employee — Sunday/Saturday are NOT automatically rest days
+ * in Philippine café/restaurant operations where weekend shifts are normal.
  */
-export function isRestDay(date: Date, restDay: number = 0): boolean {
+export function isRestDay(date: Date, restDay: number = -1): boolean {
+  if (restDay < 0 || restDay > 6) return false;
   return date.getDay() === restDay;
 }
 
@@ -370,7 +373,7 @@ export function isRestDay(date: Date, restDay: number = 0): boolean {
 export function calculateDailyHoursBreakdown(
   shifts: { startTime: Date | string; endTime: Date | string; actualStartTime?: Date | string | null; actualEndTime?: Date | string | null }[],
   holidays: Holiday[],
-  restDay: number = 0
+  restDay: number = -1
 ): Map<string, ShiftHourBreakdown> {
   const dailyBreakdown = new Map<string, ShiftHourBreakdown>();
 
@@ -436,7 +439,7 @@ export function calculatePeriodPay(
   shifts: { startTime: Date | string; endTime: Date | string; actualStartTime?: Date | string | null; actualEndTime?: Date | string | null }[],
   hourlyRate: number,
   holidays: Holiday[],
-  restDay: number = 0,
+  restDay: number = -1,
   isHolidayExempt: boolean = false
 ): PayCalculation {
   const dailyBreakdown = calculateDailyHoursBreakdown(shifts, holidays, restDay);
@@ -633,7 +636,7 @@ export function calculateShiftPay(params: CalculateShiftPayParams): PayBreakdown
     shift,
     hourlyRate,
     holidays,
-    restDay = 0,
+    restDay = -1,
     holidayLookup,
     options,
     weeklyOtHoursAlreadyAccumulated = 0,

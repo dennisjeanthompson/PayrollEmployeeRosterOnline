@@ -147,12 +147,9 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
       "Rest Day Pay (PHP)",
       "Gross Pay (PHP)",
       "SSS Contribution (PHP)",
-      "SSS Loan (PHP)",
       "PhilHealth Contribution (PHP)",
       "Pag-IBIG Contribution (PHP)",
-      "Pag-IBIG Loan (PHP)",
       "Withholding Tax (PHP)",
-      "Other Deductions (PHP)",
       "Total Deductions (PHP)",
       "Net Pay (PHP)",
       "Status",
@@ -175,12 +172,9 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
         peso(e.restDayPay),
         peso(e.grossPay),
         peso(e.sssContribution),
-        peso(e.sssLoan),
         peso(e.philHealthContribution),
         peso(e.pagibigContribution),
-        peso(e.pagibigLoan),
         peso(e.withholdingTax),
-        peso(e.otherDeductions),
         peso(e.totalDeductions),
         peso(e.netPay),
         (e.status || "").toUpperCase(),
@@ -200,12 +194,9 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
     const totalRestDay = sum("restDayPay");
     const totalGross = sum("grossPay");
     const totalSSS = sum("sssContribution");
-    const totalSSSLoan = sum("sssLoan");
     const totalPhilHealth = sum("philHealthContribution");
     const totalPagibig = sum("pagibigContribution");
-    const totalPagibigLoan = sum("pagibigLoan");
     const totalTax = sum("withholdingTax");
-    const totalOtherDed = sum("otherDeductions");
     const totalDeductions = sum("totalDeductions");
     const totalNet = sum("netPay");
 
@@ -214,9 +205,9 @@ router.get("/api/reports/payroll/export", requireAuth, requireManagerRole, async
       row("TOTALS", "", "",
         totalRegHours.toFixed(2), totalOTHours.toFixed(2), totalNDHours.toFixed(2), totalHours.toFixed(2),
         peso(totalBasic), peso(totalOTPay), peso(totalNDPay), peso(totalHoliday), peso(totalRestDay),
-        peso(totalGross), peso(totalSSS), peso(totalSSSLoan), peso(totalPhilHealth),
-        peso(totalPagibig), peso(totalPagibigLoan), peso(totalTax),
-        peso(totalOtherDed), peso(totalDeductions), peso(totalNet), ""),
+        peso(totalGross), peso(totalSSS), peso(totalPhilHealth),
+        peso(totalPagibig), peso(totalTax),
+        peso(totalDeductions), peso(totalNet), ""),
     ];
 
     const csv = buildCSV([...meta, headers, ...dataRows, ...summaryRows]);
@@ -364,12 +355,9 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
       "PhilHealth Number",
       "Pag-IBIG Number",
       "SSS Contribution (PHP)",
-      "SSS Loan (PHP)",
       "PhilHealth (PHP)",
       "Pag-IBIG Contribution (PHP)",
-      "Pag-IBIG Loan (PHP)",
       "Withholding Tax (PHP)",
-      "Other Deductions (PHP)",
       "Total Deductions (PHP)",
     );
 
@@ -383,12 +371,9 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
         (user as any)?.philhealthNumber || "",
         (user as any)?.pagibigNumber || "",
         peso(e.sssContribution),
-        peso(e.sssLoan),
         peso(e.philHealthContribution),
         peso(e.pagibigContribution),
-        peso(e.pagibigLoan),
         peso(e.withholdingTax),
-        peso(e.otherDeductions),
         peso(e.totalDeductions),
       )
     );
@@ -398,17 +383,14 @@ router.get("/api/reports/deductions/export", requireAuth, requireManagerRole, as
     const totalPhilHealth = enriched.reduce((s, { e }) => s + (parseFloat(String(e.philHealthContribution)) || 0), 0);
     const totalPagibig = enriched.reduce((s, { e }) => s + (parseFloat(String(e.pagibigContribution)) || 0), 0);
     const totalTax = enriched.reduce((s, { e }) => s + (parseFloat(String(e.withholdingTax)) || 0), 0);
-    const totalOther = enriched.reduce((s, { e }) => s + (parseFloat(String(e.otherDeductions)) || 0), 0);
     const totalDeductions = enriched.reduce((s, { e }) => s + (parseFloat(String(e.totalDeductions)) || 0), 0);
-    const totalSSSLoan = enriched.reduce((s, { e }) => s + (parseFloat(String(e.sssLoan)) || 0), 0);
-    const totalPagibigLoan = enriched.reduce((s, { e }) => s + (parseFloat(String(e.pagibigLoan)) || 0), 0);
 
     const summaryRows = [
       "",
       row("TOTALS", "", "", "", "", "", "",
-        peso(totalSSS), peso(totalSSSLoan), peso(totalPhilHealth),
-        peso(totalPagibig), peso(totalPagibigLoan),
-        peso(totalTax), peso(totalOther), peso(totalDeductions)),
+        peso(totalSSS), peso(totalPhilHealth),
+        peso(totalPagibig),
+        peso(totalTax), peso(totalDeductions)),
     ];
 
     const csv = buildCSV([...meta, headers, ...dataRows, ...summaryRows]);

@@ -1236,7 +1236,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type,
         value: numValue.toString(),
         remarks: remarks || null,
-        status: 'pending',
+        status: 'approved',
       });
 
       // Notify the employee
@@ -1257,7 +1257,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: employeeId,
         type: 'adjustment',
         title: 'Exception Log Recorded',
-        message: `${manager?.firstName || 'Manager'} logged ${typeLabels[type] || type}: ${value} ${valueUnit} for ${new Date(date).toLocaleDateString('en-PH')}. Please verify.`,
+        message: `${manager?.firstName || 'Manager'} logged ${typeLabels[type] || type}: ${value} ${valueUnit} for ${new Date(date).toLocaleDateString('en-PH')}.`,
         data: JSON.stringify({ adjustmentLogId: log.id }),
       } as any);
 
@@ -1750,7 +1750,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/deduction-settings", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user!.branchId;
-      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs, includeHolidayPay } = req.body;
+      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs, includeNightDiff } = req.body;
 
       const existing = await db.select().from(deductionSettingsTable).where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
 
@@ -1764,7 +1764,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           deductPagibig: deductPagibig ?? true,
           deductWithholdingTax: deductWithholdingTax ?? true,
           includeExceptionLogs: includeExceptionLogs ?? true,
-          includeHolidayPay: includeHolidayPay ?? false,
+          includeNightDiff: includeNightDiff ?? true,
           updatedAt: new Date(),
         });
       } else {
@@ -1775,7 +1775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           deductPagibig: deductPagibig ?? true,
           deductWithholdingTax: deductWithholdingTax ?? true,
           includeExceptionLogs: includeExceptionLogs ?? true,
-          includeHolidayPay: includeHolidayPay ?? false,
+          includeNightDiff: includeNightDiff ?? true,
           updatedAt: new Date(),
         }).where(eq(deductionSettingsTable.branchId, branchId));
       }
@@ -1844,7 +1844,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Create payroll period (Manager only)
   app.post("/api/payroll/periods", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
-        const { startDate, endDate, runType = 'regular' } = req.body;
+        const { startDate, endDate, runType = 'regular', periodConfig } = req.body;
         const branchId = req.user!.branchId;
 
         if (!startDate || !endDate) {
@@ -1858,26 +1858,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ message: "End date must be after start date" });
         }
 
-        // Check for overlapping periods
-        const existingPeriods = await storage.getPayrollPeriodsByBranch(branchId);
-        
-        // Block if same date range + same run type already exists
-        const hasOverlap = existingPeriods.some(p => {
-          const pStart = new Date(p.startDate);
-          const pEnd = new Date(p.endDate);
-          const isSameDateRange = parsedStart.getTime() === pStart.getTime() && parsedEnd.getTime() === pEnd.getTime();
-          return isSameDateRange && p.runType === runType;
-        });
-        if (hasOverlap) {
-          return res.status(400).json({ message: "A payroll period with this date range and run type already exists" });
-        }
-
         const period = await storage.createPayrollPeriod({
           branchId,
           startDate: parsedStart,
           endDate: parsedEnd,
           runType: runType,
-      });
+          periodConfig: periodConfig || null,
+        });
 
       res.json({ period });
       realTimeManager.broadcastPayrollPeriodCreated(period);
@@ -1982,12 +1969,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
       const branchDeductionSettings = dsRows[0] || {
         deductSSS: true, deductPhilHealth: true,
-        deductPagibig: true, deductWithholdingTax: true, includeExceptionLogs: true
+        deductPagibig: true, deductWithholdingTax: true, includeExceptionLogs: true, includeNightDiff: true
       };
 
-      // --- Pre-fetch static branch & company data to prevent N+1 Queries ---
+      // ─── OVERRIDE DEFAULTS WITH PER-PERIOD CONFIG IF IT EXISTS ───
+      const pConfig = period.periodConfig as any;
+      const runConfig = pConfig ? {
+        deductSSS: pConfig.deductSSS ?? branchDeductionSettings.deductSSS,
+        deductPhilHealth: pConfig.deductPhilHealth ?? branchDeductionSettings.deductPhilHealth,
+        deductPagibig: pConfig.deductPagibig ?? branchDeductionSettings.deductPagibig,
+        deductWithholdingTax: pConfig.deductWithholdingTax ?? branchDeductionSettings.deductWithholdingTax,
+        includeExceptionLogs: pConfig.includeExceptionLogs ?? branchDeductionSettings.includeExceptionLogs,
+        includeNightDiff: pConfig.includeNightDiff ?? branchDeductionSettings.includeNightDiff,
+        includeHolidayPay: pConfig.includeHolidayPay, // Checked vs companySettings later
+      } : branchDeductionSettings;
+// --- Pre-fetch static branch & company data to prevent N+1 Queries ---
       const companySettings = await storage.getCompanySettings();
-      const globalHolidayPayEnabled = companySettings ? companySettings.includeHolidayPay : false;
+      const globalHolidayPayEnabled = pConfig && pConfig.includeHolidayPay !== undefined 
+        ? pConfig.includeHolidayPay 
+        : (companySettings ? companySettings.includeHolidayPay : false);
       const activeHeadcount = employees.filter(e => e.isActive).length;
       const branchRecord = await storage.getBranch(branchId);
       const isBranchExempt = !!(
@@ -2036,6 +2036,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
           continue;
         }
         const payCalculation = calculatePeriodPay(shifts, hourlyRate, periodHolidays, 0, isHolidayExempt); // 0 = Sunday as rest day
+        
+        if (runConfig.includeNightDiff === false) {
+          payCalculation.totalGrossPay -= payCalculation.nightDiffPay;
+          payCalculation.nightDiffPay = 0;
+          for (let day of payCalculation.breakdown) {
+            day.regularNightDiffHours = 0;
+            day.overtimeNightDiffHours = 0;
+          }
+        }
 
         // -- Add Service Incentive Leave (Paid Time Off) --
         let paidLeaveHours = 0;
@@ -2089,7 +2098,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         for (const adj of employeeAdjustments) {
           // Skip if branch settings disabled exception log inclusion
-          if (!branchDeductionSettings.includeExceptionLogs) continue;
+          if (!runConfig.includeExceptionLogs) continue;
 
           // Only process approved or employee-verified adjustments
           if (adj.status !== 'approved' && adj.status !== 'employee_verified') continue;
@@ -2604,7 +2613,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           ? period.endDate.toISOString()
           : String(period.endDate);
         runType = period.runType
-          ? (period.runType instanceof Date ? period.runType.toISOString() : String(period.runType))
+          ? String(period.runType)
           : null;
 
         // Fetch verified/approved exception logs within this period for this user
@@ -3644,7 +3653,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Only the requester can delete a pending trade
-      if (trade.fromUserId !== userId && req.user!.role !== "admin") {
+      if (trade.fromUserId !== userId && !["admin", "manager"].includes(req.user!.role)) {
         return res.status(403).json({ message: "You cannot delete this trade" });
       }
 

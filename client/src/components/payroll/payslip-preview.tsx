@@ -90,6 +90,9 @@ interface PayslipData {
   // 13th Month Pay
   has13thMonth?: boolean;
   thirteenthMonthAmount?: string;
+  
+  // Custom Payment Date
+  payDate?: string | null;
 }
 
 interface PayslipPreviewProps {

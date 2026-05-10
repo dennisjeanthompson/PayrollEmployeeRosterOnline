@@ -25,7 +25,7 @@ export interface IStorage {
   updateShift(id: string, shift: Partial<InsertShift>): Promise<Shift | undefined>;
   getShiftsByUser(userId: string, startDate?: Date, endDate?: Date): Promise<Shift[]>;
   getShiftsByBranch(branchId: string, startDate?: Date, endDate?: Date): Promise<Shift[]>;
-  deleteShift(id: string): Promise<boolean>;
+  deleteShift(id: string, deletedBy?: string, deletionReason?: string): Promise<boolean>;
 
   // Shift Trades
   createShiftTrade(trade: InsertShiftTrade): Promise<ShiftTrade>;
@@ -282,6 +282,10 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       actualStartTime: null,
       actualEndTime: null,
+      isDeleted: false,
+      deletedAt: null,
+      deletedBy: null,
+      deletionReason: null,
     };
     this.shifts.set(todayShift.id, todayShift);
     
@@ -300,6 +304,10 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       actualStartTime: null,
       actualEndTime: null,
+      isDeleted: false,
+      deletedAt: null,
+      deletedBy: null,
+      deletionReason: null,
     };
     this.shifts.set(managerShift.id, managerShift);
     
@@ -318,6 +326,10 @@ export class MemStorage implements IStorage {
       createdAt: new Date(),
       actualStartTime: null,
       actualEndTime: null,
+      isDeleted: false,
+      deletedAt: null,
+      deletedBy: null,
+      deletionReason: null,
     };
     this.shifts.set(tomorrowShift.id, tomorrowShift);
   }
@@ -420,6 +432,10 @@ export class MemStorage implements IStorage {
       breakDurationMinutes: insertShift.breakDurationMinutes ?? 0,
       actualStartTime: null,
       actualEndTime: null,
+      isDeleted: false,
+      deletedAt: null,
+      deletedBy: null,
+      deletionReason: null,
     };
     this.shifts.set(id, shift);
     return shift;
@@ -456,7 +472,7 @@ export class MemStorage implements IStorage {
     });
   }
 
-  async deleteShift(id: string): Promise<boolean> {
+  async deleteShift(id: string, deletedBy?: string, deletionReason?: string): Promise<boolean> {
     return this.shifts.delete(id);
   }
 
@@ -518,12 +534,13 @@ export class MemStorage implements IStorage {
     const period: PayrollPeriod = { 
       ...insertPeriod, 
       id, 
+      runType: insertPeriod.runType || 'regular',
+      periodConfig: insertPeriod.periodConfig ?? null,
       createdAt: new Date(),
       status: insertPeriod.status || 'open',
       totalHours: insertPeriod.totalHours || null,
       totalPay: insertPeriod.totalPay || null,
     };
-    this.payrollPeriods.set(id, period);
     this.payrollPeriods.set(id, period);
     return period;
   }
@@ -682,6 +699,7 @@ export class MemStorage implements IStorage {
       rejectionReason: insertRequest.rejectionReason ?? null,
       isPaid: insertRequest.isPaid ?? false,
       leavePaymentStatus: insertRequest.leavePaymentStatus || "paid",
+      isOrphaned: false,
     };
     this.timeOffRequests.set(id, request);
     return request;
@@ -794,6 +812,7 @@ export class MemStorage implements IStorage {
       deductPagibig: insertSettings.deductPagibig ?? true,
       deductWithholdingTax: insertSettings.deductWithholdingTax ?? true,
       includeExceptionLogs: insertSettings.includeExceptionLogs ?? false,
+      includeNightDiff: insertSettings.includeNightDiff ?? true,
       createdAt: new Date(),
       updatedAt: new Date(),
     };
@@ -1019,6 +1038,10 @@ export class MemStorage implements IStorage {
       disputeReason: null,
       disputedAt: null,
       isIncluded: log.isIncluded ?? true,
+      isDeleted: false,
+      deletedAt: null,
+      deletedBy: null,
+      deletionReason: null,
       createdAt: new Date(),
     };
     this.adjustmentLogs.set(id, adjustmentLog);

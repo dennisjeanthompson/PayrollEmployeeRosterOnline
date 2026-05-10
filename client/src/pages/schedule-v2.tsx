@@ -30,7 +30,7 @@
  *   4. PERFORMANCE: The schedule grid already queries shifts, users, trades,
  *      and time-off. Adding an activity log query would slow initial render.
  */
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 
 function safeFormat(val: any, fmt: string): string {
   if (!val) return '';
@@ -74,7 +74,7 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { getCurrentUser, isManager as checkIsManager } from '@/lib/auth';
-import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, setHours, setMinutes, differenceInHours, isValid, areIntervalsOverlapping, eachDayOfInterval, isSameDay } from 'date-fns';
+import { format, addWeeks, subWeeks, startOfWeek, endOfWeek, addDays, setHours, setMinutes, differenceInHours, isValid, areIntervalsOverlapping, eachDayOfInterval, isSameDay, startOfDay } from 'date-fns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DateTimePicker, DatePicker, TimePicker } from '@mui/x-date-pickers';
@@ -126,13 +126,20 @@ export default function ScheduleV2() {
   const [adjType, setAdjType] = useState("late");
   const [adjValue, setAdjValue] = useState("");
   const [adjRemarks, setAdjRemarks] = useState("");
-
+  const [bulkDeleteState, setBulkDeleteState] = useState({
+    isOpen: false,
+    target: 'shifts' as 'shifts' | 'exceptions' | 'both',
+    employeeId: 'all',
+    startDate: new Date(),
+    endDate: new Date(),
+    confirmation: '',
+    deletionReason: '',
+    isDeleting: false,
+    isLoadingPreview: false,
+    preview: null as any | null,
+  });
   const adjustmentTypeOptions = [
-    { value: "overtime", label: "Regular OT (125%)", color: "#10b981" },
-    { value: "rest_day_ot", label: "Rest Day OT (169%)", color: "#3b82f6" },
-    { value: "special_holiday_ot", label: "Special Holiday OT (169%)", color: "#f59e0b" },
-    { value: "regular_holiday_ot", label: "Regular Holiday OT (260%)", color: "#ef4444" },
-    { value: "night_diff", label: "Night Differential (+10%)", color: "#8b5cf6" },
+    { value: "overtime", label: "Overtime (minutes)", color: "#10b981" },
     { value: "late", label: "Tardiness (minutes)", color: "#f97316" },
     { value: "undertime", label: "Undertime (minutes)", color: "#ec4899" },
     { value: "absent", label: "Absent (days)", color: "#dc2626" },
@@ -344,7 +351,12 @@ export default function ScheduleV2() {
   // Pending counts for badge
   const pendingCount = useMemo(() => {
     const pendingTimeOff = timeOffRequests.filter(r => r.status === 'pending').length;
-    const pendingTrades = shiftTrades.filter(t => t.status === 'pending' || t.status === 'accepted').length;
+    const pendingTrades = shiftTrades.filter(t => {
+      if (t.status !== 'pending' && t.status !== 'accepted') return false;
+      // Auto-expire past shifts
+      if (t.shift?.startTime && new Date(t.shift.startTime) < new Date()) return false;
+      return true;
+    }).length;
     return pendingTimeOff + pendingTrades;
   }, [timeOffRequests, shiftTrades]);
 
@@ -414,7 +426,7 @@ export default function ScheduleV2() {
       queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
       toast.success('Shift created');
       setCreateModalOpen(false);
-      setNewShift({ employeeId: '', startTime: null, endTime: null, notes: '', breakDurationMinutes: 30 });
+      setNewShift(prev => ({ ...prev, employeeId: '', startTime: null, endTime: null, notes: '', breakDurationMinutes: 30 }));
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -675,10 +687,6 @@ export default function ScheduleV2() {
   const createAdjustmentMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("POST", "/api/adjustment-logs", data);
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to log exception");
-      }
       return res.json();
     },
     onSuccess: () => {
@@ -716,10 +724,6 @@ export default function ScheduleV2() {
   const updateAdjustmentMutation = useMutation({
     mutationFn: async ({ id, data }: { id: string; data: any }) => {
       const res = await apiRequest('PUT', `/api/adjustment-logs/${id}`, data);
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Failed to update exception");
-      }
       return res.json();
     },
     onSuccess: () => {
@@ -849,14 +853,18 @@ export default function ScheduleV2() {
     if (!adjType || !adjValue) return;
 
     if (editAdjId) {
-      await updateAdjustmentMutation.mutateAsync({
-        id: editAdjId,
-        data: {
-          type: adjType,
-          value: adjValue,
-          remarks: adjRemarks,
-        }
-      });
+      try {
+        await updateAdjustmentMutation.mutateAsync({
+          id: editAdjId,
+          data: {
+            type: adjType,
+            value: adjValue,
+            remarks: adjRemarks,
+          }
+        });
+      } catch (e) {
+        // Error handled by mutation onError
+      }
       return;
     }
 
@@ -867,19 +875,47 @@ export default function ScheduleV2() {
       datesToLog = eachDayOfInterval({ start: adjDate!, end: adjEndDate });
     }
 
-    for (const d of datesToLog) {
-      if (!d) continue;
-      await createAdjustmentMutation.mutateAsync({
-        employeeId: adjEmployeeId,
-        date: safeFormat(d, "yyyy-MM-dd"),
-        type: adjType,
-        value: adjValue,
-        remarks: adjRemarks,
-      });
+    try {
+      for (const d of datesToLog) {
+        if (!d) continue;
+        await createAdjustmentMutation.mutateAsync({
+          employeeId: adjEmployeeId,
+          date: safeFormat(d, "yyyy-MM-dd"),
+          type: adjType,
+          value: adjValue,
+          remarks: adjRemarks,
+        });
+      }
+    } catch (e) {
+      // Error handled by mutation onError
     }
   };
 
   // â”€â”€â”€ LOADING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  useEffect(() => {
+    if (bulkDeleteState.isOpen) {
+      const fetchPreview = async () => {
+        setBulkDeleteState(prev => ({ ...prev, isLoadingPreview: true }));
+        try {
+          const res = await apiRequest('POST', '/api/shifts/bulk-delete-preview', {
+            startDate: bulkDeleteState.startDate,
+            endDate: bulkDeleteState.endDate,
+            employeeId: bulkDeleteState.employeeId,
+            target: bulkDeleteState.target
+          });
+          const data = await res.json();
+          setBulkDeleteState(prev => ({ ...prev, isLoadingPreview: false, preview: data }));
+        } catch (e) {
+          console.error('Failed to fetch bulk delete preview', e);
+          setBulkDeleteState(prev => ({ ...prev, isLoadingPreview: false }));
+        }
+      };
+      
+      const timer = setTimeout(fetchPreview, 300); // debounce
+      return () => clearTimeout(timer);
+    }
+  }, [bulkDeleteState.isOpen, bulkDeleteState.startDate, bulkDeleteState.endDate, bulkDeleteState.employeeId, bulkDeleteState.target]);
+
   if (shiftsLoading || employeesLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
@@ -959,7 +995,7 @@ export default function ScheduleV2() {
                     size="small"
                     variant="contained"
                     startIcon={<AddIcon />}
-                    onClick={() => { setNewShift({ employeeId: '', startTime: null, endTime: null, notes: '' }); setCreateModalOpen(true); }}
+                    onClick={() => { setNewShift(prev => ({ ...prev, employeeId: '', startTime: null, endTime: null, notes: '' })); setCreateModalOpen(true); }}
                     sx={{
                       textTransform: 'none',
                       fontWeight: 800,
@@ -1002,6 +1038,10 @@ export default function ScheduleV2() {
                 <MenuItem onClick={() => { setActionsMenuAnchor(null); setIsSelectionMode(prev => !prev); if (isSelectionMode) { setSelectedShifts(new Set()); setSelectedLogs(new Set()); } }}>
                   <ChecklistIcon sx={{ mr: 1.5, fontSize: 18, color: '#2563EB' }} />
                   <Typography variant="body2" fontWeight={600}>{isSelectionMode ? 'Done Editing' : 'Bulk Edit'}</Typography>
+                </MenuItem>
+                <MenuItem onClick={() => { setActionsMenuAnchor(null); setBulkDeleteState(prev => ({ ...prev, isOpen: true })); }}>
+                  <DeleteIcon sx={{ mr: 1.5, fontSize: 18, color: '#DC2626' }} />
+                  <Typography variant="body2" fontWeight={600}>Bulk Delete (Range)</Typography>
                 </MenuItem>
                 <MenuItem onClick={() => { setActionsMenuAnchor(null); openAdjustmentDialog({ date: selectedDay, type: 'late' }); }}>
                   <NoteAddIcon sx={{ mr: 1.5, fontSize: 18, color: '#F59E0B' }} />
@@ -1259,7 +1299,7 @@ export default function ScheduleV2() {
           {isManager && (
             <Tooltip title="Create Shift" placement="left">
               <IconButton
-                onClick={() => { setNewShift({ employeeId: '', startTime: null, endTime: null, notes: '' }); setCreateModalOpen(true); }}
+                onClick={() => { setNewShift(prev => ({ ...prev, employeeId: '', startTime: null, endTime: null, notes: '' })); setCreateModalOpen(true); }}
                 sx={{ bgcolor: 'primary.main', color: 'white', boxShadow: 4, width: 56, height: 56, '&:hover': { bgcolor: 'primary.dark' } }}
               >
                 <AddIcon />
@@ -1735,7 +1775,7 @@ export default function ScheduleV2() {
                   key={option.value}
                   label={option.label}
                   clickable
-                  onClick={() => setAdjType(option.value)}
+                  onClick={() => { setAdjType(option.value); if (option.value === 'absent') setAdjValue('1'); }}
                   color={adjType === option.value ? 'warning' : 'default'}
                   variant={adjType === option.value ? 'filled' : 'outlined'}
                   sx={{ fontWeight: 700 }}
@@ -1826,7 +1866,7 @@ export default function ScheduleV2() {
               <Select
                 value={adjType}
                 label="Type"
-                onChange={(e) => setAdjType(e.target.value as string)}
+                onChange={(e) => { setAdjType(e.target.value as string); if (e.target.value === 'absent') setAdjValue('1'); }}
               >
                 {adjustmentTypeOptions.map((opt) => (
                   <MenuItem key={opt.value} value={opt.value}>
@@ -1841,22 +1881,22 @@ export default function ScheduleV2() {
 
             <TextField
               label={
-                adjType === 'late' || adjType === 'undertime' ? "Minutes" : adjType === 'absent' ? "Days" : "Hours"
+                adjType === 'late' || adjType === 'undertime' || adjType === 'overtime' ? "Minutes" : adjType === 'absent' ? "Days" : "Hours"
               }
               type="number" size="small" fullWidth value={adjValue}
               onChange={(e) => setAdjValue(e.target.value)}
               InputProps={{
                 endAdornment: (
                   <InputAdornment position="end">
-                    {adjType === 'late' || adjType === 'undertime' ? 'mins' : adjType === 'absent' ? 'days' : 'hrs'}
+                    {adjType === 'late' || adjType === 'undertime' || adjType === 'overtime' ? 'mins' : adjType === 'absent' ? 'days' : 'hrs'}
                   </InputAdornment>
                 ),
               }}
-              helperText={adjType === 'late' || adjType === 'undertime'
-                ? 'Use minutes for tardiness or undertime from the logbook.'
+              helperText={adjType === 'late' || adjType === 'undertime' || adjType === 'overtime'
+                ? `Use minutes for ${adjType === 'overtime' ? 'overtime' : 'tardiness or undertime'} from the logbook.`
                 : adjType === 'absent'
                   ? 'Use days for a full-day absence entry.'
-                  : 'Use hours for overtime, rest day OT, holiday OT, or night differential.'}
+                  : 'Use hours for legacy logs.'}
             />
 
             <TextField
@@ -2093,6 +2133,166 @@ export default function ScheduleV2() {
           setExceptionLogDrawerOpen(false);
         }}
       />
+      {/* ─── BULK DELETE DIALOG ────────────────────────────────────────────────────────────── */}
+      <Dialog open={bulkDeleteState.isOpen} onClose={() => setBulkDeleteState({ ...bulkDeleteState, isOpen: false, preview: null })} maxWidth="sm" fullWidth>
+        <DialogTitle sx={{ fontWeight: 800, color: 'error.main' }}>Bulk Delete Options</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2.5} sx={{ mt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              Delete multiple shifts or exception logs at once by selecting a date range.
+            </Typography>
+
+            <FormControl fullWidth size="small">
+              <InputLabel>Delete Target</InputLabel>
+              <Select value={bulkDeleteState.target} label="Delete Target" onChange={e => setBulkDeleteState({ ...bulkDeleteState, target: e.target.value as any })}>
+                <MenuItem value="shifts">Shifts Only</MenuItem>
+                <MenuItem value="exceptions">Exception Logs Only</MenuItem>
+                <MenuItem value="both">Both Shifts & Exceptions</MenuItem>
+              </Select>
+            </FormControl>
+
+            <FormControl fullWidth size="small">
+              <InputLabel>Employee</InputLabel>
+              <Select value={bulkDeleteState.employeeId} label="Employee" onChange={e => setBulkDeleteState({ ...bulkDeleteState, employeeId: e.target.value })}>
+                <MenuItem value="all">All Employees</MenuItem>
+                {employees.map(emp => <MenuItem key={emp.id} value={emp.id}>{emp.firstName} {emp.lastName}</MenuItem>)}
+              </Select>
+            </FormControl>
+
+            <LocalizationProvider dateAdapter={AdapterDateFns}>
+              <Stack direction="row" spacing={1}>
+                <DatePicker label="Start Date" value={bulkDeleteState.startDate} onChange={v => setBulkDeleteState({ ...bulkDeleteState, startDate: v || new Date() })} slotProps={{ textField: { size: "small", fullWidth: true } }} />
+                <DatePicker label="End Date" value={bulkDeleteState.endDate} onChange={v => setBulkDeleteState({ ...bulkDeleteState, endDate: v || new Date() })} minDate={bulkDeleteState.startDate} slotProps={{ textField: { size: "small", fullWidth: true } }} />
+              </Stack>
+            </LocalizationProvider>
+            
+            <TextField 
+              size="small" 
+              fullWidth
+              label="Reason for Deletion (Required)"
+              value={bulkDeleteState.deletionReason}
+              onChange={e => setBulkDeleteState({ ...bulkDeleteState, deletionReason: e.target.value })}
+              required
+            />
+            
+            <Box sx={{ p: 2, bgcolor: 'background.default', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+               <Typography variant="subtitle2" sx={{ mb: 1 }}>Pre-flight Impact Summary</Typography>
+               {bulkDeleteState.isLoadingPreview ? (
+                 <CircularProgress size={20} />
+               ) : bulkDeleteState.preview ? (
+                 <Stack spacing={1}>
+                   <Typography variant="body2">• {bulkDeleteState.preview.shiftCount} shifts will be deleted.</Typography>
+                   <Typography variant="body2">• {bulkDeleteState.preview.exceptionCount} exception logs will be deleted.</Typography>
+                   {bulkDeleteState.preview.tradesCount > 0 && <Typography variant="body2" color="error.main">• {bulkDeleteState.preview.tradesCount} shift trades will be canceled.</Typography>}
+                   
+                   {bulkDeleteState.preview.orphanedLeaves?.length > 0 && (
+                     <Box sx={{ mt: 1 }}>
+                       <Typography variant="body2" color="warning.main" fontWeight={600}>The following leave requests will be orphaned:</Typography>
+                       <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                         {bulkDeleteState.preview.orphanedLeaves.map((l: any, i: number) => (
+                           <li key={i}>
+                             <Typography variant="body2" color="text.secondary">
+                               {l.employeeName}'s {l.type} leave ({safeFormat(new Date(l.start), 'MMM d')})
+                             </Typography>
+                           </li>
+                         ))}
+                       </ul>
+                     </Box>
+                   )}
+                 </Stack>
+               ) : (
+                 <Typography variant="body2" color="text.secondary">Select options to see impact.</Typography>
+               )}
+            </Box>
+            
+            <Alert severity="warning" sx={{ '& .MuiAlert-message': { width: '100%' } }}>
+              This action is permanent and cannot be undone. To proceed, type <b>DELETE</b> below.
+            </Alert>
+            <TextField 
+              size="small" 
+              placeholder="Type DELETE to confirm" 
+              value={bulkDeleteState.confirmation}
+              onChange={e => setBulkDeleteState({ ...bulkDeleteState, confirmation: e.target.value })}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setBulkDeleteState({ ...bulkDeleteState, isOpen: false })}>Cancel</Button>
+          <Button 
+            variant="contained" 
+            color="error"
+            disabled={bulkDeleteState.confirmation !== 'DELETE' || bulkDeleteState.isDeleting || !bulkDeleteState.deletionReason}
+            onClick={async () => {
+              setBulkDeleteState(prev => ({ ...prev, isDeleting: true }));
+                                          
+              try {
+                const qStart = safeFormat(bulkDeleteState.startDate, "yyyy-MM-dd");
+                const qEnd = safeFormat(bulkDeleteState.endDate, "yyyy-MM-dd");
+                
+                let deletedShifts = 0;
+                let deletedLogs = 0;
+                let failedCount = 0;
+                
+                const fetches = [];
+                if (bulkDeleteState.target === 'shifts' || bulkDeleteState.target === 'both') {
+                  fetches.push(apiRequest("GET", `/api/shifts/branch?startDate=${qStart}&endDate=${qEnd}`).then(r => r.json()).then(d => ({ type: 'shifts', data: d.shifts || [] })));
+                }
+                if (bulkDeleteState.target === 'exceptions' || bulkDeleteState.target === 'both') {
+                  fetches.push(apiRequest("GET", `/api/adjustment-logs/branch?startDate=${qStart}&endDate=${qEnd}`).then(r => r.json()).then(d => ({ type: 'exceptions', data: d.logs || [] })));
+                }
+                
+                const results = await Promise.all(fetches);
+                
+                const promises = [];
+                
+                for (const res of results) {
+                  let items = res.data;
+                  if (bulkDeleteState.employeeId !== 'all') {
+                    items = items.filter((x: any) => String(x.userId || x.employeeId) === String(bulkDeleteState.employeeId));
+                  }
+                  
+                  if (res.type === 'shifts') {
+                    for (const s of items) {
+                      promises.push(
+                        apiRequest('DELETE', `/api/shifts/${s.id}`, { deletionReason: bulkDeleteState.deletionReason })
+                          .then(() => { deletedShifts++; })
+                      );
+                    }
+                  } else {
+                    for (const l of items) {
+                      promises.push(
+                        apiRequest('DELETE', `/api/adjustment-logs/${l.id}`, { deletionReason: bulkDeleteState.deletionReason })
+                          .then(() => { deletedLogs++; })
+                      );
+                    }
+                  }
+                }
+                
+                const settled = await Promise.allSettled(promises);
+                failedCount = settled.filter(p => p.status === 'rejected').length;
+                
+                queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
+                queryClient.invalidateQueries({ queryKey: [isManager ? "adjustment-logs-branch" : "adjustment-logs-mine"] });
+                queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats/manager'] });
+                
+                const msg = [deletedShifts > 0 && `${deletedShifts} shifts`, deletedLogs > 0 && `${deletedLogs} exceptions`].filter(Boolean).join(' and ');
+                if (failedCount > 0) {
+                  toast.warning(`Deleted ${msg || '0 items'}, but ${failedCount} items failed.`);
+                } else {
+                  toast.success(`Successfully deleted ${msg || '0 items'}.`);
+                }
+                
+                setBulkDeleteState(prev => ({ ...prev, isOpen: false, confirmation: '', isDeleting: false, deletionReason: '', preview: null }));
+              } catch (e: any) {
+                toast.error('Bulk delete failed.');
+                setBulkDeleteState(prev => ({ ...prev, isDeleting: false }));
+              }
+            }}
+          >
+            {bulkDeleteState.isDeleting ? 'Deleting...' : 'Delete Items'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

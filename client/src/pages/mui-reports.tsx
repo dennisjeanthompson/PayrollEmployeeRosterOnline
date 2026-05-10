@@ -62,14 +62,7 @@ export default function MuiReports() {
     },
   });
 
-  const { data: remittances = [], isLoading: loadingRemittances } = useQuery<any[]>({
-    queryKey: ["/api/reports/remittance", selectedMonth],
-    queryFn: async () => {
-      const [year, month] = selectedMonth.split("-");
-      const res = await apiRequest("GET", `/api/reports/remittance?month=${month}&year=${year}`);
-      return await res.json();
-    },
-  });
+
 
   const periods = periodsData?.periods || [];
   const summary = summaryData?.summary;
@@ -358,47 +351,7 @@ export default function MuiReports() {
         </Card>
       </Stack>
 
-      {/* Remittance Report Table */}
-      <Card elevation={0} sx={{ mt: 4, borderRadius: 3, border: `1px solid ${alpha(theme.palette.divider, 0.1)}` }}>
-        <CardHeader
-          avatar={<ReportIcon color="primary" />}
-          title="Government Remittance Tracking (PRN Generation)"
-          subheader="Monthly pending contributions to be paid to SSS, PhilHealth, and Pag-IBIG"
-        />
-        {loadingRemittances ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}><CircularProgress size={24} /></Box>
-        ) : (
-        <TableContainer>
-          <Table size="medium">
-            <TableHead sx={{ bgcolor: alpha(theme.palette.primary.main, 0.05) }}>
-              <TableRow>
-                <TableCell>Employee</TableCell>
-                <TableCell align="right">SSS Contrib (₱)</TableCell>
-                <TableCell align="right">Total Due (₱)</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {remittances.map((row, idx) => {
-                const total = row.sssContribution + row.philHealthContribution + row.pagibigContribution;
-                return (
-                <TableRow key={idx} hover>
-                  <TableCell sx={{ fontWeight: 'bold' }}>{row.employeeName}</TableCell>
-                  <TableCell align="right">{row.sssContribution.toFixed(2)}</TableCell>
-                  <TableCell align="right">{row.philHealthContribution.toFixed(2)}</TableCell>
-                  <TableCell align="right">{row.pagibigContribution.toFixed(2)}</TableCell>
-                  <TableCell align="right" sx={{ fontWeight: 'bold' }}>{total.toFixed(2)}</TableCell>
-                </TableRow>
-              )})}
-              {remittances.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 3, color: 'text.secondary' }}>No remittance data for this month.</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        )}
-      </Card>
+
 
       <Divider sx={{ my: 4 }} />
 

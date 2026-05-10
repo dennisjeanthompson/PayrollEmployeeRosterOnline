@@ -143,10 +143,15 @@ export default function MuiPayroll() {
     () => paidEntries.reduce((sum, entry) => sum + parseFloat(String(entry.totalHours || 0)), 0),
     [paidEntries]
   );
-  const averagePay = useMemo(
-    () => (paidEntries.length > 0 ? totalEarningsYTD / paidEntries.length : 0),
-    [paidEntries.length, totalEarningsYTD]
-  );
+  const lastPayAmount = useMemo(() => {
+    if (paidEntries.length === 0) return 0;
+    // paidEntries is assumed to be sorted latest first, or we can find the max date
+    const latestEntry = paidEntries.reduce((latest, entry) => {
+      if (!latest.createdAt) return entry;
+      return new Date(entry.createdAt) > new Date(latest.createdAt) ? entry : latest;
+    }, paidEntries[0]);
+    return parseFloat(String(latestEntry?.netPay || 0));
+  }, [paidEntries]);
 
   const formatCurrency = (value: number | string) => {
     const num = typeof value === "string" ? parseFloat(value) : value;
@@ -221,11 +226,10 @@ export default function MuiPayroll() {
         <Grid container spacing={2} sx={{ mb: 3 }}>
           {[
             { label: 'YTD Earnings', value: formatCurrency(totalEarningsYTD), icon: <PesoIcon fontSize="small" />, color: theme.palette.success.main },
-            { label: 'Total Hours', value: `${totalHoursYTD.toFixed(1)}h`, icon: <ClockIcon fontSize="small" />, color: theme.palette.primary.main },
-            { label: 'Average Pay', value: formatCurrency(averagePay), icon: <TrendingUpIcon fontSize="small" />, color: theme.palette.info.main },
-            { label: 'Pay Periods', value: String(paidEntries.length), icon: <ReceiptIcon fontSize="small" />, color: theme.palette.secondary.main },
+            { label: 'Latest Net Pay', value: formatCurrency(lastPayAmount), icon: <ReceiptIcon fontSize="small" />, color: theme.palette.info.main },
+            { label: 'YTD Hours Worked', value: `${totalHoursYTD.toFixed(1)}h`, icon: <ClockIcon fontSize="small" />, color: theme.palette.primary.main },
           ].map((stat, idx) => (
-            <Grid size={{ xs: 6, sm: 6, md: 3 }} key={stat.label}>
+            <Grid size={{ xs: 12, md: 4 }} key={stat.label}>
               <motion.div
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -270,14 +274,13 @@ export default function MuiPayroll() {
         </Grid>
 
         {/* Current Period Card */}
-        <Box sx={{ mb: 4, minHeight: 220 }}>
+        <Box sx={{ mb: 4 }}>
           {payrollLoading && !currentEntry ? (
             <Paper
               elevation={0}
               sx={{
                 p: 3,
                 borderRadius: 4,
-                minHeight: 220,
                 bgcolor: alpha(theme.palette.background.paper, 0.55),
                 border: `1px solid ${alpha(theme.palette.divider, 0.12)}`,
               }}
@@ -381,7 +384,6 @@ export default function MuiPayroll() {
               sx={{
                 p: 3,
                 borderRadius: 4,
-                minHeight: 220,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',

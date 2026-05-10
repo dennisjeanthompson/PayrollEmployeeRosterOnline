@@ -135,8 +135,7 @@ async function main() {
     // Add 5 upcoming shifts (March 21-25 as an example range)
     for (let day = 21; day <= 25; day++) {
       const shiftDate = new Date(year, month, day);
-      // Skip Sundays
-      if (shiftDate.getDay() === 0) continue;
+      // Employees can work any day including weekends — no day skipping
 
       const startHour = [8, 10, 14][day % 3]; // Rotate: morning, mid, afternoon
       const startTime = new Date(year, month, day, startHour, 0, 0);
