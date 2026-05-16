@@ -586,6 +586,8 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   const activeEntry = records.find((r: any) => r.status === 'draft' || r.status === 'pending');
   const latestPaidEntry = records.find((r: any) => r.status === 'paid' || r.status === 'completed');
   const currentPeriod = payrollData?.period;
+  
+  const displayEntry = activeEntry || latestPaidEntry;
 
   // Count shifts in the current pay period only (not all-time)
   const currentPeriodShifts = (employeeShifts?.shifts || []).filter((s: any) => {
@@ -607,8 +609,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
     return d >= periodStart && d <= periodEnd;
   });
   
-  // Hours worked this period. Fallback to this week\'s scheduled hours.
-  const displayEntry = activeEntry || latestPaidEntry;
+  // Hours worked this period. Fallback to this week's scheduled hours.
   const hoursWorked = displayEntry ? Number(displayEntry.totalHours || 0) : (payrollData?.totalHours ?? totalHoursThisWeek);
   
   // Calculate Estimated Net Pay
