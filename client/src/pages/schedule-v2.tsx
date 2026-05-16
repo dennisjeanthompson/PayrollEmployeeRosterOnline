@@ -1097,6 +1097,52 @@ export default function ScheduleV2() {
               </Menu>
             </>
           )}
+
+          {/* Employee action buttons — Time Off & Shift Trade */}
+          {!isManager && (
+            <ButtonGroup size="small" variant="outlined" sx={{ height: 32 }}>
+              <Tooltip title="Request Time Off">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<TimeOffIcon />}
+                  onClick={() => setTimeOffModalOpen(true)}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    borderRadius: 2,
+                    color: isDark ? '#F5EDE4' : '#92400E',
+                    borderColor: alpha(isDark ? '#F5EDE4' : '#92400E', 0.3),
+                    '&:hover': { bgcolor: alpha('#92400E', 0.08), borderColor: '#92400E' },
+                  }}
+                >
+                  {isMobile ? '' : 'Time Off'}
+                </Button>
+              </Tooltip>
+              <Tooltip title="Trade a Shift">
+                <Button
+                  size="small"
+                  variant="outlined"
+                  startIcon={<SwapIcon />}
+                  onClick={() => {
+                    const myFutureShifts = shifts.filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date());
+                    if (myFutureShifts.length === 0) { toast.info('No future shifts to trade'); return; }
+                    setTradeModalOpen(true);
+                  }}
+                  sx={{
+                    textTransform: 'none',
+                    fontWeight: 700,
+                    borderRadius: 2,
+                    color: isDark ? '#F5EDE4' : '#7C3AED',
+                    borderColor: alpha(isDark ? '#F5EDE4' : '#7C3AED', 0.3),
+                    '&:hover': { bgcolor: alpha('#7C3AED', 0.08), borderColor: '#7C3AED' },
+                  }}
+                >
+                  {isMobile ? '' : 'Trade'}
+                </Button>
+              </Tooltip>
+            </ButtonGroup>
+          )}
         </Box>
       </Box>
 
