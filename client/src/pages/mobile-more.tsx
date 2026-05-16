@@ -47,17 +47,10 @@ export default function MobileMore() {
   const mainMenuItems: MenuItem[] = [
     {
       icon: <CalendarIcon />,
-      label: "Employee Requests",
+      label: "My Requests",
       description: "Manage Time Off & Loans",
       path: "/employee/requests",
       color: theme.palette.success.main,
-    },
-    {
-      icon: <TradeIcon />,
-      label: "Shift Trading",
-      description: "Swap or give away your shifts",
-      path: "/employee/shift-trading",
-      color: "#7C3AED",
     },
     {
       icon: <BellIcon />,
