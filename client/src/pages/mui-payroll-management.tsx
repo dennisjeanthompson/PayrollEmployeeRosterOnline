@@ -72,35 +72,6 @@ import {
   ToggleOff as ToggleOffIcon,
 } from "@mui/icons-material";
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
-  FormControlLabel,
-} from "@mui/material";
-import {
-  Add as AddIcon,
-  CalendarMonth,
-  AccessTime,
-  Visibility,
-  Download,
-  Send,
-  CheckCircle,
-  PlayArrow,
-  Search,
-  MoreVert,
-  TrendingUp,
-  Receipt,
-  Speed,
-  Groups,
-  Description as DescriptionIcon,
-  NoteAdd,
-  Schedule,
-  Warning,
-  Cancel,
-  Delete as DeleteIcon,
-  FileDownload as ExportIcon,
-  Settings as SettingsIcon,
-  ToggleOn as ToggleOnIcon,
-  ToggleOff as ToggleOffIcon,
-} from "@mui/icons-material";
-import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 import { format, eachDayOfInterval, subDays, addDays, startOfMonth, endOfMonth, differenceInDays } from "date-fns";
@@ -171,8 +142,8 @@ export default function MuiPayrollManagement() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
-  const adminMode = isAdmin();
-  const [selectedBranchId, setSelectedBranchId] = useState<string>("all");
+  const adminUser = isAdmin();
+  const [selectedBranchId, setSelectedBranchId] = useState<string>(adminUser ? 'all' : '');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedPeriod, setSelectedPeriod] = useState<PayrollPeriod | null>(null);
   const [startDate, setStartDate] = useState<Date | null>(null);
@@ -307,19 +278,19 @@ export default function MuiPayrollManagement() {
   const { data: branchesData } = useQuery({
     queryKey: ["branches"],
     queryFn: async () => {
-      const response = await apiRequest("GET", "/api/branches");
-      return response.json();
+      const res = await apiRequest("GET", "/api/branches");
+      return res.json();
     },
-    enabled: adminMode,
+    enabled: adminUser,
   });
-  const branches = branchesData?.branches || [];
+  const allBranches = branchesData?.branches || [];
 
   // Fetch payroll periods with real-time updates
   const { data: periodsData, isLoading: periodsLoading, refetch: refetchPeriods } = useQuery({
     queryKey: ["payroll-periods", selectedBranchId],
     queryFn: async () => {
-      const url = adminMode ? `/api/payroll/periods?branchId=${selectedBranchId}` : "/api/payroll/periods";
-      const response = await apiRequest("GET", url);
+      const branchParam = adminUser && selectedBranchId ? `?branchId=${selectedBranchId}` : '';
+      const response = await apiRequest("GET", `/api/payroll/periods${branchParam}`);
       return response.json();
     },
     staleTime: 60 * 1000,
@@ -329,12 +300,11 @@ export default function MuiPayrollManagement() {
 
   // Fetch payroll entries for selected period with real-time updates
   const { data: entriesData, isLoading: entriesLoading, refetch: refetchEntries } = useQuery({
-    queryKey: ["payroll-entries-branch", selectedPeriod?.id, selectedBranchId],
+    queryKey: ["payroll-entries-branch", selectedPeriod?.id],
     queryFn: async () => {
-      let url = selectedPeriod
+      const url = selectedPeriod
         ? `/api/payroll/entries/branch?periodId=${selectedPeriod.id}`
         : "/api/payroll/entries/branch";
-      if (adminMode) url += (url.includes('?') ? '&' : '?') + `branchId=${selectedBranchId}`;
       const response = await apiRequest("GET", url);
       return response.json();
     },
@@ -640,6 +610,201 @@ export default function MuiPayrollManagement() {
       runType: "regular",
       periodConfig,
     });
+  };
+
+  const applyTemplate = (template: "semi-monthly" | "weekly" | "monthly") => {
+    const today = new Date();
+    let start: Date, end: Date;
+
+    if (template === "semi-monthly") {
+      const day = today.getDate();
+      if (day <= 15) {
+        start = new Date(today.getFullYear(), today.getMonth(), 1);
+        end = new Date(today.getFullYear(), today.getMonth(), 15);
+      } else {
+        start = new Date(today.getFullYear(), today.getMonth(), 16);
+        end = endOfMonth(today);
+      }
+    } else if (template === "weekly") {
+      start = subDays(today, 7);
+      end = today;
+    } else {
+      start = startOfMonth(today);
+      end = endOfMonth(today);
+    }
+
+    setStartDate(start);
+    setEndDate(end);
+    setIsCreateDialogOpen(true);
+  };
+
+  const periods = periodsData?.periods || [];
+  const entries = entriesData?.entries || [];
+
+  // Calculate summary stats
+  const totalPeriods = periods.length;
+  const openPeriods = periods.filter((p: PayrollPeriod) => p.status === "open").length;
+  const totalPaid = periods.reduce(
+    (sum: number, p: PayrollPeriod) => sum + (parseFloat(String(p.totalPay)) || 0),
+    0
+  );
+  const totalHours = periods.reduce(
+    (sum: number, p: PayrollPeriod) => sum + (parseFloat(String(p.totalHours)) || 0),
+    0
+  );
+
+  const StatCard = ({
+    title,
+    value,
+    subtitle,
+    icon: Icon,
+    color,
+  }: {
+    title: string;
+    value: string;
+    subtitle: string;
+    icon: React.ElementType;
+    color: string;
+  }) => (
+    <Card
+      elevation={0}
+      sx={{
+        borderRadius: 4,
+        border: `1px solid ${'rgba(255, 255, 255, 0.02)'}`,
+        transition: "all 0.3s ease",
+        "&:hover": {
+          transform: "translateY(-4px)",
+          boxShadow: `0 12px 40px ${alpha(color, 0.15)}`,
+        },
+      }}
+    >
+      <CardContent sx={{ p: 2.5, "&:last-child": { pb: 2.5 } }}>
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Box
+            sx={{
+              width: 52,
+              height: 52,
+              borderRadius: 3,
+              bgcolor: alpha(color, 0.1),
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0,
+            }}
+          >
+            <Icon sx={{ color, fontSize: 28 }} />
+          </Box>
+          <Box sx={{ overflow: "hidden", flex: 1 }}>
+            <Typography variant="body2" color="text.secondary" fontWeight={600} noWrap>
+              {title}
+            </Typography>
+            <Typography variant="h5" fontWeight={800} sx={{ mt: 0.25, mb: 0.25, lineHeight: 1.2, letterSpacing: "-0.02em" }} noWrap>
+              {value}
+            </Typography>
+            <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block', opacity: 0.8 }}>
+              {subtitle}
+            </Typography>
+          </Box>
+        </Box>
+      </CardContent>
+    </Card>
+  );
+
+  return (
+    <Box sx={{ p: { xs: 2, md: 4 } }}>
+      {/* Header */}
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", md: "row" },
+          alignItems: { xs: "flex-start", md: "center" },
+          justifyContent: "space-between",
+          gap: 2,
+          mb: 4,
+        }}
+      >
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Box
+            sx={{
+              width: 48,
+              height: 48,
+              borderRadius: 3,
+              background: `linear-gradient(135deg, ${theme.palette.primary.main}, ${theme.palette.secondary.main})`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, 0.3)}`,
+            }}
+          >
+            <Receipt sx={{ color: "white" }} />
+          </Box>
+          <Box>
+            <Typography variant="h5" fontWeight={700}>
+              Payroll Management
+            </Typography>
+            <Typography variant="body2" color="text.secondary">
+              Process payments, manage periods & track earnings
+            </Typography>
+          </Box>
+        </Box>
+
+        <Stack direction="row" spacing={2} alignItems="center">
+          {adminUser && (
+            <FormControl size="small" sx={{ minWidth: 180 }}>
+              <InputLabel>Branch</InputLabel>
+              <Select
+                value={selectedBranchId}
+                label="Branch"
+                onChange={(e) => { setSelectedBranchId(e.target.value); setSelectedPeriod(null); }}
+                sx={{ borderRadius: 3 }}
+              >
+                <MenuItem value="all">All Branches</MenuItem>
+                {allBranches.map((b: any) => (
+                  <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+          <TextField
+            placeholder="Search periods..."
+            size="small"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            slotProps={{
+              input: {
+                startAdornment: (
+                  <InputAdornment position="start">
+                    <Search sx={{ color: "text.secondary", fontSize: 20 }} />
+                  </InputAdornment>
+                ),
+              },
+            }}
+            sx={{
+              display: { xs: "none", md: "block" },
+              width: 240,
+              "& .MuiOutlinedInput-root": { borderRadius: 3 },
+            }}
+          />
+          <Button
+            variant="contained"
+            startIcon={<AddIcon />}
+            onClick={openCreateDialog}
+            sx={{
+              borderRadius: 3,
+              px: 3,
+              fontWeight: 600,
+              textTransform: "none",
+              boxShadow: `0 4px 16px ${alpha(theme.palette.primary.main, 0.3)}`,
+            }}
+          >
+            New Period
+          </Button>
+        </Stack>
+      </Box>
+
+      {/* Stats Grid */}
+      <Grid container spacing={3} sx={{ mb: 4 }}>
+        <Grid size={{ xs: 12, md: 3 }}>
           <StatCard
             title="Total Periods"
             value={totalPeriods.toString()}
@@ -911,12 +1076,9 @@ export default function MuiPayrollManagement() {
                             <CalendarMonth sx={{ color: "primary.main" }} />
                           </Box>
                           <Box>
-                            <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.2, display: 'flex', alignItems: 'center' }}>
+                            <Typography variant="subtitle1" fontWeight={600} sx={{ lineHeight: 1.2 }}>
                               {format(new Date(period.startDate), "MMM d")} –{" "}
                               {format(new Date(period.endDate), "MMM d, yyyy")}
-                              {(period as any).branchName && (
-                                <Chip size="small" color="primary" variant="outlined" label={(period as any).branchName} sx={{ ml: 1, fontSize: '0.65rem', height: 20 }} />
-                              )}
                             </Typography>
                             <Typography variant="caption" color="text.secondary">
                               {(() => {

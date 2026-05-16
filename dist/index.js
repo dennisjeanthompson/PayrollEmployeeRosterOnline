@@ -11082,6 +11082,88 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to fetch dashboard stats" });
     }
   }));
+  app2.get("/api/dashboard/admin", requireAuth9, requireRole3(["admin"]), asyncHandler(async (req, res) => {
+    try {
+      const allBranches = await storage5.getAllBranches();
+      let totalPayrollCurrentPeriod = 0;
+      let generatedBranchesCount = 0;
+      let totalPendingApprovals = 0;
+      let totalStaffCount = 0;
+      const branchStatuses = [];
+      const staffOverview = [];
+      const alerts = [];
+      await Promise.all(allBranches.map(async (branch) => {
+        const branchUsers = await storage5.getUsersByBranch(branch.id);
+        const activeUsers = branchUsers.filter((u) => u.isActive && (u.role === "employee" || u.role === "manager"));
+        totalStaffCount += activeUsers.length;
+        staffOverview.push({
+          branchName: branch.name,
+          headcount: activeUsers.length
+        });
+        const branchApprovals = await storage5.getPendingApprovals(branch.id);
+        totalPendingApprovals += branchApprovals.length;
+        const payrollPeriods2 = await storage5.getPayrollPeriodsByBranch(branch.id);
+        const activeOrPending = payrollPeriods2.find((p) => p.status === "draft" || p.status === "pending");
+        const latestGenerated = payrollPeriods2.find((p) => p.status === "paid" || p.status === "completed");
+        const periodToEval = activeOrPending || latestGenerated;
+        let netAmount = 0;
+        let isGenerated = false;
+        let status = "No Payroll Yet";
+        if (periodToEval) {
+          status = periodToEval.status;
+          if (status === "paid" || status === "completed") {
+            isGenerated = true;
+            generatedBranchesCount++;
+          }
+          if (!isGenerated && activeOrPending) {
+            alerts.push(`${branch.name} has not generated their current payroll period.`);
+          }
+          const fullPeriod = await storage5.getPayrollPeriod(periodToEval.id);
+          if (fullPeriod && fullPeriod.entries) {
+            const entries = fullPeriod.entries;
+            netAmount = entries.reduce((sum, e) => sum + (Number(e.netPay) || 0), 0);
+            if (isGenerated) {
+              const totalDeds = entries.reduce((sum, e) => sum + (Number(e.totalDeductions) || 0), 0);
+              if (totalDeds === 0) {
+                alerts.push(`${branch.name} generated payroll with ZERO deductions.`);
+              }
+            }
+          }
+          if (isGenerated) {
+            totalPayrollCurrentPeriod += netAmount;
+          }
+        } else {
+          alerts.push(`${branch.name} has never created a payroll period.`);
+        }
+        branchStatuses.push({
+          id: branch.id,
+          branchName: branch.name,
+          status,
+          isGenerated,
+          netAmount,
+          periodStartDate: periodToEval?.startDate,
+          periodEndDate: periodToEval?.endDate
+        });
+      }));
+      const recentLogs = await storage5.getAuditLogs({ limit: 5 });
+      res.json({
+        stats: {
+          totalPayroll: totalPayrollCurrentPeriod,
+          branchesGenerated: generatedBranchesCount,
+          totalBranches: allBranches.length,
+          pendingApprovals: totalPendingApprovals,
+          totalStaff: totalStaffCount
+        },
+        branchStatuses,
+        staffOverview,
+        recentActivity: recentLogs,
+        alerts
+      });
+    } catch (error) {
+      console.error("Error in /api/dashboard/admin:", error);
+      res.status(500).json({ message: error.message || "Failed to fetch admin dashboard stats" });
+    }
+  }));
   app2.get("/api/deduction-settings", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
@@ -11155,9 +11237,21 @@ async function registerRoutes(app2) {
   }));
   app2.get("/api/payroll/periods", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
-      const branchId = req.user.branchId;
-      const periods = await storage5.getPayrollPeriodsByBranch(branchId);
-      res.json({ periods });
+      const isUserAdmin = req.user.role === "admin";
+      const targetBranchId = isUserAdmin && req.query.branchId && req.query.branchId !== "all" ? req.query.branchId : req.user.branchId;
+      if (isUserAdmin && (!req.query.branchId || req.query.branchId === "all")) {
+        const allBranches = await storage5.getAllBranches();
+        let allPeriods = [];
+        await Promise.all(allBranches.map(async (b) => {
+          const bp = await storage5.getPayrollPeriodsByBranch(b.id);
+          allPeriods.push(...bp.map((p) => ({ ...p, branchName: b.name })));
+        }));
+        allPeriods.sort((a, b) => new Date(b.startDate).getTime() - new Date(a.startDate).getTime());
+        res.json({ periods: allPeriods });
+      } else {
+        const periods = await storage5.getPayrollPeriodsByBranch(targetBranchId);
+        res.json({ periods });
+      }
     } catch (error) {
       console.error("Get payroll periods error:", error);
       res.status(500).json({ message: error.message || "Failed to fetch payroll periods" });
@@ -11570,9 +11664,19 @@ async function registerRoutes(app2) {
   }));
   app2.get("/api/payroll/entries/branch", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
-      const branchId = req.user.branchId;
+      const isUserAdmin = req.user.role === "admin";
+      const targetBranchId = isUserAdmin && req.query.branchId && req.query.branchId !== "all" ? req.query.branchId : req.user.branchId;
       const { periodId } = req.query;
-      const allEmployees = await storage5.getUsersByBranch(branchId);
+      let allEmployees = [];
+      if (isUserAdmin && (!req.query.branchId || req.query.branchId === "all")) {
+        const allBranches = await storage5.getAllBranches();
+        await Promise.all(allBranches.map(async (b) => {
+          const users2 = await storage5.getUsersByBranch(b.id);
+          allEmployees.push(...users2.map((u) => ({ ...u, branchName: b.name })));
+        }));
+      } else {
+        allEmployees = await storage5.getUsersByBranch(targetBranchId);
+      }
       const employees = allEmployees.filter((emp) => emp.isActive);
       let allEntries = [];
       const periodCache = {};
