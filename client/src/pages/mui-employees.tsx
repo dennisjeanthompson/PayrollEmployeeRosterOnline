@@ -200,7 +200,6 @@ export default function MuiEmployees() {
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [roleFilter, setRoleFilter] = useState<string>("all");
-  const [branchFilter, setBranchFilter] = useState<string>("all");
   const [selectedEmployees, setSelectedEmployees] = useState<string[]>([]);
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -325,11 +324,9 @@ export default function MuiEmployees() {
         (statusFilter === "inactive" && !employee.isActive);
 
       const matchesRole = roleFilter === "all" || employee.role === roleFilter;
-      const matchesBranch = branchFilter === "all" || employee.branchId === branchFilter;
-
-      return matchesSearch && matchesStatus && matchesRole && matchesBranch;
+      return matchesSearch && matchesStatus && matchesRole;
     });
-  }, [employeesData, deferredSearchTerm, statusFilter, roleFilter, branchFilter]);
+  }, [employeesData, deferredSearchTerm, statusFilter, roleFilter]);
 
   // Mutations
   const createEmployee = useMutation({
@@ -870,19 +867,7 @@ export default function MuiEmployees() {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid size={{ xs: 6, md: 2 }}>
-                <FormControl fullWidth size="small">
-                  <InputLabel>Branch</InputLabel>
-                  <Select value={branchFilter} label="Branch" onChange={(e) => setBranchFilter(e.target.value)}>
-                    <MenuItem value="all">All Branches</MenuItem>
-                    {branchesData.map((branch) => (
-                      <MenuItem key={branch.id} value={branch.id}>
-                        {branch.name}
-                      </MenuItem>
-                    ))}
-                  </Select>
-                </FormControl>
-              </Grid>
+                {/* Branch dropdown removed to avoid conflict with global branch switcher */}
 
             </Grid>
 
