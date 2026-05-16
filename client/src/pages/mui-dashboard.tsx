@@ -410,7 +410,7 @@ function AdminDashboard({ currentUser }: any) {
                       <ListItemIcon sx={{ minWidth: 36 }}><HistoryIcon fontSize="small" color="secondary" /></ListItemIcon>
                       <ListItemText 
                         primary={log.action} 
-                        secondary={`${log.userName || 'System'} • ${format(new Date(log.timestamp), 'MMM d, h:mm a')}`}
+                        secondary={`${log.userName || log.userId || 'System'} • ${log.createdAt ? format(new Date(log.createdAt), 'MMM d, h:mm a') : 'Unknown'}`}
                         primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
                         secondaryTypographyProps={{ variant: 'caption' }}
                       />
