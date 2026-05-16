@@ -12,9 +12,16 @@
     "check": "tsc",
     "test": "vitest run",
     "db:push": "drizzle-kit push",
-    "db:reset": "cross-env FRESH_DB=true tsx server/index.ts"
+    "db:reset": "cross-env FRESH_DB=true tsx server/index.ts",
+    "cap:build": "npx vite build && npx cap sync android",
+    "cap:build:debug": "npx vite build && npx cap sync android && cd android && .\\gradlew.bat assembleDebug",
+    "cap:build:release": "npx vite build && npx cap sync android && cd android && .\\gradlew.bat assembleRelease",
+    "cap:open": "npx cap open android"
   },
   "dependencies": {
+    "@capacitor/android": "^8.3.4",
+    "@capacitor/cli": "^8.3.4",
+    "@capacitor/core": "^8.3.4",
     "@cloudinary/react": "^1.14.3",
     "@cloudinary/url-gen": "^1.22.0",
     "@emotion/react": "^11.14.0",
@@ -116,6 +123,7 @@
     "zod-validation-error": "^3.4.0"
   },
   "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
     "@tailwindcss/typography": "^0.5.15",
     "@tailwindcss/vite": "^4.1.3",
     "@types/compression": "^1.8.1",

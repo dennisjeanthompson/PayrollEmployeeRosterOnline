@@ -758,6 +758,128 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
+  // ─── BULK ACTION PREVIEW ──────────────────────────────────────────────────────
+  // Returns an impact summary before executing any bulk action (delete/create)
+  app.post("/api/shifts/bulk-delete-preview", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+    try {
+      const branchId = req.user!.branchId;
+      const { startDate, endDate, employeeId, target } = req.body;
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "startDate and endDate are required" });
+      }
+
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      // Fetch shifts in range
+      const allShifts = await storage.getShiftsByBranch(branchId, start, end);
+      let filteredShifts = employeeId && employeeId !== 'all'
+        ? allShifts.filter(s => String(s.userId) === String(employeeId))
+        : allShifts;
+
+      // Fetch exception logs in range
+      const allLogs = await storage.getAdjustmentLogsByBranch(branchId, start, end);
+      let filteredLogs = employeeId && employeeId !== 'all'
+        ? allLogs.filter(l => String(l.employeeId) === String(employeeId))
+        : allLogs;
+
+      // Determine counts based on target
+      let shiftCount = 0;
+      let exceptionCount = 0;
+      if (target === 'shifts' || target === 'both') shiftCount = filteredShifts.length;
+      if (target === 'exceptions' || target === 'both') exceptionCount = filteredLogs.length;
+
+      const allUsersInBranch = await storage.getUsersByBranch(branchId);
+      // Check for shift trades that would be affected
+      const shiftIds = filteredShifts.map(s => s.id);
+      const allTradesRaw = (await Promise.all(allUsersInBranch.map(u => storage.getShiftTradesByUser(u.id)))).flat();
+      // deduplicate
+      const allTradesMap = new Map();
+      allTradesRaw.forEach((t: any) => allTradesMap.set(t.id, t));
+      const allTrades = Array.from(allTradesMap.values());
+      const affectedTrades = allTrades.filter((t: any) =>
+        (t.status === 'pending' || t.status === 'accepted') &&
+        shiftIds.includes(t.shiftId)
+      );
+
+      // Check for time-off requests that overlap this date range
+      const allTimeOff = (await Promise.all(allUsersInBranch.map(u => storage.getTimeOffRequestsByUser(u.id)))).flat();
+      const orphanedLeaves = allTimeOff
+        .filter((t: any) => {
+          if (t.status !== 'approved' && t.status !== 'pending') return false;
+          const tStart = new Date(t.startDate);
+          const tEnd = new Date(t.endDate);
+          // Check overlap
+          if (tStart > end || tEnd < start) return false;
+          if (employeeId && employeeId !== 'all' && String(t.userId) !== String(employeeId)) return false;
+          return true;
+        })
+        .map((t: any) => {
+          const user = t as any;
+          return {
+            employeeName: user.userName || 'Employee',
+            type: t.type,
+            start: t.startDate,
+            end: t.endDate,
+          };
+        });
+
+      // Enrich orphaned leaves with employee names
+      const enrichedLeaves = await Promise.all(orphanedLeaves.map(async (leave: any) => {
+        if (leave.employeeName === 'Employee') {
+          const matchingTimeOff = allTimeOff.find(t =>
+            t.startDate === leave.start && t.endDate === leave.end && t.type === leave.type
+          );
+          if (matchingTimeOff) {
+            const user = await storage.getUser(matchingTimeOff.userId);
+            if (user) leave.employeeName = `${user.firstName} ${user.lastName}`;
+          }
+        }
+        return leave;
+      }));
+
+      // Enrich affected shifts with employee names for the detail list
+      const allUsers = await storage.getUsersByBranch(branchId);
+      const userMap = new Map(allUsers.map(u => [u.id, u]));
+
+      const shiftDetails = filteredShifts.slice(0, 20).map(s => {
+        const user = userMap.get(s.userId);
+        return {
+          id: s.id,
+          employeeName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+          date: s.startTime,
+          startTime: s.startTime,
+          endTime: s.endTime,
+        };
+      });
+
+      const logDetails = filteredLogs.slice(0, 20).map((l: any) => {
+        const user = userMap.get(l.employeeId);
+        return {
+          id: l.id,
+          employeeName: user ? `${user.firstName} ${user.lastName}` : 'Unknown',
+          type: l.type,
+          value: l.value,
+          date: l.startDate,
+        };
+      });
+
+      res.json({
+        shiftCount,
+        exceptionCount,
+        tradesCount: (target === 'shifts' || target === 'both') ? affectedTrades.length : 0,
+        orphanedLeaves: enrichedLeaves,
+        shiftDetails,
+        logDetails,
+        totalAffected: shiftCount + exceptionCount,
+      });
+    } catch (error: any) {
+      console.error('Bulk preview error:', error);
+      res.status(500).json({ message: error.message || "Failed to generate preview" });
+    }
+  }));
+
   app.post("/api/shifts", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const shiftData = insertShiftSchema.parse(req.body);
