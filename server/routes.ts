@@ -1939,8 +1939,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
       }));
       
-      // 4. Recent System Activity
-      const recentLogs = await storage.getAuditLogs({ limit: 5 });
+      // 4. Recent System Activity (with resolved user names)
+      const rawLogs = await storage.getAuditLogs({ limit: 5 });
+      const recentLogs = await Promise.all(rawLogs.map(async (log: any) => {
+        let userName = log.userId || 'System';
+        if (log.userId) {
+          const user = await storage.getUser(log.userId);
+          if (user) {
+            userName = `${user.firstName} ${user.lastName}`;
+          }
+        }
+        return { ...log, userName };
+      }));
       
       // Combine all data
       res.json({

@@ -11145,7 +11145,17 @@ async function registerRoutes(app2) {
           periodEndDate: periodToEval?.endDate
         });
       }));
-      const recentLogs = await storage5.getAuditLogs({ limit: 5 });
+      const rawLogs = await storage5.getAuditLogs({ limit: 5 });
+      const recentLogs = await Promise.all(rawLogs.map(async (log2) => {
+        let userName = log2.userId || "System";
+        if (log2.userId) {
+          const user = await storage5.getUser(log2.userId);
+          if (user) {
+            userName = `${user.firstName} ${user.lastName}`;
+          }
+        }
+        return { ...log2, userName };
+      }));
       res.json({
         stats: {
           totalPayroll: totalPayrollCurrentPeriod,
