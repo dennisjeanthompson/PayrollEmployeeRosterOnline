@@ -587,7 +587,8 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   const latestPaidEntry = records.find((r: any) => r.status === 'paid' || r.status === 'completed');
   const currentPeriod = payrollData?.period;
   
-  const displayEntry = activeEntry || latestPaidEntry;
+  // Always display the latest fully processed (generated) payroll on the dashboard
+  const displayEntry = latestPaidEntry;
 
   // Count shifts in the current pay period only (not all-time)
   const currentPeriodShifts = (employeeShifts?.shifts || []).filter((s: any) => {
@@ -763,7 +764,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                 <Box sx={{ px: 2, py: 1.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                      {latestPaidEntry && !activeEntry ? 'Latest Payslip' : 'Current Pay Period'}
+                      {latestPaidEntry ? 'Latest Payslip' : 'Current Pay Period'}
                     </Typography>
                     <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main' }}>
                       {displayEntry && displayEntry.periodStartDate && displayEntry.periodEndDate
