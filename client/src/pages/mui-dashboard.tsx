@@ -573,6 +573,17 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
     return sum + (isNaN(hours) ? 0 : hours);
   }, 0);
 
+  // Count shifts in the current pay period only (not all-time)
+  const currentPeriodShifts = (employeeShifts?.shifts || []).filter((s: any) => {
+    if (!s.startTime || !currentPeriod) return false;
+    const d = new Date(s.startTime);
+    if (isNaN(d.getTime())) return false;
+    const periodStart = new Date(currentPeriod.startDate);
+    const periodEnd = new Date(currentPeriod.endDate);
+    periodEnd.setHours(23, 59, 59, 999);
+    return d >= periodStart && d <= periodEnd;
+  });
+
   const upcomingShifts = (employeeShifts?.shifts || [])
     .filter((s: any) => s.startTime && !isNaN(new Date(s.startTime).getTime()) && new Date(s.startTime) >= new Date())
     .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
@@ -760,13 +771,13 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                   <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>Net Pay</Typography>
                     <Typography variant="h5" sx={{ fontWeight: 900, color: 'success.main', lineHeight: 1.2, mt: 0.5 }}>
-                      {estNetPay > 0 ? `₱${Number(estNetPay).toLocaleString('en-PH', { minimumFractionDigits: 0 })}` : '--'}
+                      {estNetPay > 0 ? `₱${Number(estNetPay).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : '--'}
                     </Typography>
                   </Box>
                   <Box sx={{ flex: 1, textAlign: 'center', py: 2 }}>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 700 }}>Shifts</Typography>
                     <Typography variant="h5" sx={{ fontWeight: 900, color: 'info.main', lineHeight: 1.2, mt: 0.5 }}>
-                      {employeeShifts?.shifts?.length || 0}
+                      {currentPeriod ? currentPeriodShifts.length : thisWeekShifts.length}
                     </Typography>
                   </Box>
                 </Stack>

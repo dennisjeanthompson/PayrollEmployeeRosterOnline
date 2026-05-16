@@ -12,3 +12,7 @@ vite.config.ts.*
 .env.*.local
 .cache
 .vite
+package-lock.json
+tmp/
+debug.json
+test-db.ts
