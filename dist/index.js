@@ -11103,34 +11103,33 @@ async function registerRoutes(app2) {
         const branchApprovals = await storage5.getPendingApprovals(branch.id);
         totalPendingApprovals += branchApprovals.length;
         const payrollPeriods2 = await storage5.getPayrollPeriodsByBranch(branch.id);
-        const activeOrPending = payrollPeriods2.find((p) => p.status === "draft" || p.status === "pending");
-        const latestGenerated = payrollPeriods2.find((p) => p.status === "paid" || p.status === "completed");
-        const periodToEval = activeOrPending || latestGenerated;
+        payrollPeriods2.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+        const openPeriod = payrollPeriods2.find((p) => p.status === "open" || p.status === "processing");
+        const closedPeriod = payrollPeriods2.find((p) => p.status === "closed");
+        const periodToEval = closedPeriod || openPeriod || payrollPeriods2[0];
         let netAmount = 0;
         let isGenerated = false;
         let status = "No Payroll Yet";
         if (periodToEval) {
           status = periodToEval.status;
-          if (status === "paid" || status === "completed") {
+          const entries = await storage5.getPayrollEntriesByPeriod(periodToEval.id);
+          const hasProcessedEntries = entries.some((e) => Number(e.netPay) > 0);
+          if (hasProcessedEntries) {
             isGenerated = true;
             generatedBranchesCount++;
+          } else if (periodToEval.status === "open") {
+            status = "open";
           }
-          if (!isGenerated && activeOrPending) {
-            alerts.push(`${branch.name} has not generated their current payroll period.`);
-          }
-          const fullPeriod = await storage5.getPayrollPeriod(periodToEval.id);
-          if (fullPeriod && fullPeriod.entries) {
-            const entries = fullPeriod.entries;
-            netAmount = entries.reduce((sum, e) => sum + (Number(e.netPay) || 0), 0);
-            if (isGenerated) {
-              const totalDeds = entries.reduce((sum, e) => sum + (Number(e.totalDeductions) || 0), 0);
-              if (totalDeds === 0) {
-                alerts.push(`${branch.name} generated payroll with ZERO deductions.`);
-              }
-            }
+          netAmount = entries.reduce((sum, e) => sum + (Number(e.netPay) || 0), 0);
+          if (!isGenerated && openPeriod) {
+            alerts.push(`${branch.name} has an open payroll period that hasn't been processed yet.`);
           }
           if (isGenerated) {
             totalPayrollCurrentPeriod += netAmount;
+            const totalDeds = entries.reduce((sum, e) => sum + (Number(e.totalDeductions) || 0), 0);
+            if (totalDeds === 0 && entries.length > 0) {
+              alerts.push(`${branch.name} generated payroll with ZERO deductions.`);
+            }
           }
         } else {
           alerts.push(`${branch.name} has never created a payroll period.`);

@@ -1887,10 +1887,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // 3. Payroll Status for the current active/latest period
         const payrollPeriods = await storage.getPayrollPeriodsByBranch(branch.id);
-        const activeOrPending = payrollPeriods.find((p: any) => p.status === 'draft' || p.status === 'pending');
-        const latestGenerated = payrollPeriods.find((p: any) => p.status === 'paid' || p.status === 'completed');
+        // Sort by createdAt descending to get the latest period
+        payrollPeriods.sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
         
-        const periodToEval = activeOrPending || latestGenerated;
+        const openPeriod = payrollPeriods.find((p: any) => p.status === 'open' || p.status === 'processing');
+        const closedPeriod = payrollPeriods.find((p: any) => p.status === 'closed');
+        
+        // Prefer the latest closed (fully processed) period for amounts, fallback to open
+        const periodToEval = closedPeriod || openPeriod || payrollPeriods[0];
         
         let netAmount = 0;
         let isGenerated = false;
@@ -1898,30 +1902,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         if (periodToEval) {
           status = periodToEval.status;
-          if (status === 'paid' || status === 'completed') {
+          
+          // Fetch actual payroll entries for this period
+          const entries = await storage.getPayrollEntriesByPeriod(periodToEval.id);
+          
+          // Consider it "generated" if there are processed entries with actual pay amounts
+          const hasProcessedEntries = entries.some((e: any) => Number(e.netPay) > 0);
+          
+          if (hasProcessedEntries) {
             isGenerated = true;
             generatedBranchesCount++;
+          } else if (periodToEval.status === 'open') {
+            // Period exists but not yet processed
+            status = 'open';
           }
           
-          if (!isGenerated && activeOrPending) {
-            alerts.push(`${branch.name} has not generated their current payroll period.`);
-          }
+          // Sum net pay from all entries
+          netAmount = entries.reduce((sum: number, e: any) => sum + (Number(e.netPay) || 0), 0);
           
-          const fullPeriod = await storage.getPayrollPeriod(periodToEval.id);
-          if (fullPeriod && fullPeriod.entries) {
-            const entries = fullPeriod.entries as any[];
-            netAmount = entries.reduce((sum, e) => sum + (Number(e.netPay) || 0), 0);
-            
-            if (isGenerated) {
-              const totalDeds = entries.reduce((sum, e) => sum + (Number(e.totalDeductions) || 0), 0);
-              if (totalDeds === 0) {
-                alerts.push(`${branch.name} generated payroll with ZERO deductions.`);
-              }
-            }
+          if (!isGenerated && openPeriod) {
+            alerts.push(`${branch.name} has an open payroll period that hasn't been processed yet.`);
           }
           
           if (isGenerated) {
             totalPayrollCurrentPeriod += netAmount;
+            
+            const totalDeds = entries.reduce((sum: number, e: any) => sum + (Number(e.totalDeductions) || 0), 0);
+            if (totalDeds === 0 && entries.length > 0) {
+              alerts.push(`${branch.name} generated payroll with ZERO deductions.`);
+            }
           }
         } else {
           alerts.push(`${branch.name} has never created a payroll period.`);
