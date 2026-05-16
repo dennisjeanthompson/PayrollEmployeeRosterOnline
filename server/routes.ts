@@ -162,6 +162,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     'http://localhost:3000',            // alternative local
     'https://localhost:5000',           // https localhost
     'https://localhost:5173',           // https Vite dev server
+    'http://localhost',                 // Capacitor default
+    'https://localhost',                // Capacitor secure
+    'capacitor://localhost',            // Capacitor iOS
   ].filter(Boolean) as string[];
 
   app.use(cors({
@@ -5562,3 +5565,4 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   return httpServer;
 }
+
