@@ -200,21 +200,9 @@ export const invalidateQueries = {
     queryClient.invalidateQueries({ queryKey: ['/api/approvals'] });
   },
   branchSwitch: () => {
-    queryClient.invalidateQueries({ queryKey: ['/api/shifts'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/shifts/branch'] });
-    queryClient.invalidateQueries({ queryKey: ['branches'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/branches'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/dashboard'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/deduction-settings'] });
-    queryClient.invalidateQueries({ queryKey: ['time-off-requests'] });
-    queryClient.invalidateQueries({ queryKey: ['analytics-trends'] });
-    queryClient.invalidateQueries({ queryKey: ['forecast-labor'] });
-    queryClient.invalidateQueries({ queryKey: ['forecast-payroll'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/adjustment-logs/branch'] });
-    queryClient.invalidateQueries({ queryKey: ['adjustment-logs-branch'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/exception-logs'] });
-    queryClient.invalidateQueries({ queryKey: ['/api/loans/branch'] });
-    queryClient.invalidateQueries({ queryKey: ['leave-credits'] });
+    // A branch switch fundamentally changes the context of almost all data in the app.
+    // It's safest to invalidate ALL queries so every page refetches for the new branch.
+    queryClient.invalidateQueries();
   },
   all: () => {
     queryClient.invalidateQueries();
