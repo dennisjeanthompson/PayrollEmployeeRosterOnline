@@ -456,7 +456,7 @@ export default function MuiPayroll() {
                     No payment history yet
                   </Typography>
                   <Typography variant="body2" color="text.disabled">
-                    Your paid payroll entries will appear here
+                    Your generated payroll entries will appear here
                   </Typography>
                 </Box>
               ) : (
@@ -488,7 +488,7 @@ export default function MuiPayroll() {
                                         {format(new Date(entry.periodStartDate), "MMM d")} – {format(new Date(entry.periodEndDate), "MMM d, yyyy")}
                                       </Typography>
                                       <Typography variant="caption" color="text.secondary">
-                                        Paid {entry.paidAt
+                                        Generated {entry.paidAt
                                           ? format(new Date(entry.paidAt), "MMM d, yyyy")
                                           : format(getPaymentDate(entry.periodEndDate!), "MMM d, yyyy")}
                                       </Typography>
@@ -517,7 +517,7 @@ export default function MuiPayroll() {
                                   sx={{ color: 'info.main', borderColor: alpha(theme.palette.info.main, 0.4), fontWeight: 600 }}
                                 />
                                 <Chip
-                                  label="Paid"
+                                  label="Generated"
                                   color="success"
                                   size="small"
                                   icon={<CheckCircleIcon />}
@@ -564,7 +564,7 @@ export default function MuiPayroll() {
                                   {format(new Date(entry.periodStartDate), "MMM d")} – {format(new Date(entry.periodEndDate), "MMM d, yyyy")}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                                  Paid {entry.paidAt
+                                  Generated {entry.paidAt
                                     ? format(new Date(entry.paidAt), "MMM d, yyyy")
                                     : format(getPaymentDate(entry.periodEndDate!), "MMM d, yyyy")}
                                 </Typography>
@@ -573,7 +573,7 @@ export default function MuiPayroll() {
                               <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>{format(parseISO(entry.createdAt), "MMM d, yyyy")}</Typography>
                             )}
                           </Box>
-                          <Chip label="Paid" color="success" size="small" icon={<CheckCircleIcon />} sx={{ height: 24, flexShrink: 0 }} />
+                          <Chip label="Generated" color="success" size="small" icon={<CheckCircleIcon />} sx={{ height: 24, flexShrink: 0 }} />
                         </Box>
                         
                         <Divider />
@@ -663,7 +663,7 @@ export default function MuiPayroll() {
                               sx={{ bgcolor: alpha(theme.palette.info.main, 0.1), color: 'info.main', fontWeight: 700, fontSize: '0.65rem', borderRadius: 1.5 }}
                             />
                             <Chip 
-                              label="Paid" 
+                              label="Generated" 
                               size="small" 
                               color="success" 
                               sx={{ fontWeight: 800, fontSize: '0.65rem', borderRadius: 1.5 }} 
