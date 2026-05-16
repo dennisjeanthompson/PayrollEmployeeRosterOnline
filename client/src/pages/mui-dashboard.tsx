@@ -589,9 +589,18 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
 
   // Count shifts in the current pay period only (not all-time)
   const currentPeriodShifts = (employeeShifts?.shifts || []).filter((s: any) => {
-    if (!s.startTime || !currentPeriod) return false;
+    if (!s.startTime) return false;
     const d = new Date(s.startTime);
     if (isNaN(d.getTime())) return false;
+    
+    if (displayEntry?.periodStartDate && displayEntry?.periodEndDate) {
+      const periodStart = new Date(displayEntry.periodStartDate);
+      const periodEnd = new Date(displayEntry.periodEndDate);
+      periodEnd.setHours(23, 59, 59, 999);
+      return d >= periodStart && d <= periodEnd;
+    }
+
+    if (!currentPeriod) return false;
     const periodStart = new Date(currentPeriod.startDate);
     const periodEnd = new Date(currentPeriod.endDate);
     periodEnd.setHours(23, 59, 59, 999);
@@ -599,13 +608,14 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   });
   
   // Hours worked this period. Fallback to this week\'s scheduled hours.
-  const hoursWorked = activeEntry ? Number(activeEntry.totalHours || 0) : (payrollData?.totalHours ?? totalHoursThisWeek);
+  const displayEntry = activeEntry || latestPaidEntry;
+  const hoursWorked = displayEntry ? Number(displayEntry.totalHours || 0) : (payrollData?.totalHours ?? totalHoursThisWeek);
   
   // Calculate Estimated Net Pay
   // If there's already a payroll record for the current period, use its netPay.
   // Otherwise, estimate it based on hours * hourlyRate
   const hourlyRate = Number(currentUser?.hourlyRate || 0);
-  const estNetPay = activeEntry ? Number(activeEntry.netPay || 0) : (hoursWorked * hourlyRate);
+  const estNetPay = displayEntry ? Number(displayEntry.netPay || 0) : (hoursWorked * hourlyRate);
 
   const quickActions = [
     {
@@ -752,10 +762,12 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                 <Box sx={{ px: 2, py: 1.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
                   <Stack direction="row" justifyContent="space-between" alignItems="center">
                     <Typography variant="caption" color="text.secondary" sx={{ fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.8 }}>
-                      Current Pay Period
+                      {latestPaidEntry && !activeEntry ? 'Latest Payslip' : 'Current Pay Period'}
                     </Typography>
                     <Typography variant="caption" sx={{ fontWeight: 800, color: 'primary.main' }}>
-                      {currentPeriod
+                      {displayEntry && displayEntry.periodStartDate && displayEntry.periodEndDate
+                        ? `${sfmt(displayEntry.periodStartDate, 'MMM d')} – ${sfmt(displayEntry.periodEndDate, 'MMM d, yyyy')}`
+                        : currentPeriod
                         ? `${sfmt(currentPeriod.startDate, 'MMM d')} – ${sfmt(currentPeriod.endDate, 'MMM d, yyyy')}`
                         : 'This Pay Period'}
                     </Typography>
