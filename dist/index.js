@@ -108,7 +108,7 @@ __export(schema_exports, {
   wageOrders: () => wageOrders,
   workerAllowances: () => workerAllowances
 });
-import { pgTable, text, boolean, timestamp, integer, numeric, serial } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, integer, numeric, serial, json } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 var session, branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, companySettings, auditLogs, timeOffPolicy, employeeDocuments, adjustmentLogs, adjustmentLogComments, leaveCredits, sssContributionTable, wageOrders, allowanceTypes, workerAllowances, deMinimisYtd, employeeTaxYtd, thirteenthMonthPay, insertBranchSchema, insertUserSchema, insertShiftSchema, insertShiftTradeSchema, insertPayrollPeriodSchema, insertPayrollEntrySchema, insertApprovalSchema, insertTimeOffRequestSchema, insertNotificationSchema, insertDeductionSettingsSchema, insertDeductionRatesSchema, insertHolidaySchema, insertArchivedPayrollPeriodSchema, insertAuditLogSchema, insertTimeOffPolicySchema, insertAdjustmentLogSchema, insertAdjustmentLogCommentSchema, insertLeaveCreditsSchema, insertCompanySettingsSchema, serviceChargePools, insertServiceChargePoolSchema, insertSssContributionTableSchema, insertWageOrderSchema, insertAllowanceTypeSchema, insertWorkerAllowanceSchema, insertDeMinimisYtdSchema, insertEmployeeTaxYtdSchema, insertThirteenthMonthPaySchema;
@@ -179,7 +179,11 @@ var init_schema = __esm({
       // Break time in minutes
       actualStartTime: timestamp("actual_start_time"),
       actualEndTime: timestamp("actual_end_time"),
-      createdAt: timestamp("created_at").defaultNow()
+      createdAt: timestamp("created_at").defaultNow(),
+      isDeleted: boolean("is_deleted").default(false),
+      deletedAt: timestamp("deleted_at"),
+      deletedBy: text("deleted_by").references(() => users.id),
+      deletionReason: text("deletion_reason")
     });
     shiftTrades = pgTable("shift_trades", {
       id: text("id").primaryKey(),
@@ -200,6 +204,8 @@ var init_schema = __esm({
       startDate: timestamp("start_date").notNull(),
       endDate: timestamp("end_date").notNull(),
       runType: text("run_type").default("regular").notNull(),
+      periodConfig: json("period_config"),
+      // Stores per-period toggles
       status: text("status").default("open"),
       totalHours: text("total_hours"),
       totalPay: text("total_pay"),
@@ -263,7 +269,8 @@ var init_schema = __esm({
       requestedAt: timestamp("requested_at").defaultNow(),
       approvedAt: timestamp("approved_at"),
       approvedBy: text("approved_by").references(() => users.id),
-      rejectionReason: text("rejection_reason")
+      rejectionReason: text("rejection_reason"),
+      isOrphaned: boolean("is_orphaned").default(false)
     });
     notifications = pgTable("notifications", {
       id: text("id").primaryKey(),
@@ -291,6 +298,8 @@ var init_schema = __esm({
       deductWithholdingTax: boolean("deduct_withholding_tax").default(false),
       includeExceptionLogs: boolean("include_exception_logs").default(true),
       // Toggle OT/lateness in payroll
+      includeNightDiff: boolean("include_night_diff").default(true),
+      // Toggle Night Diff in payroll
       updatedAt: timestamp("updated_at").defaultNow(),
       createdAt: timestamp("created_at").defaultNow()
     });
@@ -467,7 +476,11 @@ var init_schema = __esm({
       // Positive for OT, negative for late deduction
       isIncluded: boolean("is_included").default(true),
       // Toggle on/off for payroll inclusion
-      createdAt: timestamp("created_at").defaultNow()
+      createdAt: timestamp("created_at").defaultNow(),
+      isDeleted: boolean("is_deleted").default(false),
+      deletedAt: timestamp("deleted_at"),
+      deletedBy: text("deleted_by").references(() => users.id),
+      deletionReason: text("deletion_reason")
     });
     adjustmentLogComments = pgTable("adjustment_log_comments", {
       id: text("id").primaryKey(),
@@ -589,6 +602,10 @@ var init_schema = __esm({
     insertPayrollPeriodSchema = createInsertSchema(payrollPeriods).omit({
       id: true,
       createdAt: true
+    }).extend({
+      startDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+      endDate: z.union([z.date(), z.string().pipe(z.coerce.date())]),
+      periodConfig: z.any().optional()
     });
     insertPayrollEntrySchema = createInsertSchema(payrollEntries).omit({
       id: true,
@@ -617,7 +634,8 @@ var init_schema = __esm({
       createdAt: true,
       updatedAt: true
     }).extend({
-      includeExceptionLogs: z.boolean().optional().nullable()
+      includeExceptionLogs: z.boolean().optional().nullable(),
+      includeNightDiff: z.boolean().optional().nullable()
     });
     insertDeductionRatesSchema = createInsertSchema(deductionRates).omit({
       id: true,
@@ -948,6 +966,7 @@ var init_db_storage = __esm({
       async checkShiftOverlap(userId, startTime, endTime, excludeShiftId) {
         const conditions = [
           eq(shifts.userId, userId),
+          eq(shifts.isDeleted, false),
           // Shift overlaps if: new_start < existing_end AND new_end > existing_start
           and(
             lt(shifts.startTime, endTime),
@@ -971,6 +990,7 @@ var init_db_storage = __esm({
         dayEnd.setHours(23, 59, 59, 999);
         const conditions = [
           eq(shifts.userId, userId),
+          eq(shifts.isDeleted, false),
           gte(shifts.startTime, dayStart),
           lte(shifts.startTime, dayEnd)
         ];
@@ -1003,27 +1023,39 @@ var init_db_storage = __esm({
           return db.select().from(shifts).where(
             and(
               eq(shifts.userId, userId),
+              eq(shifts.isDeleted, false),
               gte(shifts.startTime, startDate),
               lte(shifts.startTime, endDate)
             )
           ).orderBy(shifts.startTime);
         }
-        return db.select().from(shifts).where(eq(shifts.userId, userId)).orderBy(shifts.startTime);
+        return db.select().from(shifts).where(
+          and(
+            eq(shifts.userId, userId),
+            eq(shifts.isDeleted, false)
+          )
+        ).orderBy(shifts.startTime);
       }
       async getShiftsByBranch(branchId, startDate, endDate) {
         if (startDate && endDate) {
           return db.select().from(shifts).where(
             and(
               eq(shifts.branchId, branchId),
+              eq(shifts.isDeleted, false),
               gte(shifts.startTime, startDate),
               lte(shifts.startTime, endDate)
             )
           );
         }
-        return db.select().from(shifts).where(eq(shifts.branchId, branchId));
+        return db.select().from(shifts).where(
+          and(
+            eq(shifts.branchId, branchId),
+            eq(shifts.isDeleted, false)
+          )
+        );
       }
-      async deleteShift(id) {
-        await db.delete(shifts).where(eq(shifts.id, id));
+      async deleteShift(id, deletedBy, deletionReason) {
+        await db.update(shifts).set({ isDeleted: true, deletedAt: /* @__PURE__ */ new Date(), deletedBy, deletionReason }).where(eq(shifts.id, id));
         return true;
       }
       // Shift Trades
@@ -1653,6 +1685,10 @@ var init_db_storage = __esm({
           disputeReason: null,
           disputedAt: null,
           isIncluded: log2.isIncluded ?? true,
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null,
+          deletionReason: null,
           createdAt: /* @__PURE__ */ new Date()
         };
         await db.insert(adjustmentLogs).values(adjustmentLog);
@@ -1855,7 +1891,11 @@ var init_storage = __esm({
           breakDurationMinutes: 0,
           createdAt: /* @__PURE__ */ new Date(),
           actualStartTime: null,
-          actualEndTime: null
+          actualEndTime: null,
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null,
+          deletionReason: null
         };
         this.shifts.set(todayShift.id, todayShift);
         const managerShift = {
@@ -1873,7 +1913,11 @@ var init_storage = __esm({
           breakDurationMinutes: 0,
           createdAt: /* @__PURE__ */ new Date(),
           actualStartTime: null,
-          actualEndTime: null
+          actualEndTime: null,
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null,
+          deletionReason: null
         };
         this.shifts.set(managerShift.id, managerShift);
         const tomorrowShift = {
@@ -1891,7 +1935,11 @@ var init_storage = __esm({
           breakDurationMinutes: 0,
           createdAt: /* @__PURE__ */ new Date(),
           actualStartTime: null,
-          actualEndTime: null
+          actualEndTime: null,
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null,
+          deletionReason: null
         };
         this.shifts.set(tomorrowShift.id, tomorrowShift);
       }
@@ -1979,7 +2027,11 @@ var init_storage = __esm({
           recurringPattern: insertShift.recurringPattern || null,
           breakDurationMinutes: insertShift.breakDurationMinutes ?? 0,
           actualStartTime: null,
-          actualEndTime: null
+          actualEndTime: null,
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null,
+          deletionReason: null
         };
         this.shifts.set(id, shift);
         return shift;
@@ -2010,7 +2062,7 @@ var init_storage = __esm({
           return true;
         });
       }
-      async deleteShift(id) {
+      async deleteShift(id, deletedBy, deletionReason) {
         return this.shifts.delete(id);
       }
       async createShiftTrade(insertTrade) {
@@ -2063,12 +2115,13 @@ var init_storage = __esm({
         const period = {
           ...insertPeriod,
           id,
+          runType: insertPeriod.runType || "regular",
+          periodConfig: insertPeriod.periodConfig ?? null,
           createdAt: /* @__PURE__ */ new Date(),
           status: insertPeriod.status || "open",
           totalHours: insertPeriod.totalHours || null,
           totalPay: insertPeriod.totalPay || null
         };
-        this.payrollPeriods.set(id, period);
         this.payrollPeriods.set(id, period);
         return period;
       }
@@ -2202,7 +2255,8 @@ var init_storage = __esm({
           approvedBy: insertRequest.approvedBy || null,
           rejectionReason: insertRequest.rejectionReason ?? null,
           isPaid: insertRequest.isPaid ?? false,
-          leavePaymentStatus: insertRequest.leavePaymentStatus || "paid"
+          leavePaymentStatus: insertRequest.leavePaymentStatus || "paid",
+          isOrphaned: false
         };
         this.timeOffRequests.set(id, request);
         return request;
@@ -2293,6 +2347,7 @@ var init_storage = __esm({
           deductPagibig: insertSettings.deductPagibig ?? true,
           deductWithholdingTax: insertSettings.deductWithholdingTax ?? true,
           includeExceptionLogs: insertSettings.includeExceptionLogs ?? false,
+          includeNightDiff: insertSettings.includeNightDiff ?? true,
           createdAt: /* @__PURE__ */ new Date(),
           updatedAt: /* @__PURE__ */ new Date()
         };
@@ -2479,6 +2534,10 @@ var init_storage = __esm({
           disputeReason: null,
           disputedAt: null,
           isIncluded: log2.isIncluded ?? true,
+          isDeleted: false,
+          deletedAt: null,
+          deletedBy: null,
+          deletionReason: null,
           createdAt: /* @__PURE__ */ new Date()
         };
         this.adjustmentLogs.set(id, adjustmentLog);
@@ -3107,10 +3166,11 @@ function splitCrossMidnightShift(startTime, endTime) {
 function calculateSegmentHours(start, end) {
   return (end.getTime() - start.getTime()) / (1e3 * 60 * 60);
 }
-function isRestDay(date, restDay = 0) {
+function isRestDay(date, restDay = -1) {
+  if (restDay < 0 || restDay > 6) return false;
   return date.getDay() === restDay;
 }
-function calculateDailyHoursBreakdown(shifts2, holidays2, restDay = 0) {
+function calculateDailyHoursBreakdown(shifts2, holidays2, restDay = -1) {
   const dailyBreakdown = /* @__PURE__ */ new Map();
   for (const shift of shifts2) {
     const startTime = new Date(shift.actualStartTime || shift.startTime);
@@ -3153,7 +3213,7 @@ function calculateDailyHoursBreakdown(shifts2, holidays2, restDay = 0) {
   }
   return dailyBreakdown;
 }
-function calculatePeriodPay(shifts2, hourlyRate, holidays2, restDay = 0, isHolidayExempt = false) {
+function calculatePeriodPay(shifts2, hourlyRate, holidays2, restDay = -1, isHolidayExempt = false) {
   const dailyBreakdown = calculateDailyHoursBreakdown(shifts2, holidays2, restDay);
   let basicPay = 0;
   let overtimePay = 0;
@@ -6179,12 +6239,9 @@ router6.get("/api/reports/payroll/export", requireAuth7, requireManagerRole2, as
       "Rest Day Pay (PHP)",
       "Gross Pay (PHP)",
       "SSS Contribution (PHP)",
-      "SSS Loan (PHP)",
       "PhilHealth Contribution (PHP)",
       "Pag-IBIG Contribution (PHP)",
-      "Pag-IBIG Loan (PHP)",
       "Withholding Tax (PHP)",
-      "Other Deductions (PHP)",
       "Total Deductions (PHP)",
       "Net Pay (PHP)",
       "Status"
@@ -6205,12 +6262,9 @@ router6.get("/api/reports/payroll/export", requireAuth7, requireManagerRole2, as
         peso(e.restDayPay),
         peso(e.grossPay),
         peso(e.sssContribution),
-        peso(e.sssLoan),
         peso(e.philHealthContribution),
         peso(e.pagibigContribution),
-        peso(e.pagibigLoan),
         peso(e.withholdingTax),
-        peso(e.otherDeductions),
         peso(e.totalDeductions),
         peso(e.netPay),
         (e.status || "").toUpperCase()
@@ -6228,12 +6282,9 @@ router6.get("/api/reports/payroll/export", requireAuth7, requireManagerRole2, as
     const totalRestDay = sum("restDayPay");
     const totalGross = sum("grossPay");
     const totalSSS = sum("sssContribution");
-    const totalSSSLoan = sum("sssLoan");
     const totalPhilHealth = sum("philHealthContribution");
     const totalPagibig = sum("pagibigContribution");
-    const totalPagibigLoan = sum("pagibigLoan");
     const totalTax = sum("withholdingTax");
-    const totalOtherDed = sum("otherDeductions");
     const totalDeductions = sum("totalDeductions");
     const totalNet = sum("netPay");
     const summaryRows = [
@@ -6253,12 +6304,9 @@ router6.get("/api/reports/payroll/export", requireAuth7, requireManagerRole2, as
         peso(totalRestDay),
         peso(totalGross),
         peso(totalSSS),
-        peso(totalSSSLoan),
         peso(totalPhilHealth),
         peso(totalPagibig),
-        peso(totalPagibigLoan),
         peso(totalTax),
-        peso(totalOtherDed),
         peso(totalDeductions),
         peso(totalNet),
         ""
@@ -6385,12 +6433,9 @@ router6.get("/api/reports/deductions/export", requireAuth7, requireManagerRole2,
       "PhilHealth Number",
       "Pag-IBIG Number",
       "SSS Contribution (PHP)",
-      "SSS Loan (PHP)",
       "PhilHealth (PHP)",
       "Pag-IBIG Contribution (PHP)",
-      "Pag-IBIG Loan (PHP)",
       "Withholding Tax (PHP)",
-      "Other Deductions (PHP)",
       "Total Deductions (PHP)"
     );
     const dataRows = enriched.map(
@@ -6403,12 +6448,9 @@ router6.get("/api/reports/deductions/export", requireAuth7, requireManagerRole2,
         user?.philhealthNumber || "",
         user?.pagibigNumber || "",
         peso(e.sssContribution),
-        peso(e.sssLoan),
         peso(e.philHealthContribution),
         peso(e.pagibigContribution),
-        peso(e.pagibigLoan),
         peso(e.withholdingTax),
-        peso(e.otherDeductions),
         peso(e.totalDeductions)
       )
     );
@@ -6416,10 +6458,7 @@ router6.get("/api/reports/deductions/export", requireAuth7, requireManagerRole2,
     const totalPhilHealth = enriched.reduce((s, { e }) => s + (parseFloat(String(e.philHealthContribution)) || 0), 0);
     const totalPagibig = enriched.reduce((s, { e }) => s + (parseFloat(String(e.pagibigContribution)) || 0), 0);
     const totalTax = enriched.reduce((s, { e }) => s + (parseFloat(String(e.withholdingTax)) || 0), 0);
-    const totalOther = enriched.reduce((s, { e }) => s + (parseFloat(String(e.otherDeductions)) || 0), 0);
     const totalDeductions = enriched.reduce((s, { e }) => s + (parseFloat(String(e.totalDeductions)) || 0), 0);
-    const totalSSSLoan = enriched.reduce((s, { e }) => s + (parseFloat(String(e.sssLoan)) || 0), 0);
-    const totalPagibigLoan = enriched.reduce((s, { e }) => s + (parseFloat(String(e.pagibigLoan)) || 0), 0);
     const summaryRows = [
       "",
       row(
@@ -6431,12 +6470,9 @@ router6.get("/api/reports/deductions/export", requireAuth7, requireManagerRole2,
         "",
         "",
         peso(totalSSS),
-        peso(totalSSSLoan),
         peso(totalPhilHealth),
         peso(totalPagibig),
-        peso(totalPagibigLoan),
         peso(totalTax),
-        peso(totalOther),
         peso(totalDeductions)
       )
     ];
@@ -7982,6 +8018,20 @@ async function initializeDatabase() {
     } catch (err) {
       console.log("\u26A0\uFE0F Could not apply new column migrations:", err);
     }
+    try {
+      await db.execute(sql3`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false`);
+      await db.execute(sql3`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`);
+      await db.execute(sql3`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS deleted_by TEXT`);
+      await db.execute(sql3`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS deletion_reason TEXT`);
+      await db.execute(sql3`ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT false`);
+      await db.execute(sql3`ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP`);
+      await db.execute(sql3`ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS deleted_by TEXT`);
+      await db.execute(sql3`ALTER TABLE adjustment_logs ADD COLUMN IF NOT EXISTS deletion_reason TEXT`);
+      await db.execute(sql3`ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS is_orphaned BOOLEAN DEFAULT false`);
+      console.log("\u2705 Soft-delete and orphaned migrations checked/applied");
+    } catch (err) {
+      console.log("\u26A0\uFE0F Could not apply soft delete migrations:", err);
+    }
     await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS shifts (
         id TEXT PRIMARY KEY,
@@ -7996,6 +8046,10 @@ async function initializeDatabase() {
         break_duration_minutes INTEGER DEFAULT 0,
         actual_start_time TIMESTAMP,
         actual_end_time TIMESTAMP,
+        is_deleted BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP,
+        deleted_by TEXT,
+        deletion_reason TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
@@ -8085,6 +8139,7 @@ async function initializeDatabase() {
         status TEXT DEFAULT 'pending',
         is_paid BOOLEAN DEFAULT false,
         leave_payment_status TEXT DEFAULT 'paid',
+        is_orphaned BOOLEAN DEFAULT false,
         requested_at TIMESTAMP DEFAULT NOW(),
         approved_at TIMESTAMP,
         approved_by TEXT REFERENCES users(id),
@@ -8255,6 +8310,10 @@ async function initializeDatabase() {
         payroll_period_id TEXT REFERENCES payroll_periods(id),
         calculated_amount TEXT,
         is_included BOOLEAN DEFAULT true,
+        is_deleted BOOLEAN DEFAULT false,
+        deleted_at TIMESTAMP,
+        deleted_by TEXT,
+        deletion_reason TEXT,
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
@@ -9714,8 +9773,14 @@ async function registerRoutes(app2) {
     // alternative local
     "https://localhost:5000",
     // https localhost
-    "https://localhost:5173"
+    "https://localhost:5173",
     // https Vite dev server
+    "http://localhost",
+    // Capacitor default
+    "https://localhost",
+    // Capacitor secure
+    "capacitor://localhost"
+    // Capacitor iOS
   ].filter(Boolean);
   app2.use(cors({
     origin: (origin, callback) => {
@@ -10177,6 +10242,97 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to fetch shifts" });
     }
   }));
+  app2.post("/api/shifts/bulk-delete-preview", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+    try {
+      const branchId = req.user.branchId;
+      const { startDate, endDate, employeeId, target } = req.body;
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "startDate and endDate are required" });
+      }
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+      const allShifts = await storage5.getShiftsByBranch(branchId, start, end);
+      let filteredShifts = employeeId && employeeId !== "all" ? allShifts.filter((s) => String(s.userId) === String(employeeId)) : allShifts;
+      const allLogs = await storage5.getAdjustmentLogsByBranch(branchId, start, end);
+      let filteredLogs = employeeId && employeeId !== "all" ? allLogs.filter((l) => String(l.employeeId) === String(employeeId)) : allLogs;
+      let shiftCount = 0;
+      let exceptionCount = 0;
+      if (target === "shifts" || target === "both") shiftCount = filteredShifts.length;
+      if (target === "exceptions" || target === "both") exceptionCount = filteredLogs.length;
+      const allUsersInBranch = await storage5.getUsersByBranch(branchId);
+      const shiftIds = filteredShifts.map((s) => s.id);
+      const allTradesRaw = (await Promise.all(allUsersInBranch.map((u) => storage5.getShiftTradesByUser(u.id)))).flat();
+      const allTradesMap = /* @__PURE__ */ new Map();
+      allTradesRaw.forEach((t) => allTradesMap.set(t.id, t));
+      const allTrades = Array.from(allTradesMap.values());
+      const affectedTrades = allTrades.filter(
+        (t) => (t.status === "pending" || t.status === "accepted") && shiftIds.includes(t.shiftId)
+      );
+      const allTimeOff = (await Promise.all(allUsersInBranch.map((u) => storage5.getTimeOffRequestsByUser(u.id)))).flat();
+      const orphanedLeaves = allTimeOff.filter((t) => {
+        if (t.status !== "approved" && t.status !== "pending") return false;
+        const tStart = new Date(t.startDate);
+        const tEnd = new Date(t.endDate);
+        if (tStart > end || tEnd < start) return false;
+        if (employeeId && employeeId !== "all" && String(t.userId) !== String(employeeId)) return false;
+        return true;
+      }).map((t) => {
+        const user = t;
+        return {
+          employeeName: user.userName || "Employee",
+          type: t.type,
+          start: t.startDate,
+          end: t.endDate
+        };
+      });
+      const enrichedLeaves = await Promise.all(orphanedLeaves.map(async (leave) => {
+        if (leave.employeeName === "Employee") {
+          const matchingTimeOff = allTimeOff.find(
+            (t) => t.startDate === leave.start && t.endDate === leave.end && t.type === leave.type
+          );
+          if (matchingTimeOff) {
+            const user = await storage5.getUser(matchingTimeOff.userId);
+            if (user) leave.employeeName = `${user.firstName} ${user.lastName}`;
+          }
+        }
+        return leave;
+      }));
+      const allUsers = await storage5.getUsersByBranch(branchId);
+      const userMap = new Map(allUsers.map((u) => [u.id, u]));
+      const shiftDetails = filteredShifts.slice(0, 20).map((s) => {
+        const user = userMap.get(s.userId);
+        return {
+          id: s.id,
+          employeeName: user ? `${user.firstName} ${user.lastName}` : "Unknown",
+          date: s.startTime,
+          startTime: s.startTime,
+          endTime: s.endTime
+        };
+      });
+      const logDetails = filteredLogs.slice(0, 20).map((l) => {
+        const user = userMap.get(l.employeeId);
+        return {
+          id: l.id,
+          employeeName: user ? `${user.firstName} ${user.lastName}` : "Unknown",
+          type: l.type,
+          value: l.value,
+          date: l.startDate
+        };
+      });
+      res.json({
+        shiftCount,
+        exceptionCount,
+        tradesCount: target === "shifts" || target === "both" ? affectedTrades.length : 0,
+        orphanedLeaves: enrichedLeaves,
+        shiftDetails,
+        logDetails,
+        totalAffected: shiftCount + exceptionCount
+      });
+    } catch (error) {
+      console.error("Bulk preview error:", error);
+      res.status(500).json({ message: error.message || "Failed to generate preview" });
+    }
+  }));
   app2.post("/api/shifts", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
       const shiftData = insertShiftSchema.parse(req.body);
@@ -10528,7 +10684,7 @@ async function registerRoutes(app2) {
         type,
         value: numValue.toString(),
         remarks: remarks || null,
-        status: "pending"
+        status: "approved"
       });
       const manager = await storage5.getUser(loggedBy);
       const typeLabels = {
@@ -10546,7 +10702,7 @@ async function registerRoutes(app2) {
         userId: employeeId,
         type: "adjustment",
         title: "Exception Log Recorded",
-        message: `${manager?.firstName || "Manager"} logged ${typeLabels[type] || type}: ${value} ${valueUnit} for ${new Date(date).toLocaleDateString("en-PH")}. Please verify.`,
+        message: `${manager?.firstName || "Manager"} logged ${typeLabels[type] || type}: ${value} ${valueUnit} for ${new Date(date).toLocaleDateString("en-PH")}.`,
         data: JSON.stringify({ adjustmentLogId: log2.id })
       });
       res.json({ log: log2 });
@@ -10941,7 +11097,7 @@ async function registerRoutes(app2) {
   app2.put("/api/deduction-settings", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
-      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs, includeHolidayPay } = req.body;
+      const { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs, includeNightDiff } = req.body;
       const existing = await db.select().from(deductionSettings).where(eq6(deductionSettings.branchId, branchId)).limit(1);
       if (existing.length === 0) {
         await db.insert(deductionSettings).values({
@@ -10952,7 +11108,7 @@ async function registerRoutes(app2) {
           deductPagibig: deductPagibig ?? true,
           deductWithholdingTax: deductWithholdingTax ?? true,
           includeExceptionLogs: includeExceptionLogs ?? true,
-          includeHolidayPay: includeHolidayPay ?? false,
+          includeNightDiff: includeNightDiff ?? true,
           updatedAt: /* @__PURE__ */ new Date()
         });
       } else {
@@ -10962,7 +11118,7 @@ async function registerRoutes(app2) {
           deductPagibig: deductPagibig ?? true,
           deductWithholdingTax: deductWithholdingTax ?? true,
           includeExceptionLogs: includeExceptionLogs ?? true,
-          includeHolidayPay: includeHolidayPay ?? false,
+          includeNightDiff: includeNightDiff ?? true,
           updatedAt: /* @__PURE__ */ new Date()
         }).where(eq6(deductionSettings.branchId, branchId));
       }
@@ -11019,7 +11175,7 @@ async function registerRoutes(app2) {
   }));
   app2.post("/api/payroll/periods", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     try {
-      const { startDate, endDate, runType = "regular" } = req.body;
+      const { startDate, endDate, runType = "regular", periodConfig } = req.body;
       const branchId = req.user.branchId;
       if (!startDate || !endDate) {
         return res.status(400).json({ message: "Start date and end date are required" });
@@ -11029,21 +11185,12 @@ async function registerRoutes(app2) {
       if (parsedEnd <= parsedStart) {
         return res.status(400).json({ message: "End date must be after start date" });
       }
-      const existingPeriods = await storage5.getPayrollPeriodsByBranch(branchId);
-      const hasOverlap = existingPeriods.some((p) => {
-        const pStart = new Date(p.startDate);
-        const pEnd = new Date(p.endDate);
-        const isSameDateRange = parsedStart.getTime() === pStart.getTime() && parsedEnd.getTime() === pEnd.getTime();
-        return isSameDateRange && p.runType === runType;
-      });
-      if (hasOverlap) {
-        return res.status(400).json({ message: "A payroll period with this date range and run type already exists" });
-      }
       const period = await storage5.createPayrollPeriod({
         branchId,
         startDate: parsedStart,
         endDate: parsedEnd,
-        runType
+        runType,
+        periodConfig: periodConfig || null
       });
       res.json({ period });
       realTimeManager.broadcastPayrollPeriodCreated(period);
@@ -11124,10 +11271,22 @@ async function registerRoutes(app2) {
         deductPhilHealth: true,
         deductPagibig: true,
         deductWithholdingTax: true,
-        includeExceptionLogs: true
+        includeExceptionLogs: true,
+        includeNightDiff: true
       };
+      const pConfig = period.periodConfig;
+      const runConfig = pConfig ? {
+        deductSSS: pConfig.deductSSS ?? branchDeductionSettings.deductSSS,
+        deductPhilHealth: pConfig.deductPhilHealth ?? branchDeductionSettings.deductPhilHealth,
+        deductPagibig: pConfig.deductPagibig ?? branchDeductionSettings.deductPagibig,
+        deductWithholdingTax: pConfig.deductWithholdingTax ?? branchDeductionSettings.deductWithholdingTax,
+        includeExceptionLogs: pConfig.includeExceptionLogs ?? branchDeductionSettings.includeExceptionLogs,
+        includeNightDiff: pConfig.includeNightDiff ?? branchDeductionSettings.includeNightDiff,
+        includeHolidayPay: pConfig.includeHolidayPay
+        // Checked vs companySettings later
+      } : branchDeductionSettings;
       const companySettings2 = await storage5.getCompanySettings();
-      const globalHolidayPayEnabled = companySettings2 ? companySettings2.includeHolidayPay : false;
+      const globalHolidayPayEnabled = pConfig && pConfig.includeHolidayPay !== void 0 ? pConfig.includeHolidayPay : companySettings2 ? companySettings2.includeHolidayPay : false;
       const activeHeadcount = employees.filter((e) => e.isActive).length;
       const branchRecord = await storage5.getBranch(branchId);
       const isBranchExempt = !!(branchRecord?.intentHolidayExempt && ["retail", "service"].includes(branchRecord?.establishmentType || "") && activeHeadcount <= 5);
@@ -11153,6 +11312,14 @@ async function registerRoutes(app2) {
           continue;
         }
         const payCalculation = calculatePeriodPay(shifts2, hourlyRate, periodHolidays, 0, isHolidayExempt);
+        if (runConfig.includeNightDiff === false) {
+          payCalculation.totalGrossPay -= payCalculation.nightDiffPay;
+          payCalculation.nightDiffPay = 0;
+          for (let day of payCalculation.breakdown) {
+            day.regularNightDiffHours = 0;
+            day.overtimeNightDiffHours = 0;
+          }
+        }
         let paidLeaveHours = 0;
         let paidLeavePay = 0;
         for (const leave of approvedLeaves) {
@@ -11189,7 +11356,7 @@ async function registerRoutes(app2) {
         let totalLateMinutes = 0;
         let undertimeDeduction = 0;
         for (const adj of employeeAdjustments) {
-          if (!branchDeductionSettings.includeExceptionLogs) continue;
+          if (!runConfig.includeExceptionLogs) continue;
           if (adj.status !== "approved" && adj.status !== "employee_verified") continue;
           if (adj.isIncluded === false) continue;
           const adjValue = parseFloat(adj.value);
@@ -11264,7 +11431,7 @@ async function registerRoutes(app2) {
         const philHealthContribution = Math.round(mandatoryBreakdown.philHealthContribution * periodFraction * 100) / 100;
         const pagibigContribution = Math.round(mandatoryBreakdown.pagibigContribution * periodFraction * 100) / 100;
         const { workerAllowances: workerAllowances2, allowanceTypes: allowanceTypes2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq7, and: and3 } = await import("drizzle-orm");
+        const { eq: eq8, and: and4 } = await import("drizzle-orm");
         const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         let totalAllowanceAmount = 0;
         let taxableAllowanceExcess = 0;
@@ -11272,7 +11439,7 @@ async function registerRoutes(app2) {
           amount: workerAllowances2.amount,
           ceiling: allowanceTypes2.ceilingValue,
           isDeMinimis: allowanceTypes2.isDeMinimis
-        }).from(workerAllowances2).innerJoin(allowanceTypes2, eq7(workerAllowances2.allowanceTypeId, allowanceTypes2.id)).where(and3(eq7(workerAllowances2.userId, employee.id), eq7(workerAllowances2.isActive, true)));
+        }).from(workerAllowances2).innerJoin(allowanceTypes2, eq8(workerAllowances2.allowanceTypeId, allowanceTypes2.id)).where(and4(eq8(workerAllowances2.userId, employee.id), eq8(workerAllowances2.isActive, true)));
         for (const al of empAllowances) {
           const periodAllowance = Math.round(parseFloat(al.amount) * periodFraction * 100) / 100;
           const periodCeiling = al.ceiling ? Math.round(parseFloat(al.ceiling) * periodFraction * 100) / 100 : null;
@@ -11547,19 +11714,19 @@ async function registerRoutes(app2) {
     let includedExceptions = [];
     try {
       const { payrollPeriods: payrollPeriods2, adjustmentLogs: adjustmentLogs2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq7, and: and3, gte: gte2, lte: lte2, inArray } = await import("drizzle-orm");
+      const { eq: eq8, and: and4, gte: gte2, lte: lte3, inArray } = await import("drizzle-orm");
       const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
-      const periods = await db2.select().from(payrollPeriods2).where(eq7(payrollPeriods2.id, entry.payrollPeriodId)).limit(1);
+      const periods = await db2.select().from(payrollPeriods2).where(eq8(payrollPeriods2.id, entry.payrollPeriodId)).limit(1);
       if (periods.length > 0) {
         const period = periods[0];
         periodStart = period.startDate instanceof Date ? period.startDate.toISOString() : String(period.startDate);
         periodEnd = period.endDate instanceof Date ? period.endDate.toISOString() : String(period.endDate);
-        runType = period.runType ? period.runType instanceof Date ? period.runType.toISOString() : String(period.runType) : null;
+        runType = period.runType ? String(period.runType) : null;
         const logs = await db2.select().from(adjustmentLogs2).where(
-          and3(
-            eq7(adjustmentLogs2.employeeId, entry.userId),
+          and4(
+            eq8(adjustmentLogs2.employeeId, entry.userId),
             gte2(adjustmentLogs2.startDate, new Date(periodStart)),
-            lte2(adjustmentLogs2.startDate, new Date(periodEnd)),
+            lte3(adjustmentLogs2.startDate, new Date(periodEnd)),
             inArray(adjustmentLogs2.status, ["employee_verified", "approved"])
           )
         );
@@ -12346,7 +12513,7 @@ async function registerRoutes(app2) {
       if (!trade) {
         return res.status(404).json({ message: "Trade not found" });
       }
-      if (trade.fromUserId !== userId && req.user.role !== "admin") {
+      if (trade.fromUserId !== userId && !["admin", "manager"].includes(req.user.role)) {
         return res.status(403).json({ message: "You cannot delete this trade" });
       }
       if (trade.status !== "pending") {
@@ -13003,9 +13170,9 @@ async function registerRoutes(app2) {
     try {
       const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { leaveCredits: leaveCredits2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq7, and: and3 } = await import("drizzle-orm");
+      const { eq: eq8, and: and4 } = await import("drizzle-orm");
       const specificBalance = await db2.select().from(leaveCredits2).where(
-        and3(eq7(leaveCredits2.userId, request.userId), eq7(leaveCredits2.year, startD.getFullYear()), eq7(leaveCredits2.leaveType, request.type))
+        and4(eq8(leaveCredits2.userId, request.userId), eq8(leaveCredits2.year, startD.getFullYear()), eq8(leaveCredits2.leaveType, request.type))
       ).limit(1);
       let deductedFrom = null;
       if (specificBalance[0] && parseFloat(specificBalance[0].remainingCredits) > 0) {
@@ -13171,9 +13338,9 @@ async function registerRoutes(app2) {
       try {
         const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const { leaveCredits: leaveCredits2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq7, and: and3 } = await import("drizzle-orm");
+        const { eq: eq8, and: and4 } = await import("drizzle-orm");
         const specificBalance = await db2.select().from(leaveCredits2).where(
-          and3(eq7(leaveCredits2.userId, existing.userId), eq7(leaveCredits2.year, startD.getFullYear()), eq7(leaveCredits2.leaveType, existing.type))
+          and4(eq8(leaveCredits2.userId, existing.userId), eq8(leaveCredits2.year, startD.getFullYear()), eq8(leaveCredits2.leaveType, existing.type))
         ).limit(1);
         let deductedFrom = null;
         if (specificBalance[0] && parseFloat(specificBalance[0].remainingCredits) > 0) {
@@ -13920,6 +14087,56 @@ async function loadSampleData() {
 
 // server/index.ts
 init_db();
+
+// server/cron.ts
+init_db();
+init_schema();
+import { lte as lte2, and as and3, eq as eq7 } from "drizzle-orm";
+import { subDays as subDays2 } from "date-fns";
+function setupCronJobs() {
+  console.log("\u{1F552} Setting up background cron jobs...");
+  const scheduleNextPurge = () => {
+    const now = /* @__PURE__ */ new Date();
+    const next3AM = new Date(now);
+    next3AM.setHours(3, 0, 0, 0);
+    if (now.getTime() > next3AM.getTime()) {
+      next3AM.setDate(next3AM.getDate() + 1);
+    }
+    const timeUntilNext = next3AM.getTime() - now.getTime();
+    setTimeout(async () => {
+      await runDataPurge();
+      scheduleNextPurge();
+    }, timeUntilNext);
+  };
+  scheduleNextPurge();
+  if (process.env.NODE_ENV === "production") {
+    setTimeout(runDataPurge, 1e3 * 60 * 5);
+  }
+}
+async function runDataPurge() {
+  console.log("\u{1F9F9} Running soft-deleted data purge job...");
+  try {
+    const cutoffDate = subDays2(/* @__PURE__ */ new Date(), 90);
+    const shiftResult = await db.delete(shifts).where(
+      and3(
+        eq7(shifts.isDeleted, true),
+        lte2(shifts.deletedAt, cutoffDate)
+      )
+    );
+    console.log(`\u2705 Purged soft-deleted shifts older than 90 days.`);
+    const logResult = await db.delete(adjustmentLogs).where(
+      and3(
+        eq7(adjustmentLogs.isDeleted, true),
+        lte2(adjustmentLogs.deletedAt, cutoffDate)
+      )
+    );
+    console.log(`\u2705 Purged soft-deleted adjustment logs older than 90 days.`);
+  } catch (err) {
+    console.error("\u274C Error running data purge job:", err);
+  }
+}
+
+// server/index.ts
 process.env.TZ = "Asia/Manila";
 var app = express2();
 app.use(express2.json());
@@ -13988,6 +14205,7 @@ app.get("/api/health", (req, res) => {
   await seedSampleShiftTrades();
   await markSetupComplete();
   console.log("\u2705 Setup marked as complete");
+  setupCronJobs();
   const server = await registerRoutes(app);
   app.use((err, _req, res, _next) => {
     const status = err.status || err.statusCode || 500;
