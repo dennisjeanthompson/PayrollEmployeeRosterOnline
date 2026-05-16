@@ -573,17 +573,6 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
     return sum + (isNaN(hours) ? 0 : hours);
   }, 0);
 
-  // Count shifts in the current pay period only (not all-time)
-  const currentPeriodShifts = (employeeShifts?.shifts || []).filter((s: any) => {
-    if (!s.startTime || !currentPeriod) return false;
-    const d = new Date(s.startTime);
-    if (isNaN(d.getTime())) return false;
-    const periodStart = new Date(currentPeriod.startDate);
-    const periodEnd = new Date(currentPeriod.endDate);
-    periodEnd.setHours(23, 59, 59, 999);
-    return d >= periodStart && d <= periodEnd;
-  });
-
   const upcomingShifts = (employeeShifts?.shifts || [])
     .filter((s: any) => s.startTime && !isNaN(new Date(s.startTime).getTime()) && new Date(s.startTime) >= new Date())
     .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
@@ -595,7 +584,19 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   // Get latest payslip and current period estimates
   const records = payrollHistory?.entries || payrollHistory?.records || payrollHistory?.payroll || [];
   const activeEntry = records.find((r: any) => r.status === 'draft' || r.status === 'pending');
+  const latestPaidEntry = records.find((r: any) => r.status === 'paid' || r.status === 'completed');
   const currentPeriod = payrollData?.period;
+
+  // Count shifts in the current pay period only (not all-time)
+  const currentPeriodShifts = (employeeShifts?.shifts || []).filter((s: any) => {
+    if (!s.startTime || !currentPeriod) return false;
+    const d = new Date(s.startTime);
+    if (isNaN(d.getTime())) return false;
+    const periodStart = new Date(currentPeriod.startDate);
+    const periodEnd = new Date(currentPeriod.endDate);
+    periodEnd.setHours(23, 59, 59, 999);
+    return d >= periodStart && d <= periodEnd;
+  });
   
   // Hours worked this period. Fallback to this week\'s scheduled hours.
   const hoursWorked = activeEntry ? Number(activeEntry.totalHours || 0) : (payrollData?.totalHours ?? totalHoursThisWeek);
