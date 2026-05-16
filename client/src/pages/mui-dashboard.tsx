@@ -33,6 +33,10 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  List,
+  ListItem,
+  ListItemIcon,
+  ListItemText,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
 
@@ -58,6 +62,8 @@ import {
   Assessment as AnalyticsIcon,
   AccountBalance as ReceiptIcon,
   History as HistoryIcon,
+  Store as StoreIcon,
+  Assignment as AssignmentIcon,
 } from "@mui/icons-material";
 
 // Types
@@ -206,12 +212,31 @@ export default function MuiDashboard() {
 }
 
 // Admin Dashboard Component
-import MuiBranches from "./mui-branches";
-
 function AdminDashboard({ currentUser }: any) {
   const theme = useTheme();
+  
+  const { data, isLoading } = useQuery<any>({
+    queryKey: ["/api/dashboard/admin"],
+    staleTime: 10 * 1000,
+    refetchInterval: 30 * 1000, // Refresh every 30s
+  });
+
+  if (isLoading) {
+    return (
+      <Box sx={{ p: 3 }}>
+        <Skeleton variant="rectangular" height={150} sx={{ borderRadius: 4, mb: 3 }} />
+        <Grid container spacing={3}>
+          {[1,2,3,4].map(i => <Grid size={{ xs: 12, sm: 6, md: 3 }} key={i}><Skeleton variant="rectangular" height={120} sx={{ borderRadius: 3 }} /></Grid>)}
+        </Grid>
+      </Box>
+    );
+  }
+
+  const { stats, branchStatuses, staffOverview, recentActivity, alerts } = data || {};
+
   return (
     <Stack spacing={3} sx={{ width: "100%", maxWidth: "none" }}>
+      {/* 1. Hero Strip */}
       <Paper
         elevation={0}
         sx={{
@@ -222,47 +247,183 @@ function AdminDashboard({ currentUser }: any) {
           backdropFilter: "blur(10px)",
           border: `1px solid ${alpha(theme.palette.success.main, 0.15)}`,
           p: { xs: 2.5, md: 3 },
+          display: 'flex',
+          flexDirection: { xs: 'column', md: 'row' },
+          justifyContent: 'space-between',
+          alignItems: { xs: 'flex-start', md: 'center' },
+          gap: 2
         }}
       >
         <Box sx={{ position: "relative", zIndex: 1 }}>
-          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+          <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 1 }}>
             <Chip
               size="small"
               icon={<VerifiedIcon sx={{ fontSize: 16 }} />}
               label="System Administrator"
-              sx={{
-                bgcolor: alpha(theme.palette.success.main, 0.1),
-                color: "success.main",
-                fontWeight: 600,
-              }}
+              sx={{ bgcolor: alpha(theme.palette.success.main, 0.1), color: "success.main", fontWeight: 600 }}
             />
+            <Typography variant="body2" color="text.secondary" fontWeight={500}>
+              {format(new Date(), "EEEE, MMMM d, yyyy")}
+            </Typography>
           </Stack>
           <Typography variant="h4" sx={{ fontWeight: 800, mb: 0.5, letterSpacing: "-0.02em" }}>
             Welcome, {currentUser?.firstName || "Admin"}
           </Typography>
-          <Typography color="text.secondary" sx={{ fontSize: "1rem", maxWidth: 800, mb: 3 }}>
-            As a System Administrator, you have bird's-eye access to all locations. Use the branch switcher in the top navigation menu to view data for specific branches, or access reports below.
-          </Typography>
-
-          <Stack direction="row" spacing={2}>
-            <Link href="/reports">
-              <Button
-                variant="outlined"
-                color="success"
-                startIcon={<AnalyticsIcon />}
-                sx={{ px: 3, py: 1.5, borderRadius: 2, fontWeight: 600, borderWidth: 2, '&:hover': { borderWidth: 2 } }}
-              >
-                Payroll Analytics
-              </Button>
-            </Link>
-          </Stack>
+        </Box>
+        <Box>
+           <Chip label="Company-Wide View (All Branches)" color="primary" sx={{ fontWeight: 600, px: 1 }} />
         </Box>
       </Paper>
 
-      {/* Embedded Branches Management */}
-      <Box sx={{ mt: 2 }}>
-        <MuiBranches isEmbedded={true} />
-      </Box>
+      {/* 5. Alerts Panel */}
+      {alerts && alerts.length > 0 && (
+        <Paper sx={{ p: 2, borderRadius: 3, borderLeft: `4px solid ${theme.palette.warning.main}`, bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
+          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
+            <BellIcon color="warning" fontSize="small" />
+            <Typography variant="subtitle2" fontWeight={700} color="warning.dark">System Alerts ({alerts.length})</Typography>
+          </Stack>
+          <ul style={{ margin: 0, paddingLeft: '20px', color: theme.palette.text.secondary, fontSize: '0.875rem' }}>
+            {alerts.map((a: string, i: number) => <li key={i}>{a}</li>)}
+          </ul>
+        </Paper>
+      )}
+
+      {/* 2. Stat Cards */}
+      <Grid container spacing={2}>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard
+            title="Total Payroll (Current)"
+            value={`₱${(stats?.totalPayroll || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            icon={<PesoIcon />}
+            subtitle={`${stats?.branchesGenerated || 0} of ${stats?.totalBranches || 0} branches done`}
+            color="success"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard
+            title="Branches Generated"
+            value={`${stats?.branchesGenerated || 0} / ${stats?.totalBranches || 0}`}
+            icon={<StoreIcon />}
+            color="primary"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard
+            title="Pending Approvals"
+            value={stats?.pendingApprovals || 0}
+            icon={<AssignmentIcon />}
+            subtitle="Across all branches"
+            color="warning"
+          />
+        </Grid>
+        <Grid size={{ xs: 12, sm: 6, md: 3 }}>
+          <StatCard
+            title="Total Staff"
+            value={stats?.totalStaff || 0}
+            icon={<UsersIcon />}
+            color="info"
+          />
+        </Grid>
+      </Grid>
+
+      <Grid container spacing={3}>
+        {/* 3. Branch Payroll Status Table */}
+        <Grid size={{ xs: 12, md: 8 }}>
+          <Card sx={{ borderRadius: 4, height: '100%', border: `1px solid ${theme.palette.divider}`, boxShadow: 'none' }}>
+            <Box sx={{ p: 2.5, borderBottom: `1px solid ${theme.palette.divider}`, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+               <Typography variant="h6" fontWeight={700}>Branch Payroll Status</Typography>
+            </Box>
+            <Box sx={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left' }}>
+                <thead>
+                  <tr style={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
+                    <th style={{ padding: '12px 20px', fontSize: '0.75rem', textTransform: 'uppercase', color: theme.palette.text.secondary }}>Branch</th>
+                    <th style={{ padding: '12px 20px', fontSize: '0.75rem', textTransform: 'uppercase', color: theme.palette.text.secondary }}>Status</th>
+                    <th style={{ padding: '12px 20px', fontSize: '0.75rem', textTransform: 'uppercase', color: theme.palette.text.secondary }}>Net Payroll</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {branchStatuses?.map((b: any) => (
+                    <tr key={b.id} style={{ borderBottom: `1px solid ${theme.palette.divider}` }}>
+                      <td style={{ padding: '16px 20px', fontWeight: 600 }}>{b.branchName}</td>
+                      <td style={{ padding: '16px 20px' }}>
+                        <Chip 
+                          size="small" 
+                          label={b.isGenerated ? 'Generated' : (b.status === 'No Payroll Yet' ? 'No Payroll' : 'Pending')} 
+                          color={b.isGenerated ? 'success' : (b.status === 'No Payroll Yet' ? 'default' : 'warning')} 
+                          variant="outlined"
+                        />
+                      </td>
+                      <td style={{ padding: '16px 20px', fontFamily: 'monospace', fontWeight: 700 }}>
+                        ₱{(b.netAmount || 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      </td>
+                    </tr>
+                  ))}
+                  {(!branchStatuses || branchStatuses.length === 0) && (
+                    <tr>
+                      <td colSpan={3} style={{ padding: '20px', textAlign: 'center', color: theme.palette.text.secondary }}>No branches found.</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </Box>
+          </Card>
+        </Grid>
+
+        {/* 6. Staff Overview (Bar Chart) & 7. Recent Activity */}
+        <Grid size={{ xs: 12, md: 4 }}>
+          <Stack spacing={3}>
+            {/* Staff Overview */}
+            <Card sx={{ borderRadius: 4, border: `1px solid ${theme.palette.divider}`, boxShadow: 'none' }}>
+              <Box sx={{ p: 2.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
+                 <Typography variant="subtitle1" fontWeight={700}>Staff Distribution</Typography>
+              </Box>
+              <CardContent>
+                <Stack spacing={2}>
+                  {staffOverview?.map((s: any, idx: number) => {
+                    const max = Math.max(...(staffOverview.map((st:any) => st.headcount) || [1]));
+                    const pct = max > 0 ? (s.headcount / max) * 100 : 0;
+                    return (
+                      <Box key={idx}>
+                        <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
+                          <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: '80%' }}>{s.branchName}</Typography>
+                          <Typography variant="body2" color="text.secondary">{s.headcount}</Typography>
+                        </Stack>
+                        <Box sx={{ width: '100%', height: 6, bgcolor: alpha(theme.palette.primary.main, 0.1), borderRadius: 3, overflow: 'hidden' }}>
+                          <Box sx={{ width: `${pct}%`, height: '100%', bgcolor: 'primary.main', borderRadius: 3 }} />
+                        </Box>
+                      </Box>
+                    );
+                  })}
+                </Stack>
+              </CardContent>
+            </Card>
+
+            {/* Recent Activity */}
+            <Card sx={{ borderRadius: 4, border: `1px solid ${theme.palette.divider}`, boxShadow: 'none' }}>
+               <Box sx={{ p: 2.5, borderBottom: `1px solid ${theme.palette.divider}` }}>
+                 <Typography variant="subtitle1" fontWeight={700}>Recent Activity</Typography>
+               </Box>
+               <List disablePadding>
+                 {recentActivity?.map((log: any, idx: number) => (
+                   <ListItem key={idx} divider={idx < recentActivity.length - 1} sx={{ px: 2.5, py: 1.5 }}>
+                      <ListItemIcon sx={{ minWidth: 36 }}><HistoryIcon fontSize="small" color="secondary" /></ListItemIcon>
+                      <ListItemText 
+                        primary={log.action} 
+                        secondary={`${log.userName || 'System'} • ${format(new Date(log.timestamp), 'MMM d, h:mm a')}`}
+                        primaryTypographyProps={{ variant: 'body2', fontWeight: 600 }}
+                        secondaryTypographyProps={{ variant: 'caption' }}
+                      />
+                   </ListItem>
+                 ))}
+                 {(!recentActivity || recentActivity.length === 0) && (
+                   <ListItem><ListItemText secondary="No recent activity" /></ListItem>
+                 )}
+               </List>
+            </Card>
+          </Stack>
+        </Grid>
+      </Grid>
     </Stack>
   );
 }

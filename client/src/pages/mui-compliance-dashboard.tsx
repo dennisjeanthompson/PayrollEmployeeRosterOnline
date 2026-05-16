@@ -1,6 +1,6 @@
 /**
  * Compliance Dashboard
- * Overview of Philippine payroll compliance status
+ * Overview of internal company configuration and basic compliance status
  */
 
 import { startTransition } from "react";
@@ -9,14 +9,12 @@ import {
   Box,
   Card,
   CardContent,
-  CardHeader,
   Typography,
   Stack,
   Chip,
   CircularProgress,
   useTheme,
   alpha,
-  Alert,
   LinearProgress,
   Divider,
   List,
@@ -29,15 +27,15 @@ import {
   CheckCircle as CheckIcon,
   Warning as WarningIcon,
   Error as ErrorIcon,
-  Security as SecurityIcon,
-  LocalHospital as HealthIcon,
-  Home as HomeIcon,
-  Receipt as TaxIcon,
+  Business as BusinessIcon,
+  Store as StoreIcon,
+  People as PeopleIcon,
   Verified as VerifiedIcon,
   Refresh as RefreshIcon,
   OpenInNew as OpenIcon,
 } from "@mui/icons-material";
 import { useLocation } from "wouter";
+import { apiRequest } from "@/lib/queryClient";
 
 interface ComplianceCheck {
   id: string;
@@ -51,110 +49,82 @@ export default function MuiComplianceDashboard() {
   const theme = useTheme();
   const [, setLocation] = useLocation();
 
-  // Fetch employees for compliance checks
-  const { data: employeesData, isLoading: loadingEmployees } = useQuery<{ employees: any[] }>({
-    queryKey: ["/api/hours/all-employees"],
+  const { data: companyData, isLoading: loadingCompany } = useQuery({
+    queryKey: ["company-settings"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/company-settings");
+      return res.json();
+    },
   });
 
-  // Fetch deduction rates
-  const { data: ratesData, isLoading: loadingRates } = useQuery<{ rates: any[] }>({
-    queryKey: ["/api/admin/deduction-rates"],
+  const { data: branchesData, isLoading: loadingBranches } = useQuery({
+    queryKey: ["branches"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/branches");
+      return res.json();
+    },
   });
 
+  const { data: employeesData, isLoading: loadingEmployees } = useQuery({
+    queryKey: ["all-employees"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", "/api/employees");
+      return res.json();
+    },
+  });
+
+  const company = companyData?.settings || companyData;
+  const branches = branchesData?.branches || [];
   const employees = employeesData?.employees || [];
-  const rates = ratesData?.rates || [];
 
-  // Calculate compliance checks
   const complianceChecks: ComplianceCheck[] = [];
 
-  // 1. Check SSS rates configured
-  const sssRates = rates.filter(r => r.type === "sss");
+  // 1. Check Company Profile
+  const isCompanyComplete = company?.name && company?.address && company?.industry;
   complianceChecks.push({
-    id: "sss-rates",
-    name: "SSS Contribution Table",
-    status: sssRates.length >= 30 ? "pass" : sssRates.length > 0 ? "warning" : "fail",
-    message: sssRates.length >= 30 
-      ? `${sssRates.length} brackets configured (2026 compliant)`
-      : sssRates.length > 0 
-        ? `Only ${sssRates.length} brackets. Should be 33 for full 2026 compliance.`
-        : "No SSS rates configured. Add 2026 rate brackets.",
-    icon: <SecurityIcon />,
+    id: "company-profile",
+    name: "Company Identity Setup",
+    status: isCompanyComplete ? "pass" : company ? "warning" : "fail",
+    message: isCompanyComplete 
+      ? "Core company details configured"
+      : "Company identity is missing core details (Name, Address, or Industry)",
+    icon: <BusinessIcon />,
   });
 
-  // 2. Check PhilHealth rates
-  const philhealthRates = rates.filter(r => r.type === "philhealth");
+  // 2. Check Branch Configuration
+  const activeBranches = branches.filter((b: any) => b.isActive);
+  const branchesWithIncompleteData = activeBranches.filter((b: any) => !b.name || !b.address);
   complianceChecks.push({
-    id: "philhealth-rates",
-    name: "PhilHealth Contribution",
-    status: philhealthRates.length > 0 ? "pass" : "warning",
-    message: philhealthRates.length > 0 
-      ? "PhilHealth 5% rate configured"
-      : "Add PhilHealth rate (5% shared, 2.5% employee)",
-    icon: <HealthIcon />,
+    id: "branch-config",
+    name: "Branch Details",
+    status: activeBranches.length === 0 ? "fail" : branchesWithIncompleteData.length === 0 ? "pass" : "warning",
+    message: activeBranches.length === 0
+      ? "No active branches configured"
+      : branchesWithIncompleteData.length === 0
+        ? "All active branches have complete details"
+        : `${branchesWithIncompleteData.length} branch(es) missing required address/name`,
+    icon: <StoreIcon />,
   });
 
-  // 3. Check Pag-IBIG rates
-  const pagibigRates = rates.filter(r => r.type === "pagibig");
+  // 3. Check Employee Payroll Details
+  const activeEmployees = employees.filter((e: any) => e.isActive);
+  const employeesWithoutRate = activeEmployees.filter((e: any) => !e.hourlyRate || parseFloat(e.hourlyRate) <= 0);
   complianceChecks.push({
-    id: "pagibig-rates",
-    name: "Pag-IBIG (HDMF) Contribution",
-    status: pagibigRates.length > 0 ? "pass" : "warning",
-    message: pagibigRates.length > 0 
-      ? "Pag-IBIG rate configured"
-      : "Add Pag-IBIG rate (2% each, max ₱200)",
-    icon: <HomeIcon />,
+    id: "employee-rates",
+    name: "Employee Pay Rates",
+    status: activeEmployees.length === 0 ? "fail" : employeesWithoutRate.length === 0 ? "pass" : "fail",
+    message: activeEmployees.length === 0
+      ? "No active employees found"
+      : employeesWithoutRate.length === 0
+        ? "All active employees have an assigned hourly rate"
+        : `${employeesWithoutRate.length} employee(s) missing hourly rate configuration`,
+    icon: <PeopleIcon />,
   });
 
-  // 4. Check BIR withholding tax rates
-  const taxRates = rates.filter(r => r.type === "tax");
-  complianceChecks.push({
-    id: "tax-rates",
-    name: "BIR Withholding Tax (TRAIN)",
-    status: taxRates.length >= 5 ? "pass" : taxRates.length > 0 ? "warning" : "fail",
-    message: taxRates.length >= 5 
-      ? `${taxRates.length} tax brackets configured`
-      : taxRates.length > 0 
-        ? "Incomplete tax brackets. TRAIN law requires 6 brackets."
-        : "Add BIR withholding tax brackets per TRAIN law.",
-    icon: <TaxIcon />,
-  });
-
-  // 5. Check employee data completeness
-  const employeesWithMissingData = employees.filter(e => 
-    !e.tin || !e.sss || !e.philhealth || !e.pagibig
-  );
-  complianceChecks.push({
-    id: "employee-data",
-    name: "Employee Government IDs",
-    status: employeesWithMissingData.length === 0 ? "pass" : 
-            employeesWithMissingData.length <= 2 ? "warning" : "fail",
-    message: employeesWithMissingData.length === 0 
-      ? "All employees have complete government IDs"
-      : `${employeesWithMissingData.length} employee(s) missing TIN/SSS/PhilHealth/Pag-IBIG`,
-    icon: <VerifiedIcon />,
-  });
-
-  // 6. Min wage compliance
-  const minWageLaUnion = 470; // ₱470/day La Union 2026
-  const minHourlyRate = minWageLaUnion / 8;
-  const belowMinWage = employees.filter(e => 
-    e.hourlyRate && parseFloat(e.hourlyRate) < minHourlyRate
-  );
-  complianceChecks.push({
-    id: "min-wage",
-    name: "Minimum Wage (La Union)",
-    status: belowMinWage.length === 0 ? "pass" : "fail",
-    message: belowMinWage.length === 0 
-      ? `All employees meet ₱${minWageLaUnion}/day minimum`
-      : `${belowMinWage.length} employee(s) below ₱${minWageLaUnion}/day minimum!`,
-    icon: <WarningIcon />,
-  });
-
-  // Calculate overall score
   const passCount = complianceChecks.filter(c => c.status === "pass").length;
-  const score = Math.round((passCount / complianceChecks.length) * 100);
+  const score = complianceChecks.length > 0 ? Math.round((passCount / complianceChecks.length) * 100) : 0;
 
-  const isLoading = loadingEmployees || loadingRates;
+  const isLoading = loadingCompany || loadingBranches || loadingEmployees;
 
   if (isLoading) {
     return (
@@ -166,14 +136,13 @@ export default function MuiComplianceDashboard() {
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 } }}>
-      {/* Header */}
       <Box sx={{ display: "flex", alignItems: "center", gap: 2, mb: 4 }}>
         <Box
           sx={{
             width: 48,
             height: 48,
             borderRadius: 3,
-            background: score >= 80 
+            background: score === 100 
               ? `linear-gradient(135deg, ${theme.palette.success.main}, ${theme.palette.success.dark})`
               : score >= 50
                 ? `linear-gradient(135deg, ${theme.palette.warning.main}, ${theme.palette.warning.dark})`
@@ -191,31 +160,30 @@ export default function MuiComplianceDashboard() {
             Compliance Dashboard
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Philippine Payroll Compliance Status (2026)
+            System Configuration Readiness
           </Typography>
         </Box>
         <Chip
-          icon={score >= 80 ? <CheckIcon /> : score >= 50 ? <WarningIcon /> : <ErrorIcon />}
-          label={`${score}% Compliant`}
-          color={score >= 80 ? "success" : score >= 50 ? "warning" : "error"}
+          icon={score === 100 ? <CheckIcon /> : score >= 50 ? <WarningIcon /> : <ErrorIcon />}
+          label={`${score}% Ready`}
+          color={score === 100 ? "success" : score >= 50 ? "warning" : "error"}
           sx={{ fontWeight: 700, fontSize: "1rem", py: 2.5, px: 1 }}
         />
       </Box>
 
-      {/* Overall Score Card */}
       <Card 
         elevation={0} 
         sx={{ 
           mb: 4, 
           borderRadius: 3, 
           bgcolor: alpha(
-            score >= 80 ? theme.palette.success.main : 
+            score === 100 ? theme.palette.success.main : 
             score >= 50 ? theme.palette.warning.main : 
             theme.palette.error.main, 
             0.05
           ),
           border: `1px solid ${alpha(
-            score >= 80 ? theme.palette.success.main : 
+            score === 100 ? theme.palette.success.main : 
             score >= 50 ? theme.palette.warning.main : 
             theme.palette.error.main, 
             0.2
@@ -226,12 +194,12 @@ export default function MuiComplianceDashboard() {
           <Stack direction={{ xs: "column", md: "row" }} alignItems="center" spacing={3}>
             <Box sx={{ flex: 1, width: "100%" }}>
               <Typography variant="body2" color="text.secondary" gutterBottom>
-                Overall Compliance Score
+                System Configuration Score
               </Typography>
               <LinearProgress
                 variant="determinate"
                 value={score}
-                color={score >= 80 ? "success" : score >= 50 ? "warning" : "error"}
+                color={score === 100 ? "success" : score >= 50 ? "warning" : "error"}
                 sx={{ height: 12, borderRadius: 6, mb: 1 }}
               />
               <Typography variant="caption" color="text.secondary">
@@ -250,19 +218,18 @@ export default function MuiComplianceDashboard() {
               <Button
                 variant="contained"
                 startIcon={<OpenIcon />}
-                onClick={() => startTransition(() => setLocation("/admin/deduction-rates"))}
+                onClick={() => startTransition(() => setLocation("/admin/company-settings"))}
                 sx={{ borderRadius: 2 }}
               >
-                Configure Rates
+                Company Settings
               </Button>
             </Stack>
           </Stack>
         </CardContent>
       </Card>
 
-      {/* Compliance Checks */}
       <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-        Compliance Checks
+        Configuration Checks
       </Typography>
 
       <Card elevation={0} sx={{ borderRadius: 3, overflow: "hidden" }}>
@@ -331,24 +298,6 @@ export default function MuiComplianceDashboard() {
           ))}
         </List>
       </Card>
-
-      {/* Reference Information */}
-      <Alert severity="info" sx={{ mt: 4, borderRadius: 2 }}>
-        <Typography variant="body2" gutterBottom>
-          <strong>2026 Rate References:</strong>
-        </Typography>
-        <Typography variant="caption" component="div">
-          • SSS: CI-2024-006 (15% total, 5% employee, 10% employer, 33 brackets)
-          <br />
-          • PhilHealth: PA2026-0002 (5% total, 2.5% each, ₱10k-₱100k salary range)
-          <br />
-          • Pag-IBIG: Circular 460 (2% each, max ₱200/share)
-          <br />
-          • BIR: RR 11-2018/TRAIN Law (progressive 0%-35%)
-          <br />
-          • Min Wage La Union: RB I-D-26 (₱470/day non-agri)
-        </Typography>
-      </Alert>
     </Box>
   );
 }

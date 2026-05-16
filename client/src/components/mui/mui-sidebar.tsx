@@ -62,8 +62,8 @@ interface NavItem {
 
 const navigation: NavItem[] = [
   { name: "Dashboard", href: "/", icon: DashboardIcon, roles: ["employee", "manager", "admin"] },
-  { name: "Schedule", href: "/schedule", icon: CalendarIcon, roles: ["employee", "manager", "admin"] },
-  { name: "Pay Summary", href: "/payroll", icon: PesoIcon, roles: ["employee", "manager", "admin"] },
+  { name: "Schedule", href: "/schedule", icon: CalendarIcon, roles: ["employee", "manager"] },
+  { name: "Pay Summary", href: "/payroll", icon: PesoIcon, roles: ["employee", "manager"] },
   { name: "Notifications", href: "/notifications", icon: NotificationsIcon, roles: ["employee", "manager", "admin"], badge: true },
 ];
 
@@ -71,14 +71,14 @@ const managementNavigation: NavItem[] = [
   { name: "Employees", href: "/employees", icon: PeopleIcon, roles: ["manager", "admin"] },
   { name: "Payroll", href: "/payroll-management", icon: PesoIcon, roles: ["manager", "admin"] },
   { name: "Holidays", href: "/holiday-calendar", icon: CalendarIcon, roles: ["manager", "admin"] },
-  { name: "Employee Requests", href: "/requests", icon: AssignmentIcon, roles: ["manager", "admin"] },
+  { name: "Employee Requests", href: "/requests", icon: AssignmentIcon, roles: ["manager"] },
   { name: "Forecasting", href: "/analytics", icon: TrendingUpIcon, roles: ["manager", "admin"] },
-  { name: "Branches", href: "/branches", icon: StoreIcon, roles: ["manager"] },
+  { name: "Branches", href: "/branches", icon: StoreIcon, roles: ["manager", "admin"] },
 ];
 
 const settingsNavigation: NavItem[] = [
   { name: "Company Settings", href: "/company-settings", icon: BusinessIcon, roles: ["manager", "admin"] },
-  { name: "Profile Settings", href: "/profile", icon: ProfileIcon, roles: ["employee", "manager", "admin"] },
+  { name: "Profile Settings", href: "/profile", icon: ProfileIcon, roles: ["employee", "manager"] },
   { name: "Compliance", href: "/compliance", icon: VerifiedIcon, roles: ["admin"] },
   { name: "Deductions", href: "/deduction-settings", icon: SettingsIcon, roles: ["manager", "admin"] },
   { name: "13th Month Pay", href: "/13th-month", icon: PesoIcon, roles: ["manager", "admin"] },
