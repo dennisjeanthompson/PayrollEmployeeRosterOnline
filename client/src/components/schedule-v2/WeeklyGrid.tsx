@@ -401,6 +401,8 @@ function WeeklyGridComponent({
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const isDark = theme.palette.mode === 'dark';
   const weekDays = getWeekDays(weekStart);
+  const weekDayStrs = React.useMemo(() => weekDays.map(date => format(date, 'yyyy-MM-dd')), [weekDays]);
+  const isTodayArr = React.useMemo(() => weekDays.map(date => isToday(date)), [weekDays]);
 
   // Filter to only relevant time-off (pending + approved visible on calendar, rejected transiently)
   const visibleTimeOff = timeOffRequests.filter(r => r.status === 'pending' || r.status === 'approved');
@@ -713,9 +715,9 @@ function WeeklyGridComponent({
               </Typography>
             </Box>
             {/* Day columns */}
-            {weekDays.map(date => {
-              const dateStr = format(date, 'yyyy-MM-dd');
-              const today = isToday(date);
+            {weekDays.map((date, dayIndex) => {
+              const dateStr = weekDayStrs[dayIndex];
+              const today = isTodayArr[dayIndex];
               const holiday = holidaysByDate[dateStr];
               return (
                 <Box
@@ -786,222 +788,47 @@ function WeeklyGridComponent({
             </Box>
           )}
           {employees.map(emp => {
-            const rc = getRoleColor(emp.position, emp.role);
-            const isInactive = emp.isActive === false;
-            const weekHours = weekDays.reduce((sum, date) => {
-              const cellShifts = shiftsByCell[`${emp.id}_${format(date, 'yyyy-MM-dd')}`] || [];
-              return sum + cellShifts.reduce((s, sh) => s + differenceInHours(new Date(sh.endTime), new Date(sh.startTime)), 0);
-            }, 0);
+            // Extract only arrays relevant to this employee to keep props shallow-comparable
+            const empShifts: Record<string, any[]> = {};
+            const empTimeOff: Record<string, any[]> = {};
+            const empAdjustments: Record<string, any[]> = {};
+            
+            weekDayStrs.forEach(dateStr => {
+              const cellKey = `${emp.id}_${dateStr}`;
+              empShifts[dateStr] = shiftsByCell[cellKey] || [];
+              empTimeOff[dateStr] = timeOffByCell[cellKey] || [];
+              empAdjustments[dateStr] = adjustmentsByCell[cellKey] || [];
+            });
 
             return (
-              <Box
+              <EmployeeRow
                 key={emp.id}
-                component="tr"
-                sx={{
-                  opacity: isInactive ? 0.5 : 1,
-                  '&:hover td': { bgcolor: isDark ? '#342A1E' : '#FBF8F4' },
-                }}
-              >
-                {/* Employee name cell */}
-                <Box
-                  component="td"
-                  sx={{
-                    p: 1.5, borderBottom: '1px solid',
-                    borderColor: isDark ? '#3D3228' : '#E8E0D4',
-                    position: 'sticky', left: 0, zIndex: 1,
-                    bgcolor: isDark ? '#2A2018' : '#FFFFFF',
-                  }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                    <Avatar src={emp?.photoUrl || undefined} sx={{ width: 28, height: 28, bgcolor: rc.bg, color: rc.text, fontSize: '0.65rem', fontWeight: 700 }}>
-                      {!emp?.photoUrl && <>{emp?.firstName?.[0]}{emp?.lastName?.[0]}</>}
-                    </Avatar>
-                    <Box sx={{ minWidth: 0, flex: 1 }}>
-                      <Typography variant="body2" fontWeight={700} noWrap sx={{ fontSize: '0.75rem', lineHeight: 1.3 }}>
-                        {emp.firstName} {emp.lastName?.[0]}.
-                        {isInactive && <Box component="span" sx={{ color: 'text.disabled', fontSize: '0.6rem' }}> (Off)</Box>}
-                      </Typography>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
-                        <Chip
-                          size="small"
-                          label={emp.position || emp.role || 'Staff'}
-                          sx={{
-                            height: 16, fontSize: '0.55rem', fontWeight: 600,
-                            bgcolor: isDark ? rc.bgDark : rc.bgLight,
-                            color: isDark ? rc.text : rc.bg,
-                          }}
-                        />
-                        <Typography variant="caption" sx={{
-                          fontSize: '0.55rem', fontWeight: 700,
-                          color: weekHours > 44 ? '#DC2626' : '#166534',
-                        }}>
-                          {weekHours}h
-                        </Typography>
-                      </Box>
-                    </Box>
-                  </Box>
-                </Box>
-
-                {/* Shift cells for each day */}
-                {weekDays.map(date => {
-                  const dateStr = format(date, 'yyyy-MM-dd');
-                  const cellKey = `${emp.id}_${dateStr}`;
-                  const cellShifts = shiftsByCell[cellKey] || [];
-                  const today = isToday(date);
-                  const holiday = holidaysByDate[dateStr];
-                  const isBlocked = holiday && !holiday.workAllowed;
-                  
-                  const cellTimeOff = timeOffByCell[cellKey] || [];
-                  const cellAdjustments = adjustmentsByCell[cellKey] || [];
-                  const hasTimeOff = cellTimeOff.length > 0;
-                  const hasApprovedTimeOff = cellTimeOff.some(r => r.status === 'approved');
-
-                  return (
-                    <Box
-                      key={date.toISOString()}
-                      component="td"
-                      sx={{
-                        p: 1,
-                        borderBottom: '1px solid',
-                        borderLeft: '1px solid',
-                        borderColor: isDark ? '#3D3228' : '#E8E0D4',
-                        verticalAlign: 'top',
-                        bgcolor: isBlocked
-                          ? alpha(theme.palette.error.main, isDark ? 0.06 : 0.04)
-                          : hasApprovedTimeOff
-                            ? alpha('#F59E0B', isDark ? 0.06 : 0.06)
-                            : today
-                              ? alpha(theme.palette.primary.main, isDark ? 0.06 : 0.06)
-                              : 'transparent',
-                        overflow: 'visible',
-                        transition: 'background-color 0.2s',
-                        '&:hover .add-shift-btn': {
-                          opacity: 1,
-                          transform: 'scale(1)',
-                        }
-                      }}
-                    >
-                      <Box sx={{ 
-                        display: 'flex', flexDirection: 'column', gap: 0.5, minHeight: 44,
-                        overflow: 'visible',
-                      }}>
-                        {/* Shift pills with trade badge overlay FIRST for perfect horizontal alignment */}
-                        {cellShifts.map(shift => {
-                          const trade = tradesByShift[shift.id];
-                          return (
-                            <ShiftPill 
-                              key={shift.id} 
-                              shift={shift} 
-                              trade={trade}
-                              isSelectionMode={isSelectionMode}
-                              isSelected={isSelectionMode && selectedShifts?.has(shift.id)}
-                              isOvertime={overtimeShiftIds.has(shift.id)}
-                              onLogAdjustment={isManager && !isSelectionMode && onLogAdjustment ? () => onLogAdjustment(shift) : undefined}
-                              onClick={() => {
-                                if (isSelectionMode && onToggleShiftSelection) {
-                                  onToggleShiftSelection(shift.id);
-                                } else {
-                                  onEditShift(shift);
-                                }
-                              }} 
-                            />
-                          );
-                        })}
-
-                        {/* Exceptions & Time-off rendered BELOW shifts */}
-                        {(cellTimeOff.length > 0 || cellAdjustments.length > 0) && (
-                          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                            {cellTimeOff.map(req => (
-                              <TimeOffIndicator 
-                                key={`to-${req.id}`} 
-                                request={req} 
-                                compact
-                                onDelete={isManager ? onDeleteTimeOff : undefined}
-                              />
-                            ))}
-                            {(() => {
-                              // Smart aggregation: Group by type + isIncluded
-                              const grouped = new Map<string, any>();
-                              cellAdjustments.forEach(log => {
-                                const key = `${log.type}-${log.isIncluded}`;
-                                if (!grouped.has(key)) {
-                                  grouped.set(key, { ...log, value: parseFloat(log.value) || 0, count: 1, logs: [log] });
-                                } else {
-                                  const existing = grouped.get(key);
-                                  existing.value += (parseFloat(log.value) || 0);
-                                  existing.count++;
-                                  existing.logs.push(log);
-                                }
-                              });
-                              
-                              return Array.from(grouped.values()).map(aggrLog => (
-                                <AdjustmentBadge 
-                                  key={`adj-group-${aggrLog.id}`} 
-                                  log={aggrLog} 
-                                  isSelectionMode={isSelectionMode}
-                                  isSelected={isSelectionMode && selectedLogs?.has(aggrLog.id)} // In selection mode, maybe it only selects the first ID, which is a known limitation of bulk edits with grouped views
-                                  onClick={() => {
-                                    if (isSelectionMode && onToggleLogSelection) {
-                                      // Toggle all individual IDs in the group
-                                      aggrLog.logs.forEach((l: any) => onToggleLogSelection(l.id));
-                                    } else if (!isSelectionMode && onManageLogGroup) {
-                                      onManageLogGroup(aggrLog.logs);
-                                    } else if (!isSelectionMode && onExceptionLogClick) {
-                                      onExceptionLogClick(aggrLog.logs?.[0] || aggrLog);
-                                    }
-                                  }}
-                                />
-                              ));
-                            })()}
-                          </Box>
-                        )}
-                        {cellShifts.length === 0 && !hasApprovedTimeOff && isManager && !isSelectionMode && (
-                          <Box className="add-shift-btn" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, opacity: 0, transform: 'scale(0.95)', transition: 'all 0.2s ease', '&:hover': { opacity: 1, transform: 'scale(1)' } }}>
-                            {!isBlocked && (
-                              <Tooltip title="Add shift" placement="top">
-                                <IconButton
-                                  size="small"
-                                  onClick={() => onCreateShift(emp.id, date)}
-                                  sx={{
-                                    width: '100%', height: 28,
-                                    borderRadius: 1.5, border: '1px dashed',
-                                    borderColor: isDark ? alpha('#C4AA88', 0.2) : alpha('#5C4033', 0.1),
-                                    color: isDark ? alpha('#C4AA88', 0.3) : alpha('#5C4033', 0.2),
-                                    '&:hover': { borderColor: 'primary.main', color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.04) },
-                                  }}
-                                >
-                                  <AddIcon sx={{ fontSize: 14 }} />
-                                </IconButton>
-                              </Tooltip>
-                            )}
-                            {holiday && onAddHolidayPay && !cellAdjustments.some(a => a.type === 'holiday_pay') && (
-                              <Tooltip title="Grant Holiday Pay (No work performed)" placement="top">
-                                <Box
-                                  onClick={() => onAddHolidayPay(emp.id, date)}
-                                  sx={{ width: '100%', height: 28, borderRadius: 1.5, border: '1px dashed', borderColor: '#10B981', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 800, '&:hover': { bgcolor: alpha('#10B981', 0.1) } }}
-                                >
-                                  + Holiday Pay
-                                </Box>
-                              </Tooltip>
-                            )}
-                          </Box>
-                        )}
-                        {/* Empty cells left cleanly blank */}
-                        {isBlocked && cellShifts.length === 0 && !hasTimeOff && (
-                          <Box sx={{ 
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            minHeight: 32,
-                            color: isDark ? alpha('#FCA5A5', 0.4) : alpha('#DC2626', 0.3),
-                            fontSize: '0.6rem', fontWeight: 700, fontStyle: 'italic',
-                          }}>
-                            Blocked
-                          </Box>
-                        )}
-                      </Box>
-                    </Box>
-                  );
-                })}
-              </Box>
+                emp={emp}
+                weekDays={weekDays}
+                weekDayStrs={weekDayStrs}
+                isTodayArr={isTodayArr}
+                empShifts={empShifts}
+                empTimeOff={empTimeOff}
+                empAdjustments={empAdjustments}
+                holidaysByDate={holidaysByDate}
+                tradesByShift={tradesByShift}
+                overtimeShiftIds={overtimeShiftIds}
+                isSelectionMode={isSelectionMode}
+                selectedShifts={selectedShifts}
+                selectedLogs={selectedLogs}
+                isManager={isManager}
+                theme={theme}
+                isDark={isDark}
+                onToggleShiftSelection={onToggleShiftSelection}
+                onEditShift={onEditShift}
+                onDeleteTimeOff={onDeleteTimeOff}
+                onToggleLogSelection={onToggleLogSelection}
+                onManageLogGroup={onManageLogGroup}
+                onExceptionLogClick={onExceptionLogClick}
+                onCreateShift={onCreateShift}
+                onAddHolidayPay={onAddHolidayPay}
+                onLogAdjustment={onLogAdjustment}
+              />
             );
           })}
         </Box>
@@ -1009,6 +836,279 @@ function WeeklyGridComponent({
     </Box>
   );
 }
+
+const EmployeeRow = React.memo(({
+  emp,
+  weekDays,
+  weekDayStrs,
+  isTodayArr,
+  empShifts,
+  empTimeOff,
+  empAdjustments,
+  holidaysByDate,
+  tradesByShift,
+  overtimeShiftIds,
+  isSelectionMode,
+  selectedShifts,
+  selectedLogs,
+  isManager,
+  theme,
+  isDark,
+  onToggleShiftSelection,
+  onEditShift,
+  onDeleteTimeOff,
+  onToggleLogSelection,
+  onManageLogGroup,
+  onExceptionLogClick,
+  onCreateShift,
+  onAddHolidayPay,
+  onLogAdjustment
+}: any) => {
+  const rc = getRoleColor(emp.position, emp.role);
+  const isInactive = emp.isActive === false;
+  const weekHours = weekDays.reduce((sum: number, date: Date, dayIndex: number) => {
+    const cellShifts = empShifts[weekDayStrs[dayIndex]] || [];
+    return sum + cellShifts.reduce((s: number, sh: any) => s + differenceInHours(new Date(sh.endTime), new Date(sh.startTime)), 0);
+  }, 0);
+
+  return (
+    <Box
+      component="tr"
+      sx={{
+        opacity: isInactive ? 0.5 : 1,
+        '&:hover td': { bgcolor: isDark ? '#342A1E' : '#FBF8F4' },
+      }}
+    >
+      {/* Employee name cell */}
+      <Box
+        component="td"
+        sx={{
+          p: 1.5, borderBottom: '1px solid',
+          borderColor: isDark ? '#3D3228' : '#E8E0D4',
+          position: 'sticky', left: 0, zIndex: 1,
+          bgcolor: isDark ? '#2A2018' : '#FFFFFF',
+        }}
+      >
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+          <Avatar src={emp?.photoUrl || undefined} sx={{ width: 28, height: 28, bgcolor: rc.bg, color: rc.text, fontSize: '0.65rem', fontWeight: 700 }}>
+            {!emp?.photoUrl && <>{emp?.firstName?.[0]}{emp?.lastName?.[0]}</>}
+          </Avatar>
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography variant="body2" fontWeight={700} noWrap sx={{ fontSize: '0.75rem', lineHeight: 1.3 }}>
+              {emp.firstName} {emp.lastName?.[0]}.
+              {isInactive && <Box component="span" sx={{ color: 'text.disabled', fontSize: '0.6rem' }}> (Off)</Box>}
+            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
+              <Chip
+                size="small"
+                label={emp.position || emp.role || 'Staff'}
+                sx={{
+                  height: 16, fontSize: '0.55rem', fontWeight: 600,
+                  bgcolor: isDark ? rc.bgDark : rc.bgLight,
+                  color: isDark ? rc.text : rc.bg,
+                }}
+              />
+              <Typography variant="caption" sx={{
+                fontSize: '0.55rem', fontWeight: 700,
+                color: weekHours > 44 ? '#DC2626' : '#166534',
+              }}>
+                {weekHours}h
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Shift cells for each day */}
+      {weekDays.map((date: Date, dayIndex: number) => {
+        const dateStr = weekDayStrs[dayIndex];
+        const cellShifts = empShifts[dateStr] || [];
+        const today = isTodayArr[dayIndex];
+        const holiday = holidaysByDate[dateStr];
+        const isBlocked = holiday && !holiday.workAllowed;
+        
+        const cellTimeOff = empTimeOff[dateStr] || [];
+        const cellAdjustments = empAdjustments[dateStr] || [];
+        const hasTimeOff = cellTimeOff.length > 0;
+        const hasApprovedTimeOff = cellTimeOff.some((r: any) => r.status === 'approved');
+
+        return (
+          <Box
+            key={date.toISOString()}
+            component="td"
+            sx={{
+              p: 1,
+              borderBottom: '1px solid',
+              borderLeft: '1px solid',
+              borderColor: isDark ? '#3D3228' : '#E8E0D4',
+              verticalAlign: 'top',
+              bgcolor: isBlocked
+                ? alpha(theme.palette.error.main, isDark ? 0.06 : 0.04)
+                : hasApprovedTimeOff
+                  ? alpha('#F59E0B', isDark ? 0.06 : 0.06)
+                  : today
+                    ? alpha(theme.palette.primary.main, isDark ? 0.06 : 0.06)
+                    : 'transparent',
+              overflow: 'visible',
+              transition: 'background-color 0.2s',
+              '&:hover .add-shift-btn': {
+                opacity: 1,
+                transform: 'scale(1)',
+              }
+            }}
+          >
+            <Box sx={{ 
+              display: 'flex', flexDirection: 'column', gap: 0.5, minHeight: 44,
+              overflow: 'visible',
+            }}>
+              {/* Shift pills with trade badge overlay FIRST for perfect horizontal alignment */}
+              {cellShifts.map((shift: any) => {
+                const trade = tradesByShift[shift.id];
+                return (
+                  <ShiftPill 
+                    key={shift.id} 
+                    shift={shift} 
+                    trade={trade}
+                    isSelectionMode={isSelectionMode}
+                    isSelected={isSelectionMode && selectedShifts?.has(shift.id)}
+                    isOvertime={overtimeShiftIds.has(shift.id)}
+                    onLogAdjustment={isManager && !isSelectionMode && onLogAdjustment ? () => onLogAdjustment(shift) : undefined}
+                    onClick={() => {
+                      if (isSelectionMode && onToggleShiftSelection) {
+                        onToggleShiftSelection(shift.id);
+                      } else {
+                        onEditShift(shift);
+                      }
+                    }} 
+                  />
+                );
+              })}
+
+              {/* Exceptions & Time-off rendered BELOW shifts */}
+              {(cellTimeOff.length > 0 || cellAdjustments.length > 0) && (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+                  {cellTimeOff.map((req: any) => (
+                    <TimeOffIndicator 
+                      key={`to-${req.id}`} 
+                      request={req} 
+                      compact
+                      onDelete={isManager ? onDeleteTimeOff : undefined}
+                    />
+                  ))}
+                  {(() => {
+                    // Smart aggregation: Group by type + isIncluded
+                    const grouped = new Map<string, any>();
+                    cellAdjustments.forEach((log: any) => {
+                      const key = `${log.type}-${log.isIncluded}`;
+                      if (!grouped.has(key)) {
+                        grouped.set(key, { ...log, value: parseFloat(log.value) || 0, count: 1, logs: [log] });
+                      } else {
+                        const existing = grouped.get(key);
+                        existing.value += (parseFloat(log.value) || 0);
+                        existing.count++;
+                        existing.logs.push(log);
+                      }
+                    });
+                    
+                    return Array.from(grouped.values()).map(aggrLog => (
+                      <AdjustmentBadge 
+                        key={`adj-group-${aggrLog.id}`} 
+                        log={aggrLog} 
+                        isSelectionMode={isSelectionMode}
+                        isSelected={isSelectionMode && selectedLogs?.has(aggrLog.id)}
+                        onClick={() => {
+                          if (isSelectionMode && onToggleLogSelection) {
+                            aggrLog.logs.forEach((l: any) => onToggleLogSelection(l.id));
+                          } else if (!isSelectionMode && onManageLogGroup) {
+                            onManageLogGroup(aggrLog.logs);
+                          } else if (!isSelectionMode && onExceptionLogClick) {
+                            onExceptionLogClick(aggrLog.logs?.[0] || aggrLog);
+                          }
+                        }}
+                      />
+                    ));
+                  })()}
+                </Box>
+              )}
+              {cellShifts.length === 0 && !hasApprovedTimeOff && isManager && !isSelectionMode && (
+                <Box className="add-shift-btn" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, opacity: 0, transform: 'scale(0.95)', transition: 'all 0.2s ease', '&:hover': { opacity: 1, transform: 'scale(1)' } }}>
+                  {!isBlocked && (
+                    <Tooltip title="Add shift" placement="top">
+                      <IconButton
+                        size="small"
+                        onClick={() => onCreateShift(emp.id, date)}
+                        sx={{
+                          width: '100%', height: 28,
+                          borderRadius: 1.5, border: '1px dashed',
+                          borderColor: isDark ? alpha('#C4AA88', 0.2) : alpha('#5C4033', 0.1),
+                          color: isDark ? alpha('#C4AA88', 0.3) : alpha('#5C4033', 0.2),
+                          '&:hover': { borderColor: 'primary.main', color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.04) },
+                        }}
+                      >
+                        <AddIcon sx={{ fontSize: 14 }} />
+                      </IconButton>
+                    </Tooltip>
+                  )}
+                  {holiday && onAddHolidayPay && !cellAdjustments.some((a: any) => a.type === 'holiday_pay') && (
+                    <Tooltip title="Grant Holiday Pay (No work performed)" placement="top">
+                      <Box
+                        onClick={() => onAddHolidayPay(emp.id, date)}
+                        sx={{ width: '100%', height: 28, borderRadius: 1.5, border: '1px dashed', borderColor: '#10B981', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 800, '&:hover': { bgcolor: alpha('#10B981', 0.1) } }}
+                      >
+                        + Holiday Pay
+                      </Box>
+                    </Tooltip>
+                  )}
+                </Box>
+              )}
+              {/* Empty cells left cleanly blank */}
+              {isBlocked && cellShifts.length === 0 && !hasTimeOff && (
+                <Box sx={{ 
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  minHeight: 32,
+                  color: isDark ? alpha('#FCA5A5', 0.4) : alpha('#DC2626', 0.3),
+                  fontSize: '0.6rem', fontWeight: 700, fontStyle: 'italic',
+                }}>
+                  Blocked
+                </Box>
+              )}
+            </Box>
+          </Box>
+        );
+      })}
+    </Box>
+  );
+}, (prevProps, nextProps) => {
+  if (prevProps.isSelectionMode !== nextProps.isSelectionMode) return false;
+  if (prevProps.isManager !== nextProps.isManager) return false;
+  if (prevProps.emp.id !== nextProps.emp.id) return false;
+
+  for (const dateStr of prevProps.weekDayStrs) {
+    if (prevProps.empShifts[dateStr] !== nextProps.empShifts[dateStr]) return false;
+    if (prevProps.empTimeOff[dateStr] !== nextProps.empTimeOff[dateStr]) return false;
+    if (prevProps.empAdjustments[dateStr] !== nextProps.empAdjustments[dateStr]) return false;
+  }
+  
+  if (prevProps.selectedShifts !== nextProps.selectedShifts) {
+    // Check if any shift for this employee is selected
+    for (const shifts of Object.values(prevProps.empShifts) as any[]) {
+      for (const s of shifts) {
+        if (prevProps.selectedShifts?.has(s.id) !== nextProps.selectedShifts?.has(s.id)) return false;
+      }
+    }
+  }
+  
+  if (prevProps.selectedLogs !== nextProps.selectedLogs) {
+    // Check if any log for this employee is selected
+    for (const logs of Object.values(prevProps.empAdjustments) as any[]) {
+      for (const l of logs) {
+        if (prevProps.selectedLogs?.has(l.id) !== nextProps.selectedLogs?.has(l.id)) return false;
+      }
+    }
+  }
+
+  return true;
+});
 
 export default React.memo(WeeklyGridComponent, (prevProps, nextProps) => {
   return (

@@ -149,6 +149,11 @@ export default function ScheduleV2() {
     isLoadingPreview: false,
     preview: null as any | null,
   });
+  const [bulkCreatePreview, setBulkCreatePreview] = useState<{
+    isOpen: boolean;
+    data: any;
+    payload: any;
+  } | null>(null);
   const adjustmentTypeOptions = [
     { value: "overtime", label: "Overtime (minutes)", color: "#10b981" },
     { value: "late", label: "Tardiness (minutes)", color: "#f97316" },
@@ -438,6 +443,25 @@ export default function ScheduleV2() {
       toast.success('Shift created');
       setCreateModalOpen(false);
       setNewShift(prev => ({ ...prev, employeeId: '', startTime: null, endTime: null, notes: '', breakDurationMinutes: 30 }));
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const bulkCreateMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await apiRequest('POST', '/api/shifts/bulk', payload);
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to bulk create'); }
+      return res.json();
+    },
+    onSuccess: (data, variables) => {
+      if (data.preview) {
+        setBulkCreatePreview({ isOpen: true, data, payload: variables });
+      } else {
+        queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
+        toast.success(`Created ${data.createdShifts} shifts. Skipped ${data.skipped}.`);
+        setCreateModalOpen(false);
+        setBulkCreatePreview(null);
+      }
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -1507,32 +1531,50 @@ export default function ScheduleV2() {
           <Button onClick={() => setCreateModalOpen(false)}>Cancel</Button>
           <Button
             variant="contained"
-            disabled={!newShift.employeeId || !newShift.startTime || !newShift.endTime || createShiftMutation.isPending}
+            disabled={!newShift.employeeId || createShiftMutation.isPending || bulkCreateMutation.isPending}
             onClick={() => {
-              if (!newShift.startTime || !newShift.endTime || !isValid(newShift.startTime) || !isValid(newShift.endTime)) { toast.error('Please select valid start and end times'); return; }
-              const hasShiftOnDay = shifts.some(s => 
-                s.userId === newShift.employeeId && 
-                s.startTime &&
-                isSameDay(new Date(s.startTime), newShift.startTime!)
-              );
-              if (hasShiftOnDay) {
-                toast.error('This employee already has a shift scheduled on this day. Employees can only have 1 shift per day.');
-                return;
+              if (newShift.isBulk) {
+                if (!newShift.bulkStartDate || !newShift.bulkEndDate || !newShift.bulkStartTime || !newShift.bulkEndTime || !newShift.bulkDays.length) {
+                  toast.error('Please fill in all bulk scheduling details');
+                  return;
+                }
+                bulkCreateMutation.mutate({
+                  employeeId: newShift.employeeId,
+                  bulkStartDate: newShift.bulkStartDate.toISOString(),
+                  bulkEndDate: newShift.bulkEndDate.toISOString(),
+                  bulkStartTime: newShift.bulkStartTime.toISOString(),
+                  bulkEndTime: newShift.bulkEndTime.toISOString(),
+                  bulkDays: newShift.bulkDays,
+                  notes: newShift.notes,
+                  breakDurationMinutes: newShift.breakDurationMinutes,
+                  confirm: false
+                });
+              } else {
+                if (!newShift.startTime || !newShift.endTime || !isValid(newShift.startTime) || !isValid(newShift.endTime)) { toast.error('Please select valid start and end times'); return; }
+                const hasShiftOnDay = shifts.some(s => 
+                  s.userId === newShift.employeeId && 
+                  s.startTime &&
+                  isSameDay(new Date(s.startTime), newShift.startTime!)
+                );
+                if (hasShiftOnDay) {
+                  toast.error('This employee already has a shift scheduled on this day. Employees can only have 1 shift per day.');
+                  return;
+                }
+  
+                const emp = employees.find(e => e.id === newShift.employeeId);
+                createShiftMutation.mutate({
+                  userId: newShift.employeeId,
+                  branchId: emp?.branchId || '',
+                  position: emp?.position || 'Staff',
+                  startTime: newShift.startTime.toISOString(),
+                  endTime: newShift.endTime.toISOString(),
+                  notes: newShift.notes,
+                  breakDurationMinutes: newShift.breakDurationMinutes,
+                });
               }
-
-              const emp = employees.find(e => e.id === newShift.employeeId);
-              createShiftMutation.mutate({
-                userId: newShift.employeeId,
-                branchId: emp?.branchId || '',
-                position: emp?.position || 'Staff',
-                startTime: newShift.startTime.toISOString(),
-                endTime: newShift.endTime.toISOString(),
-                notes: newShift.notes,
-                breakDurationMinutes: newShift.breakDurationMinutes,
-              });
             }}
           >
-            {createShiftMutation.isPending ? 'Creating...' : 'Create'}
+            {createShiftMutation.isPending || bulkCreateMutation.isPending ? 'Processing...' : 'Create'}
           </Button>
         </DialogActions>
       </Dialog>
@@ -1958,19 +2000,22 @@ export default function ScheduleV2() {
               label={
                 adjType === 'late' || adjType === 'undertime' || adjType === 'overtime' ? "Minutes" : adjType === 'absent' ? "Days" : "Hours"
               }
-              type="number" size="small" fullWidth value={adjValue}
-              onChange={(e) => setAdjValue(e.target.value)}
+              type="number" size="small" fullWidth value={adjType === 'absent' ? '1' : adjValue}
+              onChange={(e) => {
+                if (adjType !== 'absent') setAdjValue(e.target.value);
+              }}
               InputProps={{
+                readOnly: adjType === 'absent',
                 endAdornment: (
                   <InputAdornment position="end">
-                    {adjType === 'late' || adjType === 'undertime' || adjType === 'overtime' ? 'mins' : adjType === 'absent' ? 'days' : 'hrs'}
+                    {adjType === 'late' || adjType === 'undertime' || adjType === 'overtime' ? 'mins' : adjType === 'absent' ? 'day' : 'hrs'}
                   </InputAdornment>
                 ),
               }}
               helperText={adjType === 'late' || adjType === 'undertime' || adjType === 'overtime'
                 ? `Use minutes for ${adjType === 'overtime' ? 'overtime' : 'tardiness or undertime'} from the logbook.`
                 : adjType === 'absent'
-                  ? 'Use days for a full-day absence entry.'
+                  ? 'Absent records are exactly 1 day per scheduled shift.'
                   : 'Use hours for legacy logs.'}
             />
 
@@ -2304,58 +2349,22 @@ export default function ScheduleV2() {
                 const qStart = safeFormat(bulkDeleteState.startDate, "yyyy-MM-dd");
                 const qEnd = safeFormat(bulkDeleteState.endDate, "yyyy-MM-dd");
                 
-                let deletedShifts = 0;
-                let deletedLogs = 0;
-                let failedCount = 0;
-                
-                const fetches = [];
-                if (bulkDeleteState.target === 'shifts' || bulkDeleteState.target === 'both') {
-                  fetches.push(apiRequest("GET", `/api/shifts/branch?startDate=${qStart}&endDate=${qEnd}`).then(r => r.json()).then(d => ({ type: 'shifts', data: d.shifts || [] })));
-                }
-                if (bulkDeleteState.target === 'exceptions' || bulkDeleteState.target === 'both') {
-                  fetches.push(apiRequest("GET", `/api/adjustment-logs/branch?startDate=${qStart}&endDate=${qEnd}`).then(r => r.json()).then(d => ({ type: 'exceptions', data: d.logs || [] })));
-                }
-                
-                const results = await Promise.all(fetches);
-                
-                const promises = [];
-                
-                for (const res of results) {
-                  let items = res.data;
-                  if (bulkDeleteState.employeeId !== 'all') {
-                    items = items.filter((x: any) => String(x.userId || x.employeeId) === String(bulkDeleteState.employeeId));
-                  }
-                  
-                  if (res.type === 'shifts') {
-                    for (const s of items) {
-                      promises.push(
-                        apiRequest('DELETE', `/api/shifts/${s.id}`, { deletionReason: bulkDeleteState.deletionReason })
-                          .then(() => { deletedShifts++; })
-                      );
-                    }
-                  } else {
-                    for (const l of items) {
-                      promises.push(
-                        apiRequest('DELETE', `/api/adjustment-logs/${l.id}`, { deletionReason: bulkDeleteState.deletionReason })
-                          .then(() => { deletedLogs++; })
-                      );
-                    }
-                  }
-                }
-                
-                const settled = await Promise.allSettled(promises);
-                failedCount = settled.filter(p => p.status === 'rejected').length;
+                const res = await apiRequest('POST', '/api/shifts/bulk-delete', {
+                  startDate: qStart,
+                  endDate: qEnd,
+                  employeeId: bulkDeleteState.employeeId,
+                  target: bulkDeleteState.target,
+                  deletionReason: bulkDeleteState.deletionReason,
+                });
+                if (!res.ok) throw new Error("Bulk delete failed");
+                const data = await res.json();
                 
                 queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
                 queryClient.invalidateQueries({ queryKey: [isManager ? "adjustment-logs-branch" : "adjustment-logs-mine"] });
                 queryClient.invalidateQueries({ queryKey: ['/api/dashboard/stats/manager'] });
                 
-                const msg = [deletedShifts > 0 && `${deletedShifts} shifts`, deletedLogs > 0 && `${deletedLogs} exceptions`].filter(Boolean).join(' and ');
-                if (failedCount > 0) {
-                  toast.warning(`Deleted ${msg || '0 items'}, but ${failedCount} items failed.`);
-                } else {
-                  toast.success(`Successfully deleted ${msg || '0 items'}.`);
-                }
+                const msg = [data.deletedShifts > 0 && `${data.deletedShifts} shifts`, data.deletedExceptions > 0 && `${data.deletedExceptions} exceptions`].filter(Boolean).join(' and ');
+                toast.success(`Successfully deleted ${msg || '0 items'}.`);
                 
                 setBulkDeleteState(prev => ({ ...prev, isOpen: false, confirmation: '', isDeleting: false, deletionReason: '', preview: null }));
               } catch (e: any) {
@@ -2485,6 +2494,74 @@ export default function ScheduleV2() {
             }}
           >
             {bulkExceptionPreview?.isProcessing ? 'Creating...' : `Confirm & Create ${bulkExceptionPreview?.dateCount || 0} Logs`}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* ─── BULK CREATE CONFIRMATION DIALOG ──────────────────────────────────── */}
+      <Dialog
+        open={Boolean(bulkCreatePreview?.isOpen)}
+        onClose={() => setBulkCreatePreview(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, bgcolor: isDark ? '#1C1410' : '#FFF', backgroundImage: 'none' } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, display: 'flex', alignItems: 'center', gap: 1 }}>
+          <Box component="span" sx={{ fontSize: '1.2rem' }}>📅</Box> Bulk Creation Summary
+        </DialogTitle>
+        <DialogContent>
+          {bulkCreatePreview && (
+            <Stack spacing={2.5} sx={{ mt: 1 }}>
+              <Alert severity="info" sx={{ borderRadius: 2 }}>
+                Review the scheduled shifts before proceeding. Overlapping shifts or time-off are automatically skipped.
+              </Alert>
+
+              <Box sx={{ p: 2, bgcolor: isDark ? '#2A2018' : '#F8F5F0', borderRadius: 2, border: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="h6" fontWeight={800} color="primary.main" sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  {bulkCreatePreview.data.createCount} shift{bulkCreatePreview.data.createCount !== 1 ? 's' : ''} will be created
+                </Typography>
+                {bulkCreatePreview.data.skipCount > 0 && (
+                  <Typography variant="body2" color="warning.main" sx={{ mt: 1, fontWeight: 700 }}>
+                    {bulkCreatePreview.data.skipCount} shift{bulkCreatePreview.data.skipCount !== 1 ? 's' : ''} will be skipped due to conflicts.
+                  </Typography>
+                )}
+                
+                {bulkCreatePreview.data.skippedDetails?.length > 0 && (
+                  <ul style={{ margin: '8px 0 0 0', paddingLeft: '20px' }}>
+                    {bulkCreatePreview.data.skippedDetails.map((skip: any, i: number) => (
+                      <li key={i}>
+                        <Typography variant="caption" color="text.secondary">
+                          {safeFormat(new Date(skip.date), 'MMM d, yyyy')}: {skip.reason}
+                        </Typography>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Box>
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2 }}>
+          <Button
+            onClick={() => setBulkCreatePreview(null)}
+            sx={{ borderRadius: 2, textTransform: 'none' }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="primary"
+            disabled={bulkCreateMutation.isPending || !bulkCreatePreview?.data.createCount}
+            sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 800, px: 3 }}
+            onClick={() => {
+              if (!bulkCreatePreview) return;
+              bulkCreateMutation.mutate({
+                ...bulkCreatePreview.payload,
+                confirm: true
+              });
+            }}
+          >
+            {bulkCreateMutation.isPending ? 'Creating...' : `Confirm & Create`}
           </Button>
         </DialogActions>
       </Dialog>

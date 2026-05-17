@@ -883,6 +883,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
+  app.post("/api/shifts/bulk-delete", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+    try {
+      const branchId = req.user!.branchId;
+      const { startDate, endDate, employeeId, target } = req.body;
+
+      if (!startDate || !endDate) {
+        return res.status(400).json({ message: "startDate and endDate are required" });
+      }
+
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      // Fetch shifts in range
+      const allShifts = await storage.getShiftsByBranch(branchId, start, end);
+      let filteredShifts = employeeId && employeeId !== 'all'
+        ? allShifts.filter(s => String(s.userId) === String(employeeId))
+        : allShifts;
+
+      // Fetch exception logs in range
+      const allLogs = await storage.getAdjustmentLogsByBranch(branchId, start, end);
+      let filteredLogs = employeeId && employeeId !== 'all'
+        ? allLogs.filter((l: any) => String(l.employeeId) === String(employeeId))
+        : allLogs;
+
+      let deletedShifts = 0;
+      let deletedExceptions = 0;
+
+      if (target === 'shifts' || target === 'both') {
+        for (const shift of filteredShifts) {
+          await storage.deleteShift(shift.id);
+          deletedShifts++;
+          realTimeManager.broadcastShiftDeleted(shift.id, branchId);
+        }
+      }
+
+      if (target === 'exceptions' || target === 'both') {
+        for (const log of filteredLogs) {
+          await storage.deleteAdjustmentLog(log.id);
+          deletedExceptions++;
+        }
+      }
+
+      res.json({ message: "Bulk deletion completed", deletedShifts, deletedExceptions });
+    } catch (error: any) {
+      console.error('Bulk delete error:', error);
+      res.status(500).json({ message: error.message || "Failed to execute bulk deletion" });
+    }
+  }));
+
+  // ─── BULK CREATE ──────────────────────────────────────────────────
+  app.post("/api/shifts/bulk", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+    try {
+      const { employeeId, bulkStartDate, bulkEndDate, bulkDays, bulkStartTime, bulkEndTime, breakDurationMinutes, notes, confirm } = req.body;
+
+      if (!employeeId || !bulkStartDate || !bulkEndDate || !bulkStartTime || !bulkEndTime || !bulkDays || !Array.isArray(bulkDays)) {
+        return res.status(400).json({ message: "Missing required bulk parameters" });
+      }
+
+      const branchId = req.user!.branchId;
+      const targetUser = await storage.getUser(employeeId);
+      if (!targetUser || targetUser.branchId !== branchId) {
+        return res.status(403).json({ message: "Employee does not belong to your branch" });
+      }
+
+      const start = new Date(bulkStartDate);
+      const end = new Date(bulkEndDate);
+      const timeStart = new Date(bulkStartTime);
+      const timeEnd = new Date(bulkEndTime);
+
+      const existingShifts = await storage.getShiftsByUser(employeeId, start, end);
+      const existingTimeOffs = await storage.getTimeOffRequestsByUser(employeeId);
+
+      const toCreate = [];
+      const skipped = [];
+
+      let currentDate = new Date(start);
+      while (currentDate <= end) {
+        const dayOfWeek = currentDate.getDay(); // 0=Sun, 1=Mon, etc.
+        if (bulkDays.includes(dayOfWeek)) {
+          // Construct start and end times for this specific day
+          const shiftStart = new Date(currentDate);
+          shiftStart.setHours(timeStart.getHours(), timeStart.getMinutes(), 0, 0);
+          
+          const shiftEnd = new Date(currentDate);
+          shiftEnd.setHours(timeEnd.getHours(), timeEnd.getMinutes(), 0, 0);
+          if (shiftEnd <= shiftStart) {
+            shiftEnd.setDate(shiftEnd.getDate() + 1); // overnight shift
+          }
+
+          // Check if employee already has a shift on this calendar date
+          const hasShift = existingShifts.some(s => {
+             const existingDate = new Date(s.startTime);
+             return existingDate.getFullYear() === shiftStart.getFullYear() && 
+                    existingDate.getMonth() === shiftStart.getMonth() && 
+                    existingDate.getDate() === shiftStart.getDate();
+          });
+
+          // Check for approved time-off requests during this shift
+          const sStartMs = shiftStart.getTime();
+          const sEndMs = shiftEnd.getTime();
+          const hasTimeOff = existingTimeOffs.some(r => {
+            if (r.status !== 'approved') return false;
+            const existStart = new Date(r.startDate).setHours(0,0,0,0);
+            const existEnd = new Date(r.endDate).setHours(23,59,59,999);
+            return sStartMs <= existEnd && sEndMs >= existStart;
+          });
+
+          if (hasShift || hasTimeOff) {
+            skipped.push({
+               date: shiftStart.toISOString(),
+               reason: hasShift ? "Already scheduled" : "Approved time-off"
+            });
+          } else {
+            toCreate.push({
+              userId: employeeId,
+              branchId,
+              position: targetUser.position || 'Staff',
+              startTime: shiftStart.toISOString(),
+              endTime: shiftEnd.toISOString(),
+              notes: notes || '',
+              breakDurationMinutes: breakDurationMinutes || 0,
+            });
+          }
+        }
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+
+      if (!confirm) {
+        return res.json({
+           preview: true,
+           createCount: toCreate.length,
+           skipCount: skipped.length,
+           skippedDetails: skipped
+        });
+      }
+
+      // Execute creation
+      const createdShifts = [];
+      for (const shiftData of toCreate) {
+        const shift = await storage.createShift(shiftData);
+        realTimeManager.broadcastShiftCreated(shift);
+        createdShifts.push(shift);
+      }
+
+      res.json({ message: "Bulk creation completed", createdShifts: createdShifts.length, skipped: skipped.length });
+    } catch (error: any) {
+      console.error('Bulk create error:', error);
+      res.status(500).json({ message: error.message || "Failed to execute bulk creation" });
+    }
+  }));
+
   app.post("/api/shifts", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
       const shiftData = insertShiftSchema.parse(req.body);
@@ -1350,6 +1501,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate manager's branch matches the employee's branch
       if (req.user!.role === 'manager' && branchId !== req.user!.branchId) {
         return res.status(403).json({ message: "Cannot create exception logs for employees in another branch." });
+      }
+
+      // Check for existing absent log to prevent duplicates
+      if (type === 'absent') {
+        const existingLogs = await storage.getAdjustmentLogsByUser(employeeId);
+        const logDate = new Date(date).getTime();
+        const hasAbsent = existingLogs.some((l: any) => 
+          l.type === 'absent' && new Date(l.startDate).getTime() === logDate && l.status !== 'rejected'
+        );
+        if (hasAbsent) {
+          return res.status(409).json({ message: "Employee is already marked as absent on this day." });
+        }
       }
 
       const log = await storage.createAdjustmentLog({
