@@ -1,0 +1,1 @@
+function n(t){const e=new Date(t);return isNaN(e.getTime())?new Date:e.getUTCDate()<=15?new Date(Date.UTC(e.getUTCFullYear(),e.getUTCMonth(),25)):new Date(Date.UTC(e.getUTCFullYear(),e.getUTCMonth()+1,10))}export{n as g};

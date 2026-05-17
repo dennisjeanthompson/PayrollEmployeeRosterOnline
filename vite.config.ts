@@ -27,7 +27,7 @@ export default defineConfig({
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
     sourcemap: false,
-    minify: false,
+    minify: 'esbuild',
     target: 'esnext',
     chunkSizeWarningLimit: 1000,
     cssCodeSplit: true,

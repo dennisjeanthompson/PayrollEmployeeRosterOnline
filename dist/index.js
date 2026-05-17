@@ -14146,7 +14146,7 @@ var vite_config_default = defineConfig({
     outDir: path.resolve(__dirname, "dist/public"),
     emptyOutDir: true,
     sourcemap: false,
-    minify: false,
+    minify: "esbuild",
     target: "esnext",
     chunkSizeWarningLimit: 1e3,
     cssCodeSplit: true,

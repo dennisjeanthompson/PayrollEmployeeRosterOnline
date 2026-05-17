@@ -74,7 +74,7 @@ const TIME_OFF_STATUS_CONFIG = {
 } as const;
 
 /** Full-width time-off event banner for calendar cells */
-function TimeOffIndicator({ request, compact = false, onDelete }: { request: TimeOffRequest; compact?: boolean; onDelete?: (id: string) => void }) {
+const TimeOffIndicator = React.memo(function TimeOffIndicator({ request, compact = false, onDelete }: { request: TimeOffRequest; compact?: boolean; onDelete?: (id: string) => void }) {
   const config = TIME_OFF_STATUS_CONFIG[request.status as keyof typeof TIME_OFF_STATUS_CONFIG] || TIME_OFF_STATUS_CONFIG.pending;
   const StatusIcon = config.icon;
   const typeLabel = request.type.charAt(0).toUpperCase() + request.type.slice(1);
@@ -122,10 +122,10 @@ function TimeOffIndicator({ request, compact = false, onDelete }: { request: Tim
       </Box>
     </Tooltip>
   );
-}
+});
 
 /** Prominent trade badge pill on shift pills */
-function TradeBadge({ trade }: { trade: ShiftTrade }) {
+const TradeBadge = React.memo(function TradeBadge({ trade }: { trade: ShiftTrade }) {
   const isAccepted = trade.status === 'accepted';
   const targetName = trade.targetUser?.firstName || trade.toUser?.firstName || '';
   const label = isAccepted
@@ -152,10 +152,10 @@ function TradeBadge({ trade }: { trade: ShiftTrade }) {
       </Box>
     </Tooltip>
   );
-}
+});
 
 // Shift pill — the colored chip inside each cell
-function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, isOvertime, onLogAdjustment }: { shift: Shift; onClick?: () => void; trade?: ShiftTrade; isSelectionMode?: boolean; isSelected?: boolean; isOvertime?: boolean; onLogAdjustment?: () => void }) {
+const ShiftPill = React.memo(function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, isOvertime, onLogAdjustment }: { shift: Shift; onClick?: () => void; trade?: ShiftTrade; isSelectionMode?: boolean; isSelected?: boolean; isOvertime?: boolean; onLogAdjustment?: () => void }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const rc = getRoleColor(shift.position, shift.user?.role);
@@ -260,7 +260,7 @@ function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, isOvert
         )}
     </Box>
   );
-}
+});
 /** Get adjustment logs for an employee on a specific date */
 export function getAdjustmentsForCell(logs: any[], employeeId: string, date: Date): any[] {
   const dateStr = format(date, 'yyyy-MM-dd');
@@ -283,7 +283,7 @@ const ADJ_TYPE_CONFIG: Record<string, { label: string, color: string, bgColor: s
 };
 
 /** Prominent pill for exception logs (OT/Late) */
-export function AdjustmentBadge({ log, isSelectionMode, isSelected, onClick }: { log: any; isSelectionMode?: boolean; isSelected?: boolean; onClick?: (e: any) => void }) {
+export const AdjustmentBadge = React.memo(function AdjustmentBadge({ log, isSelectionMode, isSelected, onClick }: { log: any; isSelectionMode?: boolean; isSelected?: boolean; onClick?: (e: any) => void }) {
   const isTime = log.type === 'late' || log.type === 'undertime';
   const unit = log.type === 'holiday_pay' ? '' : isTime ? 'm' : log.type === 'absent' ? 'd' : 'h';
   const config = ADJ_TYPE_CONFIG[log.type] || { label: log.type, color: '#444', bgColor: '#eee' };
@@ -371,7 +371,7 @@ export function AdjustmentBadge({ log, isSelectionMode, isSelected, onClick }: {
       </Box>
     </Tooltip>
   );
-}
+});
 
 function WeeklyGridComponent({
   employees,

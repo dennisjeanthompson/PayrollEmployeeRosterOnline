@@ -128,19 +128,18 @@ export default function MuiDashboard() {
   const teamHoursLoading = isManagerRole ? statsLoading : false;
 
   // Filter today's shifts using Philippine timezone
-  const toDateStringPHT = (d: Date) => d.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' });
-  const todayPHT = toDateStringPHT(new Date());
-  const todayShifts = isManagerRole
-    ? (shifts?.shifts?.filter((shift: any) => {
-        return toDateStringPHT(new Date(shift.startTime)) === todayPHT;
-      }) || [])
-    : (employeeShifts?.shifts?.filter((shift: any) => {
-        return toDateStringPHT(new Date(shift.startTime)) === todayPHT;
-      }) || []);
+  const todayShifts = React.useMemo(() => {
+    const toDateStringPHT = (d: Date) => d.toLocaleDateString('en-PH', { timeZone: 'Asia/Manila' });
+    const todayPHT = toDateStringPHT(new Date());
+    if (isManagerRole) {
+      return shifts?.shifts?.filter((shift: any) => toDateStringPHT(new Date(shift.startTime)) === todayPHT) || [];
+    }
+    return employeeShifts?.shifts?.filter((shift: any) => toDateStringPHT(new Date(shift.startTime)) === todayPHT) || [];
+  }, [isManagerRole, shifts?.shifts, employeeShifts?.shifts]);
 
-  const pendingTimeOffRequests = (timeOffResponse?.requests || []).filter(
-    (request: any) => request.status === "pending"
-  );
+  const pendingTimeOffRequests = React.useMemo(() => {
+    return (timeOffResponse?.requests || []).filter((request: any) => request.status === "pending");
+  }, [timeOffResponse?.requests]);
 
   // Mutations
   const approveTimeOffMutation = useMutation({
@@ -714,30 +713,36 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   });
 
   // Calculate this week's total scheduled hours
-  const thisWeekShifts = (employeeShifts?.shifts || []).filter((s: any) => {
-    if (!s.startTime || !s.endTime) return false;
-    const d = new Date(s.startTime);
-    if (isNaN(d.getTime())) return false;
-    
-    const now = new Date();
-    const startOfWeek = new Date(now);
-    startOfWeek.setDate(now.getDate() - now.getDay());
-    startOfWeek.setHours(0, 0, 0, 0);
-    const endOfWeek = new Date(startOfWeek);
-    endOfWeek.setDate(startOfWeek.getDate() + 6);
-    return d >= startOfWeek && d <= endOfWeek;
-  });
+  const thisWeekShifts = React.useMemo(() => {
+    return (employeeShifts?.shifts || []).filter((s: any) => {
+      if (!s.startTime || !s.endTime) return false;
+      const d = new Date(s.startTime);
+      if (isNaN(d.getTime())) return false;
+      
+      const now = new Date();
+      const startOfWeek = new Date(now);
+      startOfWeek.setDate(now.getDate() - now.getDay());
+      startOfWeek.setHours(0, 0, 0, 0);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 6);
+      return d >= startOfWeek && d <= endOfWeek;
+    });
+  }, [employeeShifts?.shifts]);
 
-  const totalHoursThisWeek = thisWeekShifts.reduce((sum: number, s: any) => {
-    const diffMs = new Date(s.endTime).getTime() - new Date(s.startTime).getTime();
-    const hours = diffMs / 3600000;
-    return sum + (isNaN(hours) ? 0 : hours);
-  }, 0);
+  const totalHoursThisWeek = React.useMemo(() => {
+    return thisWeekShifts.reduce((sum: number, s: any) => {
+      const diffMs = new Date(s.endTime).getTime() - new Date(s.startTime).getTime();
+      const hours = diffMs / 3600000;
+      return sum + (isNaN(hours) ? 0 : hours);
+    }, 0);
+  }, [thisWeekShifts]);
 
-  const upcomingShifts = (employeeShifts?.shifts || [])
-    .filter((s: any) => s.startTime && !isNaN(new Date(s.startTime).getTime()) && new Date(s.startTime) >= new Date())
-    .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
-    .slice(0, 5);
+  const upcomingShifts = React.useMemo(() => {
+    return (employeeShifts?.shifts || [])
+      .filter((s: any) => s.startTime && !isNaN(new Date(s.startTime).getTime()) && new Date(s.startTime) >= new Date())
+      .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+      .slice(0, 5);
+  }, [employeeShifts?.shifts]);
 
   const isDark = theme.palette.mode === 'dark';
   const primaryColor = theme.palette.primary.main;
@@ -752,24 +757,26 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
   const displayEntry = latestPaidEntry;
 
   // Count shifts in the current pay period only (not all-time)
-  const currentPeriodShifts = (employeeShifts?.shifts || []).filter((s: any) => {
-    if (!s.startTime) return false;
-    const d = new Date(s.startTime);
-    if (isNaN(d.getTime())) return false;
-    
-    if (displayEntry?.periodStartDate && displayEntry?.periodEndDate) {
-      const periodStart = new Date(displayEntry.periodStartDate);
-      const periodEnd = new Date(displayEntry.periodEndDate);
+  const currentPeriodShifts = React.useMemo(() => {
+    return (employeeShifts?.shifts || []).filter((s: any) => {
+      if (!s.startTime) return false;
+      const d = new Date(s.startTime);
+      if (isNaN(d.getTime())) return false;
+      
+      if (displayEntry?.periodStartDate && displayEntry?.periodEndDate) {
+        const periodStart = new Date(displayEntry.periodStartDate);
+        const periodEnd = new Date(displayEntry.periodEndDate);
+        periodEnd.setHours(23, 59, 59, 999);
+        return d >= periodStart && d <= periodEnd;
+      }
+
+      if (!currentPeriod) return false;
+      const periodStart = new Date(currentPeriod.startDate);
+      const periodEnd = new Date(currentPeriod.endDate);
       periodEnd.setHours(23, 59, 59, 999);
       return d >= periodStart && d <= periodEnd;
-    }
-
-    if (!currentPeriod) return false;
-    const periodStart = new Date(currentPeriod.startDate);
-    const periodEnd = new Date(currentPeriod.endDate);
-    periodEnd.setHours(23, 59, 59, 999);
-    return d >= periodStart && d <= periodEnd;
-  });
+    });
+  }, [employeeShifts?.shifts, displayEntry?.periodStartDate, displayEntry?.periodEndDate, currentPeriod]);
   
   // Hours worked this period. Fallback to this week's scheduled hours.
   const hoursWorked = displayEntry ? Number(displayEntry.totalHours || 0) : (payrollData?.totalHours ?? totalHoursThisWeek);

@@ -1,0 +1,1 @@
+import{Q as a}from"./vendor-DQ2xi9GZ.js";import{F as r,i as n,b as o}from"./vendor-calendar-BU_8hi5E.js";function s({events:e,onEventClick:t,onEventContent:i}){return a.jsx(r,{plugins:[n,o],initialView:"dayGridMonth",events:e,headerToolbar:{left:"prev,next today",center:"title",right:"dayGridMonth,dayGridYear"},height:"auto",eventClick:t,eventContent:i})}export{s as default};
