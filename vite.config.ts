@@ -56,11 +56,6 @@ export default defineConfig({
             if (id.includes('recharts') || id.includes('d3')) {
               return 'vendor-charts';
             }
-            // Framer Motion is large and only used for entrance anims —
-            // isolate it so pages without motion load faster
-            if (id.includes('framer-motion') || id.includes('motion')) {
-              return 'vendor-motion';
-            }
             // TanStack Query — used on most pages but can load in parallel
             if (id.includes('@tanstack')) {
               return 'vendor-query';
