@@ -56,11 +56,6 @@ export default function Mui13thMonth() {
 
   const { data: records = [], isLoading } = useQuery<ThirteenthMonthRecord[]>({
     queryKey: ["/api/13th-month", selectedYear],
-    queryFn: async () => {
-      const res = await fetch(`/api/13th-month/${selectedYear}`);
-      if (!res.ok) throw new Error("Failed to fetch 13th month records");
-      return res.json();
-    }
   });
 
   const computeMutation = useMutation({
