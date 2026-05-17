@@ -89,11 +89,6 @@ const TimeOffIndicator = React.memo(function TimeOffIndicator({ request, compact
   return (
     <Tooltip title={`${typeLabel} Leave · ${paidLabel}${request.reason ? `\n"${request.reason}"` : ''}${onDelete ? '\n(Click to manage)' : ''}`} arrow placement="top">
       <Box 
-        component={motion.div}
-        initial={{ opacity: 0, scale: 0.95 }}
-        animate={{ opacity: 1, scale: 1 }}
-        whileHover={{ boxShadow: onDelete ? '0 6px 14px rgba(0,0,0,0.12)' : '0 4px 10px rgba(0,0,0,0.08)' }}
-        whileTap={{}}
         onClick={onDelete ? (e: any) => { e.stopPropagation(); onDelete(request.id); } : undefined}
         sx={{
           display: 'flex', alignItems: 'center', gap: 0.5,
@@ -105,9 +100,9 @@ const TimeOffIndicator = React.memo(function TimeOffIndicator({ request, compact
           borderColor: isPaid ? '#047857' : config.borderColor,
           fontSize: '0.72rem', fontWeight: 700,
           boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
-          transition: 'box-shadow 0.2s',
+          transition: 'all 0.2s',
           overflow: 'hidden',
-          '&:hover': onDelete ? { filter: 'brightness(0.92)', boxShadow: '0 6px 14px rgba(0,0,0,0.12)' } : {}
+          '&:hover': onDelete ? { filter: 'brightness(0.92)', boxShadow: '0 6px 14px rgba(0,0,0,0.12)' } : { boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }
         }}>
         <StatusIcon sx={{ fontSize: 14, flexShrink: 0 }} />
         <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
@@ -166,11 +161,6 @@ const ShiftPill = React.memo(function ShiftPill({ shift, onClick, trade, isSelec
 
   return (
     <Box
-      component={motion.div}
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      whileHover={{ scale: 1.04, y: -2 }}
-      whileTap={{ scale: 0.98 }}
       onClick={onClick}
       sx={{
         position: 'relative',
@@ -192,18 +182,20 @@ const ShiftPill = React.memo(function ShiftPill({ shift, onClick, trade, isSelec
         fontWeight: 800,
         lineHeight: 1.2,
         letterSpacing: '-0.01em',
-        transition: 'box-shadow 0.2s',
+        transition: 'all 0.2s',
         whiteSpace: 'nowrap',
         overflow: 'visible',
+        '&:hover': onClick ? {
+          transform: 'scale(1.04) translateY(-2px)',
+          filter: 'brightness(0.92)',
+          boxShadow: isSelected ? undefined : `0 6px 16px ${alpha(rc.bg, 0.3)}`,
+        } : {},
+        '&:active': onClick ? { transform: 'scale(0.98)' } : {},
         ...(hasTrade && {
           outline: '2px dashed',
           outlineColor: trade.status === 'accepted' ? '#3B82F6' : '#8B5CF6',
           outlineOffset: 1,
         }),
-        '&:hover': onClick ? {
-          filter: 'brightness(0.92)',
-          boxShadow: isSelected ? undefined : `0 6px 16px ${alpha(rc.bg, 0.3)}`,
-        } : {},
       }}
     >
       <Tooltip

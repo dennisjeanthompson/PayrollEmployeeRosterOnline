@@ -897,7 +897,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                     {currentUser?.position || currentUser?.role || 'Team Member'}
                   </Typography>
                 </Box>
-                <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+                <Box sx={{ transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.05)' }, '&:active': { transform: 'scale(0.95)' } }}>
                   <Chip
                     size="small"
                     label="● Online"
@@ -911,7 +911,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                       boxShadow: '0 0 12px rgba(74,222,128,0.2)' 
                     }}
                   />
-                </motion.div>
+                </Box>
               </Stack>
             </Box>
 
@@ -966,7 +966,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                 </Stack>
 
                 <Box sx={{ px: 1.5, pb: 1.5, pt: 0 }}>
-                  <motion.div whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.99 }}>
+                  <Box sx={{ transition: 'transform 0.2s', '&:hover': { transform: 'scale(1.01)' }, '&:active': { transform: 'scale(0.99)' } }}>
                     <Button
                       fullWidth
                       variant="contained"
@@ -984,7 +984,7 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                     >
                       View Payslips
                     </Button>
-                  </motion.div>
+                  </Box>
                 </Box>
               </Paper>
             </Box>
@@ -1004,31 +1004,32 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
         ) : todayShifts.length > 0 ? (
           <Stack spacing={2}>
             {todayShifts.map((shift: any, i: number) => (
-              <motion.div
-                key={shift.id}
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, delay: i * 0.1 }}
-                whileHover={{ scale: 1.02, y: -2 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <Paper
-                  elevation={isDark ? 0 : 2}
-                  onClick={() => startTransition(() => setLocation('/employee/schedule'))}
-                  sx={{
-                    p: 2.5,
-                    borderRadius: 4,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 2,
-                    cursor: 'pointer',
-                    background: isDark ? alpha(primaryColor, 0.05) : '#fff',
-                    border: `1px solid ${shift.status === 'completed' ? alpha(theme.palette.success.main, 0.3) : alpha(primaryColor, 0.2)}`,
-                    boxShadow: `0 8px 24px ${alpha(primaryColor, 0.08)}`,
-                    position: 'relative',
-                    overflow: 'hidden'
-                  }}
+                <motion.div
+                  key={shift.id}
+                  initial={{ opacity: 0, x: -20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  transition={{ duration: 0.4, delay: i * 0.1 }}
                 >
+                  <Paper
+                    elevation={isDark ? 0 : 2}
+                    onClick={() => startTransition(() => setLocation('/employee/schedule'))}
+                    sx={{
+                      p: 2.5,
+                      borderRadius: 4,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 2,
+                      cursor: 'pointer',
+                      background: isDark ? alpha(primaryColor, 0.05) : '#fff',
+                      border: `1px solid ${shift.status === 'completed' ? alpha(theme.palette.success.main, 0.3) : alpha(primaryColor, 0.2)}`,
+                      boxShadow: `0 8px 24px ${alpha(primaryColor, 0.08)}`,
+                      position: 'relative',
+                      overflow: 'hidden',
+                      transition: 'transform 0.2s',
+                      '&:hover': { transform: 'scale(1.02) translateY(-2px)' },
+                      '&:active': { transform: 'scale(0.98)' }
+                    }}
+                  >
                   <Box sx={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, bgcolor: shift.status === 'completed' ? 'success.main' : 'primary.main' }} />
                   <Box sx={{ width: 50, height: 50, borderRadius: 3, bgcolor: alpha(primaryColor, 0.1), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     <Typography variant="caption" sx={{ fontSize: '0.6rem', fontWeight: 800, color: 'primary.main', lineHeight: 1 }}>
@@ -1079,8 +1080,6 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.4, delay: 0.2 + (i * 0.1) }}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
               >
                 <Paper
                   elevation={0}
@@ -1095,10 +1094,13 @@ function EmployeeDashboard({ currentUser, todayShifts, employeeShifts, shiftsLoa
                     border: `1px solid ${theme.palette.divider}`,
                     background: isDark ? alpha('#000', 0.2) : alpha('#fff', 0.5),
                     backdropFilter: 'blur(10px)',
+                    transition: 'transform 0.2s, border-color 0.2s, background 0.2s',
                     '&:hover': {
                       borderColor: alpha(primaryColor, 0.3),
-                      background: isDark ? alpha(primaryColor, 0.05) : '#fff'
-                    }
+                      background: isDark ? alpha(primaryColor, 0.05) : '#fff',
+                      transform: 'scale(1.02)'
+                    },
+                    '&:active': { transform: 'scale(0.98)' }
                   }}
                 >
                   <Box sx={{ width: 44, height: 44, borderRadius: 2.5, bgcolor: alpha(primaryColor, 0.08), display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

@@ -199,7 +199,7 @@ export default function MuiPayroll() {
                   View your earnings, payslips, and payment history • Updates in real-time
                 </Typography>
               </Box>
-              <motion.div whileHover={{ rotate: 180 }} transition={{ duration: 0.4 }}>
+              <Box sx={{ transition: 'transform 0.4s', '&:hover': { transform: 'rotate(180deg)' } }}>
                 <Tooltip title="Refresh data">
                   <IconButton
                     onClick={() => {
@@ -215,7 +215,7 @@ export default function MuiPayroll() {
                     <RefreshIcon />
                   </IconButton>
                 </Tooltip>
-              </motion.div>
+              </Box>
             </Stack>
           </Box>
         </motion.div>
@@ -234,7 +234,6 @@ export default function MuiPayroll() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5, delay: idx * 0.1, ease: [0.22, 1, 0.36, 1] }}
-                whileHover={{ y: -4, scale: 1.02 }}
               >
                 <Paper
                   elevation={0}
@@ -248,10 +247,12 @@ export default function MuiPayroll() {
                     WebkitBackdropFilter: 'blur(20px)',
                     border: `1px solid ${alpha(stat.color, 0.15)}`,
                     boxShadow: `0 4px 20px ${alpha(stat.color, 0.08)}`,
-                    transition: 'border-color 0.3s, box-shadow 0.3s',
+                    transition: 'all 0.3s',
+                    transform: 'translateY(0)',
                     '&:hover': {
                       borderColor: alpha(stat.color, 0.35),
                       boxShadow: `0 8px 30px ${alpha(stat.color, 0.15)}`,
+                      transform: 'translateY(-4px) scale(1.02)',
                     },
                   }}
                 >
@@ -626,8 +627,6 @@ export default function MuiPayroll() {
                       initial={{ opacity: 0, y: 20 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.4, delay: idx * 0.1 }}
-                      whileHover={{ scale: 1.03, y: -4 }}
-                      whileTap={{ scale: 0.97 }}
                     >
                       <Paper
                         elevation={0}
@@ -642,10 +641,15 @@ export default function MuiPayroll() {
                           boxShadow: `0 8px 24px ${alpha(theme.palette.primary.main, 0.08)}`,
                           position: "relative",
                           overflow: "hidden",
-                          transition: "border-color 0.3s, box-shadow 0.3s",
+                          transition: "all 0.3s",
+                          transform: "scale(1) translateY(0)",
                           "&:hover": {
                             borderColor: alpha(theme.palette.primary.main, 0.4),
                             boxShadow: `0 12px 32px ${alpha(theme.palette.primary.main, 0.15)}`,
+                            transform: "scale(1.03) translateY(-4px)",
+                          },
+                          "&:active": {
+                            transform: "scale(0.97)",
                           },
                         }}
                         onClick={() => handleViewPayslip(entry)}

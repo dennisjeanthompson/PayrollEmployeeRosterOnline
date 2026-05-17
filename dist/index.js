@@ -14174,6 +14174,12 @@ var vite_config_default = defineConfig({
             if (id.includes("recharts") || id.includes("d3")) {
               return "vendor-charts";
             }
+            if (id.includes("framer-motion") || id.includes("motion")) {
+              return "vendor-motion";
+            }
+            if (id.includes("@tanstack")) {
+              return "vendor-query";
+            }
             return "vendor";
           }
         },

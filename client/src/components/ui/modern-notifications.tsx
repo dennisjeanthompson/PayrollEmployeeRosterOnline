@@ -301,15 +301,14 @@ export function NotificationBell({
                   </div>
                 ) : (
                   notifications.map((notification) => (
-                    <motion.button
+                    <button
                       key={notification.id}
-                      whileHover={{ backgroundColor: "rgba(0,0,0,0.02)" }}
                       onClick={() => {
                         onNotificationClick?.(notification.id);
                         setOpen(false);
                       }}
                       className={cn(
-                        "w-full p-4 text-left border-b last:border-0 transition-colors",
+                        "w-full p-4 text-left border-b last:border-0 transition-colors hover:bg-black/[0.02] dark:hover:bg-white/[0.02]",
                         !notification.read && "bg-primary/5"
                       )}
                     >
@@ -337,7 +336,7 @@ export function NotificationBell({
                           </div>
                         )}
                       </div>
-                    </motion.button>
+                    </button>
                   ))
                 )}
               </div>
