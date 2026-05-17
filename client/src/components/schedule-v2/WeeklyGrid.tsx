@@ -230,11 +230,7 @@ function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, isOvert
           {hasTrade && <TradeBadge trade={trade} />}
           <Box component="span" sx={{ flex: 1, minWidth: 0, textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 0.5 }}>
             {startStr}-{endStr}
-            {isOvertime && (
-              <Tooltip title="Pushes employee >48h (OT)" arrow placement="top">
-                <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: '#F97316', flexShrink: 0, boxShadow: '0 0 0 1px #FFF' }} />
-              </Tooltip>
-            )}
+
           </Box>
         </Box>
       </Tooltip>

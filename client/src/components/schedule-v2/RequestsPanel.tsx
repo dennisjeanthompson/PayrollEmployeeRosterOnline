@@ -163,11 +163,7 @@ export default function RequestsPanel({
         }
       }
 
-      // Red: No rest day all week (7 distinct days of shifts)
-      const daysWorked = new Set(empShifts.map(s => safeFormat(s.startTime, 'yyyy-MM-dd')));
-      if (daysWorked.size >= 7) {
-        alerts.push({ type: 'error', message: `${empName} is scheduled for 7 days this week (No rest day DOLE violation).` });
-      }
+
     });
 
     // Red: Pending leave overlap with scheduled shifts
