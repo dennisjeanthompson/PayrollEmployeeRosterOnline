@@ -915,6 +915,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
           await storage.deleteShift(shift.id);
           deletedShifts++;
           realTimeManager.broadcastShiftDeleted(shift.id, branchId);
+
+          try {
+            const shiftStart = new Date(shift.startTime);
+            const dayStart = new Date(shiftStart.getFullYear(), shiftStart.getMonth(), shiftStart.getDate());
+            const dayEnd = new Date(shiftStart.getFullYear(), shiftStart.getMonth(), shiftStart.getDate(), 23, 59, 59, 999);
+            const relatedLogs = await storage.getAdjustmentLogsByEmployee(shift.userId, dayStart, dayEnd);
+            for (const log of relatedLogs) {
+              if (['absent', 'late', 'undertime'].includes(log.type)) {
+                await storage.deleteAdjustmentLog(log.id);
+                deletedExceptions++;
+              }
+            }
+          } catch (e) {
+            console.error('Failed to cleanup related exception logs in bulk delete:', e);
+          }
         }
       }
 
@@ -1022,7 +1037,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Execute creation
       const createdShifts = [];
       for (const shiftData of toCreate) {
-        const shift = await storage.createShift(shiftData);
+        const shift = await storage.createShift({
+          ...shiftData,
+          startTime: new Date(shiftData.startTime),
+          endTime: new Date(shiftData.endTime)
+        });
         realTimeManager.broadcastShiftCreated(shift);
         createdShifts.push(shift);
       }
@@ -1229,6 +1248,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!result) {
         return res.status(500).json({ message: "Failed to delete shift" });
+      }
+
+      // Clean up exception logs tied to this shift's date
+      try {
+        const shiftStart = new Date(shift.startTime);
+        const dayStart = new Date(shiftStart.getFullYear(), shiftStart.getMonth(), shiftStart.getDate());
+        const dayEnd = new Date(shiftStart.getFullYear(), shiftStart.getMonth(), shiftStart.getDate(), 23, 59, 59, 999);
+        const relatedLogs = await storage.getAdjustmentLogsByEmployee(shift.userId, dayStart, dayEnd);
+        for (const log of relatedLogs) {
+          if (['absent', 'late', 'undertime'].includes(log.type)) {
+            await storage.deleteAdjustmentLog(log.id);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to cleanup related exception logs:', e);
       }
 
       // Broadcast real-time shift deletion
@@ -1505,7 +1539,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check for existing absent log to prevent duplicates
       if (type === 'absent') {
-        const existingLogs = await storage.getAdjustmentLogsByUser(employeeId);
+        const existingLogs = await storage.getAdjustmentLogsByEmployee(employeeId);
         const logDate = new Date(date).getTime();
         const hasAbsent = existingLogs.some((l: any) => 
           l.type === 'absent' && new Date(l.startDate).getTime() === logDate && l.status !== 'rejected'
@@ -2064,7 +2098,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         let status = "No Payroll Yet";
         
         if (periodToEval) {
-          status = periodToEval.status;
+          status = periodToEval.status || "No Payroll Yet";
           
           // Fetch actual payroll entries for this period
           const entries = await storage.getPayrollEntriesByPeriod(periodToEval.id);
@@ -2464,7 +2498,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.warn(`[PAYROLL SKIP] ${employee.firstName} ${employee.lastName} — invalid hourlyRate "${employee.hourlyRate}", skipping.`);
           continue;
         }
-        const payCalculation = calculatePeriodPay(shifts, hourlyRate, periodHolidays, 0, isHolidayExempt); // 0 = Sunday as rest day
+        const payCalculation = calculatePeriodPay(shifts, hourlyRate, periodHolidays, -1, isHolidayExempt); // -1 = no default rest day
         
         if (runConfig.includeNightDiff === false) {
           payCalculation.totalGrossPay -= payCalculation.nightDiffPay;
