@@ -832,6 +832,7 @@ function WeeklyGridComponent({
         </Box>
       </Box>
     </Box>
+    </Box>
   );
 }
 
