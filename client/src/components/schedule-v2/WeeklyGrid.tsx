@@ -278,7 +278,7 @@ const ADJ_TYPE_CONFIG: Record<string, { label: string, color: string, bgColor: s
 };
 
 /** Prominent pill for exception logs (OT/Late) */
-export const AdjustmentBadge = React.memo(function AdjustmentBadge({ log, isSelectionMode, isSelected, onClick }: { log: any; isSelectionMode?: boolean; isSelected?: boolean; onClick?: (e: any) => void }) {
+export const AdjustmentBadge = React.memo(function AdjustmentBadge({ log, isSelectionMode, isSelected, onClick, compact }: { log: any; isSelectionMode?: boolean; isSelected?: boolean; onClick?: (e: any) => void; compact?: boolean }) {
   const isTime = log.type === 'late' || log.type === 'undertime';
   const unit = log.type === 'holiday_pay' ? '' : isTime ? 'm' : log.type === 'absent' ? 'd' : 'h';
   const config = ADJ_TYPE_CONFIG[log.type] || { label: log.type, color: '#444', bgColor: '#eee' };
@@ -934,7 +934,7 @@ const DayCell = React.memo(({
   let cellBgColor = 'transparent';
   if (isBlocked) cellBgColor = alpha(theme.palette.error.main, isDark ? 0.06 : 0.04);
   else if (hasApprovedTimeOff) cellBgColor = alpha('#F59E0B', isDark ? 0.06 : 0.06);
-  else if (today) cellBgColor = alpha(theme.palette.primary.main, isDark ? 0.06 : 0.06);
+  else if (today) cellBgColor = alpha(theme.palette.primary.main, isDark ? 0.12 : 0.1);
 
   if (isDragOver) {
     cellBgColor = isOccupied 
@@ -951,6 +951,7 @@ const DayCell = React.memo(({
       onDrop={handleDrop}
       sx={{
         p: 1,
+        position: 'relative',
         borderBottom: '1px solid',
         borderLeft: '1px solid',
         borderColor: isDragOver ? (isOccupied ? 'warning.main' : 'primary.main') : (isDark ? '#3D3228' : '#E8E0D4'),
@@ -1005,6 +1006,9 @@ const DayCell = React.memo(({
             {(() => {
               const grouped = new Map<string, any>();
               cellAdjustments.forEach((log: any) => {
+                // Ignore late/ot/undertime if there is no shift
+                if (['late', 'overtime', 'undertime'].includes(log.type) && cellShifts.length === 0) return;
+                
                 const key = `${log.type}-${log.isIncluded}`;
                 if (!grouped.has(key)) {
                   grouped.set(key, { ...log, value: parseFloat(log.value) || 0, count: 1, logs: [log] });
@@ -1036,22 +1040,37 @@ const DayCell = React.memo(({
             })()}
           </Box>
         )}
+        
+        {/* Empty placeholder */}
+        {!isBlocked && cellShifts.length === 0 && cellTimeOff.length === 0 && cellAdjustments.length === 0 && !hasApprovedTimeOff && !isSelectionMode && (
+          <Box sx={{ 
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            minHeight: 32, opacity: 0.6,
+            color: isDark ? 'text.secondary' : 'text.disabled',
+            fontSize: '0.65rem', fontWeight: 600, fontStyle: 'italic',
+            pointerEvents: 'none'
+          }}>
+            No shift
+          </Box>
+        )}
+
         {cellShifts.length === 0 && !hasApprovedTimeOff && isManager && !isSelectionMode && (
-          <Box className="add-shift-btn" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, opacity: { xs: 1, sm: 0.5 }, transform: 'scale(0.98)', transition: 'all 0.2s ease', '&:hover': { opacity: 1, transform: 'scale(1)' } }}>
+          <Box className="add-shift-btn" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, opacity: { xs: 1, sm: 0 }, transform: 'scale(0.98)', position: 'absolute', inset: 4, zIndex: 5, transition: 'all 0.2s ease', '&:hover': { opacity: 1, transform: 'scale(1)' } }}>
             {!isBlocked && (
               <Tooltip title="Add shift" placement="top">
                 <IconButton
                   size="small"
                   onClick={() => onCreateShift(emp.id, date)}
                   sx={{
-                    width: '100%', height: 28,
+                    width: '100%', height: '100%',
                     borderRadius: 1.5, border: '1px dashed',
                     borderColor: isDark ? alpha('#C4AA88', 0.2) : alpha('#5C4033', 0.1),
                     color: isDark ? alpha('#C4AA88', 0.3) : alpha('#5C4033', 0.2),
-                    '&:hover': { borderColor: 'primary.main', color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.04) },
+                    bgcolor: isDark ? alpha('#C4AA88', 0.05) : alpha('#5C4033', 0.05),
+                    '&:hover': { borderColor: 'primary.main', color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.08) },
                   }}
                 >
-                  <AddIcon sx={{ fontSize: 14 }} />
+                  <AddIcon sx={{ fontSize: 18 }} />
                 </IconButton>
               </Tooltip>
             )}
@@ -1059,7 +1078,7 @@ const DayCell = React.memo(({
               <Tooltip title="Grant Holiday Pay (No work performed)" placement="top">
                 <Box
                   onClick={() => onAddHolidayPay(emp.id, date)}
-                  sx={{ width: '100%', height: 28, borderRadius: 1.5, border: '1px dashed', borderColor: '#10B981', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 800, '&:hover': { bgcolor: alpha('#10B981', 0.1) } }}
+                  sx={{ position: 'absolute', bottom: -20, left: 0, right: 0, zIndex: 10, width: '100%', height: 20, borderRadius: 1.5, border: '1px dashed', borderColor: '#10B981', color: '#10B981', bgcolor: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 800, '&:hover': { bgcolor: alpha('#10B981', 0.1) } }}
                 >
                   + Holiday Pay
                 </Box>

@@ -383,7 +383,7 @@ export default function DayView({
         </Box>
       )}
 
-      {/* Shift list */}
+      {/* Timeline view for shifts */}
       {sortedShifts.length === 0 ? (
         <Box sx={{ textAlign: 'center', py: 6 }}>
           <Typography variant="h4" sx={{ mb: 1 }}>📭</Typography>
@@ -393,99 +393,142 @@ export default function DayView({
           </Typography>
         </Box>
       ) : (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-          {sortedShifts.map(shift => {
-            const emp = employees.find(e => e.id === shift.userId);
-            const rc = getRoleColor(shift.position, emp?.role, shift.startTime);
-            const hours = differenceInHours(toDate(shift.endTime), toDate(shift.startTime));
-            const trade = activeTrades.find(t => t.shiftId === shift.id);
-            const adjustments = getAdjustmentsForCell(adjustmentLogs, shift.userId, date);
-
-            const isSelected = isSelectionMode && selectedShifts?.has(shift.id);
-
-            return (
-              <Box
-                key={shift.id}
-                onClick={() => {
-                  if (isSelectionMode && onToggleShiftSelection) {
-                    onToggleShiftSelection(shift.id);
-                  } else {
-                    onEditShift(shift);
-                  }
-                }}
-                sx={{
-                  display: 'flex', alignItems: 'center', gap: 2,
-                  p: 2, borderRadius: 2.5,
-                  border: trade ? '2px dashed' : '1px solid',
-                  borderColor: isSelected ? '#3B82F6' : (trade
-                    ? (trade.status === 'accepted' ? '#93C5FD' : '#C4B5FD')
-                    : (isDark ? '#3D3228' : '#E8E0D4')),
-                  borderLeft: `5px solid ${rc.bg}`,
-                  bgcolor: isSelected ? alpha('#3B82F6', 0.1) : (isDark ? '#2A2018' : '#FFFFFF'),
-                  cursor: 'pointer',
-                  transition: 'background-color 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease',
-                  boxShadow: isSelected ? '0 0 0 2px #3B82F6, 0 4px 12px rgba(59, 130, 246, 0.4)' : undefined,
-                  position: 'relative',
-                  '&:hover': {
-                    bgcolor: isSelected ? alpha('#3B82F6', 0.15) : (isDark ? '#342A1E' : '#FBF8F4'),
-                    boxShadow: isSelected ? '0 0 0 2px #3B82F6, 0 4px 12px rgba(59, 130, 246, 0.4)' : '0 3px 10px rgba(0,0,0,0.08)',
-                  },
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+          {/* Time axis */}
+          <Box sx={{ display: 'flex', position: 'relative', height: 20, mb: 1, ml: { xs: 8, sm: 20 } }}>
+            {[0, 6, 12, 18, 24].map((hour) => (
+              <Typography 
+                key={hour} 
+                variant="caption" 
+                sx={{ 
+                  position: 'absolute', 
+                  left: `${(hour / 24) * 100}%`, 
+                  transform: 'translateX(-50%)',
+                  color: 'text.secondary',
+                  fontSize: '0.65rem',
+                  fontWeight: 600
                 }}
               >
-                {isSelected && (
-                  <Box sx={{ position: 'absolute', top: -5, right: -5, bgcolor: '#3B82F6', color: '#fff', borderRadius: '50%', width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 2, zIndex: 12 }}>
-                    <CheckIcon sx={{ fontSize: 13, fontWeight: 900 }} />
+                {hour === 0 ? '12 AM' : hour === 12 ? '12 PM' : hour === 24 ? '12 AM' : hour > 12 ? `${hour - 12} PM` : `${hour} AM`}
+              </Typography>
+            ))}
+          </Box>
+          
+          {/* Shift rows */}
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            {sortedShifts.map(shift => {
+              const emp = employees.find(e => e.id === shift.userId);
+              const rc = getRoleColor(shift.position, emp?.role, shift.startTime);
+              const startD = toDate(shift.startTime);
+              const endD = toDate(shift.endTime);
+              const startHour = startD.getHours() + (startD.getMinutes() / 60);
+              let endHour = endD.getHours() + (endD.getMinutes() / 60);
+              if (endHour <= startHour && startD.getDate() !== endD.getDate()) endHour += 24; // Handle overnight
+              
+              // Cap at 24 for the timeline display
+              const displayEndHour = Math.min(endHour, 24);
+              const durationHours = displayEndHour - startHour;
+              
+              const leftPercent = (startHour / 24) * 100;
+              const widthPercent = (durationHours / 24) * 100;
+
+              const trade = activeTrades.find(t => t.shiftId === shift.id);
+              const adjustments = getAdjustmentsForCell(adjustmentLogs, shift.userId, date);
+              const isSelected = isSelectionMode && selectedShifts?.has(shift.id);
+
+              return (
+                <Box
+                  key={shift.id}
+                  onClick={() => {
+                    if (isSelectionMode && onToggleShiftSelection) {
+                      onToggleShiftSelection(shift.id);
+                    } else {
+                      onEditShift(shift);
+                    }
+                  }}
+                  sx={{
+                    display: 'flex', alignItems: 'center', 
+                    p: 1, borderRadius: 2,
+                    bgcolor: isSelected ? alpha('#3B82F6', 0.1) : (isDark ? '#2A2018' : '#FFFFFF'),
+                    border: '1px solid',
+                    borderColor: isSelected ? '#3B82F6' : (isDark ? '#3D3228' : '#E8E0D4'),
+                    cursor: 'pointer', position: 'relative',
+                    '&:hover': { bgcolor: isSelected ? alpha('#3B82F6', 0.15) : (isDark ? '#342A1E' : '#FBF8F4') }
+                  }}
+                >
+                  {/* Employee info sidebar */}
+                  <Box sx={{ width: { xs: 64, sm: 160 }, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 1, overflow: 'hidden' }}>
+                    <Avatar sx={{ width: 28, height: 28, bgcolor: rc.bg, color: rc.text, fontWeight: 700, fontSize: '0.65rem' }}>
+                      {emp?.firstName?.[0]}{emp?.lastName?.[0]}
+                    </Avatar>
+                    <Box sx={{ display: { xs: 'none', sm: 'block' }, minWidth: 0 }}>
+                      <Typography variant="body2" fontWeight={700} noWrap>
+                        {emp ? `${emp.firstName} ${emp.lastName?.[0]}.` : 'Unknown'}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary" noWrap sx={{ display: 'block' }}>
+                        {shift.position || 'Staff'}
+                      </Typography>
+                    </Box>
                   </Box>
-                )}
-                <Avatar sx={{ width: 44, height: 44, bgcolor: rc.bg, color: rc.text, fontWeight: 700, fontSize: '0.85rem' }}>
-                  {emp?.firstName?.[0]}{emp?.lastName?.[0]}
-                </Avatar>
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography variant="body1" fontWeight={700} noWrap>
-                    {emp ? `${emp.firstName} ${emp.lastName}` : 'Unknown'}
-                  </Typography>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
-                    <Chip size="small" label={shift.position || 'Staff'} sx={{
-                      height: 20, fontSize: '0.62rem', fontWeight: 600,
-                      bgcolor: isDark ? rc.bgDark : rc.bgLight, color: isDark ? rc.text : rc.bg,
-                    }} />
-                    <Typography variant="caption" color="text.secondary">
-                      {safeFormat(shift.startTime, 'h:mm a')} – {safeFormat(shift.endTime, 'h:mm a')} · {hours}h
-                    </Typography>
-                    {trade && (
-                      <Chip
-                        icon={<SwapIcon sx={{ fontSize: 12 }} />}
-                        label={trade.status === 'accepted' ? 'Traded' : 'Trade Pending'}
-                        size="small"
-                        sx={{
-                          height: 20, fontSize: '0.58rem', fontWeight: 700,
-                          bgcolor: trade.status === 'accepted' ? '#DBEAFE' : '#F5F3FF',
-                          color: trade.status === 'accepted' ? '#1E40AF' : '#7C3AED',
-                          '& .MuiChip-icon': { color: 'inherit' },
-                        }}
-                      />
-                    )}
-                    {adjustments.map(log => (
-                      <AdjustmentBadge 
-                        key={`adj-${log.id}`} 
-                        log={log} 
-                        isSelected={isSelectionMode && selectedLogs?.has(log.id)}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (isSelectionMode && onToggleLogSelection) {
-                            onToggleLogSelection(log.id);
-                          } else if (!isSelectionMode && onManageLogGroup) {
-                            onManageLogGroup([log]);
-                          }
-                        }}
-                      />
+
+                  {/* Timeline track */}
+                  <Box sx={{ flex: 1, height: 40, position: 'relative', bgcolor: isDark ? alpha('#000', 0.2) : alpha('#000', 0.03), borderRadius: 1.5, mx: 1, overflow: 'hidden' }}>
+                    {/* Grid lines */}
+                    {[6, 12, 18].map(hour => (
+                      <Box key={hour} sx={{ position: 'absolute', left: `${(hour/24)*100}%`, top: 0, bottom: 0, width: '1px', bgcolor: isDark ? alpha('#fff', 0.05) : alpha('#000', 0.05), zIndex: 0 }} />
                     ))}
+                    
+                    {/* Shift block */}
+                    <Tooltip title={`${safeFormat(shift.startTime, 'h:mm a')} – ${safeFormat(shift.endTime, 'h:mm a')}`} placement="top">
+                      <Box sx={{
+                        position: 'absolute',
+                        left: `${leftPercent}%`,
+                        width: `${widthPercent}%`,
+                        top: 4, bottom: 4,
+                        borderRadius: 1,
+                        bgcolor: rc.bg,
+                        color: rc.text,
+                        border: trade ? '2px dashed' : '1px solid',
+                        borderColor: trade ? (trade.status === 'accepted' ? '#fff' : '#fff') : alpha(rc.border, 0.3),
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        overflow: 'hidden', whiteSpace: 'nowrap', px: 1, zIndex: 1,
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.1)'
+                      }}>
+                        <Typography variant="caption" sx={{ fontWeight: 800, fontSize: '0.65rem', display: { xs: 'none', md: 'block' } }}>
+                          {safeFormat(shift.startTime, 'h:mm a')}
+                        </Typography>
+                      </Box>
+                    </Tooltip>
+                  </Box>
+
+                  {/* Badges */}
+                  <Box sx={{ width: { xs: 'auto', sm: 100 }, display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 0.5, flexShrink: 0 }}>
+                    {adjustments.length > 0 && (
+                      <Box sx={{ display: 'flex', gap: 0.5 }}>
+                        {adjustments.slice(0, 2).map(log => (
+                          <AdjustmentBadge 
+                            key={`adj-${log.id}`} 
+                            log={log} 
+                            compact
+                            isSelected={isSelectionMode && selectedLogs?.has(log.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isSelectionMode && onToggleLogSelection) {
+                                onToggleLogSelection(log.id);
+                              } else if (!isSelectionMode && onManageLogGroup) {
+                                onManageLogGroup([log]);
+                              }
+                            }}
+                          />
+                        ))}
+                      </Box>
+                    )}
+                    {isManager && <EditIcon sx={{ fontSize: 16, color: 'text.disabled', ml: 1 }} />}
                   </Box>
                 </Box>
-                {isManager && <EditIcon sx={{ fontSize: 18, color: 'text.disabled' }} />}
-              </Box>
-            );
-          })}
+              );
+            })}
+          </Box>
         </Box>
       )}
 

@@ -1981,18 +1981,15 @@ export default function ScheduleV2() {
                     />
                   )}
                 </Stack>
-                <Button
-                  size="small"
-                  variant="text"
-                  onClick={() => { setAdjIsRange(!adjIsRange); setAdjEndDate(null); }}
-                  sx={{ textTransform: 'none', alignSelf: 'flex-start', mt: -1 }}
-                >
-                  {adjIsRange ? '← Switch to single-day log' : '📅 Bulk log date range'}
-                </Button>
+                <FormControlLabel
+                  control={<Switch size="small" checked={adjIsRange} onChange={(e) => { setAdjIsRange(e.target.checked); setAdjEndDate(null); }} />}
+                  label={<Typography variant="body2" fontWeight={600}>Bulk log date range</Typography>}
+                  sx={{ mt: -1, alignSelf: 'flex-start' }}
+                />
               </LocalizationProvider>
             )}
 
-            <FormControl fullWidth size="small">
+            <FormControl fullWidth size="small" sx={{ display: editAdjId ? 'flex' : 'none' }}>
               <InputLabel>Type</InputLabel>
               <Select
                 value={adjType}
@@ -2010,33 +2007,39 @@ export default function ScheduleV2() {
               </Select>
             </FormControl>
 
-            <TextField
-              label={
-                adjType === 'late' || adjType === 'undertime' || adjType === 'overtime' ? "Minutes" : adjType === 'absent' ? "Days" : "Hours"
-              }
-              type="number" size="small" fullWidth value={adjType === 'absent' ? '1' : adjValue}
-              onChange={(e) => {
-                if (adjType !== 'absent') setAdjValue(e.target.value);
-              }}
-              InputProps={{
-                readOnly: adjType === 'absent',
-                endAdornment: (
-                  <InputAdornment position="end">
-                    {adjType === 'late' || adjType === 'undertime' || adjType === 'overtime' ? 'mins' : adjType === 'absent' ? 'day' : 'hrs'}
-                  </InputAdornment>
-                ),
-              }}
-              helperText={adjType === 'late' || adjType === 'undertime' || adjType === 'overtime'
-                ? `Use minutes for ${adjType === 'overtime' ? 'overtime' : 'tardiness or undertime'} from the logbook.`
-                : adjType === 'absent'
-                  ? 'Absent records are exactly 1 day per scheduled shift.'
+            {adjType !== 'absent' ? (
+              <TextField
+                label={
+                  adjType === 'late' || adjType === 'undertime' || adjType === 'overtime' ? "Minutes" : "Hours"
+                }
+                type="number" size="small" fullWidth value={adjValue}
+                onChange={(e) => setAdjValue(e.target.value)}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      {adjType === 'late' || adjType === 'undertime' || adjType === 'overtime' ? 'mins' : 'hrs'}
+                    </InputAdornment>
+                  ),
+                }}
+                helperText={adjType === 'late' || adjType === 'undertime' || adjType === 'overtime'
+                  ? `Use minutes for ${adjType === 'overtime' ? 'overtime' : 'tardiness or undertime'} from the logbook.`
                   : 'Use hours for legacy logs.'}
-            />
+              />
+            ) : (
+              <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: alpha(theme.palette.error.main, 0.05), border: `1px solid ${alpha(theme.palette.error.main, 0.1)}` }}>
+                <Typography variant="body2" color="error.dark" fontWeight={600} sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <span>⚠️</span> Absences are logged as full days.
+                </Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+                  This will override any scheduled shift for this date.
+                </Typography>
+              </Box>
+            )}
 
             <TextField
               label="Remarks (DOLE compliance)" size="small" fullWidth multiline rows={2}
               value={adjRemarks} onChange={(e) => setAdjRemarks(e.target.value)}
-              placeholder="e.g., Late due to heavy traffic, overtime approved by manager"
+              placeholder={adjType === 'absent' ? "e.g., Sick leave, No-call no-show" : "e.g., Late due to heavy traffic, overtime approved by manager"}
             />
           </Stack>
         </DialogContent>

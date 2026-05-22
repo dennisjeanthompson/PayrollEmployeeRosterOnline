@@ -1549,6 +1549,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Prevent late/overtime/undertime without an active shift
+      if (['late', 'overtime', 'undertime'].includes(type)) {
+        const targetDateStr = new Date(date).toISOString().split('T')[0];
+        const userShifts = await storage.getShiftsByUser(employeeId);
+        const hasShift = userShifts.some(s => 
+          new Date(s.startTime).toISOString().split('T')[0] === targetDateStr
+        );
+        if (!hasShift) {
+          return res.status(400).json({ message: `Cannot log ${type} without a scheduled shift on this date.` });
+        }
+      }
+
       const log = await storage.createAdjustmentLog({
         employeeId,
         loggedBy,
