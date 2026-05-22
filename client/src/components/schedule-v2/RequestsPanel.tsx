@@ -150,7 +150,18 @@ export default function RequestsPanel({
       
       // Yellow: Employee with zero shifts this week
       if (empShifts.length === 0) {
-        alerts.push({ type: 'warning', message: `${empName} has zero shifts assigned this week.` });
+        // Check if employee has absent adjustment logs this week
+        const empAbsentLogs = adjustmentLogs.filter((log: any) => {
+          if (String(log.employeeId) !== String(userId)) return false;
+          if (log.type !== 'absent') return false;
+          const logDate = new Date(log.startDate || log.date);
+          return logDate >= thisWeekStart && logDate <= thisWeekEnd;
+        });
+        if (empAbsentLogs.length > 0) {
+          alerts.push({ type: 'warning', message: `${empName} — all shifts marked absent this week. Verify leave status.` });
+        } else {
+          alerts.push({ type: 'warning', message: `${empName} has zero shifts assigned this week.` });
+        }
         return;
       }
 

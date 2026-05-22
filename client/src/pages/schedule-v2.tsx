@@ -467,7 +467,7 @@ export default function ScheduleV2() {
   });
 
   const updateShiftMutation = useMutation({
-    mutationFn: async (payload: { id: string; startTime?: string; endTime?: string; notes?: string; breakDurationMinutes?: number }) => {
+    mutationFn: async (payload: { id: string; startTime?: string; endTime?: string; notes?: string; breakDurationMinutes?: number; userId?: string }) => {
       const { id, ...data } = payload;
       const res = await apiRequest('PUT', `/api/shifts/${id}`, data);
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to update shift'); }
@@ -1094,7 +1094,7 @@ export default function ScheduleV2() {
                 </MenuItem>
                 <MenuItem onClick={() => { setActionsMenuAnchor(null); setBulkDeleteState(prev => ({ ...prev, isOpen: true })); }}>
                   <DeleteIcon sx={{ mr: 1.5, fontSize: 18, color: '#DC2626' }} />
-                  <Typography variant="body2" fontWeight={600}>Bulk Delete (Range)</Typography>
+                  <Typography variant="body2" fontWeight={600} color="error.main">Bulk Delete (Range)</Typography>
                 </MenuItem>
                 <MenuItem onClick={() => { setActionsMenuAnchor(null); openAdjustmentDialog({ date: selectedDay, type: 'late' }); }}>
                   <NoteAddIcon sx={{ mr: 1.5, fontSize: 18, color: '#F59E0B' }} />
@@ -1269,6 +1269,7 @@ export default function ScheduleV2() {
                   onManageLogGroup={setManageLogGroup}
                   onAddHolidayPay={(userId, date) => addHolidayPayMutation.mutate({ userId, branchId: currentUser?.branchId!, date })}
                   onLogAdjustment={handleLogAdjustmentFromShift}
+                  onMoveShift={(payload) => updateShiftMutation.mutate(payload)}
                 />
               </Stack>
             ) : (
@@ -1286,6 +1287,7 @@ export default function ScheduleV2() {
                 onCreateShift={() => {}}
                 onEditShift={() => {}}
                 onOpenRequests={() => setDrawerOpen(true)}
+                onMoveShift={() => {}}
               />
             )
           ) : (
@@ -1585,6 +1587,18 @@ export default function ScheduleV2() {
         <DialogContent>
           {selectedShift && (
             <Stack spacing={3} sx={{ mt: 1 }}>
+              {/* Overlap warning banner */}
+              {selectedShift && shifts.some(s => 
+                s.userId === selectedShift.userId && 
+                s.id !== selectedShift.id && 
+                isSameDay(new Date(s.startTime), editForm.startTime || new Date(selectedShift.startTime))
+              ) && (
+                <Box sx={{ p: 1.5, mb: 0.5, borderRadius: 2, bgcolor: alpha('#F59E0B', 0.1), border: '1px solid', borderColor: alpha('#F59E0B', 0.3), display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Typography variant="caption" fontWeight={700} color="warning.dark">
+                    ⚠️ This employee has another shift on this day.
+                  </Typography>
+                </Box>
+              )}
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, bgcolor: isDark ? '#342A1E' : '#F5F0E8', borderRadius: 2 }}>
                 <Avatar sx={{ bgcolor: getRoleColor(selectedShift.position, undefined, selectedShift.startTime).bg, color: 'white' }}>
                   {selectedShift.user?.firstName?.[0] || employees.find(e => e.id === selectedShift.userId)?.firstName?.[0] || '?'}
@@ -1634,7 +1648,7 @@ export default function ScheduleV2() {
               </Box>
               {editForm.startTime && editForm.endTime && (
                 <Typography variant="caption" color="text.secondary" sx={{ mt: -1 }}>
-                  Duration: {differenceInHours(editForm.endTime, editForm.startTime)}h
+                  Duration: {differenceInHours(editForm.endTime, editForm.startTime)}h{editForm.breakDurationMinutes > 0 ? ` · Paid: ${(differenceInHours(editForm.endTime, editForm.startTime) - editForm.breakDurationMinutes / 60).toFixed(1)}h (${editForm.breakDurationMinutes} min unpaid break)` : ''}
                 </Typography>
               )}
               <TextField
@@ -2032,7 +2046,7 @@ export default function ScheduleV2() {
             variant="contained"
             color={editAdjId ? "primary" : "warning"}
             onClick={handleCreateAdjustment}
-            disabled={(!editAdjId && (!adjEmployeeId || (!adjDate && !adjIsRange))) || !adjType || !adjValue || createAdjustmentMutation.isPending || updateAdjustmentMutation.isPending}
+            disabled={(!editAdjId && (!adjEmployeeId || (!adjDate && !adjIsRange))) || !adjType || (adjType !== 'absent' && !adjValue) || createAdjustmentMutation.isPending || updateAdjustmentMutation.isPending}
             sx={{ borderRadius: 2, textTransform: "none", fontWeight: 800, px: 3 }}
           >
             {createAdjustmentMutation.isPending || updateAdjustmentMutation.isPending ? "Saving..." : editAdjId ? "Save Changes" : "Log Exception"}

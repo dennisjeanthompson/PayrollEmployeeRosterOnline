@@ -260,6 +260,7 @@ export const companySettings = pgTable("company_settings", {
   bankAccountName: text("bank_account_name"),
   bankAccountNo: text("bank_account_no"), // stored masked in responses
   includeHolidayPay: boolean("include_holiday_pay").default(false), // Toggle DOLE holiday pay rules
+  includeRestDayPremium: boolean("include_rest_day_premium").default(false), // Toggle Rest Day Premium
   isActive: boolean("is_active").default(true),
   updatedBy: text("updated_by").references(() => users.id),
   updatedAt: timestamp("updated_at").defaultNow(),

@@ -155,6 +155,7 @@ export default function MuiPayrollManagement() {
     deductPagibig: true,
     deductWithholdingTax: true,
     includeHolidayPay: true,
+    includeRestDayPremium: true,
     includeNightDiff: true,
     includeExceptionLogs: true,
   });
@@ -167,6 +168,7 @@ export default function MuiPayrollManagement() {
   // Period context menu state (3-dot menu)
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [menuPeriod, setMenuPeriod] = useState<PayrollPeriod | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<{ isOpen: boolean; overlapping: any[] }>({ isOpen: false, overlapping: [] });
   const openPeriodMenu = (e: React.MouseEvent<HTMLElement>, period: PayrollPeriod) => {
     e.stopPropagation();
     setMenuAnchorEl(e.currentTarget);
@@ -249,6 +251,7 @@ export default function MuiPayrollManagement() {
       deductPagibig: deductionProfile?.deductPagibig ?? true,
       deductWithholdingTax: deductionProfile?.deductWithholdingTax ?? true,
       includeHolidayPay: companySettings?.includeHolidayPay ?? true,
+      includeRestDayPremium: companySettings?.includeRestDayPremium ?? true,
       includeNightDiff: deductionProfile?.includeNightDiff ?? true,
       includeExceptionLogs: deductionProfile?.includeExceptionLogs ?? true,
     });
@@ -590,19 +593,22 @@ export default function MuiPayrollManagement() {
 
   const adjLogs = adjustmentLogsData?.logs || [];
 
-  const handleCreatePeriod = () => {
+  const handleCreatePeriod = (force: boolean = false) => {
     if (!startDate || !endDate) {
       toast({ title: "Missing Dates", description: "Please select start and end dates", variant: "destructive" });
       return;
     }
-    // Check for overlapping periods
-    const overlapping = periods.filter((p: any) => {
-      const pStart = new Date(p.startDate);
-      const pEnd = new Date(p.endDate);
-      return startDate <= pEnd && endDate >= pStart;
-    });
-    if (overlapping.length > 0 && !confirm(`\u26a0\ufe0f A period already exists for these dates (${overlapping.map((p: any) => `${format(new Date(p.startDate), "MMM d")}\u2013${format(new Date(p.endDate), "MMM d")}`).join(", ")}). Create anyway?`)) {
-      return;
+    if (!force) {
+      // Check for overlapping periods
+      const overlapping = periods.filter((p: any) => {
+        const pStart = new Date(p.startDate);
+        const pEnd = new Date(p.endDate);
+        return startDate <= pEnd && endDate >= pStart;
+      });
+      if (overlapping.length > 0) {
+        setDuplicateWarning({ isOpen: true, overlapping });
+        return;
+      }
     }
     createPeriodMutation.mutate({ 
       startDate: format(startDate, "yyyy-MM-dd"), 
@@ -892,6 +898,18 @@ export default function MuiPayrollManagement() {
                 color={companySettings?.includeHolidayPay ? 'success' : 'default'}
                 variant={companySettings?.includeHolidayPay ? 'filled' : 'outlined'}
                 sx={{ fontWeight: 700, fontSize: '0.75rem', opacity: companySettings?.includeHolidayPay ? 1 : 0.6 }}
+              />
+              <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+              <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ mr: 0.5 }}>
+                Rest Day Premium:
+              </Typography>
+              <Chip
+                icon={companySettings?.includeRestDayPremium ? <CheckCircle sx={{ fontSize: 16 }} /> : <Cancel sx={{ fontSize: 16 }} />}
+                label={companySettings?.includeRestDayPremium ? 'Enabled' : 'Disabled'}
+                size="small"
+                color={companySettings?.includeRestDayPremium ? 'success' : 'default'}
+                variant={companySettings?.includeRestDayPremium ? 'filled' : 'outlined'}
+                sx={{ fontWeight: 700, fontSize: '0.75rem', opacity: companySettings?.includeRestDayPremium ? 1 : 0.6 }}
               />
               <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
               <Typography variant="body2" fontWeight={700} color="text.secondary" sx={{ mr: 0.5 }}>
@@ -1862,6 +1880,12 @@ export default function MuiPayrollManagement() {
                   </Grid>
                   <Grid size={{ xs: 6, sm: 4 }}>
                     <FormControlLabel
+                      control={<MuiSwitch size="small" checked={periodConfig.includeRestDayPremium} onChange={(e) => setPeriodConfig({...periodConfig, includeRestDayPremium: e.target.checked})} />}
+                      label={<Typography variant="body2">Rest Day Premium</Typography>}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 6, sm: 4 }}>
+                    <FormControlLabel
                       control={<MuiSwitch size="small" checked={periodConfig.includeNightDiff} onChange={(e) => setPeriodConfig({...periodConfig, includeNightDiff: e.target.checked})} />}
                       label={<Typography variant="body2">Night Diff</Typography>}
                     />
@@ -1915,7 +1939,7 @@ export default function MuiPayrollManagement() {
           </Button>
           <Button
             variant="contained"
-            onClick={handleCreatePeriod}
+            onClick={() => handleCreatePeriod(false)}
             disabled={!startDate || !endDate || createPeriodMutation.isPending}
             sx={{ 
               borderRadius: 2, 
@@ -2191,6 +2215,64 @@ export default function MuiPayrollManagement() {
           <ListItemText primary="Delete Period" secondary="Remove this payroll period" />
         </MenuItem>
       </Menu>
+
+      {/* Duplicate Warning Dialog */}
+      <Dialog
+        open={duplicateWarning.isOpen}
+        onClose={() => setDuplicateWarning({ isOpen: false, overlapping: [] })}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 4, bgcolor: theme.palette.mode === 'dark' ? '#1C1611' : '#FAFAFA' } }}
+      >
+        <DialogTitle>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            <Box sx={{ p: 1, borderRadius: 2, bgcolor: alpha(theme.palette.warning.main, 0.1), color: 'warning.main', display: 'flex' }}>
+              <Typography variant="h6">⚠️</Typography>
+            </Box>
+            <Box>
+              <Typography variant="h6" fontWeight={700}>Duplicate Pay Period</Typography>
+              <Typography variant="body2" color="text.secondary">
+                A payroll period already exists for these dates
+              </Typography>
+            </Box>
+          </Box>
+        </DialogTitle>
+        <DialogContent sx={{ mt: 2 }}>
+          <Typography variant="body2" sx={{ mb: 2 }}>
+            You are trying to generate a payroll period that overlaps with the following existing period(s):
+          </Typography>
+          <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha(theme.palette.warning.main, 0.05), border: `1px solid ${alpha(theme.palette.warning.main, 0.2)}`, display: 'flex', flexDirection: 'column', gap: 1 }}>
+            {duplicateWarning.overlapping.map((p, i) => (
+              <Typography key={i} variant="body2" fontWeight={600} color="warning.dark">
+                • {format(new Date(p.startDate), "MMM d, yyyy")} – {format(new Date(p.endDate), "MMM d, yyyy")}
+              </Typography>
+            ))}
+          </Box>
+          <Typography variant="body2" sx={{ mt: 2, color: 'text.secondary' }}>
+            Are you sure you want to generate another one? This will create duplicate entries for the same dates.
+          </Typography>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 1 }}>
+          <Button 
+            onClick={() => setDuplicateWarning({ isOpen: false, overlapping: [] })} 
+            color="inherit" 
+            sx={{ borderRadius: 2 }}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => {
+              setDuplicateWarning({ isOpen: false, overlapping: [] });
+              handleCreatePeriod(true);
+            }} 
+            variant="contained" 
+            color="warning" 
+            sx={{ borderRadius: 2, px: 3, fontWeight: 700 }}
+          >
+            Generate Anyway
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }

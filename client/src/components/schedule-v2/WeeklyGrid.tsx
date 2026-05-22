@@ -58,6 +58,7 @@ interface WeeklyGridProps {
   onDeleteTimeOff?: (id: string) => void;
   onAddHolidayPay?: (userId: string, date: Date) => void;
   onLogAdjustment?: (shift: Shift) => void;
+  onMoveShift?: (payload: { id: string; startTime: string; endTime: string; userId: string }) => void;
   onExceptionLogClick?: (log: any) => void;
 }
 
@@ -150,7 +151,7 @@ const TradeBadge = React.memo(function TradeBadge({ trade }: { trade: ShiftTrade
 });
 
 // Shift pill — the colored chip inside each cell
-const ShiftPill = React.memo(function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, isOvertime, onLogAdjustment }: { shift: Shift; onClick?: () => void; trade?: ShiftTrade; isSelectionMode?: boolean; isSelected?: boolean; isOvertime?: boolean; onLogAdjustment?: () => void }) {
+const ShiftPill = React.memo(function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, isOvertime, onLogAdjustment, draggable, onDragStart }: { shift: Shift; onClick?: () => void; trade?: ShiftTrade; isSelectionMode?: boolean; isSelected?: boolean; isOvertime?: boolean; onLogAdjustment?: () => void; draggable?: boolean; onDragStart?: React.DragEventHandler }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const rc = getRoleColor(shift.position, shift.user?.role, shift.startTime);
@@ -162,6 +163,8 @@ const ShiftPill = React.memo(function ShiftPill({ shift, onClick, trade, isSelec
   return (
     <Box
       onClick={onClick}
+      draggable={draggable}
+      onDragStart={onDragStart}
       sx={{
         position: 'relative',
         display: 'flex',
@@ -388,6 +391,7 @@ function WeeklyGridComponent({
   onManageLogGroup,
   onLogAdjustment,
   onExceptionLogClick,
+  onMoveShift,
 }: WeeklyGridProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
@@ -826,6 +830,7 @@ function WeeklyGridComponent({
                 onCreateShift={onCreateShift}
                 onAddHolidayPay={onAddHolidayPay}
                 onLogAdjustment={onLogAdjustment}
+                onMoveShift={onMoveShift}
               />
             );
           })}
@@ -835,6 +840,247 @@ function WeeklyGridComponent({
     </Box>
   );
 }
+
+const DayCell = React.memo(({
+  date,
+  dateStr,
+  emp,
+  cellShifts,
+  today,
+  holiday,
+  isBlocked,
+  cellTimeOff,
+  cellAdjustments,
+  hasApprovedTimeOff,
+  hasTimeOff,
+  tradesByShift,
+  overtimeShiftIds,
+  isSelectionMode,
+  selectedShifts,
+  selectedLogs,
+  isManager,
+  isDark,
+  theme,
+  onToggleShiftSelection,
+  onEditShift,
+  onDeleteTimeOff,
+  onToggleLogSelection,
+  onManageLogGroup,
+  onExceptionLogClick,
+  onCreateShift,
+  onAddHolidayPay,
+  onLogAdjustment,
+  onMoveShift
+}: any) => {
+  const [isDragOver, setIsDragOver] = React.useState(false);
+  const dragCounter = React.useRef(0);
+
+  const handleDragEnter = (e: React.DragEvent) => {
+    if (!isManager || isBlocked) return;
+    e.preventDefault();
+    dragCounter.current += 1;
+    if (dragCounter.current === 1) setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    if (!isManager || isBlocked) return;
+    e.preventDefault();
+    dragCounter.current -= 1;
+    if (dragCounter.current === 0) setIsDragOver(false);
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    if (!isManager || isBlocked) return;
+    e.preventDefault(); // Necessary to allow dropping
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    if (!isManager || isBlocked) return;
+    e.preventDefault();
+    dragCounter.current = 0;
+    setIsDragOver(false);
+    
+    try {
+      const dataStr = e.dataTransfer.getData('application/json');
+      if (!dataStr) return;
+      const data = JSON.parse(dataStr);
+      if (data && onMoveShift && data.id) {
+        const oldStart = new Date(data.startTime);
+        const oldEnd = new Date(data.endTime);
+        const newStart = new Date(date);
+        newStart.setHours(oldStart.getHours(), oldStart.getMinutes(), oldStart.getSeconds());
+        const newEnd = new Date(date);
+        newEnd.setHours(oldEnd.getHours(), oldEnd.getMinutes(), oldEnd.getSeconds());
+        
+        if (oldEnd.getTime() < oldStart.getTime() || oldEnd.getDate() !== oldStart.getDate()) {
+          newEnd.setDate(newEnd.getDate() + 1);
+        }
+
+        onMoveShift({
+          id: data.id,
+          userId: emp.id,
+          startTime: newStart.toISOString(),
+          endTime: newEnd.toISOString()
+        });
+      }
+    } catch (err) {
+      console.error('Drop error:', err);
+    }
+  };
+
+  const isOccupied = cellShifts.length > 0;
+  
+  let cellBgColor = 'transparent';
+  if (isBlocked) cellBgColor = alpha(theme.palette.error.main, isDark ? 0.06 : 0.04);
+  else if (hasApprovedTimeOff) cellBgColor = alpha('#F59E0B', isDark ? 0.06 : 0.06);
+  else if (today) cellBgColor = alpha(theme.palette.primary.main, isDark ? 0.06 : 0.06);
+
+  if (isDragOver) {
+    cellBgColor = isOccupied 
+      ? alpha(theme.palette.warning.main, isDark ? 0.15 : 0.2) 
+      : alpha(theme.palette.primary.main, isDark ? 0.15 : 0.2);
+  }
+
+  return (
+    <Box
+      component="td"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+      sx={{
+        p: 1,
+        borderBottom: '1px solid',
+        borderLeft: '1px solid',
+        borderColor: isDragOver ? (isOccupied ? 'warning.main' : 'primary.main') : (isDark ? '#3D3228' : '#E8E0D4'),
+        verticalAlign: 'top',
+        bgcolor: cellBgColor,
+        overflow: 'visible',
+        transition: 'all 0.2s',
+        '&:hover .add-shift-btn': { opacity: 1, transform: 'scale(1)' }
+      }}
+    >
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minHeight: 44, overflow: 'visible' }}>
+        {cellShifts.map((shift: any) => {
+          const trade = tradesByShift[shift.id];
+          return (
+            <ShiftPill 
+              key={shift.id} 
+              shift={shift} 
+              trade={trade}
+              isSelectionMode={isSelectionMode}
+              isSelected={isSelectionMode && selectedShifts?.has(shift.id)}
+              isOvertime={overtimeShiftIds.has(shift.id)}
+              draggable={isManager && !isSelectionMode}
+              onDragStart={(e: React.DragEvent) => {
+                e.dataTransfer.setData('application/json', JSON.stringify({
+                  id: shift.id,
+                  startTime: shift.startTime,
+                  endTime: shift.endTime,
+                }));
+              }}
+              onLogAdjustment={isManager && !isSelectionMode && onLogAdjustment ? () => onLogAdjustment(shift) : undefined}
+              onClick={() => {
+                if (isSelectionMode && onToggleShiftSelection) {
+                  onToggleShiftSelection(shift.id);
+                } else {
+                  onEditShift(shift);
+                }
+              }} 
+            />
+          );
+        })}
+
+        {(cellTimeOff.length > 0 || cellAdjustments.length > 0) && (
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+            {cellTimeOff.map((req: any) => (
+              <TimeOffIndicator 
+                key={`to-${req.id}`} 
+                request={req} 
+                compact
+                onDelete={isManager ? onDeleteTimeOff : undefined}
+              />
+            ))}
+            {(() => {
+              const grouped = new Map<string, any>();
+              cellAdjustments.forEach((log: any) => {
+                const key = `${log.type}-${log.isIncluded}`;
+                if (!grouped.has(key)) {
+                  grouped.set(key, { ...log, value: parseFloat(log.value) || 0, count: 1, logs: [log] });
+                } else {
+                  const existing = grouped.get(key);
+                  existing.value += (parseFloat(log.value) || 0);
+                  existing.count++;
+                  existing.logs.push(log);
+                }
+              });
+              
+              return Array.from(grouped.values()).map(aggrLog => (
+                <AdjustmentBadge 
+                  key={`adj-group-${aggrLog.id}`} 
+                  log={aggrLog} 
+                  isSelectionMode={isSelectionMode}
+                  isSelected={isSelectionMode && selectedLogs?.has(aggrLog.id)}
+                  onClick={() => {
+                    if (isSelectionMode && onToggleLogSelection) {
+                      aggrLog.logs.forEach((l: any) => onToggleLogSelection(l.id));
+                    } else if (!isSelectionMode && onManageLogGroup) {
+                      onManageLogGroup(aggrLog.logs);
+                    } else if (!isSelectionMode && onExceptionLogClick) {
+                      onExceptionLogClick(aggrLog.logs?.[0] || aggrLog);
+                    }
+                  }}
+                />
+              ));
+            })()}
+          </Box>
+        )}
+        {cellShifts.length === 0 && !hasApprovedTimeOff && isManager && !isSelectionMode && (
+          <Box className="add-shift-btn" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, opacity: { xs: 1, sm: 0.5 }, transform: 'scale(0.98)', transition: 'all 0.2s ease', '&:hover': { opacity: 1, transform: 'scale(1)' } }}>
+            {!isBlocked && (
+              <Tooltip title="Add shift" placement="top">
+                <IconButton
+                  size="small"
+                  onClick={() => onCreateShift(emp.id, date)}
+                  sx={{
+                    width: '100%', height: 28,
+                    borderRadius: 1.5, border: '1px dashed',
+                    borderColor: isDark ? alpha('#C4AA88', 0.2) : alpha('#5C4033', 0.1),
+                    color: isDark ? alpha('#C4AA88', 0.3) : alpha('#5C4033', 0.2),
+                    '&:hover': { borderColor: 'primary.main', color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.04) },
+                  }}
+                >
+                  <AddIcon sx={{ fontSize: 14 }} />
+                </IconButton>
+              </Tooltip>
+            )}
+            {holiday && onAddHolidayPay && !cellAdjustments.some((a: any) => a.type === 'holiday_pay') && (
+              <Tooltip title="Grant Holiday Pay (No work performed)" placement="top">
+                <Box
+                  onClick={() => onAddHolidayPay(emp.id, date)}
+                  sx={{ width: '100%', height: 28, borderRadius: 1.5, border: '1px dashed', borderColor: '#10B981', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 800, '&:hover': { bgcolor: alpha('#10B981', 0.1) } }}
+                >
+                  + Holiday Pay
+                </Box>
+              </Tooltip>
+            )}
+          </Box>
+        )}
+        {isBlocked && cellShifts.length === 0 && !hasTimeOff && (
+          <Box sx={{ 
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            minHeight: 32,
+            color: isDark ? alpha('#FCA5A5', 0.4) : alpha('#DC2626', 0.3),
+            fontSize: '0.6rem', fontWeight: 700, fontStyle: 'italic',
+          }}>
+            Blocked
+          </Box>
+        )}
+      </Box>
+    </Box>
+  );
+});
 
 const EmployeeRow = React.memo(({
   emp,
@@ -861,7 +1107,8 @@ const EmployeeRow = React.memo(({
   onExceptionLogClick,
   onCreateShift,
   onAddHolidayPay,
-  onLogAdjustment
+  onLogAdjustment,
+  onMoveShift
 }: any) => {
   const rc = getRoleColor(emp.position, emp.role);
   const isInactive = emp.isActive === false;
@@ -909,9 +1156,9 @@ const EmployeeRow = React.memo(({
               />
               <Typography variant="caption" sx={{
                 fontSize: '0.55rem', fontWeight: 700,
-                color: weekHours > 44 ? '#DC2626' : '#166534',
+                color: weekHours >= 48 ? '#DC2626' : weekHours >= 40 ? '#F59E0B' : '#166534',
               }}>
-                {weekHours}h
+                {weekHours}h/wk
               </Typography>
             </Box>
           </Box>
@@ -932,147 +1179,38 @@ const EmployeeRow = React.memo(({
         const hasApprovedTimeOff = cellTimeOff.some((r: any) => r.status === 'approved');
 
         return (
-          <Box
+          <DayCell
             key={date.toISOString()}
-            component="td"
-            sx={{
-              p: 1,
-              borderBottom: '1px solid',
-              borderLeft: '1px solid',
-              borderColor: isDark ? '#3D3228' : '#E8E0D4',
-              verticalAlign: 'top',
-              bgcolor: isBlocked
-                ? alpha(theme.palette.error.main, isDark ? 0.06 : 0.04)
-                : hasApprovedTimeOff
-                  ? alpha('#F59E0B', isDark ? 0.06 : 0.06)
-                  : today
-                    ? alpha(theme.palette.primary.main, isDark ? 0.06 : 0.06)
-                    : 'transparent',
-              overflow: 'visible',
-              transition: 'background-color 0.2s',
-              '&:hover .add-shift-btn': {
-                opacity: 1,
-                transform: 'scale(1)',
-              }
-            }}
-          >
-            <Box sx={{ 
-              display: 'flex', flexDirection: 'column', gap: 0.5, minHeight: 44,
-              overflow: 'visible',
-            }}>
-              {/* Shift pills with trade badge overlay FIRST for perfect horizontal alignment */}
-              {cellShifts.map((shift: any) => {
-                const trade = tradesByShift[shift.id];
-                return (
-                  <ShiftPill 
-                    key={shift.id} 
-                    shift={shift} 
-                    trade={trade}
-                    isSelectionMode={isSelectionMode}
-                    isSelected={isSelectionMode && selectedShifts?.has(shift.id)}
-                    isOvertime={overtimeShiftIds.has(shift.id)}
-                    onLogAdjustment={isManager && !isSelectionMode && onLogAdjustment ? () => onLogAdjustment(shift) : undefined}
-                    onClick={() => {
-                      if (isSelectionMode && onToggleShiftSelection) {
-                        onToggleShiftSelection(shift.id);
-                      } else {
-                        onEditShift(shift);
-                      }
-                    }} 
-                  />
-                );
-              })}
-
-              {/* Exceptions & Time-off rendered BELOW shifts */}
-              {(cellTimeOff.length > 0 || cellAdjustments.length > 0) && (
-                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5 }}>
-                  {cellTimeOff.map((req: any) => (
-                    <TimeOffIndicator 
-                      key={`to-${req.id}`} 
-                      request={req} 
-                      compact
-                      onDelete={isManager ? onDeleteTimeOff : undefined}
-                    />
-                  ))}
-                  {(() => {
-                    // Smart aggregation: Group by type + isIncluded
-                    const grouped = new Map<string, any>();
-                    cellAdjustments.forEach((log: any) => {
-                      const key = `${log.type}-${log.isIncluded}`;
-                      if (!grouped.has(key)) {
-                        grouped.set(key, { ...log, value: parseFloat(log.value) || 0, count: 1, logs: [log] });
-                      } else {
-                        const existing = grouped.get(key);
-                        existing.value += (parseFloat(log.value) || 0);
-                        existing.count++;
-                        existing.logs.push(log);
-                      }
-                    });
-                    
-                    return Array.from(grouped.values()).map(aggrLog => (
-                      <AdjustmentBadge 
-                        key={`adj-group-${aggrLog.id}`} 
-                        log={aggrLog} 
-                        isSelectionMode={isSelectionMode}
-                        isSelected={isSelectionMode && selectedLogs?.has(aggrLog.id)}
-                        onClick={() => {
-                          if (isSelectionMode && onToggleLogSelection) {
-                            aggrLog.logs.forEach((l: any) => onToggleLogSelection(l.id));
-                          } else if (!isSelectionMode && onManageLogGroup) {
-                            onManageLogGroup(aggrLog.logs);
-                          } else if (!isSelectionMode && onExceptionLogClick) {
-                            onExceptionLogClick(aggrLog.logs?.[0] || aggrLog);
-                          }
-                        }}
-                      />
-                    ));
-                  })()}
-                </Box>
-              )}
-              {cellShifts.length === 0 && !hasApprovedTimeOff && isManager && !isSelectionMode && (
-                <Box className="add-shift-btn" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, opacity: { xs: 1, sm: 0.5 }, transform: 'scale(0.98)', transition: 'all 0.2s ease', '&:hover': { opacity: 1, transform: 'scale(1)' } }}>
-                  {!isBlocked && (
-                    <Tooltip title="Add shift" placement="top">
-                      <IconButton
-                        size="small"
-                        onClick={() => onCreateShift(emp.id, date)}
-                        sx={{
-                          width: '100%', height: 28,
-                          borderRadius: 1.5, border: '1px dashed',
-                          borderColor: isDark ? alpha('#C4AA88', 0.2) : alpha('#5C4033', 0.1),
-                          color: isDark ? alpha('#C4AA88', 0.3) : alpha('#5C4033', 0.2),
-                          '&:hover': { borderColor: 'primary.main', color: 'primary.main', bgcolor: alpha(theme.palette.primary.main, 0.04) },
-                        }}
-                      >
-                        <AddIcon sx={{ fontSize: 14 }} />
-                      </IconButton>
-                    </Tooltip>
-                  )}
-                  {holiday && onAddHolidayPay && !cellAdjustments.some((a: any) => a.type === 'holiday_pay') && (
-                    <Tooltip title="Grant Holiday Pay (No work performed)" placement="top">
-                      <Box
-                        onClick={() => onAddHolidayPay(emp.id, date)}
-                        sx={{ width: '100%', height: 28, borderRadius: 1.5, border: '1px dashed', borderColor: '#10B981', color: '#10B981', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: '0.65rem', fontWeight: 800, '&:hover': { bgcolor: alpha('#10B981', 0.1) } }}
-                      >
-                        + Holiday Pay
-                      </Box>
-                    </Tooltip>
-                  )}
-                </Box>
-              )}
-              {/* Empty cells left cleanly blank */}
-              {isBlocked && cellShifts.length === 0 && !hasTimeOff && (
-                <Box sx={{ 
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  minHeight: 32,
-                  color: isDark ? alpha('#FCA5A5', 0.4) : alpha('#DC2626', 0.3),
-                  fontSize: '0.6rem', fontWeight: 700, fontStyle: 'italic',
-                }}>
-                  Blocked
-                </Box>
-              )}
-            </Box>
-          </Box>
+            date={date}
+            dateStr={dateStr}
+            emp={emp}
+            cellShifts={cellShifts}
+            today={today}
+            holiday={holiday}
+            isBlocked={isBlocked}
+            cellTimeOff={cellTimeOff}
+            cellAdjustments={cellAdjustments}
+            hasApprovedTimeOff={hasApprovedTimeOff}
+            hasTimeOff={hasTimeOff}
+            tradesByShift={tradesByShift}
+            overtimeShiftIds={overtimeShiftIds}
+            isSelectionMode={isSelectionMode}
+            selectedShifts={selectedShifts}
+            selectedLogs={selectedLogs}
+            isManager={isManager}
+            isDark={isDark}
+            theme={theme}
+            onToggleShiftSelection={onToggleShiftSelection}
+            onEditShift={onEditShift}
+            onDeleteTimeOff={onDeleteTimeOff}
+            onToggleLogSelection={onToggleLogSelection}
+            onManageLogGroup={onManageLogGroup}
+            onExceptionLogClick={onExceptionLogClick}
+            onCreateShift={onCreateShift}
+            onAddHolidayPay={onAddHolidayPay}
+            onLogAdjustment={onLogAdjustment}
+            onMoveShift={onMoveShift}
+          />
         );
       })}
     </Box>
