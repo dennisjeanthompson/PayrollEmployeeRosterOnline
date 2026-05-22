@@ -1586,7 +1586,7 @@ export default function ScheduleV2() {
           {selectedShift && (
             <Stack spacing={3} sx={{ mt: 1 }}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, bgcolor: isDark ? '#342A1E' : '#F5F0E8', borderRadius: 2 }}>
-                <Avatar sx={{ bgcolor: getRoleColor(selectedShift.position).bg, color: 'white' }}>
+                <Avatar sx={{ bgcolor: getRoleColor(selectedShift.position, undefined, selectedShift.startTime).bg, color: 'white' }}>
                   {selectedShift.user?.firstName?.[0] || employees.find(e => e.id === selectedShift.userId)?.firstName?.[0] || '?'}
                 </Avatar>
                 <Box>

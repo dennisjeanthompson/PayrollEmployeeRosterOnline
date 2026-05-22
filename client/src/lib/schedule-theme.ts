@@ -37,8 +37,23 @@ const PROFESSIONAL_SHIFT_COLOR: RoleColor = {
  * Enforces a single unified professional shift color 
  * regardless of the employee's role/position.
  */
-export function getRoleColor(position?: string | null, role?: string | null): RoleColor {
-  return PROFESSIONAL_SHIFT_COLOR;
+export function getRoleColor(position?: string | null, role?: string | null, startTime?: string | Date | null): RoleColor {
+  if (!startTime) return PROFESSIONAL_SHIFT_COLOR;
+  
+  const d = new Date(startTime);
+  if (!d || isNaN(d.getTime())) return PROFESSIONAL_SHIFT_COLOR;
+
+  const hour = d.getHours();
+  if (hour >= 5 && hour < 12) {
+    // Morning (amber)
+    return { bg: '#F59E0B', bgLight: '#FEF3C7', bgDark: '#78350F', text: '#FFFFFF', border: '#FCD34D', label: 'Morning Shift' };
+  } else if (hour >= 12 && hour < 18) {
+    // Afternoon (orange)
+    return { bg: '#F97316', bgLight: '#FFEDD5', bgDark: '#7C2D12', text: '#FFFFFF', border: '#FDBA74', label: 'Afternoon Shift' };
+  } else {
+    // Night (indigo)
+    return { bg: '#6366F1', bgLight: '#E0E7FF', bgDark: '#312E81', text: '#FFFFFF', border: '#A5B4FC', label: 'Night Shift' };
+  }
 }
 
 // ─── CAFÉ PALETTE ────────────────────────────────────────────────────
@@ -101,6 +116,12 @@ export const SHIFT_TEMPLATES = {
 
 // ─── UNIQUE ROLE LIST (for legend) ──────────────────────────────────
 export function getUniqueRoleColors(employees: Array<{ position?: string; role?: string }>): RoleColor[] {
-  // Rainbow legend removed to match professional UI standards.
-  return [];
+  const baseDate = new Date();
+  baseDate.setHours(8);
+  const morning = getRoleColor(null, null, baseDate);
+  baseDate.setHours(14);
+  const afternoon = getRoleColor(null, null, baseDate);
+  baseDate.setHours(20);
+  const night = getRoleColor(null, null, baseDate);
+  return [morning, afternoon, night];
 }

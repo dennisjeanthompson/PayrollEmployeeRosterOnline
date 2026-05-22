@@ -2659,10 +2659,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Uses actual branch deduction settings from DB (loaded above the loop)
         const skipStatutory = ["bonus", "13th_month", "final_pay", "correction", "off_cycle"].includes(period.runType || "");
           const mandatorySettings = {
-          deductSSS: skipStatutory ? false : (branchDeductionSettings.deductSSS ?? true),
-          deductPhilHealth: skipStatutory ? false : (branchDeductionSettings.deductPhilHealth ?? true),
-          deductPagibig: skipStatutory ? false : (branchDeductionSettings.deductPagibig ?? true),
-          deductWithholdingTax: false, // Tax computed separately below using branchDeductionSettings
+          deductSSS: skipStatutory ? false : (runConfig.deductSSS ?? true),
+          deductPhilHealth: skipStatutory ? false : (runConfig.deductPhilHealth ?? true),
+          deductPagibig: skipStatutory ? false : (runConfig.deductPagibig ?? true),
+          deductWithholdingTax: false, // Tax computed separately below using runConfig
         };
         const mandatoryBreakdown = await calculateAllDeductions(monthlyBasicSalary, mandatorySettings);
 
@@ -2736,7 +2736,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // ─── Feature 1: MWE Exemption (BIR TRAIN Law) ─────────────────────────
         // If employee is flagged as Minimum Wage Earner, withholding tax is 0.
         // MWE holiday pay, OT, and night diff are also exempt under BIR rulings.
-        const mweWithholdingTax = (!branchDeductionSettings.deductWithholdingTax || (employee as any).isMwe) ? 0 : withholdingTax;
+        const mweWithholdingTax = (!runConfig.deductWithholdingTax || (employee as any).isMwe) ? 0 : withholdingTax;
 
         const totalDeductions =
           sssContribution +

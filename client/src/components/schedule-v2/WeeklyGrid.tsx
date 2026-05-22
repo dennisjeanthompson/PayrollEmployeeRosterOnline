@@ -153,7 +153,7 @@ const TradeBadge = React.memo(function TradeBadge({ trade }: { trade: ShiftTrade
 const ShiftPill = React.memo(function ShiftPill({ shift, onClick, trade, isSelectionMode, isSelected, isOvertime, onLogAdjustment }: { shift: Shift; onClick?: () => void; trade?: ShiftTrade; isSelectionMode?: boolean; isSelected?: boolean; isOvertime?: boolean; onLogAdjustment?: () => void }) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
-  const rc = getRoleColor(shift.position, shift.user?.role);
+  const rc = getRoleColor(shift.position, shift.user?.role, shift.startTime);
   const startStr = safeFormat(shift.startTime, 'h:mm a').toLowerCase();
   const endStr = safeFormat(shift.endTime, 'h:mm a').toLowerCase();
   const hours = differenceInHours(toDate(shift.endTime), toDate(shift.startTime));
@@ -590,7 +590,7 @@ function WeeklyGridComponent({
                 ) : (
                   dayShifts.map(shift => {
                     const emp = employees.find(e => e.id === shift.userId);
-                    const rc = getRoleColor(shift.position, emp?.role);
+                    const rc = getRoleColor(shift.position, emp?.role, shift.startTime);
                     const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
                     const trade = tradesByShift[shift.id];
 
@@ -678,16 +678,22 @@ function WeeklyGridComponent({
   return (
     <Box sx={{
       width: '100%',
-      overflow: 'auto',
-      bgcolor: isDark ? '#2A2018' : '#FFFFFF',
-      borderRadius: 3,
-      border: '1px solid',
-      borderColor: isDark ? '#3D3228' : '#E8E0D4',
-      boxShadow: isDark ? '0 2px 12px rgba(0,0,0,0.3)' : '0 2px 12px rgba(92,64,51,0.06)',
+      overflowX: 'auto',
+      overflowY: 'visible', // Ensure vertical dropdowns/tooltips are not clipped
+      pb: 2, // padding for scrollbar
     }}>
-      {/* Table */}
-      <Box component="table" sx={{ width: '100%', minWidth: 800, borderCollapse: 'collapse' }}>
-        {/* Header row: blank + days */}
+      <Box sx={{
+        minWidth: 800,
+        width: 'max-content',
+        bgcolor: isDark ? '#2A2018' : '#FFFFFF',
+        borderRadius: 3,
+        border: '1px solid',
+        borderColor: isDark ? '#3D3228' : '#E8E0D4',
+        boxShadow: isDark ? '0 2px 12px rgba(0,0,0,0.3)' : '0 2px 12px rgba(92,64,51,0.06)',
+      }}>
+        {/* Table */}
+        <Box component="table" sx={{ width: '100%', borderCollapse: 'collapse' }}>
+          {/* Header row: blank + days */}
         <Box component="thead">
           <Box component="tr">
             {/* Employee column header */}
@@ -1023,7 +1029,7 @@ const EmployeeRow = React.memo(({
                 </Box>
               )}
               {cellShifts.length === 0 && !hasApprovedTimeOff && isManager && !isSelectionMode && (
-                <Box className="add-shift-btn" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, opacity: 0, transform: 'scale(0.95)', transition: 'all 0.2s ease', '&:hover': { opacity: 1, transform: 'scale(1)' } }}>
+                <Box className="add-shift-btn" sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, opacity: { xs: 1, sm: 0.5 }, transform: 'scale(0.98)', transition: 'all 0.2s ease', '&:hover': { opacity: 1, transform: 'scale(1)' } }}>
                   {!isBlocked && (
                     <Tooltip title="Add shift" placement="top">
                       <IconButton

@@ -153,7 +153,7 @@ export function MyDayView({
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {myShifts.map(shift => {
-            const rc = getRoleColor(shift.position, shift.user?.role);
+            const rc = getRoleColor(shift.position, shift.user?.role, shift.startTime);
             const hours = differenceInHours(toDate(shift.endTime), toDate(shift.startTime));
             const startHour = toDate(shift.startTime).getHours();
             const period = startHour < 12 ? '🌅 Morning' : startHour < 17 ? '☀️ Afternoon' : '🌙 Evening';
@@ -396,7 +396,7 @@ export default function DayView({
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
           {sortedShifts.map(shift => {
             const emp = employees.find(e => e.id === shift.userId);
-            const rc = getRoleColor(shift.position, emp?.role);
+            const rc = getRoleColor(shift.position, emp?.role, shift.startTime);
             const hours = differenceInHours(toDate(shift.endTime), toDate(shift.startTime));
             const trade = activeTrades.find(t => t.shiftId === shift.id);
             const adjustments = getAdjustmentsForCell(adjustmentLogs, shift.userId, date);
