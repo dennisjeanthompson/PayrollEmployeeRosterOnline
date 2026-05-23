@@ -215,7 +215,9 @@ export default function MuiPayroll() {
           </Box>
         </motion.div>
 
-        {payrollLoading && <LinearProgress sx={{ mb: 3, borderRadius: 1 }} />}
+        <Box sx={{ height: 4, mb: 3, borderRadius: 1, overflow: 'hidden' }}>
+          {payrollLoading ? <LinearProgress /> : null}
+        </Box>
 
         {/* Summary Cards */}
         <Grid container spacing={2} sx={{ mb: 3 }}>

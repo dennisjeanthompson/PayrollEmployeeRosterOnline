@@ -1006,7 +1006,7 @@ export default function ScheduleV2() {
             {safeFormat(weekStart, 'MMM d')} – {safeFormat(weekEndDate, 'MMM d, yyyy')}
           </Typography>
 
-          <Chip label={`${weeklyTotalHours}h total`} size="small" variant="filled" color="default" sx={{ height: 24, fontSize: '0.7rem', fontWeight: 700, borderRadius: 2 }} />
+          <Chip label={shiftsLoading ? <Skeleton width={40} height={16} sx={{ display: 'inline-block' }} /> : `${weeklyTotalHours}h total`} size="small" variant="filled" color="default" sx={{ height: 24, fontSize: '0.7rem', fontWeight: 700, borderRadius: 2 }} />
         </Box>
 
         {/* Right side: View Toggles & Actions */}
@@ -1431,7 +1431,7 @@ export default function ScheduleV2() {
           <Typography variant="h6" fontWeight={800} sx={{ color: isDark ? '#F5EDE4' : '#3C2415' }}>
             Requests & Trades
           </Typography>
-          <IconButton onClick={() => setDrawerOpen(false)}><CloseIcon /></IconButton>
+          <IconButton onClick={() => startTransition(() => setDrawerOpen(false))}><CloseIcon /></IconButton>
         </Box>
         <RequestsPanel
           timeOffRequests={timeOffRequests}
@@ -2261,7 +2261,7 @@ export default function ScheduleV2() {
       {/* Exception Log Detail Drawer — Confirm/Dispute workflow */}
       <ExceptionLogDrawer
         open={exceptionLogDrawerOpen}
-        onClose={() => { setExceptionLogDrawerOpen(false); setSelectedExceptionLog(null); }}
+        onClose={() => startTransition(() => { setExceptionLogDrawerOpen(false); setSelectedExceptionLog(null); })}
         log={selectedExceptionLog}
         isManager={isManager}
         onApprove={(id) => {
