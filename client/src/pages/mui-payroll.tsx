@@ -1,5 +1,5 @@
 import PesoIcon from "@/components/PesoIcon";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState, startTransition } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { format, parseISO } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
@@ -92,7 +92,7 @@ function TabPanel(props: TabPanelProps) {
   const { children, value, index, ...other } = props;
   return (
     <div role="tabpanel" hidden={value !== index} {...other}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
+      <Box sx={{ py: 3 }}>{children}</Box>
     </div>
   );
 }
@@ -261,7 +261,7 @@ export default function MuiPayroll() {
                     </Typography>
                   </Stack>
                   <Typography variant="h5" fontWeight={800} noWrap sx={{ position: 'relative', zIndex: 1, letterSpacing: -0.3 }}>
-                    {stat.value}
+                    {payrollLoading ? <Skeleton width={100} sx={{ display: 'inline-block', bgcolor: alpha(stat.color, 0.15) }} /> : stat.value}
                   </Typography>
                 </Paper>
               </motion.div>
@@ -419,7 +419,7 @@ export default function MuiPayroll() {
         >
           <Tabs
             value={activeTab}
-            onChange={(_, v) => setActiveTab(v)}
+            onChange={(_, v) => startTransition(() => setActiveTab(v))}
             sx={{
               borderBottom: 1,
               borderColor: alpha(theme.palette.divider, 0.1),
