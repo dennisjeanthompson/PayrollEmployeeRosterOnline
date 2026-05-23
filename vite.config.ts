@@ -22,9 +22,8 @@ export default defineConfig({
       'date-fns'
     ]
   },
-  // ESBuild options for maximum production compression
+  // ESBuild: only strip console/debugger in production builds
   esbuild: {
-    drop: ['console', 'debugger'],
     legalComments: 'none',
     treeShaking: true,
   },
@@ -89,6 +88,16 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5000,
+    warmup: {
+      clientFiles: [
+        './src/App.tsx',
+        './src/pages/mui-payroll.tsx',
+        './src/pages/mui-dashboard.tsx',
+        './src/pages/schedule-v2.tsx',
+        './src/components/mui/mui-sidebar.tsx',
+        './src/components/mui/mui-header.tsx',
+      ],
+    },
     hmr: process.env.CODESPACES ? {
       clientPort: 443,
       protocol: 'wss',

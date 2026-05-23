@@ -16,7 +16,8 @@ import { MuiThemeProvider } from "@/components/mui/mui-theme-provider";
 
 // MUI Components
 import Logo from "@/components/Logo";
-import { Box, alpha } from "@mui/material";
+import Box from "@mui/material/Box";
+import { alpha } from "@mui/material/styles";
 
 // MUI Layout Components - Direct imports (NOT lazy) because they render
 // outside <Suspense> boundaries. Lazy-loading them causes the

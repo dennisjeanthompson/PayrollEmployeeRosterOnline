@@ -8,54 +8,49 @@ import { useRealtime } from "@/hooks/use-realtime";
 import { motion } from "framer-motion";
 
 // MUI Components
-import {
-  Box,
-  Typography,
-  Button,
-  Card,
-  CardContent,
-  Avatar,
-  Chip,
-  IconButton,
-  Tooltip,
-  Paper,
-  Divider,
-  Stack,
-  alpha,
-  useTheme,
-  Skeleton,
-  LinearProgress,
-  Tabs,
-  Tab,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-} from "@mui/material";
+import Box from "@mui/material/Box";
+import Typography from "@mui/material/Typography";
+import Button from "@mui/material/Button";
+import Card from "@mui/material/Card";
+import CardContent from "@mui/material/CardContent";
+import Avatar from "@mui/material/Avatar";
+import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import Tooltip from "@mui/material/Tooltip";
+import Paper from "@mui/material/Paper";
+import Divider from "@mui/material/Divider";
+import Stack from "@mui/material/Stack";
+import Skeleton from "@mui/material/Skeleton";
+import LinearProgress from "@mui/material/LinearProgress";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import ListItemAvatar from "@mui/material/ListItemAvatar";
+import ListItemText from "@mui/material/ListItemText";
+import Table from "@mui/material/Table";
+import TableBody from "@mui/material/TableBody";
+import TableCell from "@mui/material/TableCell";
+import TableContainer from "@mui/material/TableContainer";
+import TableHead from "@mui/material/TableHead";
+import TableRow from "@mui/material/TableRow";
 import Grid from "@mui/material/Grid";
+import { alpha, useTheme } from "@mui/material/styles";
 
 // MUI Icons
-import {
-  AccessTime as ClockIcon,
-  Receipt as ReceiptIcon,
-  Download as DownloadIcon,
-  History as HistoryIcon,
-  AccountBalance as BankIcon,
-  TrendingUp as TrendingUpIcon,
-  CalendarMonth as CalendarIcon,
-  CheckCircle as CheckCircleIcon,
-  Schedule as ScheduleIcon,
-  Visibility as ViewIcon,
-  Description as DescriptionIcon,
-  Refresh as RefreshIcon,
-  Tune as AdjustmentIcon,
-} from "@mui/icons-material";
+import ClockIcon from "@mui/icons-material/AccessTime";
+import ReceiptIcon from "@mui/icons-material/Receipt";
+import DownloadIcon from "@mui/icons-material/Download";
+import HistoryIcon from "@mui/icons-material/History";
+import BankIcon from "@mui/icons-material/AccountBalance";
+import TrendingUpIcon from "@mui/icons-material/TrendingUp";
+import CalendarIcon from "@mui/icons-material/CalendarMonth";
+import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import ScheduleIcon from "@mui/icons-material/Schedule";
+import ViewIcon from "@mui/icons-material/Visibility";
+import DescriptionIcon from "@mui/icons-material/Description";
+import RefreshIcon from "@mui/icons-material/Refresh";
+import AdjustmentIcon from "@mui/icons-material/Tune";
 import { getPaymentDate } from "@shared/payroll-dates";
 
 const DigitalPayslip = lazy(() => import("@/components/payroll/payslip-preview"));
