@@ -9,6 +9,19 @@ export default defineConfig({
   plugins: [
     react(),
   ],
+  optimizeDeps: {
+    include: [
+      '@mui/material',
+      '@mui/icons-material',
+      '@mui/x-date-pickers',
+      '@mui/x-data-grid',
+      '@emotion/react',
+      '@emotion/styled',
+      'framer-motion',
+      'react-icons',
+      'date-fns'
+    ]
+  },
   // ESBuild options for maximum production compression
   esbuild: {
     drop: ['console', 'debugger'],

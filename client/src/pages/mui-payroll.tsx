@@ -490,7 +490,7 @@ export default function MuiPayroll() {
                                       </Typography>
                                       <Typography variant="caption" color="text.secondary">
                                         Generated {entry.paidAt
-                                          ? format(new Date(entry.paidAt), "MMM d, yyyy")
+                                          ? format(new Date(entry.paidAt), "MMM d, yyyy, h:mm a")
                                           : format(getPaymentDate(entry.periodEndDate!), "MMM d, yyyy")}
                                       </Typography>
                                     </>
@@ -566,7 +566,7 @@ export default function MuiPayroll() {
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                                   Generated {entry.paidAt
-                                    ? format(new Date(entry.paidAt), "MMM d, yyyy")
+                                    ? format(new Date(entry.paidAt), "MMM d, yyyy, h:mm a")
                                     : format(getPaymentDate(entry.periodEndDate!), "MMM d, yyyy")}
                                 </Typography>
                               </>

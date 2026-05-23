@@ -1195,6 +1195,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             conflictingShift: existingShifts[0]
           });
         }
+      }
       // Clean up exception logs on the old date if the calendar date changed or employee changed
       const oldStart = new Date(existingShift.startTime);
       if (oldStart.toISOString().split('T')[0] !== newStartTime.toISOString().split('T')[0] || newUserId !== existingShift.userId) {

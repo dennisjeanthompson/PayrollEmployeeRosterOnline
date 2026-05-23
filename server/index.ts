@@ -54,7 +54,7 @@ app.get('/api/health', (req, res) => {
     }
 
     // Check if this is an interactive terminal (not running in CI/CD or background)
-    const isInteractive = process.stdin.isTTY && !process.env.CI && !process.env.NON_INTERACTIVE;
+    const isInteractive = false; // Always disable interactive mode to prevent hanging in background tasks
 
     // Prompt for database choice only in interactive mode and if not already handled by FRESH_DB
     if (isInteractive && process.env.FRESH_DB !== 'true') {
