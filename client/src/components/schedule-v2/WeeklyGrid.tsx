@@ -15,6 +15,7 @@ import {
   Check as CheckIcon,
   AttachMoney as AttachMoneyIcon,
   NoteAdd as LogAttendanceIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
 import { format, addDays, isSameDay, isToday, differenceInHours, isWithinInterval, parseISO, isValid } from 'date-fns';
 import { getRoleColor } from '@/lib/schedule-theme';
@@ -1175,12 +1176,22 @@ const EmployeeRow = React.memo(({
                   color: isDark ? rc.text : rc.bg,
                 }}
               />
-              <Typography variant="caption" sx={{
-                fontSize: '0.55rem', fontWeight: 700,
-                color: weekHours >= 48 ? '#DC2626' : weekHours >= 40 ? '#F59E0B' : '#166534',
-              }}>
-                {weekHours}h/wk
-              </Typography>
+              <Tooltip title={weekHours >= 48 ? "Over PH labor law limit (48h/wk)" : ""}>
+                <Box sx={{
+                  display: 'flex', alignItems: 'center', gap: 0.25,
+                  bgcolor: weekHours >= 48 ? alpha('#DC2626', 0.1) : 'transparent',
+                  px: weekHours >= 48 ? 0.5 : 0, py: weekHours >= 48 ? 0.25 : 0,
+                  borderRadius: 1,
+                }}>
+                  {weekHours >= 48 && <WarningIcon sx={{ fontSize: '0.65rem', color: '#DC2626' }} />}
+                  <Typography variant="caption" sx={{
+                    fontSize: '0.55rem', fontWeight: 700,
+                    color: weekHours >= 48 ? '#DC2626' : weekHours >= 40 ? '#F59E0B' : '#166534',
+                  }}>
+                    {weekHours}h/wk
+                  </Typography>
+                </Box>
+              </Tooltip>
             </Box>
           </Box>
         </Box>

@@ -65,6 +65,7 @@ import {
   Check as CheckIcon,
   Edit as EditIcon,
   Print as PrintIcon,
+  Download as DownloadIcon,
   NoteAdd as NoteAddIcon,
   ContentCopy as ContentCopyIcon,
   ChecklistRtl as ChecklistIcon,
@@ -181,6 +182,7 @@ export default function ScheduleV2() {
     bulkDays: [1,2,3,4,5] as number[], // Mon-Fri
     bulkStartTime: null as Date | null,
     bulkEndTime: null as Date | null,
+    shiftType: 'regular' as 'morning' | 'afternoon' | 'night' | 'regular',
   });
   const [editForm, setEditForm] = useState({ startTime: null as Date | null, endTime: null as Date | null, notes: '', breakDurationMinutes: 30 });
   const [timeOffForm, setTimeOffForm] = useState({ type: 'vacation', startDate: new Date() as Date | null, endDate: new Date() as Date | null, reason: '' });
@@ -394,6 +396,41 @@ export default function ScheduleV2() {
       return d >= weekStart && d <= weekEnd;
     }).length;
   }, [shifts, weekStart]);
+
+  const currentWeekMetrics = useMemo(() => {
+    const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
+    const currentWeekShifts = shifts.filter(s => {
+      const d = new Date(s.startTime);
+      return d >= weekStart && d <= weekEnd;
+    });
+    const currentWeekLogs = adjustmentLogs.filter(l => {
+      if (l.status === 'rejected') return false;
+      const d = new Date(l.startDate || l.date);
+      return d >= weekStart && d <= weekEnd;
+    });
+
+    const employeesWithShifts = new Set(currentWeekShifts.map(s => s.userId));
+    const coveredEmployees = employeesWithShifts.size;
+    const unscheduledCount = employees.length - coveredEmployees;
+
+    const lateCount = currentWeekLogs.filter(l => l.type === 'late').length;
+    const absentCount = currentWeekLogs.filter(l => l.type === 'absent').length;
+
+    const empHours: Record<string, number> = {};
+    let totalCost = 0;
+    
+    currentWeekShifts.forEach(s => {
+      const hrs = differenceInHours(new Date(s.endTime), new Date(s.startTime));
+      empHours[s.userId] = (empHours[s.userId] || 0) + hrs;
+      const emp = employees.find(e => e.id === s.userId);
+      const rate = emp?.hourlyRate ? parseFloat(emp.hourlyRate) : 200;
+      totalCost += hrs * rate;
+    });
+
+    const overtimeCount = Object.values(empHours).filter(hrs => hrs >= 48).length;
+
+    return { coveredEmployees, unscheduledCount, lateCount, absentCount, overtimeCount, estimatedLaborCost: totalCost };
+  }, [shifts, adjustmentLogs, weekStart, employees]);
 
   const buildCopyWeekData = useCallback(() => {
     if (!currentUser?.branchId) return null;
@@ -991,6 +1028,7 @@ export default function ScheduleV2() {
         bgcolor: isDark ? alpha('#2A2018', 0.9) : alpha('#FFFFFF', 0.9),
         backdropFilter: 'blur(12px)',
         position: 'sticky', top: 0, zIndex: 20,
+        '@media print': { display: 'none' },
       }}>
         {/* Left side: Navigation and Info */}
         <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1.5 }}>
@@ -1118,6 +1156,32 @@ export default function ScheduleV2() {
                   <ContentCopyIcon sx={{ mr: 1.5, fontSize: 18, color: '#14B8A6' }} />
                   <Typography variant="body2" fontWeight={600}>Copy Last Week</Typography>
                 </MenuItem>
+                <Divider sx={{ my: 0.5 }} />
+                <MenuItem onClick={async () => {
+                  setActionsMenuAnchor(null);
+                  try {
+                    const { default: html2canvas } = await import('html2canvas');
+                    const element = document.getElementById('schedule-grid-container');
+                    if (!element) return;
+                    const canvas = await html2canvas(element, { backgroundColor: isDark ? '#2A2018' : '#ffffff' });
+                    const link = document.createElement('a');
+                    link.download = `schedule-${format(weekStart, 'yyyy-MM-dd')}.png`;
+                    link.href = canvas.toDataURL();
+                    link.click();
+                  } catch (e) {
+                    toast.error('Failed to export schedule image');
+                  }
+                }}>
+                  <DownloadIcon sx={{ mr: 1.5, fontSize: 18, color: '#0EA5E9' }} />
+                  <Typography variant="body2" fontWeight={600}>Export as PNG</Typography>
+                </MenuItem>
+                <MenuItem onClick={() => {
+                  setActionsMenuAnchor(null);
+                  window.print();
+                }}>
+                  <PrintIcon sx={{ mr: 1.5, fontSize: 18, color: '#64748B' }} />
+                  <Typography variant="body2" fontWeight={600}>Print Schedule</Typography>
+                </MenuItem>
               </Menu>
             </>
           )}
@@ -1170,6 +1234,42 @@ export default function ScheduleV2() {
         </Box>
       </Box>
 
+      {/* ─── WEEKLY SUMMARY STATS ──────────────────────────────────────── */}
+      {isManager && (
+        <Box sx={{
+          px: { xs: 2, sm: 3 }, py: 1,
+          display: 'flex', alignItems: 'center', gap: { xs: 1, sm: 2 }, flexWrap: 'wrap',
+          borderBottom: '1px solid', borderColor: isDark ? '#3D3228' : '#E8E0D4',
+          bgcolor: isDark ? '#2A2018' : '#FDFBF7',
+          '@media print': { display: 'none' },
+        }}>
+          <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
+            {weeklyTotalHours}h scheduled
+          </Typography>
+          <Divider orientation="vertical" flexItem sx={{ my: 0.5, display: { xs: 'none', sm: 'block' } }} />
+          <Typography variant="body2" sx={{ fontWeight: 600, color: currentWeekMetrics.unscheduledCount > 0 ? 'warning.main' : 'success.main' }}>
+            {currentWeekMetrics.coveredEmployees}/{employees.length} covered
+            {currentWeekMetrics.unscheduledCount > 0 && ` (${currentWeekMetrics.unscheduledCount} unscheduled)`}
+          </Typography>
+          <Divider orientation="vertical" flexItem sx={{ my: 0.5, display: { xs: 'none', sm: 'block' } }} />
+          <Typography variant="body2" sx={{ fontWeight: 600, color: currentWeekMetrics.overtimeCount > 0 ? 'error.main' : 'text.secondary' }}>
+            {currentWeekMetrics.overtimeCount} overtime{currentWeekMetrics.overtimeCount > 0 && ' ⚠️'}
+          </Typography>
+          <Divider orientation="vertical" flexItem sx={{ my: 0.5, display: { xs: 'none', sm: 'block' } }} />
+          <Typography variant="body2" sx={{ fontWeight: 600, color: currentWeekMetrics.lateCount > 3 ? 'error.main' : currentWeekMetrics.lateCount > 0 ? 'warning.main' : 'text.secondary' }}>
+            {currentWeekMetrics.lateCount} late
+          </Typography>
+          <Divider orientation="vertical" flexItem sx={{ my: 0.5, display: { xs: 'none', sm: 'block' } }} />
+          <Typography variant="body2" sx={{ fontWeight: 600, color: currentWeekMetrics.absentCount > 0 ? 'error.main' : 'text.secondary' }}>
+            {currentWeekMetrics.absentCount} absent
+          </Typography>
+          <Divider orientation="vertical" flexItem sx={{ my: 0.5, display: { xs: 'none', sm: 'block' } }} />
+          <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
+            ≈ ₱{currentWeekMetrics.estimatedLaborCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </Typography>
+        </Box>
+      )}
+
       {/* \u2500\u2500\u2500 ROLE COLORS & ICON LEGEND \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */}
       <Box sx={{ 
         px: { xs: 1.5, sm: 2 }, py: 0.5, 
@@ -1200,7 +1300,7 @@ export default function ScheduleV2() {
       </Box>
 
       {/* ——— MAIN CONTENT ─────────────────────────────────────── */}
-      <Box sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: { xs: 'column', lg: 'row' } }}>
+      <Box id="schedule-grid-container" sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: { xs: 'column', lg: 'row' }, bgcolor: 'background.default' }}>
 
         {/* LEFT: Grid Area */}
         <Box sx={{ flex: 1, overflow: 'auto', p: { xs: 1, sm: 2 }, minHeight: 400 }}>
