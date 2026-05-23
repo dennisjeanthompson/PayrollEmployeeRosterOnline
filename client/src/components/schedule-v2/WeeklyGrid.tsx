@@ -688,7 +688,7 @@ function WeeklyGridComponent({
     }}>
       <Box sx={{
         minWidth: 800,
-        width: 'max-content',
+        width: '100%',
         bgcolor: isDark ? '#2A2018' : '#FFFFFF',
         borderRadius: 3,
         border: '1px solid',
@@ -1006,8 +1006,8 @@ const DayCell = React.memo(({
             {(() => {
               const grouped = new Map<string, any>();
               cellAdjustments.forEach((log: any) => {
-                // Ignore late/ot/undertime if there is no shift
-                if (['late', 'overtime', 'undertime'].includes(log.type) && cellShifts.length === 0) return;
+                // Ignore adjustment logs if there is no shift on this day
+                if (['late', 'overtime', 'undertime', 'absent'].includes(log.type) && cellShifts.length === 0) return;
                 
                 const key = `${log.type}-${log.isIncluded}`;
                 if (!grouped.has(key)) {
@@ -1042,13 +1042,15 @@ const DayCell = React.memo(({
         )}
         
         {/* Empty placeholder */}
-        {!isBlocked && cellShifts.length === 0 && cellTimeOff.length === 0 && cellAdjustments.length === 0 && !hasApprovedTimeOff && !isSelectionMode && (
+        {!isBlocked && cellShifts.length === 0 && !hasApprovedTimeOff && !isSelectionMode && (
           <Box sx={{ 
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             minHeight: 32, opacity: 0.6,
             color: isDark ? 'text.secondary' : 'text.disabled',
             fontSize: '0.65rem', fontWeight: 600, fontStyle: 'italic',
-            pointerEvents: 'none'
+            pointerEvents: 'none',
+            position: 'relative',
+            zIndex: 6,
           }}>
             No shift
           </Box>

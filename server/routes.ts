@@ -967,7 +967,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const timeStart = new Date(bulkStartTime);
       const timeEnd = new Date(bulkEndTime);
 
-      const existingShifts = await storage.getShiftsByUser(employeeId, start, end);
       const existingTimeOffs = await storage.getTimeOffRequestsByUser(employeeId);
 
       const toCreate = [];
@@ -988,12 +987,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
 
           // Check if employee already has a shift on this calendar date
-          const hasShift = existingShifts.some(s => {
-             const existingDate = new Date(s.startTime);
-             return existingDate.getFullYear() === shiftStart.getFullYear() && 
-                    existingDate.getMonth() === shiftStart.getMonth() && 
-                    existingDate.getDate() === shiftStart.getDate();
-          });
+          const existingShiftsForDay = await storage.checkShiftOnDate(employeeId, shiftStart);
+          const hasShift = existingShiftsForDay.length > 0;
 
           // Check for approved time-off requests during this shift
           const sStartMs = shiftStart.getTime();
@@ -1199,6 +1194,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
             code: 'SHIFT_CONFLICT',
             conflictingShift: existingShifts[0]
           });
+        }
+      // Clean up exception logs on the old date if the calendar date changed or employee changed
+      const oldStart = new Date(existingShift.startTime);
+      if (oldStart.toISOString().split('T')[0] !== newStartTime.toISOString().split('T')[0] || newUserId !== existingShift.userId) {
+        try {
+          const dayStart = new Date(oldStart.getFullYear(), oldStart.getMonth(), oldStart.getDate());
+          const dayEnd = new Date(oldStart.getFullYear(), oldStart.getMonth(), oldStart.getDate(), 23, 59, 59, 999);
+          const relatedLogs = await storage.getAdjustmentLogsByEmployee(existingShift.userId, dayStart, dayEnd);
+          for (const log of relatedLogs) {
+            if (['absent', 'late', 'undertime'].includes(log.type)) {
+              await storage.deleteAdjustmentLog(log.id);
+            }
+          }
+        } catch (e) {
+          console.error('Failed to cleanup related exception logs on shift move:', e);
         }
       }
 

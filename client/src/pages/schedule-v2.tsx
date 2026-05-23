@@ -1332,6 +1332,8 @@ export default function ScheduleV2() {
         {!isMobile && (
           <Box sx={{ 
             width: isSidebarOpen ? 340 : 0, 
+            minWidth: isSidebarOpen ? 340 : 0,
+            maxWidth: isSidebarOpen ? 340 : 0,
             opacity: isSidebarOpen ? 1 : 0,
             visibility: isSidebarOpen ? 'visible' : 'hidden',
             flexShrink: 0, 
@@ -1340,6 +1342,7 @@ export default function ScheduleV2() {
             borderColor: isDark ? '#3D3228' : '#E8E0D4',
             bgcolor: isDark ? '#1C1410' : '#FBF8F4',
             overflowY: 'auto', 
+            overflowX: 'hidden',
             p: isSidebarOpen ? 2.5 : 0,
             transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           }}>
