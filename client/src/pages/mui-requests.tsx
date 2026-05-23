@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, startTransition } from 'react';
 import { Box, Tabs, Tab, useTheme, Typography } from '@mui/material';
 import MuiTimeOff from './mui-time-off';
 import AssignmentIcon from '@mui/icons-material/Assignment';
@@ -22,7 +22,7 @@ export default function MuiRequests() {
         </Box>
         <Tabs 
           value={tabIndex} 
-          onChange={(e, v) => setTabIndex(v)} 
+          onChange={(e, v) => startTransition(() => setTabIndex(v))} 
           aria-label="manager request tabs"
           variant="scrollable"
           scrollButtons="auto"

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback, startTransition } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { format, parseISO, differenceInDays } from "date-fns";
 import { getCurrentUser, isManager } from "@/lib/auth";
@@ -31,6 +31,7 @@ import Grid from "@mui/material/Grid";
 import Container from "@mui/material/Container";
 import Alert from "@mui/material/Alert";
 import CircularProgress from "@mui/material/CircularProgress";
+import Skeleton from "@mui/material/Skeleton";
 import IconButton from "@mui/material/IconButton";
 import Divider from "@mui/material/Divider";
 import FormControlLabel from "@mui/material/FormControlLabel";
@@ -271,16 +272,32 @@ export default function MuiTimeOff() {
     },
   });
 
-  const handleOpenDialog = (request?: TimeOffRequest) => {
-    if (request) {
-      setEditingRequest(request);
-      setFormData({
-        type: request.type,
-        startDate: parseISO(request.startDate.split("T")[0]),
-        endDate: parseISO(request.endDate.split("T")[0]),
-        reason: request.reason,
-      });
-    } else {
+  const handleOpenDialog = useCallback((request?: TimeOffRequest) => {
+    startTransition(() => {
+      if (request) {
+        setEditingRequest(request);
+        setFormData({
+          type: request.type,
+          startDate: parseISO(request.startDate.split("T")[0]),
+          endDate: parseISO(request.endDate.split("T")[0]),
+          reason: request.reason,
+        });
+      } else {
+        setEditingRequest(null);
+        setFormData({
+          type: "vacation",
+          startDate: new Date(),
+          endDate: new Date(),
+          reason: "",
+        });
+      }
+      setOpenDialog(true);
+    });
+  }, []);
+
+  const handleCloseDialog = useCallback(() => {
+    startTransition(() => {
+      setOpenDialog(false);
       setEditingRequest(null);
       setFormData({
         type: "vacation",
@@ -288,21 +305,8 @@ export default function MuiTimeOff() {
         endDate: new Date(),
         reason: "",
       });
-    }
-    setOpenDialog(true);
-  };
-
-  const handleCloseDialog = () => {
-    setOpenDialog(false);
-    setEditingRequest(null);
-    setFormData({
-      type: "vacation",
-      startDate: new Date(),
-      endDate: new Date(),
-      reason: "",
     });
-
-  };
+  }, []);
 
   const handleDateClick = (arg: any) => {
     // If user is Employee, clicking a date opens new request
@@ -408,52 +412,25 @@ export default function MuiTimeOff() {
         {/* Summary Cards (for employees) */}
         {!isManagerRole && (
           <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary" gutterBottom>
-                    Total Requests
-                  </Typography>
-                  <Typography variant="h5">{requests.length}</Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary" gutterBottom>
-                    Approved
-                  </Typography>
-                  <Typography variant="h5">
-                    {requests.filter((r) => r.status === "approved").length}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary" gutterBottom>
-                    Pending
-                  </Typography>
-                  <Typography variant="h5">
-                    {requests.filter((r) => r.status === "pending").length}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
-            <Grid size={{ xs: 12, sm: 6, md: 3 }}>
-              <Card>
-                <CardContent>
-                  <Typography color="textSecondary" gutterBottom>
-                    Rejected
-                  </Typography>
-                  <Typography variant="h5">
-                    {requests.filter((r) => r.status === "rejected").length}
-                  </Typography>
-                </CardContent>
-              </Card>
-            </Grid>
+            {[
+              { label: 'Total Requests', value: requests.length },
+              { label: 'Approved', value: requests.filter((r) => r.status === "approved").length },
+              { label: 'Pending', value: requests.filter((r) => r.status === "pending").length },
+              { label: 'Rejected', value: requests.filter((r) => r.status === "rejected").length },
+            ].map((stat) => (
+              <Grid size={{ xs: 12, sm: 6, md: 3 }} key={stat.label}>
+                <Card>
+                  <CardContent>
+                    <Typography color="textSecondary" gutterBottom>
+                      {stat.label}
+                    </Typography>
+                    <Typography variant="h5">
+                      {isLoading ? <Skeleton width={40} /> : stat.value}
+                    </Typography>
+                  </CardContent>
+                </Card>
+              </Grid>
+            ))}
           </Grid>
         )}
 
@@ -465,7 +442,7 @@ export default function MuiTimeOff() {
               value={statusFilter}
               label="Filter by Status"
               onChange={(e) => {
-                setStatusFilter(e.target.value);
+                startTransition(() => setStatusFilter(e.target.value));
               }}
             >
               <MenuItem value="">All Statuses</MenuItem>
@@ -482,7 +459,7 @@ export default function MuiTimeOff() {
               value={typeFilter}
               label="Filter by Type"
               onChange={(e) => {
-                setTypeFilter(e.target.value);
+                startTransition(() => setTypeFilter(e.target.value));
               }}
             >
               <MenuItem value="">All Types</MenuItem>
@@ -504,11 +481,16 @@ export default function MuiTimeOff() {
           <Divider />
 
           {isLoading ? (
-            <CardContent sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-              <CircularProgress />
+            <CardContent sx={{ py: 2 }}>
+              <Stack spacing={1}>
+                <Skeleton variant="rectangular" height={52} sx={{ borderRadius: 1 }} />
+                {Array(5).fill(0).map((_, i) => (
+                  <Skeleton key={i} variant="rectangular" height={52} sx={{ borderRadius: 1 }} />
+                ))}
+              </Stack>
             </CardContent>
           ) : filteredRequests.length === 0 ? (
-            <CardContent sx={{ py: 8 }}>
+            <CardContent sx={{ py: 8, minHeight: 72 }}>
               <Alert severity="info" icon={<InfoIcon />}>
                 No time off requests found
               </Alert>
