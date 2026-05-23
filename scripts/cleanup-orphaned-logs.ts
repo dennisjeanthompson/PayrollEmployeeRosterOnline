@@ -3,6 +3,7 @@ import { shifts, adjustmentLogs } from '../shared/schema';
 import { eq, inArray } from 'drizzle-orm';
 
 async function cleanupOrphanedLogs() {
+  // Get ALL exception logs (including soft-deleted ones)
   const allLogs = await db.select().from(adjustmentLogs).where(
     inArray(adjustmentLogs.type, ['absent', 'late', 'undertime'])
   );
@@ -12,7 +13,6 @@ async function cleanupOrphanedLogs() {
   let deletedCount = 0;
 
   for (const log of allLogs) {
-    if (log.isDeleted) continue;
     if (!log.startDate) continue;
 
     const logDateStr = new Date(log.startDate).toISOString().split('T')[0];
@@ -25,13 +25,13 @@ async function cleanupOrphanedLogs() {
     });
 
     if (!hasShift) {
-      console.log(`Deleting orphaned '${log.type}' log for employee ${log.employeeId} on ${logDateStr} (ID: ${log.id})`);
-      await db.update(adjustmentLogs).set({ isDeleted: true }).where(eq(adjustmentLogs.id, log.id));
+      console.log(`HARD deleting orphaned '${log.type}' log for employee ${log.employeeId} on ${logDateStr} (ID: ${log.id}, isDeleted=${log.isDeleted})`);
+      await db.delete(adjustmentLogs).where(eq(adjustmentLogs.id, log.id));
       deletedCount++;
     }
   }
 
-  console.log(`Deleted ${deletedCount} orphaned exception logs.`);
+  console.log(`Hard-deleted ${deletedCount} orphaned exception logs.`);
   process.exit(0);
 }
 

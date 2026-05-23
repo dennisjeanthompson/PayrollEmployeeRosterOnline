@@ -1559,8 +1559,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // Prevent late/overtime/undertime without an active shift
-      if (['late', 'overtime', 'undertime'].includes(type)) {
+      // Prevent late/overtime/undertime/absent without an active shift
+      if (['late', 'overtime', 'undertime', 'absent'].includes(type)) {
         const targetDateStr = new Date(date).toISOString().split('T')[0];
         const userShifts = await storage.getShiftsByUser(employeeId);
         const hasShift = userShifts.some(s => 

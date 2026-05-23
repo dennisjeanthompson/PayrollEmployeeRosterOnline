@@ -1319,14 +1319,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getAdjustmentLogsByEmployee(employeeId: string, startDate?: Date, endDate?: Date): Promise<AdjustmentLog[]> {
-    const conditions = [eq(adjustmentLogs.employeeId, employeeId)];
+    const conditions: any[] = [eq(adjustmentLogs.employeeId, employeeId), eq(adjustmentLogs.isDeleted, false)];
     if (startDate) conditions.push(gte(adjustmentLogs.startDate, startDate));
     if (endDate) conditions.push(lte(adjustmentLogs.endDate, endDate));
     return db.select().from(adjustmentLogs).where(and(...conditions)).orderBy(desc(adjustmentLogs.startDate));
   }
 
   async getAdjustmentLogsByBranch(branchId: string, startDate?: Date, endDate?: Date): Promise<AdjustmentLog[]> {
-    const conditions = [eq(adjustmentLogs.branchId, branchId)];
+    const conditions: any[] = [eq(adjustmentLogs.branchId, branchId), eq(adjustmentLogs.isDeleted, false)];
     if (startDate) conditions.push(gte(adjustmentLogs.startDate, startDate));
     if (endDate) conditions.push(lte(adjustmentLogs.endDate, endDate));
     return db.select().from(adjustmentLogs).where(and(...conditions)).orderBy(desc(adjustmentLogs.startDate));
@@ -1336,6 +1336,7 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(adjustmentLogs).where(
       and(
         eq(adjustmentLogs.branchId, branchId),
+        eq(adjustmentLogs.isDeleted, false),
         or(
           eq(adjustmentLogs.status, 'pending'),
           eq(adjustmentLogs.status, 'employee_verified')
