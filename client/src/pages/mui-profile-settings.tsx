@@ -24,17 +24,15 @@ import {
   useTheme,
   alpha,
 } from "@mui/material";
-import { 
-  Visibility, 
-  VisibilityOff, 
-  Save as SaveIcon,
-  PersonOutline as PersonIcon,
-  LockOutlined as SecurityIcon,
-  BadgeOutlined as BadgeIcon,
-  EmailOutlined as EmailIcon,
-  CakeOutlined as DateIcon,
-  LogoutOutlined as LogoutIcon,
-} from "@mui/icons-material";
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import SaveIcon from '@mui/icons-material/Save';
+import PersonIcon from '@mui/icons-material/PersonOutline';
+import SecurityIcon from '@mui/icons-material/LockOutlined';
+import BadgeIcon from '@mui/icons-material/BadgeOutlined';
+import EmailIcon from '@mui/icons-material/EmailOutlined';
+import DateIcon from '@mui/icons-material/CakeOutlined';
+import LogoutIcon from '@mui/icons-material/LogoutOutlined';
 
 // No more static ProfileBackground to prevent overflow and clashes with the layout theme.
 

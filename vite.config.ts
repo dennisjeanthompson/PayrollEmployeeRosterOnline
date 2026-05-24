@@ -59,23 +59,27 @@ export default defineConfig({
         // (the "Cannot access 'Dn' before initialization" class of bugs).
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            // Keep huge standalone libraries in their own chunks
-            if (id.includes('@fullcalendar')) {
-              if (!id.includes('resource')) {
-                return 'vendor-calendar';
-              }
+            if (id.match(/@mui[\\/]icons-material/)) {
+              return 'mui-icons';
             }
-            if (id.includes('recharts') || id.includes('d3')) {
+            if (id.match(/@mui[\\/]material/) || id.match(/@mui[\\/]system/)) {
+              return 'mui-core';
+            }
+            if (id.match(/react[\\/]|-dom/) || id.match(/react$/) || id.match(/react-dom$/)) {
+              return 'react-vendor';
+            }
+            // Keep huge standalone libraries in their own chunks
+            if (id.match(/@fullcalendar/) && !id.match(/resource/)) {
+              return 'vendor-calendar';
+            }
+            if (id.match(/recharts/) || id.match(/d3/)) {
               return 'vendor-charts';
             }
             // TanStack Query — used on most pages but can load in parallel
-            if (id.includes('@tanstack')) {
+            if (id.match(/@tanstack/)) {
               return 'vendor-query';
             }
             
-            // Unify React, Emotion, MUI, and other foundational libs
-            // into a single vendor chunk to completely eliminate 
-            // circular dependency initialization bugs
             return 'vendor';
           }
         },

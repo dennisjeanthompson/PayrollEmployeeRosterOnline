@@ -14,25 +14,23 @@ import {
   alpha, Fade,
 } from "@mui/material";
 
-import {
-  Check as CheckIcon,
-  Delete as DeleteIcon,
-  DoneAll as DoneAllIcon,
-  Schedule as ScheduleIcon,
-  SwapHoriz as SwapIcon,
-  EventAvailable as EventIcon,
-  CheckCircle as SuccessIcon,
-  Error as ErrorIcon,
-  Warning as WarningIcon,
-  Info as InfoIcon,
-  NotificationsNone as EmptyIcon,
-  OpenInNew as OpenIcon,
-  Shield as ShieldIcon,
-  AccessTime as ClockIcon,
-  Sell as PayIcon,
-  FiberManualRecord as DotIcon,
-  KeyboardArrowDown as ExpandIcon,
-} from "@mui/icons-material";
+import CheckIcon from '@mui/icons-material/Check';
+import DeleteIcon from '@mui/icons-material/Delete';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import SwapIcon from '@mui/icons-material/SwapHoriz';
+import EventIcon from '@mui/icons-material/EventAvailable';
+import SuccessIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
+import WarningIcon from '@mui/icons-material/Warning';
+import InfoIcon from '@mui/icons-material/Info';
+import EmptyIcon from '@mui/icons-material/NotificationsNone';
+import OpenIcon from '@mui/icons-material/OpenInNew';
+import ShieldIcon from '@mui/icons-material/Shield';
+import ClockIcon from '@mui/icons-material/AccessTime';
+import PayIcon from '@mui/icons-material/Sell';
+import DotIcon from '@mui/icons-material/FiberManualRecord';
+import ExpandIcon from '@mui/icons-material/KeyboardArrowDown';
 
 interface Notification {
   id: string;

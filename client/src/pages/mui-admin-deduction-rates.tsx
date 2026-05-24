@@ -32,17 +32,15 @@ import {
   AccordionDetails,
   Tooltip,
 } from "@mui/material";
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  ExpandMore,
-  Security,
-  LocalHospital,
-  Home,
-  Receipt,
-  Refresh as RefreshIcon,
-} from "@mui/icons-material";
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ExpandMore from '@mui/icons-material/ExpandMore';
+import Security from '@mui/icons-material/Security';
+import LocalHospital from '@mui/icons-material/LocalHospital';
+import Home from '@mui/icons-material/Home';
+import Receipt from '@mui/icons-material/Receipt';
+import RefreshIcon from '@mui/icons-material/Refresh';
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 

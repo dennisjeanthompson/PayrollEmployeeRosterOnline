@@ -33,17 +33,15 @@ import {
 } from "@mui/material";
 
 // MUI Icons
-import {
-  Search as SearchIcon,
-  LightMode as SunIcon,
-  DarkMode as MoonIcon,
-  CalendarMonth as CalendarIcon,
-  LocationOn as LocationIcon,
-  Keyboard as KeyboardIcon,
-  Menu as MenuIcon,
-  Store as StoreIcon,
-  SwapHoriz as SwapHorizIcon,
-} from "@mui/icons-material";
+import SearchIcon from '@mui/icons-material/Search';
+import SunIcon from '@mui/icons-material/LightMode';
+import MoonIcon from '@mui/icons-material/DarkMode';
+import CalendarIcon from '@mui/icons-material/CalendarMonth';
+import LocationIcon from '@mui/icons-material/LocationOn';
+import KeyboardIcon from '@mui/icons-material/Keyboard';
+import MenuIcon from '@mui/icons-material/Menu';
+import StoreIcon from '@mui/icons-material/Store';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 
 // Styled search component
 const Search = styled("div")(({ theme }) => ({

@@ -3,17 +3,15 @@ import {
   Box, Typography, Avatar, Chip, useTheme, IconButton, Tooltip,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import {
-  ChevronLeft as PrevIcon,
-  ChevronRight as NextIcon,
-  Add as AddIcon,
-  Edit as EditIcon,
-  SwapHoriz as SwapIcon,
-  BeachAccess as TimeOffIcon,
-  HourglassTop as PendingIcon,
-  CheckCircle as ApprovedIcon,
-  Check as CheckIcon,
-} from '@mui/icons-material';
+import PrevIcon from '@mui/icons-material/ChevronLeft';
+import NextIcon from '@mui/icons-material/ChevronRight';
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import SwapIcon from '@mui/icons-material/SwapHoriz';
+import TimeOffIcon from '@mui/icons-material/BeachAccess';
+import PendingIcon from '@mui/icons-material/HourglassTop';
+import ApprovedIcon from '@mui/icons-material/CheckCircle';
+import CheckIcon from '@mui/icons-material/Check';
 import { format, addDays, subDays, isToday, differenceInHours, isValid } from 'date-fns';
 import { getRoleColor } from '@/lib/schedule-theme';
 import type { Shift, Employee, Holiday, TimeOffRequest, ShiftTrade } from './types';

@@ -40,16 +40,14 @@ import {
 } from "@mui/x-data-grid";
 
 // Icons
-import {
-  Add as AddIcon,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
-  CalendarMonth as CalendarIcon,
-  LocalHospital as HealthIcon,
-  BeachAccess as VacationIcon,
-  Edit as EditIcon,
-  AutoAwesome as AutoAwesomeIcon,
-} from "@mui/icons-material";
+import AddIcon from '@mui/icons-material/Add';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import CalendarIcon from '@mui/icons-material/CalendarMonth';
+import HealthIcon from '@mui/icons-material/LocalHospital';
+import VacationIcon from '@mui/icons-material/BeachAccess';
+import EditIcon from '@mui/icons-material/Edit';
+import AutoAwesomeIcon from '@mui/icons-material/AutoAwesome';
 
 // Components
 import { StatCard, EmptyState } from "@/components/mui/cards";

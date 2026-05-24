@@ -1,5 +1,5 @@
 import PesoIcon from "@/components/PesoIcon";
-import { useState, useEffect, useMemo, startTransition } from "react";
+import { useState, useEffect, useMemo, startTransition, useDeferredValue } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -45,32 +45,30 @@ import {
   Switch as MuiSwitch,
   FormControlLabel,
 } from "@mui/material";
-import {
-  Add as AddIcon,
-  CalendarMonth,
-  AccessTime,
-  Visibility,
-  Download,
-  Send,
-  CheckCircle,
-  PlayArrow,
-  Search,
-  MoreVert,
-  TrendingUp,
-  Receipt,
-  Speed,
-  Groups,
-  Description as DescriptionIcon,
-  NoteAdd,
-  Schedule,
-  Warning,
-  Cancel,
-  Delete as DeleteIcon,
-  FileDownload as ExportIcon,
-  Settings as SettingsIcon,
-  ToggleOn as ToggleOnIcon,
-  ToggleOff as ToggleOffIcon,
-} from "@mui/icons-material";
+import AddIcon from '@mui/icons-material/Add';
+import CalendarMonth from '@mui/icons-material/CalendarMonth';
+import AccessTime from '@mui/icons-material/AccessTime';
+import Visibility from '@mui/icons-material/Visibility';
+import Download from '@mui/icons-material/Download';
+import Send from '@mui/icons-material/Send';
+import CheckCircle from '@mui/icons-material/CheckCircle';
+import PlayArrow from '@mui/icons-material/PlayArrow';
+import Search from '@mui/icons-material/Search';
+import MoreVert from '@mui/icons-material/MoreVert';
+import TrendingUp from '@mui/icons-material/TrendingUp';
+import Receipt from '@mui/icons-material/Receipt';
+import Speed from '@mui/icons-material/Speed';
+import Groups from '@mui/icons-material/Groups';
+import DescriptionIcon from '@mui/icons-material/Description';
+import NoteAdd from '@mui/icons-material/NoteAdd';
+import Schedule from '@mui/icons-material/Schedule';
+import Warning from '@mui/icons-material/Warning';
+import Cancel from '@mui/icons-material/Cancel';
+import DeleteIcon from '@mui/icons-material/Delete';
+import ExportIcon from '@mui/icons-material/FileDownload';
+import SettingsIcon from '@mui/icons-material/Settings';
+import ToggleOnIcon from '@mui/icons-material/ToggleOn';
+import ToggleOffIcon from '@mui/icons-material/ToggleOff';
 import { DatePicker } from "@mui/x-date-pickers/DatePicker";
 import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
@@ -647,6 +645,17 @@ export default function MuiPayrollManagement() {
   const periods = periodsData?.periods || [];
   const entries = entriesData?.entries || [];
 
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const filteredPeriods = useMemo(() => {
+    if (!deferredSearchQuery) return periods;
+    const lowerQuery = deferredSearchQuery.toLowerCase();
+    return periods.filter((p: PayrollPeriod) => {
+      const pStart = format(new Date(p.startDate), "MMM d yyyy").toLowerCase();
+      const pEnd = format(new Date(p.endDate), "MMM d yyyy").toLowerCase();
+      return pStart.includes(lowerQuery) || pEnd.includes(lowerQuery) || p.status.toLowerCase().includes(lowerQuery);
+    });
+  }, [periods, deferredSearchQuery]);
+
   // Calculate summary stats
   const totalPeriods = periods.length;
   const openPeriods = periods.filter((p: PayrollPeriod) => p.status === "open").length;
@@ -1051,7 +1060,7 @@ export default function MuiPayrollManagement() {
               </Card>
             ) : (
               <Stack spacing={2}>
-                {periods.map((period: PayrollPeriod) => (
+                {filteredPeriods.map((period: PayrollPeriod) => (
                   <Card
                     key={period.id}
                     elevation={0}

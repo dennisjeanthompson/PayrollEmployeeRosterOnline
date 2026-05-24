@@ -41,30 +41,28 @@ import {
 import Grid from "@mui/material/Grid";
 
 // MUI Icons
-import {
-  AccessTime as ClockIcon,
-  CalendarMonth as CalendarIcon,
-  People as UsersIcon,
-  TrendingUp as TrendingUpIcon,
-  ArrowForward as ArrowRightIcon,
-  Add as PlusIcon,
-  PersonAdd as UserPlusIcon,
-  Receipt as FileTextIcon,
-  Settings as SettingsIcon,
-  NotificationsActive as BellIcon,
-  Check as CheckIcon,
-  Close as CloseIcon,
-  SwapHoriz as SwapIcon,
-  AutoAwesome as SparklesIcon,
-  Verified as VerifiedIcon,
-  Schedule as ScheduleIcon,
-  EventAvailable as EventIcon,
-  Assessment as AnalyticsIcon,
-  AccountBalance as ReceiptIcon,
-  History as HistoryIcon,
-  Store as StoreIcon,
-  Assignment as AssignmentIcon,
-} from "@mui/icons-material";
+import ClockIcon from '@mui/icons-material/AccessTime';
+import CalendarIcon from '@mui/icons-material/CalendarMonth';
+import UsersIcon from '@mui/icons-material/People';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import ArrowRightIcon from '@mui/icons-material/ArrowForward';
+import PlusIcon from '@mui/icons-material/Add';
+import UserPlusIcon from '@mui/icons-material/PersonAdd';
+import FileTextIcon from '@mui/icons-material/Receipt';
+import SettingsIcon from '@mui/icons-material/Settings';
+import BellIcon from '@mui/icons-material/NotificationsActive';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
+import SwapIcon from '@mui/icons-material/SwapHoriz';
+import SparklesIcon from '@mui/icons-material/AutoAwesome';
+import VerifiedIcon from '@mui/icons-material/Verified';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import EventIcon from '@mui/icons-material/EventAvailable';
+import AnalyticsIcon from '@mui/icons-material/Assessment';
+import ReceiptIcon from '@mui/icons-material/AccountBalance';
+import HistoryIcon from '@mui/icons-material/History';
+import StoreIcon from '@mui/icons-material/Store';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 
 // Types
 interface ShiftsResponse {

@@ -27,7 +27,10 @@ import {
   useTheme,
   alpha,
 } from "@mui/material";
-import { Delete as DeleteIcon, Edit as EditIcon, Event as EventIcon, Schedule as ScheduleIcon } from "@mui/icons-material";
+import DeleteIcon from '@mui/icons-material/Delete';
+import EditIcon from '@mui/icons-material/Edit';
+import EventIcon from '@mui/icons-material/Event';
+import ScheduleIcon from '@mui/icons-material/Schedule';
 
 interface Shift {
   id?: string;

@@ -3,10 +3,14 @@ import {
   Drawer, Box, Typography, Button, TextField, Chip, Avatar, Stack,
   Divider, IconButton, CircularProgress, alpha, useTheme,
 } from '@mui/material';
-import {
-  Close, CheckCircle, Warning, Send, Schedule, Person,
-  Chat as ChatIcon, AccessTime,
-} from '@mui/icons-material';
+import Close from '@mui/icons-material/Close';
+import CheckCircle from '@mui/icons-material/CheckCircle';
+import Warning from '@mui/icons-material/Warning';
+import Send from '@mui/icons-material/Send';
+import Schedule from '@mui/icons-material/Schedule';
+import Person from '@mui/icons-material/Person';
+import ChatIcon from '@mui/icons-material/Chat';
+import AccessTime from '@mui/icons-material/AccessTime';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { format } from 'date-fns';
 import { apiRequest } from '@/lib/queryClient';

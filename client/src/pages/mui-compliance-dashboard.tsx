@@ -23,17 +23,15 @@ import {
   ListItemText,
   Button,
 } from "@mui/material";
-import {
-  CheckCircle as CheckIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-  Business as BusinessIcon,
-  Store as StoreIcon,
-  People as PeopleIcon,
-  Verified as VerifiedIcon,
-  Refresh as RefreshIcon,
-  OpenInNew as OpenIcon,
-} from "@mui/icons-material";
+import CheckIcon from '@mui/icons-material/CheckCircle';
+import WarningIcon from '@mui/icons-material/Warning';
+import ErrorIcon from '@mui/icons-material/Error';
+import BusinessIcon from '@mui/icons-material/Business';
+import StoreIcon from '@mui/icons-material/Store';
+import PeopleIcon from '@mui/icons-material/People';
+import VerifiedIcon from '@mui/icons-material/Verified';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import OpenIcon from '@mui/icons-material/OpenInNew';
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
 

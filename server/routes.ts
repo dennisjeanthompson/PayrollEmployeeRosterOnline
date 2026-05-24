@@ -2468,12 +2468,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         includeExceptionLogs: pConfig.includeExceptionLogs ?? branchDeductionSettings.includeExceptionLogs,
         includeNightDiff: pConfig.includeNightDiff ?? branchDeductionSettings.includeNightDiff,
         includeHolidayPay: pConfig.includeHolidayPay, // Checked vs companySettings later
+        includeRestDayPremium: pConfig.includeRestDayPremium, // Checked vs companySettings later
       } : branchDeductionSettings;
 // --- Pre-fetch static branch & company data to prevent N+1 Queries ---
       const companySettings = await storage.getCompanySettings();
       const globalHolidayPayEnabled = pConfig && pConfig.includeHolidayPay !== undefined 
         ? pConfig.includeHolidayPay 
         : (companySettings ? companySettings.includeHolidayPay : false);
+      const globalRestDayPremiumEnabled = pConfig && pConfig.includeRestDayPremium !== undefined 
+        ? pConfig.includeRestDayPremium 
+        : (companySettings ? companySettings.includeRestDayPremium : false);
       const activeHeadcount = employees.filter(e => e.isActive).length;
       const branchRecord = await storage.getBranch(branchId);
       const isBranchExempt = !!(
@@ -2530,6 +2534,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             day.regularNightDiffHours = 0;
             day.overtimeNightDiffHours = 0;
           }
+        }
+
+        if (globalRestDayPremiumEnabled === false) {
+          payCalculation.totalGrossPay -= payCalculation.restDayPay;
+          payCalculation.restDayPay = 0;
         }
 
         // -- Add Service Incentive Leave (Paid Time Off) --

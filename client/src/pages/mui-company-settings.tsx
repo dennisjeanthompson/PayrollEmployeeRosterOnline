@@ -21,20 +21,18 @@ import {
   Switch,
   FormControlLabel,
 } from "@mui/material";
-import {
-  Business as BusinessIcon,
-  Save as SaveIcon,
-  Edit as EditIcon,
-  CheckCircle as CheckCircleIcon,
-  AccountBalance as BankIcon,
-  Receipt as ReceiptIcon,
-  Phone as PhoneIcon,
-  Email as EmailIcon,
-  Language as WebIcon,
-  LocationOn as LocationIcon,
-  Badge as BadgeIcon,
-  Image as ImageIcon,
-} from "@mui/icons-material";
+import BusinessIcon from '@mui/icons-material/Business';
+import SaveIcon from '@mui/icons-material/Save';
+import EditIcon from '@mui/icons-material/Edit';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import BankIcon from '@mui/icons-material/AccountBalance';
+import ReceiptIcon from '@mui/icons-material/Receipt';
+import PhoneIcon from '@mui/icons-material/Phone';
+import EmailIcon from '@mui/icons-material/Email';
+import WebIcon from '@mui/icons-material/Language';
+import LocationIcon from '@mui/icons-material/LocationOn';
+import BadgeIcon from '@mui/icons-material/Badge';
+import ImageIcon from '@mui/icons-material/Image';
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { uploadToCloudinary, validateImageFile, FOLDERS, UPLOAD_PRESETS } from "@/lib/cloudinary";

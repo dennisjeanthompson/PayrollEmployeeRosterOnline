@@ -9,14 +9,12 @@ import {
   alpha,
   Theme,
 } from "@mui/material";
-import {
-  Menu as MenuIcon,
-  Close as CloseIcon,
-  ArrowBack as ArrowBackIcon,
-  Notifications as NotificationsIcon,
-  LightMode as SunIcon,
-  DarkMode as MoonIcon,
-} from "@mui/icons-material";
+import MenuIcon from '@mui/icons-material/Menu';
+import CloseIcon from '@mui/icons-material/Close';
+import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import SunIcon from '@mui/icons-material/LightMode';
+import MoonIcon from '@mui/icons-material/DarkMode';
 
 // Theme management hook
 function useTheme() {

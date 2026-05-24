@@ -384,6 +384,8 @@ var init_schema = __esm({
       // stored masked in responses
       includeHolidayPay: boolean("include_holiday_pay").default(false),
       // Toggle DOLE holiday pay rules
+      includeRestDayPremium: boolean("include_rest_day_premium").default(false),
+      // Toggle Rest Day Premium
       isActive: boolean("is_active").default(true),
       updatedBy: text("updated_by").references(() => users.id),
       updatedAt: timestamp("updated_at").defaultNow(),
@@ -1699,13 +1701,13 @@ var init_db_storage = __esm({
         return result[0];
       }
       async getAdjustmentLogsByEmployee(employeeId, startDate, endDate) {
-        const conditions = [eq(adjustmentLogs.employeeId, employeeId)];
+        const conditions = [eq(adjustmentLogs.employeeId, employeeId), eq(adjustmentLogs.isDeleted, false)];
         if (startDate) conditions.push(gte(adjustmentLogs.startDate, startDate));
         if (endDate) conditions.push(lte(adjustmentLogs.endDate, endDate));
         return db.select().from(adjustmentLogs).where(and(...conditions)).orderBy(desc(adjustmentLogs.startDate));
       }
       async getAdjustmentLogsByBranch(branchId, startDate, endDate) {
-        const conditions = [eq(adjustmentLogs.branchId, branchId)];
+        const conditions = [eq(adjustmentLogs.branchId, branchId), eq(adjustmentLogs.isDeleted, false)];
         if (startDate) conditions.push(gte(adjustmentLogs.startDate, startDate));
         if (endDate) conditions.push(lte(adjustmentLogs.endDate, endDate));
         return db.select().from(adjustmentLogs).where(and(...conditions)).orderBy(desc(adjustmentLogs.startDate));
@@ -1714,6 +1716,7 @@ var init_db_storage = __esm({
         return db.select().from(adjustmentLogs).where(
           and(
             eq(adjustmentLogs.branchId, branchId),
+            eq(adjustmentLogs.isDeleted, false),
             or(
               eq(adjustmentLogs.status, "pending"),
               eq(adjustmentLogs.status, "employee_verified")
@@ -10353,6 +10356,20 @@ async function registerRoutes(app2) {
           await storage5.deleteShift(shift.id);
           deletedShifts++;
           realTimeManager.broadcastShiftDeleted(shift.id, branchId);
+          try {
+            const shiftStart = new Date(shift.startTime);
+            const dayStart = new Date(shiftStart.getFullYear(), shiftStart.getMonth(), shiftStart.getDate());
+            const dayEnd = new Date(shiftStart.getFullYear(), shiftStart.getMonth(), shiftStart.getDate(), 23, 59, 59, 999);
+            const relatedLogs = await storage5.getAdjustmentLogsByEmployee(shift.userId, dayStart, dayEnd);
+            for (const log2 of relatedLogs) {
+              if (["absent", "late", "undertime"].includes(log2.type)) {
+                await storage5.deleteAdjustmentLog(log2.id);
+                deletedExceptions++;
+              }
+            }
+          } catch (e) {
+            console.error("Failed to cleanup related exception logs in bulk delete:", e);
+          }
         }
       }
       if (target === "exceptions" || target === "both") {
@@ -10382,7 +10399,6 @@ async function registerRoutes(app2) {
       const end = new Date(bulkEndDate);
       const timeStart = new Date(bulkStartTime);
       const timeEnd = new Date(bulkEndTime);
-      const existingShifts = await storage5.getShiftsByUser(employeeId, start, end);
       const existingTimeOffs = await storage5.getTimeOffRequestsByUser(employeeId);
       const toCreate = [];
       const skipped = [];
@@ -10397,10 +10413,8 @@ async function registerRoutes(app2) {
           if (shiftEnd <= shiftStart) {
             shiftEnd.setDate(shiftEnd.getDate() + 1);
           }
-          const hasShift = existingShifts.some((s) => {
-            const existingDate = new Date(s.startTime);
-            return existingDate.getFullYear() === shiftStart.getFullYear() && existingDate.getMonth() === shiftStart.getMonth() && existingDate.getDate() === shiftStart.getDate();
-          });
+          const existingShiftsForDay = await storage5.checkShiftOnDate(employeeId, shiftStart);
+          const hasShift = existingShiftsForDay.length > 0;
           const sStartMs = shiftStart.getTime();
           const sEndMs = shiftEnd.getTime();
           const hasTimeOff = existingTimeOffs.some((r) => {
@@ -10438,7 +10452,11 @@ async function registerRoutes(app2) {
       }
       const createdShifts = [];
       for (const shiftData of toCreate) {
-        const shift = await storage5.createShift(shiftData);
+        const shift = await storage5.createShift({
+          ...shiftData,
+          startTime: new Date(shiftData.startTime),
+          endTime: new Date(shiftData.endTime)
+        });
         realTimeManager.broadcastShiftCreated(shift);
         createdShifts.push(shift);
       }
@@ -10562,6 +10580,21 @@ async function registerRoutes(app2) {
           });
         }
       }
+      const oldStart = new Date(existingShift.startTime);
+      if (oldStart.toISOString().split("T")[0] !== newStartTime.toISOString().split("T")[0] || newUserId !== existingShift.userId) {
+        try {
+          const dayStart = new Date(oldStart.getFullYear(), oldStart.getMonth(), oldStart.getDate());
+          const dayEnd = new Date(oldStart.getFullYear(), oldStart.getMonth(), oldStart.getDate(), 23, 59, 59, 999);
+          const relatedLogs = await storage5.getAdjustmentLogsByEmployee(existingShift.userId, dayStart, dayEnd);
+          for (const log2 of relatedLogs) {
+            if (["absent", "late", "undertime"].includes(log2.type)) {
+              await storage5.deleteAdjustmentLog(log2.id);
+            }
+          }
+        } catch (e) {
+          console.error("Failed to cleanup related exception logs on shift move:", e);
+        }
+      }
       const shift = await storage5.updateShift(id, updateData);
       if (!shift) {
         return res.status(404).json({ message: "Shift not found" });
@@ -10595,6 +10628,19 @@ async function registerRoutes(app2) {
       const result = await storage5.deleteShift(id);
       if (!result) {
         return res.status(500).json({ message: "Failed to delete shift" });
+      }
+      try {
+        const shiftStart = new Date(shift.startTime);
+        const dayStart = new Date(shiftStart.getFullYear(), shiftStart.getMonth(), shiftStart.getDate());
+        const dayEnd = new Date(shiftStart.getFullYear(), shiftStart.getMonth(), shiftStart.getDate(), 23, 59, 59, 999);
+        const relatedLogs = await storage5.getAdjustmentLogsByEmployee(shift.userId, dayStart, dayEnd);
+        for (const log2 of relatedLogs) {
+          if (["absent", "late", "undertime"].includes(log2.type)) {
+            await storage5.deleteAdjustmentLog(log2.id);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to cleanup related exception logs:", e);
       }
       realTimeManager.broadcastShiftDeleted(id, shift.branchId);
       await createAuditLog({
@@ -10790,13 +10836,23 @@ async function registerRoutes(app2) {
         return res.status(403).json({ message: "Cannot create exception logs for employees in another branch." });
       }
       if (type === "absent") {
-        const existingLogs = await storage5.getAdjustmentLogsByUser(employeeId);
+        const existingLogs = await storage5.getAdjustmentLogsByEmployee(employeeId);
         const logDate = new Date(date).getTime();
         const hasAbsent = existingLogs.some(
           (l) => l.type === "absent" && new Date(l.startDate).getTime() === logDate && l.status !== "rejected"
         );
         if (hasAbsent) {
           return res.status(409).json({ message: "Employee is already marked as absent on this day." });
+        }
+      }
+      if (["late", "overtime", "undertime", "absent"].includes(type)) {
+        const targetDateStr = new Date(date).toISOString().split("T")[0];
+        const userShifts = await storage5.getShiftsByUser(employeeId);
+        const hasShift = userShifts.some(
+          (s) => new Date(s.startTime).toISOString().split("T")[0] === targetDateStr
+        );
+        if (!hasShift) {
+          return res.status(400).json({ message: `Cannot log ${type} without a scheduled shift on this date.` });
         }
       }
       const log2 = await storage5.createAdjustmentLog({
@@ -11236,7 +11292,7 @@ async function registerRoutes(app2) {
         let isGenerated = false;
         let status = "No Payroll Yet";
         if (periodToEval) {
-          status = periodToEval.status;
+          status = periodToEval.status || "No Payroll Yet";
           const entries = await storage5.getPayrollEntriesByPeriod(periodToEval.id);
           const hasProcessedEntries = entries.some((e) => Number(e.netPay) > 0);
           if (hasProcessedEntries) {
@@ -11539,7 +11595,7 @@ async function registerRoutes(app2) {
           console.warn(`[PAYROLL SKIP] ${employee.firstName} ${employee.lastName} \u2014 invalid hourlyRate "${employee.hourlyRate}", skipping.`);
           continue;
         }
-        const payCalculation = calculatePeriodPay(shifts2, hourlyRate, periodHolidays, 0, isHolidayExempt);
+        const payCalculation = calculatePeriodPay(shifts2, hourlyRate, periodHolidays, -1, isHolidayExempt);
         if (runConfig.includeNightDiff === false) {
           payCalculation.totalGrossPay -= payCalculation.nightDiffPay;
           payCalculation.nightDiffPay = 0;
@@ -11647,11 +11703,11 @@ async function registerRoutes(app2) {
         const isSemiMonthly = daysInPeriod < 28;
         const skipStatutory = ["bonus", "13th_month", "final_pay", "correction", "off_cycle"].includes(period.runType || "");
         const mandatorySettings = {
-          deductSSS: skipStatutory ? false : branchDeductionSettings.deductSSS ?? true,
-          deductPhilHealth: skipStatutory ? false : branchDeductionSettings.deductPhilHealth ?? true,
-          deductPagibig: skipStatutory ? false : branchDeductionSettings.deductPagibig ?? true,
+          deductSSS: skipStatutory ? false : runConfig.deductSSS ?? true,
+          deductPhilHealth: skipStatutory ? false : runConfig.deductPhilHealth ?? true,
+          deductPagibig: skipStatutory ? false : runConfig.deductPagibig ?? true,
           deductWithholdingTax: false
-          // Tax computed separately below using branchDeductionSettings
+          // Tax computed separately below using runConfig
         };
         const mandatoryBreakdown = await calculateAllDeductions2(monthlyBasicSalary, mandatorySettings);
         const periodFraction = isSemiMonthly ? 0.5 : 1;
@@ -11692,7 +11748,7 @@ async function registerRoutes(app2) {
         let sssLoan = 0;
         let pagibigLoan = 0;
         const otherDeductions = parseFloat(employee.otherDeductions || "0") + lateDeduction + undertimeDeduction;
-        const mweWithholdingTax = !branchDeductionSettings.deductWithholdingTax || employee.isMwe ? 0 : withholdingTax;
+        const mweWithholdingTax = !runConfig.deductWithholdingTax || employee.isMwe ? 0 : withholdingTax;
         const totalDeductions = sssContribution + philHealthContribution + pagibigContribution + mweWithholdingTax + otherDeductions;
         const netPay = Math.max(0, grossPay - totalDeductions);
         let has13thMonth = false;
@@ -14128,9 +14184,21 @@ var vite_config_default = defineConfig({
   plugins: [
     react()
   ],
-  // ESBuild options for maximum production compression
+  optimizeDeps: {
+    include: [
+      "@mui/material",
+      "@mui/icons-material",
+      "@mui/x-date-pickers",
+      "@mui/x-data-grid",
+      "@emotion/react",
+      "@emotion/styled",
+      "framer-motion",
+      "react-icons",
+      "date-fns"
+    ]
+  },
+  // ESBuild: only strip console/debugger in production builds
   esbuild: {
-    drop: ["console", "debugger"],
     legalComments: "none",
     treeShaking: true
   },
@@ -14166,15 +14234,22 @@ var vite_config_default = defineConfig({
         // (the "Cannot access 'Dn' before initialization" class of bugs).
         manualChunks(id) {
           if (id.includes("node_modules")) {
-            if (id.includes("@fullcalendar")) {
-              if (!id.includes("resource")) {
-                return "vendor-calendar";
-              }
+            if (id.match(/@mui[\\/]icons-material/)) {
+              return "mui-icons";
             }
-            if (id.includes("recharts") || id.includes("d3")) {
+            if (id.match(/@mui[\\/]material/) || id.match(/@mui[\\/]system/)) {
+              return "mui-core";
+            }
+            if (id.match(/react[\\/]|-dom/) || id.match(/react$/) || id.match(/react-dom$/)) {
+              return "react-vendor";
+            }
+            if (id.match(/@fullcalendar/) && !id.match(/resource/)) {
+              return "vendor-calendar";
+            }
+            if (id.match(/recharts/) || id.match(/d3/)) {
               return "vendor-charts";
             }
-            if (id.includes("@tanstack")) {
+            if (id.match(/@tanstack/)) {
               return "vendor-query";
             }
             return "vendor";
@@ -14189,6 +14264,16 @@ var vite_config_default = defineConfig({
   server: {
     host: "0.0.0.0",
     port: 5e3,
+    warmup: {
+      clientFiles: [
+        "./src/App.tsx",
+        "./src/pages/mui-payroll.tsx",
+        "./src/pages/mui-dashboard.tsx",
+        "./src/pages/schedule-v2.tsx",
+        "./src/components/mui/mui-sidebar.tsx",
+        "./src/components/mui/mui-header.tsx"
+      ]
+    },
     hmr: process.env.CODESPACES ? {
       clientPort: 443,
       protocol: "wss",
@@ -14407,7 +14492,7 @@ app.get("/api/health", (req, res) => {
       await resetDatabase();
       recreateConnection();
     }
-    const isInteractive = process.stdin.isTTY && !process.env.CI && !process.env.NON_INTERACTIVE;
+    const isInteractive = false;
     if (isInteractive && process.env.FRESH_DB !== "true") {
       const choice = await promptDatabaseChoice();
       if (choice === "fresh") {

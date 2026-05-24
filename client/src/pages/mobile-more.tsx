@@ -10,21 +10,19 @@ import {
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import { useTheme } from "@/components/theme-provider";
-import {
-  CalendarMonth as CalendarIcon,
-  SwapHoriz as TradeIcon,
-  NotificationsOutlined as BellIcon,
-  SettingsOutlined as SettingsIcon,
-  DescriptionOutlined as DocsIcon,
-  ChatBubbleOutlineRounded as FeedbackIcon,
-  HelpOutlineRounded as HelpIcon,
-  InfoOutlined as InfoIcon,
-  DarkModeOutlined as MoonIcon,
-  LightModeOutlined as SunIcon,
-  ChevronRight as ChevronRightIcon,
-  Star as StarIcon,
-  StarBorder as StarBorderIcon,
-} from "@mui/icons-material";
+import CalendarIcon from '@mui/icons-material/CalendarMonth';
+import TradeIcon from '@mui/icons-material/SwapHoriz';
+import BellIcon from '@mui/icons-material/NotificationsOutlined';
+import SettingsIcon from '@mui/icons-material/SettingsOutlined';
+import DocsIcon from '@mui/icons-material/DescriptionOutlined';
+import FeedbackIcon from '@mui/icons-material/ChatBubbleOutlineRounded';
+import HelpIcon from '@mui/icons-material/HelpOutlineRounded';
+import InfoIcon from '@mui/icons-material/InfoOutlined';
+import MoonIcon from '@mui/icons-material/DarkModeOutlined';
+import SunIcon from '@mui/icons-material/LightModeOutlined';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import StarIcon from '@mui/icons-material/Star';
+import StarBorderIcon from '@mui/icons-material/StarBorder';
 import { getCurrentUser } from "@/lib/auth";
 import { getInitials } from "@/lib/utils";
 import { useLocation } from "wouter";

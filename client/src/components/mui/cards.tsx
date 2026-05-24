@@ -14,11 +14,9 @@ import {
   SxProps,
   Theme,
 } from "@mui/material";
-import {
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  MoreVert as MoreVertIcon,
-} from "@mui/icons-material";
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 
 interface StatCardProps {
   title: string;

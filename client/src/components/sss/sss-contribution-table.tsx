@@ -27,11 +27,9 @@ import {
   IconButton,
   Alert,
 } from "@mui/material";
-import {
-  Search as SearchIcon,
-  Info as InfoIcon,
-  Download as DownloadIcon,
-} from "@mui/icons-material";
+import SearchIcon from '@mui/icons-material/Search';
+import InfoIcon from '@mui/icons-material/Info';
+import DownloadIcon from '@mui/icons-material/Download';
 import { sss2026Brackets, SSSBracket } from "@shared/sss-2026-rates";
 
 export default function SSSContributionTable() {

@@ -40,16 +40,14 @@ import {
 } from "@mui/material";
 
 // Icons
-import {
-  SwapHoriz as SwapIcon,
-  RefreshRounded as RefreshIcon,
-  AddRounded as AddIcon,
-  CheckCircle as CheckIcon,
-  Cancel as CancelIcon,
-  AccessTime as TimeIcon,
-  Person as PersonIcon,
-  TrendingUp as UrgentIcon,
-} from "@mui/icons-material";
+import SwapIcon from '@mui/icons-material/SwapHoriz';
+import RefreshIcon from '@mui/icons-material/RefreshRounded';
+import AddIcon from '@mui/icons-material/AddRounded';
+import CheckIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import TimeIcon from '@mui/icons-material/AccessTime';
+import PersonIcon from '@mui/icons-material/Person';
+import UrgentIcon from '@mui/icons-material/TrendingUp';
 
 interface Shift {
   id: string;

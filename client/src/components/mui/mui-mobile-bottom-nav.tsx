@@ -10,11 +10,9 @@ import {
   alpha,
   Theme,
 } from "@mui/material";
-import {
-  Home as HomeIcon,
-  CalendarMonth as CalendarIcon,
-  MoreHoriz as MoreIcon,
-} from "@mui/icons-material";
+import HomeIcon from '@mui/icons-material/Home';
+import CalendarIcon from '@mui/icons-material/CalendarMonth';
+import MoreIcon from '@mui/icons-material/MoreHoriz';
 import { getCurrentUser } from "@/lib/auth";
 import { getInitials } from "@/lib/utils";
 

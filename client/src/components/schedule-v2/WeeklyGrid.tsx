@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Box, Typography, Avatar, Chip, Tooltip, IconButton,
+  Box, Typography, Avatar, Chip, Tooltip, IconButton, Skeleton,
   useTheme, useMediaQuery,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
@@ -42,10 +42,12 @@ interface WeeklyGridProps {
   shifts: Shift[];
   weekStart: Date;
   holidays: Holiday[];
+  isLoading?: boolean;
   isManager: boolean;
   timeOffRequests?: TimeOffRequest[];
   shiftTrades?: ShiftTrade[];
   adjustmentLogs?: any[];
+  overtimeThreshold?: number;
   currentUserId?: string;
   isSelectionMode?: boolean;
   selectedShifts?: Set<string>;
@@ -90,33 +92,27 @@ const TimeOffIndicator = React.memo(function TimeOffIndicator({ request, compact
   
   return (
     <Tooltip title={`${typeLabel} Leave · ${paidLabel}${request.reason ? `\n"${request.reason}"` : ''}${onDelete ? '\n(Click to manage)' : ''}`} arrow placement="top">
-      <Box 
+      <div 
         onClick={onDelete ? (e: any) => { e.stopPropagation(); onDelete(request.id); } : undefined}
-        sx={{
-          display: 'flex', alignItems: 'center', gap: 0.5,
-          width: '100%', minHeight: 28, px: 1, py: 0.4, borderRadius: 1.5,
-          bgcolor: dynamicBg,
+        className={`time-off-indicator ${onDelete ? 'interactive' : ''}`}
+        style={{
+          backgroundColor: dynamicBg,
           color: dynamicColor,
           cursor: onDelete ? 'pointer' : 'default',
           border: request.status === 'pending' ? '1.5px dashed' : '1.5px solid',
           borderColor: isPaid ? '#047857' : config.borderColor,
-          fontSize: '0.72rem', fontWeight: 700,
-          boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
-          transition: 'all 0.2s',
-          overflow: 'hidden',
-          '&:hover': onDelete ? { filter: 'brightness(0.92)', boxShadow: '0 6px 14px rgba(0,0,0,0.12)' } : { boxShadow: '0 4px 10px rgba(0,0,0,0.08)' }
         }}>
         <StatusIcon sx={{ fontSize: 14, flexShrink: 0 }} />
-        <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>
           {compact ? typeLabel : `${typeLabel} Leave`}
-        </Box>
-        <Box component="span" sx={{ 
+        </span>
+        <span style={{ 
           fontSize: '0.58rem', fontWeight: 800, opacity: 0.8, flexShrink: 0,
-          bgcolor: isPaid ? alpha('#FFFFFF', 0.2) : alpha(config.color, 0.12), px: 0.5, py: 0.1, borderRadius: 1,
+          backgroundColor: isPaid ? alpha('#FFFFFF', 0.2) : alpha(config.color, 0.12), padding: '1.6px 4px', borderRadius: '4px',
         }}>
           {isPaid ? '₱' : paidLabel}
-        </Box>
-      </Box>
+        </span>
+      </div>
     </Tooltip>
   );
 });
@@ -162,44 +158,23 @@ const ShiftPill = React.memo(function ShiftPill({ shift, onClick, trade, isSelec
   const hasTrade = !!trade;
 
   return (
-    <Box
+    <div
       onClick={onClick}
       draggable={draggable}
-      onDragStart={onDragStart}
-      sx={{
-        position: 'relative',
-        display: 'flex',
-        alignItems: 'center',
+      onDragStart={onDragStart as any}
+      className={`shift-pill ${onClick ? 'interactive' : ''}`}
+      style={{
         justifyContent: onLogAdjustment ? 'space-between' : 'center',
-        gap: onLogAdjustment ? 0.75 : 0,
-        px: 0.75,
-        pr: onLogAdjustment ? 0.5 : 0.75,
-        py: 0.6,
-        borderRadius: 1.5,
-        bgcolor: hasTrade ? alpha(rc.bg, 0.4) : alpha(rc.bg, 0.25),
-        border: '1px solid',
+        gap: onLogAdjustment ? '6px' : '0px',
+        padding: onLogAdjustment ? '4.8px 4px 4.8px 6px' : '4.8px 6px',
+        backgroundColor: hasTrade ? alpha(rc.bg, 0.4) : alpha(rc.bg, 0.25),
         borderColor: alpha(rc.border, 0.5),
         borderLeft: `4px solid ${rc.bg}`,
         color: isDark ? alpha(rc.bgLight, 1) : rc.bgDark,
-        cursor: 'pointer',
-        fontSize: '0.68rem',
-        fontWeight: 800,
-        lineHeight: 1.2,
-        letterSpacing: '-0.01em',
-        transition: 'all 0.2s',
-        whiteSpace: 'nowrap',
-        overflow: 'visible',
-        '&:hover': onClick ? {
-          transform: 'scale(1.04) translateY(-2px)',
-          filter: 'brightness(0.92)',
-          boxShadow: isSelected ? undefined : `0 6px 16px ${alpha(rc.bg, 0.3)}`,
-        } : {},
-        '&:active': onClick ? { transform: 'scale(0.98)' } : {},
-        ...(hasTrade && {
-          outline: '2px dashed',
-          outlineColor: trade.status === 'accepted' ? '#3B82F6' : '#8B5CF6',
-          outlineOffset: 1,
-        }),
+        boxShadow: (onClick && !isSelected) ? undefined : 'none', // Will be overridden by hover if interactive
+        outline: hasTrade ? '2px dashed' : 'none',
+        outlineColor: hasTrade ? (trade.status === 'accepted' ? '#3B82F6' : '#8B5CF6') : 'transparent',
+        outlineOffset: hasTrade ? 1 : 0,
       }}
     >
       <Tooltip
@@ -254,7 +229,7 @@ const ShiftPill = React.memo(function ShiftPill({ shift, onClick, trade, isSelec
             </IconButton>
           </Tooltip>
         )}
-    </Box>
+    </div>
   );
 });
 /** Get adjustment logs for an employee on a specific date */
@@ -374,6 +349,7 @@ function WeeklyGridComponent({
   shifts,
   weekStart,
   holidays,
+  isLoading,
   isManager,
   timeOffRequests = [],
   shiftTrades = [],
@@ -783,14 +759,28 @@ function WeeklyGridComponent({
 
         {/* Body: one row per employee */}
         <Box component="tbody">
-          {employees.length === 0 && (
+          {isLoading ? (
+            Array.from({ length: 5 }).map((_, i) => (
+              <Box component="tr" key={`skel-${i}`}>
+                <Box component="td" sx={{ p: 1.5, borderBottom: '1px solid', borderColor: isDark ? '#3D3228' : '#E8E0D4' }}>
+                  <Skeleton variant="text" width="60%" />
+                  <Skeleton variant="text" width="40%" />
+                </Box>
+                {Array.from({ length: 7 }).map((_, j) => (
+                  <Box component="td" key={`skel-${i}-${j}`} sx={{ p: 1, borderBottom: '1px solid', borderLeft: '1px solid', borderColor: isDark ? '#3D3228' : '#E8E0D4' }}>
+                    <Skeleton variant="rectangular" height={60} sx={{ borderRadius: 1.5 }} />
+                  </Box>
+                ))}
+              </Box>
+            ))
+          ) : employees.length === 0 ? (
             <Box component="tr">
               <Box component="td" colSpan={7} sx={{ p: 4, textAlign: 'center' }}>
                 <Typography color="text.secondary">No employees found</Typography>
               </Box>
             </Box>
-          )}
-          {employees.map(emp => {
+          ) : (
+            employees.map(emp => {
             // Extract only arrays relevant to this employee to keep props shallow-comparable
             const empShifts: Record<string, any[]> = {};
             const empTimeOff: Record<string, any[]> = {};
@@ -834,7 +824,7 @@ function WeeklyGridComponent({
                 onMoveShift={onMoveShift}
               />
             );
-          })}
+          }))}
         </Box>
       </Box>
     </Box>
@@ -944,23 +934,15 @@ const DayCell = React.memo(({
   }
 
   return (
-    <Box
-      component="td"
+    <td
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
-      sx={{
-        p: 1,
-        position: 'relative',
-        borderBottom: '1px solid',
-        borderLeft: '1px solid',
-        borderColor: isDragOver ? (isOccupied ? 'warning.main' : 'primary.main') : (isDark ? '#3D3228' : '#E8E0D4'),
-        verticalAlign: 'top',
-        bgcolor: cellBgColor,
-        overflow: 'visible',
-        transition: 'all 0.2s',
-        '&:hover .add-shift-btn': { opacity: 1, transform: 'scale(1)' }
+      className="day-cell"
+      style={{
+        borderColor: isDragOver ? (isOccupied ? '#F59E0B' : '#10B981') : (isDark ? '#3D3228' : '#E8E0D4'),
+        backgroundColor: cellBgColor,
       }}
     >
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, minHeight: 44, overflow: 'visible' }}>
@@ -1100,7 +1082,7 @@ const DayCell = React.memo(({
           </Box>
         )}
       </Box>
-    </Box>
+    </td>
   );
 });
 

@@ -16,15 +16,13 @@ import {
   Container,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import {
-  Visibility,
-  VisibilityOff,
-  ArrowForward,
-  CheckCircleOutline,
-  AdminPanelSettings,
-  SupervisorAccount,
-  Person,
-} from "@mui/icons-material";
+import Visibility from '@mui/icons-material/Visibility';
+import VisibilityOff from '@mui/icons-material/VisibilityOff';
+import ArrowForward from '@mui/icons-material/ArrowForward';
+import CheckCircleOutline from '@mui/icons-material/CheckCircleOutline';
+import AdminPanelSettings from '@mui/icons-material/AdminPanelSettings';
+import SupervisorAccount from '@mui/icons-material/SupervisorAccount';
+import Person from '@mui/icons-material/Person';
 import Logo from "@/components/Logo";
 import { apiRequest } from "@/lib/queryClient";
 import { setAuthState } from "@/lib/auth";

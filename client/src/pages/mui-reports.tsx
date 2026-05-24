@@ -31,13 +31,11 @@ import {
   TableHead,
   TableRow,
 } from "@mui/material";
-import {
-  Download as DownloadIcon,
-  Assessment as ReportIcon,
-  People as PeopleIcon,
-  Receipt as ReceiptIcon,
-  CalendarMonth as CalendarIcon,
-} from "@mui/icons-material";
+import DownloadIcon from '@mui/icons-material/Download';
+import ReportIcon from '@mui/icons-material/Assessment';
+import PeopleIcon from '@mui/icons-material/People';
+import ReceiptIcon from '@mui/icons-material/Receipt';
+import CalendarIcon from '@mui/icons-material/CalendarMonth';
 import { format, subMonths } from "date-fns";
 
 export default function MuiReports() {

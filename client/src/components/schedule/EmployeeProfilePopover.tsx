@@ -13,17 +13,15 @@ import {
   alpha,
   useTheme,
 } from '@mui/material';
-import {
-  Close as CloseIcon,
-  Person as PersonIcon,
-  Add as AddIcon,
-  AccessTime as ClockIcon,
-  EventBusy as TimeOffIcon,
-  WbSunny as MorningIcon,
-  LightMode as AfternoonIcon,
-  NightsStay as NightIcon,
-  TrendingUp as TrendingUpIcon,
-} from '@mui/icons-material';
+import CloseIcon from '@mui/icons-material/Close';
+import PersonIcon from '@mui/icons-material/Person';
+import AddIcon from '@mui/icons-material/Add';
+import ClockIcon from '@mui/icons-material/AccessTime';
+import TimeOffIcon from '@mui/icons-material/EventBusy';
+import MorningIcon from '@mui/icons-material/WbSunny';
+import AfternoonIcon from '@mui/icons-material/LightMode';
+import NightIcon from '@mui/icons-material/NightsStay';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
 import { format, differenceInHours } from 'date-fns';
 import { getInitials } from '@/lib/utils';
 

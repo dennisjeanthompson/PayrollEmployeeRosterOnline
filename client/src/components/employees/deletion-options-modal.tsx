@@ -17,14 +17,12 @@ import {
   Stack,
   IconButton,
 } from '@mui/material';
-import {
-  Warning as WarningIcon,
-  Delete as DeleteIcon,
-  PersonOff as PersonOffIcon,
-  Download as DownloadIcon,
-  Close as CloseIcon,
-  Error as ErrorIcon,
-} from '@mui/icons-material';
+import WarningIcon from '@mui/icons-material/Warning';
+import DeleteIcon from '@mui/icons-material/Delete';
+import PersonOffIcon from '@mui/icons-material/PersonOff';
+import DownloadIcon from '@mui/icons-material/Download';
+import CloseIcon from '@mui/icons-material/Close';
+import ErrorIcon from '@mui/icons-material/Error';
 
 interface Employee {
   id: string;

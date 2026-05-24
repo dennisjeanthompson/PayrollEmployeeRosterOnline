@@ -30,7 +30,7 @@
  *   4. PERFORMANCE: The schedule grid already queries shifts, users, trades,
  *      and time-off. Adding an activity log query would slow initial render.
  */
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback, useEffect, startTransition } from 'react';
 
 function safeFormat(val: any, fmt: string): string {
   if (!val) return '';
@@ -47,31 +47,29 @@ import {
   Dialog, DialogTitle, DialogContent, DialogActions, TextField,
   FormControl, InputLabel, Select, MenuItem, Stack, Tooltip, Avatar,
   CircularProgress, useTheme, useMediaQuery, Divider, ButtonGroup,
-  InputAdornment, Menu, FormControlLabel, Switch
+  InputAdornment, Menu, FormControlLabel, Switch, Skeleton
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import {
-  ChevronLeft as PrevIcon,
-  ChevronRight as NextIcon,
-  Add as AddIcon,
-  Inbox as InboxIcon,
-  Today as TodayIcon,
-  CalendarViewDay as WeekIcon,
-  ViewAgenda as DayIcon,
-  BeachAccess as TimeOffIcon,
-  SwapHoriz as SwapIcon,
-  Close as CloseIcon,
-  Delete as DeleteIcon,
-  Check as CheckIcon,
-  Edit as EditIcon,
-  Print as PrintIcon,
-  Download as DownloadIcon,
-  NoteAdd as NoteAddIcon,
-  ContentCopy as ContentCopyIcon,
-  ChecklistRtl as ChecklistIcon,
-  ClearAll as ClearAllIcon,
-  MoreVert as MoreVertIcon,
-} from '@mui/icons-material';
+import PrevIcon from '@mui/icons-material/ChevronLeft';
+import NextIcon from '@mui/icons-material/ChevronRight';
+import AddIcon from '@mui/icons-material/Add';
+import InboxIcon from '@mui/icons-material/Inbox';
+import TodayIcon from '@mui/icons-material/Today';
+import WeekIcon from '@mui/icons-material/CalendarViewDay';
+import DayIcon from '@mui/icons-material/ViewAgenda';
+import TimeOffIcon from '@mui/icons-material/BeachAccess';
+import SwapIcon from '@mui/icons-material/SwapHoriz';
+import CloseIcon from '@mui/icons-material/Close';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CheckIcon from '@mui/icons-material/Check';
+import EditIcon from '@mui/icons-material/Edit';
+import PrintIcon from '@mui/icons-material/Print';
+import DownloadIcon from '@mui/icons-material/Download';
+import NoteAddIcon from '@mui/icons-material/NoteAdd';
+import ContentCopyIcon from '@mui/icons-material/ContentCopy';
+import ChecklistIcon from '@mui/icons-material/ChecklistRtl';
+import ClearAllIcon from '@mui/icons-material/ClearAll';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiRequest } from '@/lib/queryClient';
 import { getCurrentUser, isManager as checkIsManager } from '@/lib/auth';
@@ -184,6 +182,8 @@ export default function ScheduleV2() {
     bulkEndTime: null as Date | null,
     shiftType: 'regular' as 'morning' | 'afternoon' | 'night' | 'regular',
   });
+  const [overtimeThreshold, setOvertimeThreshold] = useState(() => Number(localStorage.getItem('pero_overtime_threshold') || 48));
+  useEffect(() => { localStorage.setItem('pero_overtime_threshold', String(overtimeThreshold)); }, [overtimeThreshold]);
   const [editForm, setEditForm] = useState({ startTime: null as Date | null, endTime: null as Date | null, notes: '', breakDurationMinutes: 30 });
   const [timeOffForm, setTimeOffForm] = useState({ type: 'vacation', startDate: new Date() as Date | null, endDate: new Date() as Date | null, reason: '' });
   const [tradeForm, setTradeForm] = useState({ shiftId: '', targetUserId: '', reason: '' });
@@ -381,12 +381,16 @@ export default function ScheduleV2() {
   // Weekly hours summary
   const weeklyTotalHours = useMemo(() => {
     const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
-    return shifts
-      .filter(s => {
-        const d = new Date(s.startTime);
-        return d >= weekStart && d <= weekEnd && d.getDay() !== 0;
-      })
-      .reduce((sum, s) => sum + differenceInHours(new Date(s.endTime), new Date(s.startTime)), 0);
+    const total = shifts.reduce((sum, s) => {
+      const d = new Date(s.startTime);
+      if (d >= weekStart && d <= weekEnd) {
+        const hrs = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000;
+        const breakHrs = (s.breakDurationMinutes || 0) / 60;
+        return sum + Math.max(0, hrs - breakHrs);
+      }
+      return sum;
+    }, 0);
+    return Math.round(total * 10) / 10;
   }, [shifts, weekStart]);
 
   const currentWeekShiftCount = useMemo(() => {
@@ -420,17 +424,20 @@ export default function ScheduleV2() {
     let totalCost = 0;
     
     currentWeekShifts.forEach(s => {
-      const hrs = differenceInHours(new Date(s.endTime), new Date(s.startTime));
+      const rawHrs = (new Date(s.endTime).getTime() - new Date(s.startTime).getTime()) / 3600000;
+      const breakHrs = (s.breakDurationMinutes || 0) / 60;
+      const hrs = Math.max(0, rawHrs - breakHrs);
+      
       empHours[s.userId] = (empHours[s.userId] || 0) + hrs;
       const emp = employees.find(e => e.id === s.userId);
       const rate = emp?.hourlyRate ? parseFloat(emp.hourlyRate) : 200;
       totalCost += hrs * rate;
     });
 
-    const overtimeCount = Object.values(empHours).filter(hrs => hrs >= 48).length;
+    const overtimeCount = Object.values(empHours).filter(hrs => hrs >= overtimeThreshold).length;
 
     return { coveredEmployees, unscheduledCount, lateCount, absentCount, overtimeCount, estimatedLaborCost: totalCost };
-  }, [shifts, adjustmentLogs, weekStart, employees]);
+  }, [shifts, adjustmentLogs, weekStart, employees, overtimeThreshold]);
 
   const buildCopyWeekData = useCallback(() => {
     if (!currentUser?.branchId) return null;
@@ -510,12 +517,28 @@ export default function ScheduleV2() {
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed to update shift'); }
       return res.json();
     },
-    onSuccess: () => {
+    onMutate: async (newShift) => {
+      await queryClient.cancelQueries({ queryKey: ['shifts', 'branch'] });
+      const previous = queryClient.getQueryData<{ shifts: Shift[] }>(['shifts', 'branch', shiftWindowStart, shiftWindowEnd]);
+      if (previous) {
+        queryClient.setQueryData(['shifts', 'branch', shiftWindowStart, shiftWindowEnd], {
+          ...previous,
+          shifts: previous.shifts.map(s => s.id === newShift.id ? { ...s, ...newShift } : s)
+        });
+      }
+      return { previous };
+    },
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
+    },
+    onSuccess: () => {
       toast.success('Shift updated');
       setEditModalOpen(false);
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error, newShift, context: any) => {
+      if (context?.previous) queryClient.setQueryData(['shifts', 'branch', shiftWindowStart, shiftWindowEnd], context.previous);
+      toast.error(err.message);
+    },
   });
 
   const deleteShiftMutation = useMutation({
@@ -662,9 +685,9 @@ export default function ScheduleV2() {
       queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       if (variables.status === 'approved') {
-        toast.success('Time-off approved â€” employee notified');
+        toast.success('Time-off approved — employee notified');
       } else {
-        toast.info('Time-off rejected â€” employee notified');
+        toast.info('Time-off rejected — employee notified');
       }
     },
     onError: (err: Error) => toast.error(err.message),
@@ -729,7 +752,7 @@ export default function ScheduleV2() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ['shift-trades'] });
       if (variables.status === 'accepted') {
-        toast.success('Trade accepted â€” awaiting manager approval');
+        toast.success('Trade accepted — awaiting manager approval');
       } else {
         toast.info('Trade declined');
       }
@@ -748,9 +771,9 @@ export default function ScheduleV2() {
       queryClient.invalidateQueries({ queryKey: ['shifts', 'branch'] });
       queryClient.invalidateQueries({ queryKey: ['/api/notifications'] });
       if (variables.status === 'approved') {
-        toast.success('Shift trade approved â€” both employees notified');
+        toast.success('Shift trade approved — both employees notified');
       } else {
-        toast.info('Shift trade rejected â€” requester notified');
+        toast.info('Shift trade rejected — requester notified');
       }
     },
     onError: (err: Error) => toast.error(err.message),
@@ -862,7 +885,7 @@ export default function ScheduleV2() {
     onError: (err: Error) => toast.error(err.message),
   });
 
-  // â”€â”€â”€ HANDLERS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— HANDLERS ——————————————————————————————————————————————————————————————————————
   const handleCreateShift = useCallback((employeeId: string, date: Date) => {
     const start = setMinutes(setHours(date, 8), 0);
     const end = setMinutes(setHours(date, 16), 0);
@@ -878,6 +901,7 @@ export default function ScheduleV2() {
       bulkDays: [1,2,3,4,5],
       bulkStartTime: start,
       bulkEndTime: end,
+      shiftType: 'regular' as const,
     });
     setCreateModalOpen(true);
   }, []);
@@ -902,7 +926,7 @@ export default function ScheduleV2() {
     } else if (direction === 'prev') {
       setWeekStart(prev => {
         const newStart = subWeeks(prev, 1);
-        // Keep day view in sync â€” move selected day to the same weekday in the new week
+        // Keep day view in sync — move selected day to the same weekday in the new week
         setSelectedDay(current => {
           const dayOfWeek = current.getDay() === 0 ? 6 : current.getDay() - 1; // Mon=0
           return addDays(newStart, dayOfWeek);
@@ -981,7 +1005,7 @@ export default function ScheduleV2() {
     })
   };
 
-  // â”€â”€â”€ LOADING â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // ——— LOADING ——————————————————————————————————————————————————————————————————————
   useEffect(() => {
     if (bulkDeleteState.isOpen) {
       const fetchPreview = async () => {
@@ -1006,20 +1030,13 @@ export default function ScheduleV2() {
     }
   }, [bulkDeleteState.isOpen, bulkDeleteState.startDate, bulkDeleteState.endDate, bulkDeleteState.employeeId, bulkDeleteState.target]);
 
-  if (shiftsLoading || employeesLoading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-        <CircularProgress size={48} />
-      </Box>
-    );
-  }
 
   const weekEndDate = endOfWeek(weekStart, { weekStartsOn: 1 });
 
   return (
     <Box sx={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', minHeight: '100%', bgcolor: 'transparent' }}>
 
-      {/* â”€â”€â”€ NAVIGATION BAR â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* ——— NAVIGATION BAR ——————————————————————————————————————————— */}
       <Box sx={{
         px: { xs: 2, sm: 3 }, py: 1.5,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1.5,
@@ -1234,7 +1251,7 @@ export default function ScheduleV2() {
         </Box>
       </Box>
 
-      {/* ─── WEEKLY SUMMARY STATS ──────────────────────────────────────── */}
+      {/* ——— WEEKLY SUMMARY STATS ———————————————————————————————————————— */}
       {isManager && (
         <Box sx={{
           px: { xs: 2, sm: 3 }, py: 1,
@@ -1252,9 +1269,25 @@ export default function ScheduleV2() {
             {currentWeekMetrics.unscheduledCount > 0 && ` (${currentWeekMetrics.unscheduledCount} unscheduled)`}
           </Typography>
           <Divider orientation="vertical" flexItem sx={{ my: 0.5, display: { xs: 'none', sm: 'block' } }} />
-          <Typography variant="body2" sx={{ fontWeight: 600, color: currentWeekMetrics.overtimeCount > 0 ? 'error.main' : 'text.secondary' }}>
-            {currentWeekMetrics.overtimeCount} overtime{currentWeekMetrics.overtimeCount > 0 && ' ⚠️'}
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <Typography variant="body2" sx={{ fontWeight: 600, color: currentWeekMetrics.overtimeCount > 0 ? 'error.main' : 'text.secondary' }}>
+              {currentWeekMetrics.overtimeCount} overtime{currentWeekMetrics.overtimeCount > 0 && ' ⚠️'}
+            </Typography>
+            <Tooltip title="Configure Overtime Threshold (hours/week)">
+              <TextField
+                size="small"
+                variant="standard"
+                type="number"
+                value={overtimeThreshold}
+                onChange={(e) => {
+                  const val = parseInt(e.target.value);
+                  if (!isNaN(val) && val > 0) setOvertimeThreshold(val);
+                }}
+                inputProps={{ style: { fontSize: '0.75rem', padding: '0 4px', width: '32px', textAlign: 'center', fontWeight: 700 } }}
+                sx={{ ml: 0.5, '& .MuiInput-underline:before': { borderBottom: 'none' }, '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottom: 'none' } }}
+              />
+            </Tooltip>
+          </Box>
           <Divider orientation="vertical" flexItem sx={{ my: 0.5, display: { xs: 'none', sm: 'block' } }} />
           <Typography variant="body2" sx={{ fontWeight: 600, color: currentWeekMetrics.lateCount > 3 ? 'error.main' : currentWeekMetrics.lateCount > 0 ? 'warning.main' : 'text.secondary' }}>
             {currentWeekMetrics.lateCount} late
@@ -1270,7 +1303,7 @@ export default function ScheduleV2() {
         </Box>
       )}
 
-      {/* \u2500\u2500\u2500 ROLE COLORS & ICON LEGEND \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 */}
+      {/* ——— ROLE COLORS & ICON LEGEND —————————————————————————————— */}
       <Box sx={{ 
         px: { xs: 1.5, sm: 2 }, py: 0.5, 
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
@@ -1288,18 +1321,18 @@ export default function ScheduleV2() {
         </Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontWeight: 600, color: 'text.secondary', fontSize: '0.65rem' }}>
-            <Box component="span" sx={{ fontSize: '0.75rem' }}>{'\ud83c\udf34'}</Box> Time Off
+            <Box component="span" sx={{ fontSize: '0.75rem' }}>🌴</Box> Time Off
           </Typography>
           <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontWeight: 600, color: 'text.secondary', fontSize: '0.65rem' }}>
-            <Box component="span" sx={{ fontSize: '0.75rem' }}>{'\u23f0'}</Box> Exception
+            <Box component="span" sx={{ fontSize: '0.75rem' }}>⏰</Box> Exception
           </Typography>
           <Typography variant="caption" sx={{ display: 'flex', alignItems: 'center', gap: 0.3, fontWeight: 600, color: 'text.secondary', fontSize: '0.65rem' }}>
-            <Box component="span" sx={{ fontSize: '0.75rem' }}>{'\ud83d\udd04'}</Box> Trade
+            <Box component="span" sx={{ fontSize: '0.75rem' }}>🔄</Box> Trade
           </Typography>
         </Box>
       </Box>
 
-      {/* ——— MAIN CONTENT ─────────────────────────────────────── */}
+      {/* ——— MAIN CONTENT ——————————————————————————————————————— */}
       <Box id="schedule-grid-container" sx={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: { xs: 'column', lg: 'row' }, bgcolor: 'background.default' }}>
 
         {/* LEFT: Grid Area */}
@@ -1348,6 +1381,7 @@ export default function ScheduleV2() {
                   </Paper>
                 )}
                 <WeeklyGrid
+                  isLoading={shiftsLoading || employeesLoading}
                   employees={employees}
                   shifts={shifts}
                   weekStart={weekStart}
@@ -1370,11 +1404,13 @@ export default function ScheduleV2() {
                   onAddHolidayPay={(userId, date) => addHolidayPayMutation.mutate({ userId, branchId: currentUser?.branchId!, date })}
                   onLogAdjustment={handleLogAdjustmentFromShift}
                   onMoveShift={(payload) => updateShiftMutation.mutate(payload)}
+                  overtimeThreshold={overtimeThreshold}
                 />
               </Stack>
             ) : (
               /* Employee week view: show their shifts only, as vertical cards */
               <WeeklyGrid
+                isLoading={shiftsLoading || employeesLoading}
                 employees={employees.filter(e => e.id === currentUser?.id)}
                 shifts={shifts.filter(s => s.userId === currentUser?.id)}
                 weekStart={weekStart}
@@ -1388,6 +1424,7 @@ export default function ScheduleV2() {
                 onEditShift={() => {}}
                 onOpenRequests={() => setDrawerOpen(true)}
                 onMoveShift={() => {}}
+                overtimeThreshold={overtimeThreshold}
               />
             )
           ) : (
@@ -2210,7 +2247,7 @@ export default function ScheduleV2() {
                       setManageLogGroup(null);
                       setIsAdjustmentDialogOpen(true);
                     }}
-                    sx={{ bgcolor: alpha(theme.palette.primary.main, 0.1), '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.2) } }}
+                    className="action-btn-edit"
                   >
                     <EditIcon fontSize="small" />
                   </IconButton>
@@ -2223,7 +2260,7 @@ export default function ScheduleV2() {
                         deleteAdjustmentMutation.mutate(log.id);
                       }
                     }}
-                    sx={{ bgcolor: alpha(theme.palette.error.main, 0.1), '&:hover': { bgcolor: alpha(theme.palette.error.main, 0.2) } }}
+                    className="action-btn-delete"
                   >
                     <DeleteIcon fontSize="small" />
                   </IconButton>

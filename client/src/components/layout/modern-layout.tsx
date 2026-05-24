@@ -15,20 +15,18 @@ import {
   Divider,
   alpha,
 } from "@mui/material";
-import {
-  Menu as MenuIcon,
-  Close as CloseIcon,
-  LogoutRounded as LogoutIcon,
-  SettingsRounded as SettingsIcon,
-  HomeRounded as HomeIcon,
-  SwapHorizRounded as ShiftIcon,
-  EventRounded as EventRoundedIcon,
-  PeopleRounded as PeopleRoundedIcon,
-  PaymentsRounded as PaymentsRoundedIcon,
-  AssignmentRounded as AssignmentRoundedIcon,
-  NotificationsRounded as NotificationsRoundedIcon,
-  BusinessRounded as BusinessIcon,
-} from "@mui/icons-material";
+import MenuIcon from '@mui/icons-material/Menu';
+import CloseIcon from '@mui/icons-material/Close';
+import LogoutIcon from '@mui/icons-material/LogoutRounded';
+import SettingsIcon from '@mui/icons-material/SettingsRounded';
+import HomeIcon from '@mui/icons-material/HomeRounded';
+import ShiftIcon from '@mui/icons-material/SwapHorizRounded';
+import EventRoundedIcon from '@mui/icons-material/EventRounded';
+import PeopleRoundedIcon from '@mui/icons-material/PeopleRounded';
+import PaymentsRoundedIcon from '@mui/icons-material/PaymentsRounded';
+import AssignmentRoundedIcon from '@mui/icons-material/AssignmentRounded';
+import NotificationsRoundedIcon from '@mui/icons-material/NotificationsRounded';
+import BusinessIcon from '@mui/icons-material/BusinessRounded';
 import { useLocation } from "wouter";
 import { logout, getCurrentUser } from "@/lib/auth";
 import { getInitials } from "@/lib/utils";

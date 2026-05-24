@@ -27,19 +27,17 @@ import {
   CircularProgress,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import {
-  CheckCircle,
-  Security,
-  LocalHospital,
-  Home,
-  Receipt,
-  OpenInNew,
-  InfoOutlined,
-  AutoAwesome,
-  ToggleOn,
-  ToggleOff,
-  CalendarMonth,
-} from "@mui/icons-material";
+import CheckCircle from '@mui/icons-material/CheckCircle';
+import Security from '@mui/icons-material/Security';
+import LocalHospital from '@mui/icons-material/LocalHospital';
+import Home from '@mui/icons-material/Home';
+import Receipt from '@mui/icons-material/Receipt';
+import OpenInNew from '@mui/icons-material/OpenInNew';
+import InfoOutlined from '@mui/icons-material/InfoOutlined';
+import AutoAwesome from '@mui/icons-material/AutoAwesome';
+import ToggleOn from '@mui/icons-material/ToggleOn';
+import ToggleOff from '@mui/icons-material/ToggleOff';
+import CalendarMonth from '@mui/icons-material/CalendarMonth';
 import { useLocation } from "wouter";
 
 const deductions = [
@@ -138,10 +136,10 @@ export default function MuiDeductionSettings() {
     deductSSS: true,
     deductPhilHealth: true,
     deductPagibig: true,
-    deductWithholdingTax: true,
     includeExceptionLogs: true,
   });
   const [includeHolidayPay, setIncludeHolidayPay] = useState(false);
+  const [includeRestDayPremium, setIncludeRestDayPremium] = useState(false);
 
   // Fetch existing deduction settings for this branch
   const { data: settingsData, isLoading: settingsLoading } = useQuery({
@@ -177,6 +175,7 @@ export default function MuiDeductionSettings() {
   useEffect(() => {
     if (companySettingsData?.settings) {
       setIncludeHolidayPay(companySettingsData.settings.includeHolidayPay ?? false);
+      setIncludeRestDayPremium(companySettingsData.settings.includeRestDayPremium ?? false);
     }
   }, [companySettingsData]);
 
@@ -191,9 +190,9 @@ export default function MuiDeductionSettings() {
     },
   });
 
-  // Holiday pay is stored in company settings, so save it through its own endpoint flow.
-  const saveHolidayPayMutation = useMutation({
-    mutationFn: async (nextValue: boolean) => {
+  // Holiday pay and Rest Day premium are stored in company settings
+  const saveCompanySettingsMutation = useMutation({
+    mutationFn: async (updates: { includeHolidayPay?: boolean; includeRestDayPremium?: boolean }) => {
       let companySettingsId = companySettingsData?.settings?.id;
 
       if (!companySettingsId) {
@@ -208,21 +207,20 @@ export default function MuiDeductionSettings() {
           name: "My Company",
           address: "Company Address",
           tin: "000-000-000-000",
-          includeHolidayPay: nextValue,
+          ...updates,
         });
         return defaultCreated.json();
       }
 
-      const res = await apiRequest("PUT", `/api/company-settings/${companySettingsId}`, {
-        includeHolidayPay: nextValue,
-      });
+      const res = await apiRequest("PUT", `/api/company-settings/${companySettingsId}`, updates);
       return res.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["company-settings"] });
     },
-    onError: (error: Error, nextValue) => {
-      setIncludeHolidayPay(!nextValue);
+    onError: (error: Error, updates) => {
+      if (updates.includeHolidayPay !== undefined) setIncludeHolidayPay(!updates.includeHolidayPay);
+      if (updates.includeRestDayPremium !== undefined) setIncludeRestDayPremium(!updates.includeRestDayPremium);
       toast({
         title: "Update Failed",
         description: error.message,
@@ -242,7 +240,14 @@ export default function MuiDeductionSettings() {
     if (!isManager) return;
     const nextValue = !includeHolidayPay;
     setIncludeHolidayPay(nextValue);
-    saveHolidayPayMutation.mutate(nextValue);
+    saveCompanySettingsMutation.mutate({ includeHolidayPay: nextValue });
+  };
+
+  const handleRestDayPremiumToggle = () => {
+    if (!isManager) return;
+    const nextValue = !includeRestDayPremium;
+    setIncludeRestDayPremium(nextValue);
+    saveCompanySettingsMutation.mutate({ includeRestDayPremium: nextValue });
   };
 
   if (settingsLoading) {
@@ -521,7 +526,48 @@ export default function MuiDeductionSettings() {
                   checked={includeHolidayPay}
                   onChange={handleHolidayPayToggle}
                   color="success"
-                  disabled={saveHolidayPayMutation.isPending}
+                  disabled={saveCompanySettingsMutation.isPending}
+                />
+              </Tooltip>
+            </Box>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Rest Day Premium Toggle */}
+      {isManager && (
+        <Card
+          elevation={0}
+          sx={{
+            borderRadius: 3,
+            border: `1px solid ${includeRestDayPremium ? alpha(theme.palette.success.main, 0.3) : alpha(theme.palette.divider, 0.15)}`,
+            transition: 'border-color 0.3s, opacity 0.3s',
+            opacity: includeRestDayPremium ? 1 : 0.75,
+          }}
+        >
+          <CardContent sx={{ p: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+              <Box sx={{ display: 'flex', gap: 2, alignItems: 'flex-start' }}>
+                <Box sx={{ width: 44, height: 44, borderRadius: 2.5, bgcolor: alpha(theme.palette.success.main, 0.12), display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <CalendarMonth sx={{ color: theme.palette.success.main, fontSize: 22 }} />
+                </Box>
+                <Box>
+                  <Typography variant="subtitle1" fontWeight={700}>Include Rest Day Premium in Payroll</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+                    When enabled, rest day premiums (e.g., 130% for working on a scheduled rest day) are included in payroll computations.
+                  </Typography>
+                  <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
+                    <Chip size="small" label="Rest day premiums included" sx={{ bgcolor: alpha(theme.palette.success.main, 0.1), color: theme.palette.success.main, fontWeight: 600 }} />
+                    <Chip size="small" label="Payroll impact only" sx={{ bgcolor: alpha(theme.palette.info.main, 0.1), color: theme.palette.info.main, fontWeight: 600 }} />
+                  </Box>
+                </Box>
+              </Box>
+              <Tooltip title={includeRestDayPremium ? 'Disable rest day premium integration' : 'Enable rest day premium integration'}>
+                <Switch
+                  checked={includeRestDayPremium}
+                  onChange={handleRestDayPremiumToggle}
+                  color="success"
+                  disabled={saveCompanySettingsMutation.isPending}
                 />
               </Tooltip>
             </Box>

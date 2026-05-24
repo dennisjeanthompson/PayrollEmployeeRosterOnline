@@ -16,17 +16,15 @@ import {
   useTheme,
   Divider,
 } from '@mui/material';
-import {
-  Search as SearchIcon,
-  Dashboard as DashboardIcon,
-  Schedule as ScheduleIcon,
-  People as PeopleIcon,
-  Settings as SettingsIcon,
-  NavigateNext as ArrowIcon,
-  Event as EventIcon,
-  SwapHoriz as TradeIcon,
-  Assessment as AssessmentIcon,
-} from '@mui/icons-material';
+import SearchIcon from '@mui/icons-material/Search';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import PeopleIcon from '@mui/icons-material/People';
+import SettingsIcon from '@mui/icons-material/Settings';
+import ArrowIcon from '@mui/icons-material/NavigateNext';
+import EventIcon from '@mui/icons-material/Event';
+import TradeIcon from '@mui/icons-material/SwapHoriz';
+import AssessmentIcon from '@mui/icons-material/Assessment';
 
 // Types
 interface SearchResult {

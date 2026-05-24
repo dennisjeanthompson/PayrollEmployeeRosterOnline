@@ -28,12 +28,10 @@ import { LocalizationProvider } from "@mui/x-date-pickers/LocalizationProvider";
 import { AdapterDateFns } from "@mui/x-date-pickers/AdapterDateFns";
 
 // Icons
-import {
-  Add as AddIcon,
-  LocalAtm as AtmIcon,
-  Delete as DeleteIcon,
-  AutoAwesome as DistributeIcon,
-} from "@mui/icons-material";
+import AddIcon from '@mui/icons-material/Add';
+import AtmIcon from '@mui/icons-material/LocalAtm';
+import DeleteIcon from '@mui/icons-material/Delete';
+import DistributeIcon from '@mui/icons-material/AutoAwesome';
 import { EmptyState } from "@/components/mui/cards";
 
 interface ServiceChargePool {

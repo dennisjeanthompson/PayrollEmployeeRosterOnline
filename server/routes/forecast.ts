@@ -18,10 +18,11 @@
  *       historical average as the predicted value.
  *
  *  HOLIDAY ADJUSTMENTS:
+ *    - Labor Hours: Assumes baseline schedule (no artificial reduction).
  *    - Regular holidays (e.g., Christmas, Independence Day):
- *        → 60% reduction in predicted hours, 200% pay premium applied
+ *        → 200% pay premium applied to baseline predicted cost
  *    - Special non-working holidays (e.g., EDSA Anniversary):
- *        → 30% reduction in predicted hours, 130% pay premium applied
+ *        → 130% pay premium applied to baseline predicted cost
  *
  *  CONFIDENCE BAND:
  *    - A fixed ±10% band around the predicted value.
@@ -391,14 +392,8 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
       
       let predicted = dowAverages[dow].avg;
       
-      // Adjust for holidays (typically lower traffic)
-      if (holiday) {
-        if (holiday.type === "regular") {
-          predicted *= 0.4; // 60% reduction for regular holidays
-        } else {
-          predicted *= 0.7; // 30% reduction for special holidays
-        }
-      }
+      // Removed heuristic holiday labor reductions to maintain accurate baseline scheduling.
+      // If managers need to reduce hours on holidays, they will schedule fewer shifts.
 
       // ±10% confidence band around predicted value
       const validPredicted = isNaN(predicted) ? 8 : predicted;
@@ -511,11 +506,11 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
       
       if (holiday) {
         if (holiday.type === "regular") {
-          // Regular holiday: 200% premium but fewer hours
-          predicted = predicted * 0.4 * 2;
+          // Regular holiday: 200% premium
+          predicted = predicted * 2.0;
         } else {
-          // Special holiday: 130% premium, slightly fewer hours
-          predicted = predicted * 0.7 * 1.3;
+          // Special holiday: 130% premium
+          predicted = predicted * 1.3;
         }
       }
 

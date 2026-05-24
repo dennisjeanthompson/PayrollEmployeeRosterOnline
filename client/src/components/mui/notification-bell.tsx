@@ -11,26 +11,24 @@ import {
   Avatar, Stack, alpha, useTheme, CircularProgress,
 } from '@mui/material';
 
-import {
-  Notifications as NotificationsIcon,
-  SwapHoriz as TradeIcon,
-  CheckCircle as ApprovedIcon,
-  Cancel as RejectedIcon,
-  OpenInNew as OpenIcon,
-  NotificationsNone as EmptyIcon,
-  CalendarMonth as ScheduleIcon,
-  EventAvailable as EventIcon,
-  EventBusy as TimeOffRejectedIcon,
-  Tune as AdjustmentIcon,
-  Info as InfoIcon,
-  Login as ClockInIcon,
-  Logout as ClockOutIcon,
-  DoneAll as DoneAllIcon,
-  AccessTime as ClockIcon,
-  Sell as PayIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon,
-} from '@mui/icons-material';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import TradeIcon from '@mui/icons-material/SwapHoriz';
+import ApprovedIcon from '@mui/icons-material/CheckCircle';
+import RejectedIcon from '@mui/icons-material/Cancel';
+import OpenIcon from '@mui/icons-material/OpenInNew';
+import EmptyIcon from '@mui/icons-material/NotificationsNone';
+import ScheduleIcon from '@mui/icons-material/CalendarMonth';
+import EventIcon from '@mui/icons-material/EventAvailable';
+import TimeOffRejectedIcon from '@mui/icons-material/EventBusy';
+import AdjustmentIcon from '@mui/icons-material/Tune';
+import InfoIcon from '@mui/icons-material/Info';
+import ClockInIcon from '@mui/icons-material/Login';
+import ClockOutIcon from '@mui/icons-material/Logout';
+import DoneAllIcon from '@mui/icons-material/DoneAll';
+import ClockIcon from '@mui/icons-material/AccessTime';
+import PayIcon from '@mui/icons-material/Sell';
+import WarningIcon from '@mui/icons-material/Warning';
+import ErrorIcon from '@mui/icons-material/Error';
 
 interface Notification {
   id: string;

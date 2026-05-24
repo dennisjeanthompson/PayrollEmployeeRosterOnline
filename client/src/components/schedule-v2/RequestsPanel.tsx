@@ -6,18 +6,16 @@ import {
   Accordion, AccordionSummary, AccordionDetails,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
-import {
-  Check as CheckIcon,
-  Close as CloseIcon,
-  SwapHoriz as SwapIcon,
-  BeachAccess as TimeOffIcon,
-  Schedule as ClockIcon,
-  Delete as DeleteIcon,
-  Block as BlockIcon,
-  ExpandMore as ExpandMoreIcon,
-  EventBusy as EventBusyIcon,
-  AssignmentLate as AssignmentLateIcon,
-} from '@mui/icons-material';
+import CheckIcon from '@mui/icons-material/Check';
+import CloseIcon from '@mui/icons-material/Close';
+import SwapIcon from '@mui/icons-material/SwapHoriz';
+import TimeOffIcon from '@mui/icons-material/BeachAccess';
+import ClockIcon from '@mui/icons-material/Schedule';
+import DeleteIcon from '@mui/icons-material/Delete';
+import BlockIcon from '@mui/icons-material/Block';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import EventBusyIcon from '@mui/icons-material/EventBusy';
+import AssignmentLateIcon from '@mui/icons-material/AssignmentLate';
 import { format, isValid } from 'date-fns';
 import type { TimeOffRequest, ShiftTrade, Employee } from './types';
 

@@ -39,16 +39,14 @@ import {
   Tabs,
   Alert,
 } from "@mui/material";
-import {
-  Add as AddIcon,
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  CalendarMonth,
-  Refresh as RefreshIcon,
-  CheckCircle,
-  Block,
-  Close as CloseIcon,
-} from "@mui/icons-material";
+import AddIcon from '@mui/icons-material/Add';
+import EditIcon from '@mui/icons-material/Edit';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CalendarMonth from '@mui/icons-material/CalendarMonth';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import CheckCircle from '@mui/icons-material/CheckCircle';
+import Block from '@mui/icons-material/Block';
+import CloseIcon from '@mui/icons-material/Close';
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { format } from "date-fns";

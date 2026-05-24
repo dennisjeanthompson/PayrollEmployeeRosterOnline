@@ -17,7 +17,7 @@ import { useRealtime } from "@/hooks/use-realtime";
 
 // MUI Components
 import { Box, CircularProgress, Typography, Button, alpha } from "@mui/material";
-import { LocalCafe as CoffeeIcon } from "@mui/icons-material";
+import CoffeeIcon from '@mui/icons-material/LocalCafe';
 
 // MUI Layout Components
 import MuiSidebar from "@/components/mui/mui-sidebar";

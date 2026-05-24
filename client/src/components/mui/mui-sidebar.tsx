@@ -31,23 +31,25 @@ import {
   useMediaQuery,
 } from "@mui/material";
 
-import {
-  Dashboard as DashboardIcon,
-  CalendarMonth as CalendarIcon,
-  Notifications as NotificationsIcon,
-  People as PeopleIcon,
-  Store as StoreIcon,
-  Settings as SettingsIcon,
-  Logout as LogoutIcon,
-  LocalCafe as CoffeeIcon,
-  ChevronLeft as ChevronLeftIcon,
-  ChevronRight as ChevronRightIcon,
-  AutoAwesome as SparklesIcon,
-  History as HistoryIcon,
-  Verified as VerifiedIcon,
-  Download as DownloadIcon,
-  TrendingUp as TrendingUpIcon,
-  ManageAccounts as ProfileIcon,  Business as BusinessIcon, AccountBalanceWalletIcon as AccountBalanceWalletIcon, Assignment as AssignmentIcon} from "@mui/icons-material";
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import CalendarIcon from '@mui/icons-material/CalendarMonth';
+import NotificationsIcon from '@mui/icons-material/Notifications';
+import PeopleIcon from '@mui/icons-material/People';
+import StoreIcon from '@mui/icons-material/Store';
+import SettingsIcon from '@mui/icons-material/Settings';
+import LogoutIcon from '@mui/icons-material/Logout';
+import CoffeeIcon from '@mui/icons-material/LocalCafe';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import SparklesIcon from '@mui/icons-material/AutoAwesome';
+import HistoryIcon from '@mui/icons-material/History';
+import VerifiedIcon from '@mui/icons-material/Verified';
+import DownloadIcon from '@mui/icons-material/Download';
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import ProfileIcon from '@mui/icons-material/ManageAccounts';
+import BusinessIcon from '@mui/icons-material/Business';
+import AccountBalanceWalletIcon from '@mui/icons-material/AccountBalanceWalletIcon';
+import AssignmentIcon from '@mui/icons-material/Assignment';
 
 const DRAWER_WIDTH = 280;
 const COLLAPSED_WIDTH = 80;

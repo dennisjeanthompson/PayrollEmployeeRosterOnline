@@ -37,24 +37,22 @@ import {
   Snackbar,
   Alert,
 } from "@mui/material";
-import {
-  History as HistoryIcon,
-  FilterList as FilterIcon,
-  Download as DownloadIcon,
-  Person as PersonIcon,
-  Edit as EditIcon,
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Close as CloseIcon,
-  Visibility as ViewIcon,
-  Payment as PaymentIcon,
-  SwapHoriz as SwapIcon,
-  Schedule as ScheduleIcon,
-  Settings as SettingsIcon,
-  CheckCircle as CheckIcon,
-  Cancel as CancelIcon,
-  FiberManualRecord as DotIcon,
-} from "@mui/icons-material";
+import HistoryIcon from '@mui/icons-material/History';
+import FilterIcon from '@mui/icons-material/FilterList';
+import DownloadIcon from '@mui/icons-material/Download';
+import PersonIcon from '@mui/icons-material/Person';
+import EditIcon from '@mui/icons-material/Edit';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import CloseIcon from '@mui/icons-material/Close';
+import ViewIcon from '@mui/icons-material/Visibility';
+import PaymentIcon from '@mui/icons-material/Payment';
+import SwapIcon from '@mui/icons-material/SwapHoriz';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import SettingsIcon from '@mui/icons-material/Settings';
+import CheckIcon from '@mui/icons-material/CheckCircle';
+import CancelIcon from '@mui/icons-material/Cancel';
+import DotIcon from '@mui/icons-material/FiberManualRecord';
 import { format, formatDistanceToNow } from "date-fns";
 
 interface AuditLog {

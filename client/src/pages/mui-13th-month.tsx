@@ -29,7 +29,9 @@ import {
   useTheme,
   alpha,
 } from "@mui/material";
-import { AccountBalance, Calculate, CheckCircle } from "@mui/icons-material";
+import AccountBalance from '@mui/icons-material/AccountBalance';
+import Calculate from '@mui/icons-material/Calculate';
+import CheckCircle from '@mui/icons-material/CheckCircle';
 import { useToast } from "@/hooks/use-toast";
 
 interface ThirteenthMonthRecord {

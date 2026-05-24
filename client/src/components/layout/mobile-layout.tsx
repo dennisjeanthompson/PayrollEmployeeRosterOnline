@@ -10,13 +10,11 @@ import {
   Avatar,
   IconButton
 } from "@mui/material";
-import {
-  HomeRounded as HomeIcon,
-  EventRounded as ScheduleIcon,
-  PaymentsRounded as PayrollIcon,
-  PersonRounded as ProfileIcon,
-  MenuRounded as MenuIcon,
-} from "@mui/icons-material";
+import HomeIcon from '@mui/icons-material/HomeRounded';
+import ScheduleIcon from '@mui/icons-material/EventRounded';
+import PayrollIcon from '@mui/icons-material/PaymentsRounded';
+import ProfileIcon from '@mui/icons-material/PersonRounded';
+import MenuIcon from '@mui/icons-material/MenuRounded';
 import Logo from "@/components/Logo";
 import { useLocation } from "wouter";
 import { getCurrentUser } from "@/lib/auth";

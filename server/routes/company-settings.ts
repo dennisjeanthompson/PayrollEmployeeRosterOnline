@@ -97,7 +97,7 @@ router.post('/', requireManagerOrAdmin, async (req: Request, res: Response) => {
       name, tradeName, address, city, province, zipCode, country,
       tin, sssEmployerNo, philhealthNo, pagibigNo, birRdo, secRegistration,
       phone, email, website, logoUrl, logoPublicId, industry,
-      payrollFrequency, paymentMethod, bankName, bankAccountName, bankAccountNo, includeHolidayPay,
+      payrollFrequency, paymentMethod, bankName, bankAccountName, bankAccountNo, includeHolidayPay, includeRestDayPremium,
     } = req.body;
 
     if (!name || !address || !tin) {
@@ -117,6 +117,7 @@ router.post('/', requireManagerOrAdmin, async (req: Request, res: Response) => {
       paymentMethod: paymentMethod || 'Bank Transfer',
       bankName, bankAccountName, bankAccountNo,
       includeHolidayPay: includeHolidayPay ?? false,
+      includeRestDayPremium: includeRestDayPremium ?? false,
       isActive: true,
       updatedBy: req.session.user!.id,
     });
@@ -150,7 +151,7 @@ router.put('/:id', requireManagerOrAdmin, async (req: Request, res: Response) =>
       name, tradeName, address, city, province, zipCode, country,
       tin, sssEmployerNo, philhealthNo, pagibigNo, birRdo, secRegistration,
       phone, email, website, logoUrl, logoPublicId, industry,
-      payrollFrequency, paymentMethod, bankName, bankAccountName, bankAccountNo, includeHolidayPay,
+      payrollFrequency, paymentMethod, bankName, bankAccountName, bankAccountNo, includeHolidayPay, includeRestDayPremium,
     } = req.body;
 
     // Only update fields that were provided
@@ -180,6 +181,7 @@ router.put('/:id', requireManagerOrAdmin, async (req: Request, res: Response) =>
     if (bankAccountName !== undefined) updates.bankAccountName = bankAccountName;
     if (bankAccountNo !== undefined) updates.bankAccountNo = bankAccountNo;
     if (includeHolidayPay !== undefined) updates.includeHolidayPay = includeHolidayPay;
+    if (includeRestDayPremium !== undefined) updates.includeRestDayPremium = includeRestDayPremium;
     updates.updatedBy = req.session.user!.id;
 
     const updated = await dbStorage.updateCompanySettings(id, updates);

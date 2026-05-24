@@ -24,14 +24,12 @@ import {
   Button,
 } from "@mui/material";
 import Grid from "@mui/material/Grid";
-import {
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  Analytics as AnalyticsIcon,
-  Schedule as ScheduleIcon,
-  Refresh as RefreshIcon,
-  Info as InfoIcon,
-} from "@mui/icons-material";
+import TrendingUpIcon from '@mui/icons-material/TrendingUp';
+import TrendingDownIcon from '@mui/icons-material/TrendingDown';
+import AnalyticsIcon from '@mui/icons-material/Analytics';
+import ScheduleIcon from '@mui/icons-material/Schedule';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import InfoIcon from '@mui/icons-material/Info';
 import {
   AreaChart,
   Area,
