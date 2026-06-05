@@ -57,32 +57,7 @@ export default defineConfig({
         // MUST land in the same chunk, otherwise Rollup may reference a
         // binding before the defining chunk has finished executing
         // (the "Cannot access 'Dn' before initialization" class of bugs).
-        manualChunks(id) {
-          if (id.includes('node_modules')) {
-            if (id.match(/@mui[\\/]icons-material/)) {
-              return 'mui-icons';
-            }
-            if (id.match(/@mui[\\/]material/) || id.match(/@mui[\\/]system/)) {
-              return 'mui-core';
-            }
-            if (id.match(/react[\\/]|-dom/) || id.match(/react$/) || id.match(/react-dom$/)) {
-              return 'react-vendor';
-            }
-            // Keep huge standalone libraries in their own chunks
-            if (id.match(/@fullcalendar/) && !id.match(/resource/)) {
-              return 'vendor-calendar';
-            }
-            if (id.match(/recharts/) || id.match(/d3/)) {
-              return 'vendor-charts';
-            }
-            // TanStack Query — used on most pages but can load in parallel
-            if (id.match(/@tanstack/)) {
-              return 'vendor-query';
-            }
-            
-            return 'vendor';
-          }
-        },
+        // manualChunks removed to prevent "Cannot access X before initialization" circular dependency errors
         entryFileNames: 'assets/[name]-[hash].js',
         chunkFileNames: 'assets/[name]-[hash].js',
         assetFileNames: 'assets/[name]-[hash][extname]',
