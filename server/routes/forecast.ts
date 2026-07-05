@@ -334,14 +334,19 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
     const { days = "14" } = req.query;
     const forecastDays = Math.min(parseInt(days as string) || 14, 30);
     
-    // Get historical data (last 8 weeks for pattern detection)
+    // Get historical data and future data
     const today = startOfDay(new Date());
     const historyStart = subWeeks(today, 8);
+    const futureEnd = addDays(today, forecastDays);
     
-    const allShifts = await storage.getShiftsByBranch(branchId, historyStart, today);
+    const allShifts = await storage.getShiftsByBranch(branchId, historyStart, futureEnd);
     const historicalShifts = allShifts.filter(s => {
       const d = new Date(s.startTime);
       return d >= historyStart && d < today;
+    });
+    const futureShifts = allShifts.filter(s => {
+      const d = new Date(s.startTime);
+      return d >= today && d <= futureEnd;
     });
 
     // Fetch holidays from DB for the forecast window
@@ -400,12 +405,20 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
       const lower = validPredicted * 0.9;
       const upper = validPredicted * 1.1;
 
+      let scheduled = 0;
+      for (const shift of futureShifts) {
+        if (isSameDay(new Date(shift.startTime), forecastDate)) {
+           scheduled += differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+        }
+      }
+
       forecasts.push({
         date: format(forecastDate, "yyyy-MM-dd"),
         dayOfWeek: format(forecastDate, "EEE"),
         predicted: Math.round(validPredicted * 10) / 10,
         lower: Math.round(lower * 10) / 10,
         upper: Math.round(upper * 10) / 10,
+        scheduled: Math.round(scheduled * 10) / 10,
         isHoliday: holiday,
       });
     }
@@ -438,8 +451,9 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
     
     const today = startOfDay(new Date());
     const historyStart = subWeeks(today, 8);
+    const futureEnd = addDays(today, forecastDays);
     
-    const allShifts = await storage.getShiftsByBranch(branchId, historyStart, today);
+    const allShifts = await storage.getShiftsByBranch(branchId, historyStart, futureEnd);
     const employees = await storage.getUsersByBranch(branchId);
     
     // Build employee hourly rate map — skip employees with no valid rate
@@ -468,6 +482,11 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
     const historicalShifts = allShifts.filter(s => {
       const d = new Date(s.startTime);
       return d >= historyStart && d < today;
+    });
+    
+    const futureShifts = allShifts.filter(s => {
+      const d = new Date(s.startTime);
+      return d >= today && d <= futureEnd;
     });
 
     const dailyCosts: Record<string, number> = {};
@@ -517,12 +536,24 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
       const validPredicted = isNaN(predicted) ? 800 : predicted;
       totalPredicted += validPredicted;
       
+      let scheduled = 0;
+      for (const shift of futureShifts) {
+        if (isSameDay(new Date(shift.startTime), forecastDate)) {
+           const rate = rateMap[shift.userId];
+           if (rate) {
+             const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+             scheduled += (hours * rate);
+           }
+        }
+      }
+      
       forecasts.push({
         date: format(forecastDate, "yyyy-MM-dd"),
         dayOfWeek: format(forecastDate, "EEE"),
         predicted: Math.round(validPredicted),
         lower: Math.round(validPredicted * 0.9),
         upper: Math.round(validPredicted * 1.1),
+        scheduled: Math.round(scheduled),
         isHoliday: holiday,
       });
     }

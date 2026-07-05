@@ -68,6 +68,7 @@ interface ForecastPoint {
   date: string;
   dayOfWeek: string;
   predicted: number;
+  scheduled?: number;
   lower: number;
   upper: number;
   isHoliday?: { name: string; type: string } | null;
@@ -222,6 +223,7 @@ export default function MuiAnalytics() {
       fullDate: f.date,
       dayOfWeek: f.dayOfWeek,
       predicted: Number(f.predicted) || 0,
+      scheduled: Number(f.scheduled) || undefined,
       lower: Number(f.lower) || 0,
       upper: Number(f.upper) || 0,
       isHoliday: f.isHoliday?.name || null,
@@ -237,6 +239,7 @@ export default function MuiAnalytics() {
     .map((f) => ({
       date: format(parseISO(f.date), "MMM d"),
       predicted: Number(f.predicted) || 0,
+      scheduled: Number(f.scheduled) || undefined,
       isHoliday: f.isHoliday?.name || null,
     }));
 
@@ -496,6 +499,7 @@ export default function MuiAnalytics() {
                               const [lo, hi] = Array.isArray(value) ? value : [value, value];
                               return [`${lo} – ${hi} hrs`, "±10% Range"];
                             }
+                            if (name === "Scheduled Hours") return [`${value} hrs`, "Scheduled"];
                             return [`${value} hrs`, "Predicted"];
                           }}
                           labelFormatter={(label: any, payload: any[]) => {
@@ -504,6 +508,7 @@ export default function MuiAnalytics() {
                             return holiday ? `${dow}, ${label} — 🎌 ${holiday}` : `${dow}, ${label}`;
                           }}
                         />
+                        <Bar dataKey="scheduled" fill={theme.palette.secondary.main} name="Scheduled Hours" radius={[4, 4, 0, 0]} barSize={20} />
                         <Area
                           type="monotone"
                           dataKey="upper"
@@ -563,7 +568,7 @@ export default function MuiAnalytics() {
                     <EmptyChart message="No payroll forecast data available." />
                   ) : (
                     <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={payrollChartData}>
+                      <ComposedChart data={payrollChartData}>
                         <defs>
                           <linearGradient id="payrollGradient" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor={theme.palette.success.main} stopOpacity={0.25} />
@@ -578,7 +583,10 @@ export default function MuiAnalytics() {
                           tickFormatter={(v) => `₱${(v / 1000).toFixed(0)}k`}
                         />
                         <RechartsTooltip
-                          formatter={(value: number) => [`₱${Number(value).toLocaleString()}`, "Est. Cost"]}
+                          formatter={(value: number, name: string) => {
+                            if (name === "Scheduled Cost") return [`₱${Number(value).toLocaleString()}`, "Scheduled"];
+                            return [`₱${Number(value).toLocaleString()}`, "Est. Cost"];
+                          }}
                           contentStyle={{
                             backgroundColor: theme.palette.background.paper,
                             border: `1px solid ${theme.palette.divider}`,
@@ -590,6 +598,7 @@ export default function MuiAnalytics() {
                             return holiday ? `${label} — 🎌 ${holiday}` : label;
                           }}
                         />
+                        <Bar dataKey="scheduled" fill={theme.palette.info.main} name="Scheduled Cost" radius={[4, 4, 0, 0]} barSize={20} />
                         <Area
                           type="monotone"
                           dataKey="predicted"
@@ -599,7 +608,7 @@ export default function MuiAnalytics() {
                           strokeWidth={2}
                           isAnimationActive={false}
                         />
-                      </AreaChart>
+                      </ComposedChart>
                     </ResponsiveContainer>
                   )}
                 </Box>

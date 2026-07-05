@@ -248,6 +248,9 @@ export default function MuiShiftTrading() {
     urgency: "normal" as "low" | "normal" | "urgent",
   });
 
+  const [respondDialogOpen, setRespondDialogOpen] = useState(false);
+  const [tradeToRespond, setTradeToRespond] = useState<ShiftTrade | null>(null);
+
   const [viewMode, setViewMode] = useState<"list" | "calendar">("calendar");
 
   // Enable real-time updates via WebSocket
@@ -520,19 +523,13 @@ export default function MuiShiftTrading() {
                 variant="contained"
                 color="success"
                 startIcon={<CheckIcon />}
-                onClick={() => respondToTrade.mutate({ id: trade.id, accept: true })}
+                onClick={() => {
+                  setTradeToRespond(trade);
+                  setRespondDialogOpen(true);
+                }}
                 disabled={respondToTrade.isPending}
               >
-                Accept
-              </Button>
-              <Button
-                variant="outlined"
-                color="error"
-                startIcon={<CloseIcon />}
-                onClick={() => respondToTrade.mutate({ id: trade.id, accept: false })}
-                disabled={respondToTrade.isPending}
-              >
-                Decline
+                Respond
               </Button>
             </>
           )}
@@ -1032,6 +1029,68 @@ export default function MuiShiftTrading() {
               disabled={!formData.shiftId || !formData.targetUserId || !formData.reason || createTrade.isPending || futureShifts.length === 0}
             >
               {createTrade.isPending ? "Sending..." : "Send Trade Request"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Respond Trade Dialog */}
+        <Dialog
+          open={respondDialogOpen}
+          onClose={() => setRespondDialogOpen(false)}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{ sx: { borderRadius: 3 } }}
+        >
+          <DialogTitle>Respond to Trade Request</DialogTitle>
+          <DialogContent>
+            <Typography variant="body1" sx={{ mb: 2 }}>
+              Please review the shift details before responding.
+            </Typography>
+            {tradeToRespond?.shift && (
+              <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
+                <Stack spacing={1}>
+                  <Typography variant="subtitle2" color="text.secondary">Shift to take over:</Typography>
+                  <Typography variant="body1" fontWeight="bold">
+                    {tradeToRespond.shift.date ? format(parseISO(tradeToRespond.shift.date), "EEEE, MMM d, yyyy") : 'N/A'}
+                  </Typography>
+                  <Typography variant="body1">
+                    {tradeToRespond.shift.startTime && tradeToRespond.shift.endTime 
+                      ? `${format(parseISO(tradeToRespond.shift.startTime), "h:mm a")} - ${format(parseISO(tradeToRespond.shift.endTime), "h:mm a")}` 
+                      : 'N/A'}
+                  </Typography>
+                </Stack>
+              </Paper>
+            )}
+            {tradeToRespond?.reason && (
+              <Typography variant="body2" sx={{ mb: 2, fontStyle: "italic" }}>
+                Reason: "{tradeToRespond.reason}"
+              </Typography>
+            )}
+            <Typography variant="body2" color="text.secondary">
+              If accepted, this shift will be transferred to your schedule, pending manager approval.
+            </Typography>
+          </DialogContent>
+          <DialogActions sx={{ p: 3 }}>
+            <Button onClick={() => setRespondDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="outlined"
+              color="error"
+              onClick={() => {
+                respondToTrade.mutate({ id: tradeToRespond!.id, accept: false });
+                setRespondDialogOpen(false);
+              }}
+            >
+              Decline
+            </Button>
+            <Button
+              variant="contained"
+              color="success"
+              onClick={() => {
+                respondToTrade.mutate({ id: tradeToRespond!.id, accept: true });
+                setRespondDialogOpen(false);
+              }}
+            >
+              Accept Trade
             </Button>
           </DialogActions>
         </Dialog>

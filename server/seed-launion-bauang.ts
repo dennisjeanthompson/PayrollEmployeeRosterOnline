@@ -212,7 +212,7 @@ async function seedUsers() {
 
   let created = 0;
   for (const def of USER_DEFS) {
-    const existing = await db.select().from(users).where(eq(users.username, def.username));
+    const existing = await db.select().from(users).where(eq(users.id, def.id));
     if (existing.length > 0) {
       console.log(`   ⏭️  ${def.username} already exists, skipping.`);
       continue;
@@ -277,21 +277,16 @@ async function seedDeductionSettings() {
 async function seedShifts() {
   console.log('📅 Step 4 — Seeding shifts (Jan 1 – Apr 15, 2026)...\n');
 
-  // Check if shifts already exist for this branch
+  // Check if shifts already exist for this branch, if so delete them so we can reseed
   const existingShifts = await db.select().from(shifts).where(eq(shifts.branchId, BRANCH_ID)).limit(1);
   if (existingShifts.length > 0) {
-    console.log('   ✅ Shifts already exist for this branch, skipping.');
-    return;
+    console.log('   ⚠️ Deleting existing shifts to reseed...');
+    await db.execute(sql`DELETE FROM shift_trades WHERE shift_id IN (SELECT id FROM shifts WHERE branch_id = ${BRANCH_ID})`);
+    await db.delete(shifts).where(eq(shifts.branchId, BRANCH_ID));
   }
 
-  // All staff who get shifts (manager + employees — NOT admin)
-  const allStaff = USER_DEFS.filter(u => u.role !== 'admin');
-
-  const shiftPatterns = [
-    { name: 'Morning', startH: 0, endH: 8 },     // 8AM-4PM PHT (UTC: 0-8)
-    { name: 'Day',     startH: 3, endH: 11 },     // 11AM-7PM PHT (UTC: 3-11)
-    { name: 'Closing', startH: 7, endH: 15 },     // 3PM-11PM PHT (UTC: 7-15)
-  ];
+  const manager = USER_DEFS.find(u => u.role === 'manager')!;
+  const employees = USER_DEFS.filter(u => u.role === 'employee');
 
   // 2026 holidays that affect working days Jan-Mar
   const holidayDates = [
@@ -301,61 +296,90 @@ async function seedShifts() {
     '2026-03-20', // Eid'l Fitr (tentative)
   ];
 
-  function getWorkingDays(year: number, month: number, startDay: number, endDay: number): Date[] {
+  // Seed from Jan 1, 2026 to Apr 15, 2026
+  function getDaysInRange(year1: number, month1: number, day1: number, year2: number, month2: number, day2: number): Date[] {
     const days: Date[] = [];
-    for (let d = startDay; d <= endDay; d++) {
-      const dt = new Date(Date.UTC(year, month, d));
-      if (dt.getUTCDay() === 0) continue; // Skip Sundays
-      const dateStr = dt.toISOString().slice(0, 10);
-      if (holidayDates.includes(dateStr)) continue;
-      days.push(dt);
+    const start = new Date(Date.UTC(year1, month1, day1));
+    const end = new Date(Date.UTC(year2, month2, day2));
+    let curr = start;
+    while (curr <= end) {
+      days.push(new Date(curr));
+      curr.setUTCDate(curr.getUTCDate() + 1);
     }
     return days;
   }
-
-  // Semi-monthly periods for shift generation
-  const periodDays = [
-    getWorkingDays(2026, 0, 1, 15),   // Jan 1-15
-    getWorkingDays(2026, 0, 16, 31),   // Jan 16-31
-    getWorkingDays(2026, 1, 1, 15),    // Feb 1-15
-    getWorkingDays(2026, 1, 16, 28),   // Feb 16-28
-    getWorkingDays(2026, 2, 1, 15),    // Mar 1-15
-    getWorkingDays(2026, 2, 16, 31),   // Mar 16-31
-    getWorkingDays(2026, 3, 1, 15),    // Apr 1-15
-  ];
+  
+  const allDays = getDaysInRange(2026, 0, 1, 2026, 3, 15); // Jan 1 to Apr 15
 
   let count = 0;
   const batch: any[] = [];
 
-  for (const days of periodDays) {
-    for (const shiftDate of days) {
-      for (let i = 0; i < allStaff.length; i++) {
-        const emp = allStaff[i];
-        const pattern = shiftPatterns[i % shiftPatterns.length];
-
+  for (const shiftDate of allDays) {
+    const dow = shiftDate.getUTCDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
+    
+    // Check if it's a holiday (optional: decide whether to work on holidays, we'll keep the shifts)
+    const isPast = shiftDate < new Date();
+    
+    // Manager Shifts: M-F 8am-8pm
+    if (dow >= 1 && dow <= 5) {
         const startTime = new Date(shiftDate);
-        startTime.setUTCHours(pattern.startH, 0, 0, 0);
+        startTime.setUTCHours(0, 0, 0, 0); // 8am PHT
         const endTime = new Date(shiftDate);
-        endTime.setUTCHours(pattern.endH, 0, 0, 0);
-
-        const isPast = shiftDate < new Date();
-
+        endTime.setUTCHours(12, 0, 0, 0); // 8pm PHT
+        
         batch.push({
           id: uuid(),
-          userId: emp.id,
+          userId: manager.id,
           branchId: BRANCH_ID,
           startTime,
           endTime,
-          position: emp.position,
+          position: manager.position,
           status: isPast ? 'completed' : 'scheduled',
         });
         count++;
+    }
+
+    // Employee Shifts
+    for (let i = 0; i < employees.length; i++) {
+        const emp = employees[i];
+        let startH = 0, endH = 0;
+        let hasShift = false;
+        
+        if (dow === 1 || dow === 3 || dow === 5) { // M, W, F
+            if (i % 2 === 0) { startH = 0; endH = 4; } // 8am-12pm
+            else { startH = 4; endH = 12; } // 12pm-8pm
+            hasShift = true;
+        } else if (dow === 2 || dow === 4) { // T, Th
+            startH = 0; endH = 4; // 8am-12pm
+            hasShift = true;
+        } else if (dow === 0 || dow === 6) { // Sat, Sun
+            if (i % 2 === 0) { startH = 0; endH = 12; } // 8am-8pm
+            else { startH = 4; endH = 9; } // 12pm-5pm
+            hasShift = true;
+        }
+        
+        if (hasShift) {
+            const startTime = new Date(shiftDate);
+            startTime.setUTCHours(startH, 0, 0, 0);
+            const endTime = new Date(shiftDate);
+            endTime.setUTCHours(endH, 0, 0, 0);
+            
+            batch.push({
+              id: uuid(),
+              userId: emp.id,
+              branchId: BRANCH_ID,
+              startTime,
+              endTime,
+              position: emp.position,
+              status: isPast ? 'completed' : 'scheduled',
+            });
+            count++;
+        }
 
         if (batch.length >= 80) {
           await db.insert(shifts).values(batch);
           batch.length = 0;
         }
-      }
     }
   }
 
@@ -375,8 +399,11 @@ async function seedPayroll() {
 
   const existingPeriods = await db.select().from(payrollPeriods).where(eq(payrollPeriods.branchId, BRANCH_ID)).limit(1);
   if (existingPeriods.length > 0) {
-    console.log('   ✅ Payroll already exists for this branch, skipping.');
-    return;
+    console.log('   ⚠️ Deleting existing payroll data to reseed...');
+    await db.execute(sql`DELETE FROM adjustment_logs WHERE branch_id = ${BRANCH_ID}`);
+    await db.execute(sql`DELETE FROM thirteenth_month_ledger WHERE payroll_period_id IN (SELECT id FROM payroll_periods WHERE branch_id = ${BRANCH_ID})`);
+    await db.delete(payrollEntries).where(sql`payroll_period_id IN (SELECT id FROM payroll_periods WHERE branch_id = ${BRANCH_ID})`);
+    await db.delete(payrollPeriods).where(eq(payrollPeriods.branchId, BRANCH_ID));
   }
 
   const periodDefs = [

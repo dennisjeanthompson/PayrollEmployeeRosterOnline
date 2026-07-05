@@ -86,9 +86,11 @@ async function main() {
       email: 'lita.angeles@pero.com.ph',
       role: 'manager',
       position: 'Branch Manager',
-      hourlyRate: '15.625', // ₱125 per day / 8 hours
+      hourlyRate: '15.625',
       photoUrl: 'https://i.pravatar.cc/150?u=angeles.l',
-      schedule: { days: [1, 2, 3, 4, 5], startH: 8, startM: 30, endH: 19, endM: 0 }
+      schedule: {
+        isManager: true,
+      }
     },
     {
       id: 'user-don-emp-kaye',
@@ -100,7 +102,7 @@ async function main() {
       position: 'Barista',
       hourlyRate: '60.00',
       photoUrl: 'https://i.pravatar.cc/150?u=gonzales.k',
-      schedule: { days: [1, 2, 3, 4, 5], startH: 9, startM: 0, endH: 18, endM: 30 }
+      schedule: { empType: 'A' }
     },
     {
       id: 'user-don-emp-jhon',
@@ -112,7 +114,7 @@ async function main() {
       position: 'Staff',
       hourlyRate: '60.00',
       photoUrl: 'https://i.pravatar.cc/150?u=bowden.j',
-      schedule: { days: [3, 6], startH: 17, startM: 0, endH: 19, endM: 0 }
+      schedule: { empType: 'B' }
     },
     {
       id: 'user-don-emp-ryan',
@@ -124,7 +126,7 @@ async function main() {
       position: 'Senior Barista',
       hourlyRate: '60.00',
       photoUrl: 'https://i.pravatar.cc/150?u=go.r',
-      schedule: { days: [1, 2, 3, 4, 5], startH: 8, startM: 0, endH: 17, endM: 0 }
+      schedule: { empType: 'A' }
     },
     {
       id: 'user-don-emp-jenny',
@@ -136,7 +138,7 @@ async function main() {
       position: 'Cashier',
       hourlyRate: '60.00',
       photoUrl: 'https://i.pravatar.cc/150?u=horton.j',
-      schedule: { days: [2, 4], startH: 7, startM: 0, endH: 17, endM: 30 }
+      schedule: { empType: 'B' }
     }
   ];
 
@@ -179,12 +181,49 @@ async function main() {
   
   for (let offset = -60; offset <= 14; offset++) {
     const date = addDays(today, offset);
-    const dayOfWeek = getDay(date);
+    const dayOfWeek = getDay(date); // 0 = Sun, 1 = Mon ... 6 = Sat
 
     for (const emp of seededEmployees) {
-      if (emp.schedule.days.includes(dayOfWeek)) {
-        const start = setMinutes(setHours(new Date(date), emp.schedule.startH), emp.schedule.startM);
-        const end = setMinutes(setHours(new Date(date), emp.schedule.endH), emp.schedule.endM);
+      let startH = 0, endH = 0;
+      let hasShift = false;
+
+      if (emp.schedule.isManager) {
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) { // M-F
+          startH = 8; endH = 20; hasShift = true; // 8am - 8pm
+        }
+      } else {
+        if (dayOfWeek >= 1 && dayOfWeek <= 5) { // M-F
+          if (emp.schedule.empType === 'A') {
+             startH = 8; endH = 20; hasShift = true; // 8am - 8pm
+          } else {
+             startH = 12; endH = 17; hasShift = true; // 12pm - 5pm
+          }
+        } else if (dayOfWeek === 6) { // Sat
+          startH = 8; endH = 20; hasShift = true; // 8am - 8pm
+        } else if (dayOfWeek === 0) { // Sun
+          startH = 8; endH = 12; hasShift = true; // 8am - 12pm
+        }
+      }
+
+      if (hasShift) {
+        // We use UTC 0-8 for PHT 8am-4pm, so we should map the hour if we want to use local times or just use UTC hours properly.
+        // Wait, the original code in don macchiatos uses setHours directly which operates in local timezone depending on the server.
+        // Let's use UTC directly.
+        // PHT is UTC+8. So 8am PHT = 0 UTC. 8pm PHT = 12 UTC. 12pm PHT = 4 UTC. 5pm PHT = 9 UTC.
+        
+        let utcStartH, utcEndH;
+        if (startH === 8) utcStartH = 0;
+        else if (startH === 12) utcStartH = 4;
+        
+        if (endH === 20) utcEndH = 12;
+        else if (endH === 17) utcEndH = 9;
+        else if (endH === 12) utcEndH = 4;
+
+        const start = new Date(date);
+        start.setUTCHours(utcStartH, 0, 0, 0);
+        
+        const end = new Date(date);
+        end.setUTCHours(utcEndH, 0, 0, 0);
 
         await db.insert(shifts).values({
           id: uuid(),
