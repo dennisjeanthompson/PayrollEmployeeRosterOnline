@@ -110,6 +110,7 @@ export async function initializeDatabase() {
     // company_settings migration runs separately (table created later in init)
     try {
       await db.execute(sql`ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS include_holiday_pay BOOLEAN DEFAULT false`);
+      await db.execute(sql`ALTER TABLE company_settings ADD COLUMN IF NOT EXISTS include_rest_day_premium BOOLEAN DEFAULT false`);
     } catch (_) { /* table may not exist yet — will be created below */ }
 
     // New column migrations for break time, leave payment status, exception logs
@@ -117,8 +118,9 @@ export async function initializeDatabase() {
       await db.execute(sql`ALTER TABLE shifts ADD COLUMN IF NOT EXISTS break_duration_minutes INTEGER DEFAULT 0`);
       await db.execute(sql`ALTER TABLE time_off_requests ADD COLUMN IF NOT EXISTS leave_payment_status TEXT DEFAULT 'paid'`);
       await db.execute(sql`ALTER TABLE deduction_settings ADD COLUMN IF NOT EXISTS include_exception_logs BOOLEAN DEFAULT true`);
+      await db.execute(sql`ALTER TABLE deduction_settings ADD COLUMN IF NOT EXISTS include_night_diff BOOLEAN DEFAULT true`);
       await db.execute(sql`ALTER TABLE payroll_entries ADD COLUMN IF NOT EXISTS has_13th_month BOOLEAN DEFAULT false`);
-      console.log('✅ New column migrations (break time, leave payment, exception logs, 13th month) checked/applied');
+      console.log('✅ New column migrations (break time, leave payment, exception logs, 13th month, night diff) checked/applied');
     } catch (err) {
       console.log('⚠️ Could not apply new column migrations:', err);
     }
@@ -300,11 +302,12 @@ export async function initializeDatabase() {
         id TEXT PRIMARY KEY,
         branch_id TEXT REFERENCES branches(id) NOT NULL,
         deduct_sss BOOLEAN DEFAULT true,
-        deduct_philhealth BOOLEAN DEFAULT false,
-        deduct_pagibig BOOLEAN DEFAULT false,
-        deduct_withholding_tax BOOLEAN DEFAULT false,
+        deduct_philhealth BOOLEAN DEFAULT true,
+        deduct_pagibig BOOLEAN DEFAULT true,
+        deduct_withholding_tax BOOLEAN DEFAULT true,
         include_exception_logs BOOLEAN DEFAULT true,
-        updated_at TIMESTAMP DEFAULT NOW(),
+        include_night_diff BOOLEAN DEFAULT true,
+        updated_by TEXT REFERENCES users(id),
         created_at TIMESTAMP DEFAULT NOW()
       )
     `);
@@ -615,6 +618,7 @@ export async function initializeDatabase() {
         bank_account_name TEXT,
         bank_account_no TEXT,
         include_holiday_pay BOOLEAN DEFAULT false,
+        include_rest_day_premium BOOLEAN DEFAULT false,
         is_active BOOLEAN DEFAULT true,
         updated_by TEXT REFERENCES users(id),
         updated_at TIMESTAMP DEFAULT NOW(),

@@ -1414,13 +1414,19 @@ export default function ScheduleV2() {
               /* Employee week view: show their shifts only, as vertical cards */
               <WeeklyGrid
                 isLoading={shiftsLoading || employeesLoading}
-                employees={employees.filter(e => e.id === currentUser?.id)}
-                shifts={shifts.filter(s => s.userId === currentUser?.id)}
+                employees={employees.filter(e => 
+                  e.id === currentUser?.id || 
+                  shiftTrades.some(t => t.shiftId && shifts.find(s => s.id === t.shiftId)?.userId === e.id && (t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId && t.status === 'pending')))
+                )}
+                shifts={shifts.filter(s => 
+                  s.userId === currentUser?.id || 
+                  shiftTrades.some(t => t.shiftId === s.id && (t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId && t.status === 'pending')))
+                )}
                 weekStart={weekStart}
                 holidays={holidays}
                 isManager={false}
                 timeOffRequests={timeOffRequests.filter(r => r.userId === currentUser?.id)}
-                shiftTrades={shiftTrades.filter(t => t.requesterId === currentUser?.id || t.fromUserId === currentUser?.id)}
+                shiftTrades={shiftTrades.filter(t => t.requesterId === currentUser?.id || t.fromUserId === currentUser?.id || t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId))}
                 adjustmentLogs={adjustmentLogs}
                 currentUserId={currentUser?.id || ''}
                 onCreateShift={() => {}}
@@ -1461,7 +1467,7 @@ export default function ScheduleV2() {
                 date={selectedDay}
                 currentUserId={currentUser?.id || ''}
                 timeOffRequests={timeOffRequests.filter(r => r.userId === currentUser?.id)}
-                shiftTrades={shiftTrades.filter(t => t.requesterId === currentUser?.id || t.fromUserId === currentUser?.id)}
+                shiftTrades={shiftTrades.filter(t => t.requesterId === currentUser?.id || t.fromUserId === currentUser?.id || t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId))}
                 onDateChange={setSelectedDay}
               />
             )

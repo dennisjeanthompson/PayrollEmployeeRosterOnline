@@ -6719,7 +6719,7 @@ import {
   endOfDay as endOfDay2,
   addDays,
   getDay,
-  differenceInHours,
+  differenceInMinutes,
   parseISO,
   isSameDay
 } from "date-fns";
@@ -6840,7 +6840,7 @@ router7.get("/api/analytics/trends", requireAuth8, requireManagerRole3, async (r
     for (const shift of shiftsInRange) {
       const dateKey = format2(new Date(shift.startTime), "yyyy-MM-dd");
       if (dailyData[dateKey]) {
-        const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+        const hours = differenceInMinutes(new Date(shift.endTime), new Date(shift.startTime)) / 60;
         dailyData[dateKey].hours += hours;
         dailyData[dateKey].shifts += 1;
         const user = userMap.get(shift.userId);
@@ -6906,10 +6906,10 @@ router7.get("/api/analytics/trends", requireAuth8, requireManagerRole3, async (r
     });
     let thisWeekHours = 0, lastWeekHours = 0;
     for (const s of thisWeekShifts) {
-      thisWeekHours += differenceInHours(new Date(s.endTime), new Date(s.startTime));
+      thisWeekHours += differenceInMinutes(new Date(s.endTime), new Date(s.startTime)) / 60;
     }
     for (const s of lastWeekShifts) {
-      lastWeekHours += differenceInHours(new Date(s.endTime), new Date(s.startTime));
+      lastWeekHours += differenceInMinutes(new Date(s.endTime), new Date(s.startTime)) / 60;
     }
     const comparison = {
       thisWeek: { hours: thisWeekHours, shifts: thisWeekShifts.length },
@@ -6935,10 +6935,15 @@ router7.get("/api/forecast/labor", requireAuth8, requireManagerRole3, async (req
     const forecastDays = Math.min(parseInt(days) || 14, 30);
     const today = startOfDay2(/* @__PURE__ */ new Date());
     const historyStart = subWeeks(today, 8);
-    const allShifts = await dbStorage.getShiftsByBranch(branchId, historyStart, today);
+    const futureEnd = addDays(today, forecastDays);
+    const allShifts = await dbStorage.getShiftsByBranch(branchId, historyStart, futureEnd);
     const historicalShifts = allShifts.filter((s) => {
       const d = new Date(s.startTime);
       return d >= historyStart && d < today;
+    });
+    const futureShifts = allShifts.filter((s) => {
+      const d = new Date(s.startTime);
+      return d >= today && d <= futureEnd;
     });
     let dbHolidays = [];
     try {
@@ -6953,7 +6958,7 @@ router7.get("/api/forecast/labor", requireAuth8, requireManagerRole3, async (req
     const dailyHours = {};
     for (const shift of historicalShifts) {
       const dateKey = format2(new Date(shift.startTime), "yyyy-MM-dd");
-      const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+      const hours = differenceInMinutes(new Date(shift.endTime), new Date(shift.startTime)) / 60;
       dailyHours[dateKey] = (dailyHours[dateKey] || 0) + hours;
     }
     for (const [dateKey, hours] of Object.entries(dailyHours)) {
@@ -6980,12 +6985,19 @@ router7.get("/api/forecast/labor", requireAuth8, requireManagerRole3, async (req
       const validPredicted = isNaN(predicted) ? 8 : predicted;
       const lower = validPredicted * 0.9;
       const upper = validPredicted * 1.1;
+      let scheduled = 0;
+      for (const shift of futureShifts) {
+        if (isSameDay(new Date(shift.startTime), forecastDate)) {
+          scheduled += differenceInMinutes(new Date(shift.endTime), new Date(shift.startTime)) / 60;
+        }
+      }
       forecasts.push({
         date: format2(forecastDate, "yyyy-MM-dd"),
         dayOfWeek: format2(forecastDate, "EEE"),
         predicted: Math.round(validPredicted * 10) / 10,
         lower: Math.round(lower * 10) / 10,
         upper: Math.round(upper * 10) / 10,
+        scheduled: Math.round(scheduled * 10) / 10,
         isHoliday: holiday
       });
     }
@@ -7008,7 +7020,8 @@ router7.get("/api/forecast/payroll", requireAuth8, requireManagerRole3, async (r
     const forecastDays = Math.min(parseInt(days) || 14, 30);
     const today = startOfDay2(/* @__PURE__ */ new Date());
     const historyStart = subWeeks(today, 8);
-    const allShifts = await dbStorage.getShiftsByBranch(branchId, historyStart, today);
+    const futureEnd = addDays(today, forecastDays);
+    const allShifts = await dbStorage.getShiftsByBranch(branchId, historyStart, futureEnd);
     const employees = await dbStorage.getUsersByBranch(branchId);
     const rateMap = {};
     for (const emp of employees) {
@@ -7031,10 +7044,14 @@ router7.get("/api/forecast/payroll", requireAuth8, requireManagerRole3, async (r
       const d = new Date(s.startTime);
       return d >= historyStart && d < today;
     });
+    const futureShifts = allShifts.filter((s) => {
+      const d = new Date(s.startTime);
+      return d >= today && d <= futureEnd;
+    });
     const dailyCosts = {};
     for (const shift of historicalShifts) {
       const dateKey = format2(new Date(shift.startTime), "yyyy-MM-dd");
-      const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+      const hours = differenceInMinutes(new Date(shift.endTime), new Date(shift.startTime)) / 60;
       const rate = rateMap[shift.userId];
       if (!rate) continue;
       dailyCosts[dateKey] = (dailyCosts[dateKey] || 0) + hours * rate;
@@ -7065,12 +7082,23 @@ router7.get("/api/forecast/payroll", requireAuth8, requireManagerRole3, async (r
       }
       const validPredicted = isNaN(predicted) ? 800 : predicted;
       totalPredicted += validPredicted;
+      let scheduled = 0;
+      for (const shift of futureShifts) {
+        if (isSameDay(new Date(shift.startTime), forecastDate)) {
+          const rate = rateMap[shift.userId];
+          if (rate) {
+            const hours = differenceInMinutes(new Date(shift.endTime), new Date(shift.startTime)) / 60;
+            scheduled += hours * rate;
+          }
+        }
+      }
       forecasts.push({
         date: format2(forecastDate, "yyyy-MM-dd"),
         dayOfWeek: format2(forecastDate, "EEE"),
         predicted: Math.round(validPredicted),
         lower: Math.round(validPredicted * 0.9),
         upper: Math.round(validPredicted * 1.1),
+        scheduled: Math.round(scheduled),
         isHoliday: holiday
       });
     }
@@ -7105,7 +7133,7 @@ router7.get("/api/forecast/peaks", requireAuth8, requireManagerRole3, async (req
     const dailyHours = {};
     for (const shift of historicalShifts) {
       const dateKey = format2(new Date(shift.startTime), "yyyy-MM-dd");
-      const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+      const hours = differenceInMinutes(new Date(shift.endTime), new Date(shift.startTime)) / 60;
       dailyHours[dateKey] = (dailyHours[dateKey] || 0) + hours;
     }
     for (const [dateKey, hours] of Object.entries(dailyHours)) {

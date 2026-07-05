@@ -67,7 +67,10 @@ export function MyDayView({
   const isDark = theme.palette.mode === 'dark';
   const dateStr = format(date, 'yyyy-MM-dd');
   const myShifts = shifts.filter(
-    s => s.userId === currentUserId && toDateStr(s.startTime) === dateStr
+    s => toDateStr(s.startTime) === dateStr && (
+      s.userId === currentUserId || 
+      shiftTrades.some(t => t.shiftId === s.id && (t.targetUserId === currentUserId || t.toUserId === currentUserId || (!t.targetUserId && !t.toUserId && t.status === 'pending')))
+    )
   );
 
   // Time-off for this user on this date
