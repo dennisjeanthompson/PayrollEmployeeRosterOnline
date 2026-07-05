@@ -271,11 +271,11 @@ async function seedDeductionSettings() {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  STEP 4: Shifts / Schedules (Jan–Mar 2026 + current week)
+//  STEP 4: Shifts / Schedules (Jan–Aug 2026)
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function seedShifts() {
-  console.log('📅 Step 4 — Seeding shifts (Jan 1 – Apr 15, 2026)...\n');
+  console.log('📅 Step 4 — Seeding shifts (Jan 1 – Aug 31, 2026)...\n');
 
   // Check if shifts already exist for this branch, if so delete them so we can reseed
   const existingShifts = await db.select().from(shifts).where(eq(shifts.branchId, BRANCH_ID)).limit(1);
@@ -296,7 +296,7 @@ async function seedShifts() {
     '2026-03-20', // Eid'l Fitr (tentative)
   ];
 
-  // Seed from Jan 1, 2026 to Apr 15, 2026
+  // Seed from Jan 1, 2026 to Aug 31, 2026
   function getDaysInRange(year1: number, month1: number, day1: number, year2: number, month2: number, day2: number): Date[] {
     const days: Date[] = [];
     const start = new Date(Date.UTC(year1, month1, day1));
@@ -309,7 +309,7 @@ async function seedShifts() {
     return days;
   }
   
-  const allDays = getDaysInRange(2026, 0, 1, 2026, 3, 15); // Jan 1 to Apr 15
+  const allDays = getDaysInRange(2026, 0, 1, 2026, 7, 31); // Jan 1 to Aug 31
 
   let count = 0;
   const batch: any[] = [];
@@ -387,7 +387,7 @@ async function seedShifts() {
     await db.insert(shifts).values(batch);
   }
 
-  console.log(`   ✅ Created ${count} shifts (Jan–Apr 2026)\n`);
+  console.log(`   ✅ Created ${count} shifts (Jan–Aug 2026)\n`);
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -411,8 +411,18 @@ async function seedPayroll() {
     { id: `lu-period-2026-01-16`, start: '2026-01-16', end: '2026-01-31', status: 'paid', workDays: 13 },
     { id: `lu-period-2026-02-01`, start: '2026-02-01', end: '2026-02-15', status: 'paid', workDays: 12 },
     { id: `lu-period-2026-02-16`, start: '2026-02-16', end: '2026-02-28', status: 'paid', workDays: 10 },
-    { id: `lu-period-2026-03-01`, start: '2026-03-01', end: '2026-03-15', status: 'closed', workDays: 12 },
-    { id: `lu-period-2026-03-16`, start: '2026-03-16', end: '2026-03-31', status: 'open', workDays: 12 },
+    { id: `lu-period-2026-03-01`, start: '2026-03-01', end: '2026-03-15', status: 'paid', workDays: 12 },
+    { id: `lu-period-2026-03-16`, start: '2026-03-16', end: '2026-03-31', status: 'paid', workDays: 12 },
+    { id: `lu-period-2026-04-01`, start: '2026-04-01', end: '2026-04-15', status: 'paid', workDays: 11 },
+    { id: `lu-period-2026-04-16`, start: '2026-04-16', end: '2026-04-30', status: 'paid', workDays: 11 },
+    { id: `lu-period-2026-05-01`, start: '2026-05-01', end: '2026-05-15', status: 'paid', workDays: 11 },
+    { id: `lu-period-2026-05-16`, start: '2026-05-16', end: '2026-05-31', status: 'paid', workDays: 11 },
+    { id: `lu-period-2026-06-01`, start: '2026-06-01', end: '2026-06-15', status: 'paid', workDays: 11 },
+    { id: `lu-period-2026-06-16`, start: '2026-06-16', end: '2026-06-30', status: 'paid', workDays: 11 },
+    { id: `lu-period-2026-07-01`, start: '2026-07-01', end: '2026-07-15', status: 'open', workDays: 11 },
+    { id: `lu-period-2026-07-16`, start: '2026-07-16', end: '2026-07-31', status: 'open', workDays: 12 },
+    { id: `lu-period-2026-08-01`, start: '2026-08-01', end: '2026-08-15', status: 'open', workDays: 11 },
+    { id: `lu-period-2026-08-16`, start: '2026-08-16', end: '2026-08-31', status: 'open', workDays: 11 },
   ];
 
   const staff = USER_DEFS.filter(u => u.role !== 'admin');

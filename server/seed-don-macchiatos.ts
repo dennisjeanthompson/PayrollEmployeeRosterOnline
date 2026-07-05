@@ -174,14 +174,16 @@ async function main() {
   }
   console.log(`👥 Seeded ${seededEmployees.length} employees`);
 
-  // 4. Seed Shifts (8 weeks historical + 2 weeks future)
-  console.log('📅 Seeding shifts for forecasting (8 weeks back + 2 weeks forward)...');
-  const today = startOfDay(new Date());
+  // 4. Seed Shifts (Jan 1, 2026 to Aug 31, 2026)
+  console.log('📅 Seeding shifts for forecasting (Jan 1, 2026 to Aug 31, 2026)...');
+  const startDate = new Date(Date.UTC(2026, 0, 1));
+  const endDate = new Date(Date.UTC(2026, 7, 31));
+  
   let shiftCount = 0;
   
-  for (let offset = -60; offset <= 14; offset++) {
-    const date = addDays(today, offset);
-    const dayOfWeek = getDay(date); // 0 = Sun, 1 = Mon ... 6 = Sat
+  for (let curr = startDate; curr <= endDate; curr.setUTCDate(curr.getUTCDate() + 1)) {
+    const date = new Date(curr);
+    const dayOfWeek = date.getUTCDay(); // 0 = Sun, 1 = Mon ... 6 = Sat
 
     for (const emp of seededEmployees) {
       let startH = 0, endH = 0;
@@ -232,7 +234,7 @@ async function main() {
           startTime: start,
           endTime: end,
           position: emp.position,
-          status: offset < 0 ? 'completed' : 'scheduled',
+          status: date < new Date() ? 'completed' : 'scheduled',
           createdAt: new Date(),
         });
         shiftCount++;
@@ -244,10 +246,22 @@ async function main() {
   // 5. Seed Payroll
   console.log('💰 Seeding payroll periods & entries...');
   const periodDefs = [
+    { start: '2026-01-01', end: '2026-01-15', status: 'paid' },
+    { start: '2026-01-16', end: '2026-01-31', status: 'paid' },
     { start: '2026-02-01', end: '2026-02-15', status: 'paid' },
     { start: '2026-02-16', end: '2026-02-28', status: 'paid' },
-    { start: '2026-03-01', end: '2026-03-15', status: 'closed' },
-    { start: '2026-03-16', end: '2026-03-31', status: 'open' },
+    { start: '2026-03-01', end: '2026-03-15', status: 'paid' },
+    { start: '2026-03-16', end: '2026-03-31', status: 'paid' },
+    { start: '2026-04-01', end: '2026-04-15', status: 'paid' },
+    { start: '2026-04-16', end: '2026-04-30', status: 'paid' },
+    { start: '2026-05-01', end: '2026-05-15', status: 'paid' },
+    { start: '2026-05-16', end: '2026-05-31', status: 'paid' },
+    { start: '2026-06-01', end: '2026-06-15', status: 'paid' },
+    { start: '2026-06-16', end: '2026-06-30', status: 'paid' },
+    { start: '2026-07-01', end: '2026-07-15', status: 'open' },
+    { start: '2026-07-16', end: '2026-07-31', status: 'open' },
+    { start: '2026-08-01', end: '2026-08-15', status: 'open' },
+    { start: '2026-08-16', end: '2026-08-31', status: 'open' },
   ];
 
   for (const def of periodDefs) {
