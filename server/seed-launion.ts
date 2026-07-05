@@ -49,14 +49,8 @@ const uuid = () => crypto.randomUUID();
 //  BRANCH + USER DEFINITIONS
 // ═══════════════════════════════════════════════════════════════════════════
 
-const BRANCH_ID = 'branch-launion-bauang';
-const BRANCH = {
-  id: BRANCH_ID,
-  name: 'PERO – La Union Bauang',
-  address: 'National Highway, Bauang, La Union 2501',
-  phone: '(072) 888-1234',
-  isActive: true,
-};
+const BRANCH_ID = 'branch-launion';
+// We will fetch existing users from the database.
 
 // La Union uses Region I wage order — daily minimum ~₱400 → ~₱50/hr
 // Slightly higher rates for a café in a tourist/beach town
@@ -285,8 +279,9 @@ async function seedShifts() {
     await db.delete(shifts).where(eq(shifts.branchId, BRANCH_ID));
   }
 
-  const manager = USER_DEFS.find(u => u.role === 'manager')!;
-  const employees = USER_DEFS.filter(u => u.role === 'employee');
+  const usersList = await db.select().from(users).where(eq(users.branchId, BRANCH_ID));
+  const manager = usersList.find(u => u.role === 'manager')!;
+  const employees = usersList.filter(u => u.role === 'employee');
 
   // 2026 holidays that affect working days Jan-Mar
   const holidayDates = [
@@ -345,16 +340,15 @@ async function seedShifts() {
         let startH = 0, endH = 0;
         let hasShift = false;
         
-        if (dow === 1 || dow === 3 || dow === 5) { // M, W, F
-            if (i % 2 === 0) { startH = 0; endH = 4; } // 8am-12pm
-            else { startH = 4; endH = 12; } // 12pm-8pm
-            hasShift = true;
-        } else if (dow === 2 || dow === 4) { // T, Th
-            startH = 0; endH = 4; // 8am-12pm
-            hasShift = true;
-        } else if (dow === 0 || dow === 6) { // Sat, Sun
+        if (dow >= 1 && dow <= 5) { // M-F
             if (i % 2 === 0) { startH = 0; endH = 12; } // 8am-8pm
             else { startH = 4; endH = 9; } // 12pm-5pm
+            hasShift = true;
+        } else if (dow === 6) { // Saturday
+            startH = 0; endH = 12; // 8am-8pm
+            hasShift = true;
+        } else if (dow === 0) { // Sunday
+            startH = 0; endH = 4; // 8am-12pm
             hasShift = true;
         }
         
@@ -407,25 +401,25 @@ async function seedPayroll() {
   }
 
   const periodDefs = [
-    { id: `lu-period-2026-01-01`, start: '2026-01-01', end: '2026-01-15', status: 'paid', workDays: 12 },
-    { id: `lu-period-2026-01-16`, start: '2026-01-16', end: '2026-01-31', status: 'paid', workDays: 13 },
-    { id: `lu-period-2026-02-01`, start: '2026-02-01', end: '2026-02-15', status: 'paid', workDays: 12 },
-    { id: `lu-period-2026-02-16`, start: '2026-02-16', end: '2026-02-28', status: 'paid', workDays: 10 },
-    { id: `lu-period-2026-03-01`, start: '2026-03-01', end: '2026-03-15', status: 'paid', workDays: 12 },
-    { id: `lu-period-2026-03-16`, start: '2026-03-16', end: '2026-03-31', status: 'paid', workDays: 12 },
-    { id: `lu-period-2026-04-01`, start: '2026-04-01', end: '2026-04-15', status: 'paid', workDays: 11 },
-    { id: `lu-period-2026-04-16`, start: '2026-04-16', end: '2026-04-30', status: 'paid', workDays: 11 },
-    { id: `lu-period-2026-05-01`, start: '2026-05-01', end: '2026-05-15', status: 'paid', workDays: 11 },
-    { id: `lu-period-2026-05-16`, start: '2026-05-16', end: '2026-05-31', status: 'paid', workDays: 11 },
-    { id: `lu-period-2026-06-01`, start: '2026-06-01', end: '2026-06-15', status: 'paid', workDays: 11 },
-    { id: `lu-period-2026-06-16`, start: '2026-06-16', end: '2026-06-30', status: 'paid', workDays: 11 },
-    { id: `lu-period-2026-07-01`, start: '2026-07-01', end: '2026-07-15', status: 'open', workDays: 11 },
-    { id: `lu-period-2026-07-16`, start: '2026-07-16', end: '2026-07-31', status: 'open', workDays: 12 },
-    { id: `lu-period-2026-08-01`, start: '2026-08-01', end: '2026-08-15', status: 'open', workDays: 11 },
-    { id: `lu-period-2026-08-16`, start: '2026-08-16', end: '2026-08-31', status: 'open', workDays: 11 },
+    { id: `dmc-period-2026-01-01`, start: '2026-01-01', end: '2026-01-15', status: 'paid', workDays: 12 },
+    { id: `dmc-period-2026-01-16`, start: '2026-01-16', end: '2026-01-31', status: 'paid', workDays: 13 },
+    { id: `dmc-period-2026-02-01`, start: '2026-02-01', end: '2026-02-15', status: 'paid', workDays: 12 },
+    { id: `dmc-period-2026-02-16`, start: '2026-02-16', end: '2026-02-28', status: 'paid', workDays: 10 },
+    { id: `dmc-period-2026-03-01`, start: '2026-03-01', end: '2026-03-15', status: 'paid', workDays: 12 },
+    { id: `dmc-period-2026-03-16`, start: '2026-03-16', end: '2026-03-31', status: 'paid', workDays: 12 },
+    { id: `dmc-period-2026-04-01`, start: '2026-04-01', end: '2026-04-15', status: 'paid', workDays: 11 },
+    { id: `dmc-period-2026-04-16`, start: '2026-04-16', end: '2026-04-30', status: 'paid', workDays: 11 },
+    { id: `dmc-period-2026-05-01`, start: '2026-05-01', end: '2026-05-15', status: 'paid', workDays: 11 },
+    { id: `dmc-period-2026-05-16`, start: '2026-05-16', end: '2026-05-31', status: 'paid', workDays: 11 },
+    { id: `dmc-period-2026-06-01`, start: '2026-06-01', end: '2026-06-15', status: 'paid', workDays: 11 },
+    { id: `dmc-period-2026-06-16`, start: '2026-06-16', end: '2026-06-30', status: 'paid', workDays: 11 },
+    { id: `dmc-period-2026-07-01`, start: '2026-07-01', end: '2026-07-15', status: 'open', workDays: 11 },
+    { id: `dmc-period-2026-07-16`, start: '2026-07-16', end: '2026-07-31', status: 'open', workDays: 12 },
+    { id: `dmc-period-2026-08-01`, start: '2026-08-01', end: '2026-08-15', status: 'open', workDays: 11 },
+    { id: `dmc-period-2026-08-16`, start: '2026-08-16', end: '2026-08-31', status: 'open', workDays: 11 },
   ];
 
-  const staff = USER_DEFS.filter(u => u.role !== 'admin');
+  const staff = (await db.select().from(users).where(eq(users.branchId, BRANCH_ID))).filter(u => u.role !== 'admin');
   const { calculateAllDeductions, calculateWithholdingTax } = await import('./utils/deductions');
 
   let totalEntries = 0;
@@ -520,60 +514,7 @@ async function seedPayroll() {
   console.log(`\n   ✅ Created ${periodDefs.length} periods, ${totalEntries} payroll entries\n`);
 }
 
-// ═══════════════════════════════════════════════════════════════════════════
-//  STEP 6: Exception / Adjustment Logs
-// ═══════════════════════════════════════════════════════════════════════════
-
-async function seedExceptionLogs() {
-  console.log('📝 Step 6 — Seeding exception / adjustment logs...\n');
-
-  const now = new Date();
-  const MGR_ID = 'lu-mgr-001';
-
-  const adjustments = [
-    { empId: 'lu-emp-001', type: 'overtime', value: '2.5', remarks: 'Extended shift for weekend rush — beach crowd', status: 'approved', daysAgo: 5, periodId: 'lu-period-2026-03-01' },
-    { empId: 'lu-emp-001', type: 'late', value: '20', remarks: 'Traffic along National Highway due to road work', status: 'employee_verified', daysAgo: 3, periodId: 'lu-period-2026-03-16' },
-    { empId: 'lu-emp-002', type: 'overtime', value: '1.5', remarks: 'Stayed to close and count register after event', status: 'approved', daysAgo: 7, periodId: 'lu-period-2026-03-01' },
-    { empId: 'lu-emp-003', type: 'undertime', value: '45', remarks: 'Left early — medical appointment at Bauang RHU', status: 'approved', daysAgo: 10, periodId: 'lu-period-2026-02-16' },
-    { empId: 'lu-emp-004', type: 'night_diff', value: '3.0', remarks: 'Covered evening shift for absent coworker', status: 'pending', daysAgo: 2, periodId: 'lu-period-2026-03-16' },
-    { empId: 'lu-emp-004', type: 'late', value: '30', remarks: 'Jeepney breakdown from San Fernando', status: 'employee_verified', daysAgo: 8, periodId: 'lu-period-2026-03-01' },
-    { empId: 'lu-emp-005', type: 'rest_day_ot', value: '8.0', remarks: 'Sunday coverage — Bauang Festival week', status: 'approved', daysAgo: 14, periodId: 'lu-period-2026-02-16' },
-    { empId: 'lu-emp-005', type: 'overtime', value: '3.0', remarks: 'Extended shift for VIP catering event', status: 'approved', daysAgo: 4, periodId: 'lu-period-2026-03-16' },
-    { empId: 'lu-emp-006', type: 'absent', value: '1', remarks: 'No call, no show — first offense, documented', status: 'pending', daysAgo: 4, periodId: 'lu-period-2026-03-16' },
-    { empId: 'lu-emp-006', type: 'overtime', value: '2.0', remarks: 'Shift lead duties — training new hire', status: 'approved', daysAgo: 12, periodId: 'lu-period-2026-02-16' },
-  ];
-
-  let count = 0;
-  for (const adj of adjustments) {
-    const emp = USER_DEFS.find(u => u.id === adj.empId);
-    if (!emp) continue;
-
-    await db.insert(adjustmentLogs).values({
-      id: uuid(),
-      employeeId: adj.empId,
-      branchId: BRANCH_ID,
-      loggedBy: MGR_ID,
-      startDate: subDays(now, adj.daysAgo),
-      endDate: subDays(now, adj.daysAgo),
-      type: adj.type,
-      value: adj.value,
-      remarks: adj.remarks,
-      status: adj.status,
-      verifiedByEmployee: adj.status === 'employee_verified' || adj.status === 'approved',
-      verifiedAt: adj.status !== 'pending' ? subDays(now, adj.daysAgo - 1) : null,
-      approvedBy: adj.status === 'approved' ? MGR_ID : null,
-      approvedAt: adj.status === 'approved' ? subDays(now, adj.daysAgo - 1) : null,
-      payrollPeriodId: adj.periodId,
-      calculatedAmount: adj.type === 'overtime' || adj.type === 'rest_day_ot' || adj.type === 'night_diff'
-        ? (parseFloat(emp.hourlyRate) * 1.25 * parseFloat(adj.value)).toFixed(2)
-        : null,
-      isIncluded: true,
-    });
-    count++;
-  }
-
-  console.log(`   ✅ Created ${count} exception / adjustment logs\n`);
-}
+// Removed exception logs for Don Mac Citaos seed script.
 
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -668,7 +609,7 @@ async function seedLeaveCredits() {
   console.log('⛱️  Step 10 — Seeding leave credits...\n');
 
   const currentYear = new Date().getFullYear();
-  const staff = USER_DEFS.filter(u => u.role !== 'admin');
+  const staff = (await db.select().from(users).where(eq(users.branchId, BRANCH_ID))).filter(u => u.role !== 'admin');
   let count = 0;
 
   for (const emp of staff) {
@@ -713,7 +654,7 @@ async function seedAuditLogs() {
       daysAgo: 95,
     },
     {
-      action: 'payroll_process', entityType: 'payroll_period', entityId: 'lu-period-2026-01-01',
+      action: 'payroll_process', entityType: 'payroll_period', entityId: 'dmc-period-2026-01-01',
       userId: MGR_ID,
       reason: 'Processed payroll for Jan 1-15, 2026',
       oldValues: JSON.stringify({ status: 'open' }),
@@ -721,7 +662,7 @@ async function seedAuditLogs() {
       daysAgo: 75,
     },
     {
-      action: 'payroll_process', entityType: 'payroll_period', entityId: 'lu-period-2026-01-16',
+      action: 'payroll_process', entityType: 'payroll_period', entityId: 'dmc-period-2026-01-16',
       userId: MGR_ID,
       reason: 'Processed payroll for Jan 16-31, 2026',
       oldValues: JSON.stringify({ status: 'open' }),
@@ -729,7 +670,7 @@ async function seedAuditLogs() {
       daysAgo: 60,
     },
     {
-      action: 'payroll_process', entityType: 'payroll_period', entityId: 'lu-period-2026-02-01',
+      action: 'payroll_process', entityType: 'payroll_period', entityId: 'dmc-period-2026-02-01',
       userId: MGR_ID,
       reason: 'Processed payroll for Feb 1-15, 2026',
       oldValues: JSON.stringify({ status: 'open' }),
@@ -737,7 +678,7 @@ async function seedAuditLogs() {
       daysAgo: 45,
     },
     {
-      action: 'payroll_process', entityType: 'payroll_period', entityId: 'lu-period-2026-02-16',
+      action: 'payroll_process', entityType: 'payroll_period', entityId: 'dmc-period-2026-02-16',
       userId: MGR_ID,
       reason: 'Processed payroll for Feb 16-28, 2026',
       oldValues: JSON.stringify({ status: 'open' }),
@@ -745,7 +686,7 @@ async function seedAuditLogs() {
       daysAgo: 30,
     },
     {
-      action: 'payroll_process', entityType: 'payroll_period', entityId: 'lu-period-2026-03-01',
+      action: 'payroll_process', entityType: 'payroll_period', entityId: 'dmc-period-2026-03-01',
       userId: MGR_ID,
       reason: 'Processed payroll for Mar 1-15, 2026',
       oldValues: JSON.stringify({ status: 'open' }),
@@ -816,8 +757,8 @@ async function seedShiftTrades() {
 
   // Create a few upcoming shifts specifically for trades
   const tradeShiftDefs = [
-    { id: 'lu-trade-shift-1', userId: 'lu-emp-001', day: 8 },
-    { id: 'lu-trade-shift-2', userId: 'lu-emp-003', day: 10 },
+    { id: 'dmc-trade-shift-1', userId: 'lu-emp-001', day: 8 },
+    { id: 'dmc-trade-shift-2', userId: 'lu-emp-003', day: 10 },
   ];
 
   for (const ts of tradeShiftDefs) {
@@ -838,7 +779,7 @@ async function seedShiftTrades() {
   // Trade 1: Pending — Flores wants to swap with Navarro
   await db.insert(shiftTrades).values({
     id: uuid(),
-    shiftId: 'lu-trade-shift-1',
+    shiftId: 'dmc-trade-shift-1',
     fromUserId: 'lu-emp-001',
     toUserId: 'lu-emp-002',
     reason: 'Need to attend barangay assembly meeting',
@@ -850,7 +791,7 @@ async function seedShiftTrades() {
   // Trade 2: Open/Urgent — Corpuz needs coverage
   await db.insert(shiftTrades).values({
     id: uuid(),
-    shiftId: 'lu-trade-shift-2',
+    shiftId: 'dmc-trade-shift-2',
     fromUserId: 'lu-emp-003',
     toUserId: null,
     reason: 'Family emergency — need immediate coverage',
@@ -875,17 +816,11 @@ async function main() {
   console.log(`  Time: ${new Date().toLocaleString('en-PH')}`);
   console.log('═══════════════════════════════════════════════════════════════');
 
-  await seedBranch();
-  await seedUsers();
   await seedDeductionSettings();
   await seedShifts();
   await seedPayroll();
-  await seedExceptionLogs();
-
-  await seedNotifs();
   await seedTimeOff();
   await seedLeaveCredits();
-  await seedAuditLogs();
   await seedShiftTrades();
 
   const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);

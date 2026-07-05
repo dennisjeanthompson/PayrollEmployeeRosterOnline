@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -5,6 +6,14 @@ import { formatDate, formatTime } from "@/lib/utils";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 interface ShiftCardProps {
   trade: any;
@@ -15,6 +24,7 @@ interface ShiftCardProps {
 export default function ShiftCard({ trade, type, "data-testid": testId }: ShiftCardProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
 
   const takeShiftMutation = useMutation({
     mutationFn: (tradeId: string) => 
@@ -22,6 +32,7 @@ export default function ShiftCard({ trade, type, "data-testid": testId }: ShiftC
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/shift-trades"] });
       queryClient.invalidateQueries({ queryKey: ["/api/shift-trades/available"] });
+      setIsDialogOpen(false);
       toast({
         title: "Success",
         description: "Shift trade request sent for approval",
@@ -104,11 +115,10 @@ export default function ShiftCard({ trade, type, "data-testid": testId }: ShiftC
         {type === "available" ? (
           <Button
             className="w-full"
-            onClick={() => takeShiftMutation.mutate(trade.id)}
-            disabled={takeShiftMutation.isPending}
+            onClick={() => setIsDialogOpen(true)}
             data-testid={`button-take-shift-${trade.id}`}
           >
-            {takeShiftMutation.isPending ? "Taking..." : "Take This Shift"}
+            Take This Shift
           </Button>
         ) : (
           <div className="flex items-center justify-between">
@@ -137,6 +147,38 @@ export default function ShiftCard({ trade, type, "data-testid": testId }: ShiftC
           </div>
         )}
       </CardContent>
+
+      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Take Shift</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to take this open shift? Your manager will still need to approve it.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="bg-muted p-4 rounded-md">
+              <p className="font-medium">{trade.fromUser?.firstName} {trade.fromUser?.lastName}</p>
+              {trade.shift && (
+                <div className="mt-2 text-sm space-y-1">
+                  <p><strong>Date:</strong> {formatDate(trade.shift.startTime)}</p>
+                  <p><strong>Time:</strong> {formatTime(trade.shift.startTime)} - {formatTime(trade.shift.endTime)}</p>
+                  {trade.shift.position && <p><strong>Position:</strong> {trade.shift.position}</p>}
+                </div>
+              )}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancel</Button>
+            <Button 
+              onClick={() => takeShiftMutation.mutate(trade.id)}
+              disabled={takeShiftMutation.isPending}
+            >
+              {takeShiftMutation.isPending ? "Processing..." : "Confirm"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

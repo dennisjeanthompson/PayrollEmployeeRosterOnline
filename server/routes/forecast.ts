@@ -62,7 +62,7 @@ import {
   endOfDay,
   addDays,
   getDay,
-  differenceInHours,
+  differenceInMinutes,
   parseISO,
   isWithinInterval,
   isSameDay
@@ -221,7 +221,7 @@ router.get("/api/analytics/trends", requireAuth, requireManagerRole, async (req,
     for (const shift of shiftsInRange) {
       const dateKey = format(new Date(shift.startTime), "yyyy-MM-dd");
       if (dailyData[dateKey]) {
-        const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+        const hours = differenceInMinutes(new Date(shift.endTime), new Date(shift.startTime)) / 60;
         dailyData[dateKey].hours += hours;
         dailyData[dateKey].shifts += 1;
         const user = userMap.get(shift.userId);
@@ -300,10 +300,10 @@ router.get("/api/analytics/trends", requireAuth, requireManagerRole, async (req,
 
     let thisWeekHours = 0, lastWeekHours = 0;
     for (const s of thisWeekShifts) {
-      thisWeekHours += differenceInHours(new Date(s.endTime), new Date(s.startTime));
+      thisWeekHours += differenceInMinutes(new Date(s.endTime), new Date(s.startTime)) / 60;
     }
     for (const s of lastWeekShifts) {
-      lastWeekHours += differenceInHours(new Date(s.endTime), new Date(s.startTime));
+      lastWeekHours += differenceInMinutes(new Date(s.endTime), new Date(s.startTime)) / 60;
     }
 
     const comparison = {
@@ -366,7 +366,7 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
     const dailyHours: Record<string, number> = {};
     for (const shift of historicalShifts) {
       const dateKey = format(new Date(shift.startTime), "yyyy-MM-dd");
-      const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+      const hours = differenceInMinutes(new Date(shift.endTime), new Date(shift.startTime)) / 60;
       dailyHours[dateKey] = (dailyHours[dateKey] || 0) + hours;
     }
 
@@ -408,7 +408,7 @@ router.get("/api/forecast/labor", requireAuth, requireManagerRole, async (req, r
       let scheduled = 0;
       for (const shift of futureShifts) {
         if (isSameDay(new Date(shift.startTime), forecastDate)) {
-           scheduled += differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+           scheduled += differenceInMinutes(new Date(shift.endTime), new Date(shift.startTime)) / 60;
         }
       }
 
@@ -492,7 +492,7 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
     const dailyCosts: Record<string, number> = {};
     for (const shift of historicalShifts) {
       const dateKey = format(new Date(shift.startTime), "yyyy-MM-dd");
-      const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+      const hours = differenceInMinutes(new Date(shift.endTime), new Date(shift.startTime)) / 60;
       const rate = rateMap[shift.userId];
       if (!rate) continue; // Skip shifts for employees with no valid rate
       dailyCosts[dateKey] = (dailyCosts[dateKey] || 0) + (hours * rate);
@@ -541,7 +541,7 @@ router.get("/api/forecast/payroll", requireAuth, requireManagerRole, async (req,
         if (isSameDay(new Date(shift.startTime), forecastDate)) {
            const rate = rateMap[shift.userId];
            if (rate) {
-             const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+             const hours = differenceInMinutes(new Date(shift.endTime), new Date(shift.startTime)) / 60;
              scheduled += (hours * rate);
            }
         }
@@ -599,7 +599,7 @@ router.get("/api/forecast/peaks", requireAuth, requireManagerRole, async (req, r
     const dailyHours: Record<string, number> = {};
     for (const shift of historicalShifts) {
       const dateKey = format(new Date(shift.startTime), "yyyy-MM-dd");
-      const hours = differenceInHours(new Date(shift.endTime), new Date(shift.startTime));
+      const hours = differenceInMinutes(new Date(shift.endTime), new Date(shift.startTime)) / 60;
       dailyHours[dateKey] = (dailyHours[dateKey] || 0) + hours;
     }
 

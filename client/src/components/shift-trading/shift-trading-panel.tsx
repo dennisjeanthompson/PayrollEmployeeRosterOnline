@@ -73,20 +73,6 @@ interface ShiftTrade {
   shift?: Shift;
 }
 
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index } = props;
-  return (
-    <div role="tabpanel" hidden={value !== index}>
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
 
 export default function ShiftTradingPanel() {
   const theme = useTheme();
@@ -101,6 +87,9 @@ export default function ShiftTradingPanel() {
   const [targetEmployee, setTargetEmployee] = useState("");
   const [reason, setReason] = useState("");
   const [urgency, setUrgency] = useState<"low" | "normal" | "urgent">("normal");
+
+  const [respondDialogOpen, setRespondDialogOpen] = useState(false);
+  const [tradeToRespond, setTradeToRespond] = useState<ShiftTrade | null>(null);
 
   // Real-time shifts query with polling
   const { data: shiftsData, isLoading: shiftsLoading, refetch: refetchShifts } = useQuery({
@@ -402,24 +391,13 @@ export default function ShiftTradingPanel() {
                     color="success"
                     size="small"
                     startIcon={<CheckIcon />}
-                    onClick={() =>
-                      respondToTradeMutation.mutate({ tradeId: trade.id, accept: true })
-                    }
+                    onClick={() => {
+                      setTradeToRespond(trade);
+                      setRespondDialogOpen(true);
+                    }}
                     disabled={respondToTradeMutation.isPending}
                   >
-                    Accept
-                  </Button>
-                  <Button
-                    variant="outlined"
-                    color="error"
-                    size="small"
-                    startIcon={<CancelIcon />}
-                    onClick={() =>
-                      respondToTradeMutation.mutate({ tradeId: trade.id, accept: false })
-                    }
-                    disabled={respondToTradeMutation.isPending}
-                  >
-                    Reject
+                    Respond
                   </Button>
                 </>
               )}
@@ -610,6 +588,62 @@ export default function ShiftTradingPanel() {
             disabled={createTradeMutation.isPending || !selectedShift || !targetEmployee || !reason.trim()}
           >
             {createTradeMutation.isPending ? "Creating..." : "Create Request"}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Respond Trade Dialog */}
+      <Dialog open={respondDialogOpen} onClose={() => setRespondDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Respond to Trade Request</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Stack spacing={2}>
+            <Typography variant="body1">
+              Please review the shift details before responding.
+            </Typography>
+            {tradeToRespond?.shift && (
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
+                <Stack spacing={1}>
+                  <Typography variant="subtitle2" color="text.secondary">Shift to take over:</Typography>
+                  <Typography variant="body1" fontWeight="bold">
+                    {format(parseISO(tradeToRespond.shift.date), "EEEE, MMM d, yyyy")}
+                  </Typography>
+                  <Typography variant="body1">
+                    {format(parseISO(tradeToRespond.shift.startTime), "h:mm a")} - {format(parseISO(tradeToRespond.shift.endTime), "h:mm a")}
+                  </Typography>
+                </Stack>
+              </Paper>
+            )}
+            {tradeToRespond?.reason && (
+              <Typography variant="body2" sx={{ fontStyle: "italic" }}>
+                Reason: "{tradeToRespond.reason}"
+              </Typography>
+            )}
+            <Typography variant="body2" color="text.secondary">
+              If accepted, this shift will be transferred to your schedule, pending manager approval.
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setRespondDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="outlined"
+            color="error"
+            onClick={() => {
+              respondToTradeMutation.mutate({ tradeId: tradeToRespond!.id, accept: false });
+              setRespondDialogOpen(false);
+            }}
+          >
+            Decline
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={() => {
+              respondToTradeMutation.mutate({ tradeId: tradeToRespond!.id, accept: true });
+              setRespondDialogOpen(false);
+            }}
+          >
+            Accept Trade
           </Button>
         </DialogActions>
       </Dialog>

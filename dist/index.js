@@ -2613,6 +2613,7 @@ var init_storage = __esm({
           bankAccountName: settings.bankAccountName ?? null,
           bankAccountNo: settings.bankAccountNo ?? null,
           includeHolidayPay: settings.includeHolidayPay ?? null,
+          includeRestDayPremium: settings.includeRestDayPremium ?? null,
           updatedBy: settings.updatedBy ?? null,
           updatedAt: /* @__PURE__ */ new Date(),
           createdAt: /* @__PURE__ */ new Date()
@@ -6020,7 +6021,8 @@ router5.post("/", requireManagerOrAdmin3, async (req, res) => {
       bankName,
       bankAccountName,
       bankAccountNo,
-      includeHolidayPay
+      includeHolidayPay,
+      includeRestDayPremium
     } = req.body;
     if (!name || !address || !tin) {
       return res.status(400).json({
@@ -6054,6 +6056,7 @@ router5.post("/", requireManagerOrAdmin3, async (req, res) => {
       bankAccountName,
       bankAccountNo,
       includeHolidayPay: includeHolidayPay ?? false,
+      includeRestDayPremium: includeRestDayPremium ?? false,
       isActive: true,
       updatedBy: req.session.user.id
     });
@@ -6101,7 +6104,8 @@ router5.put("/:id", requireManagerOrAdmin3, async (req, res) => {
       bankName,
       bankAccountName,
       bankAccountNo,
-      includeHolidayPay
+      includeHolidayPay,
+      includeRestDayPremium
     } = req.body;
     const updates = {};
     if (name !== void 0) updates.name = name;
@@ -6129,6 +6133,7 @@ router5.put("/:id", requireManagerOrAdmin3, async (req, res) => {
     if (bankAccountName !== void 0) updates.bankAccountName = bankAccountName;
     if (bankAccountNo !== void 0) updates.bankAccountNo = bankAccountNo;
     if (includeHolidayPay !== void 0) updates.includeHolidayPay = includeHolidayPay;
+    if (includeRestDayPremium !== void 0) updates.includeRestDayPremium = includeRestDayPremium;
     updates.updatedBy = req.session.user.id;
     const updated = await dbStorage.updateCompanySettings(id, updates);
     res.json({ success: true, settings: updated });
@@ -6972,13 +6977,6 @@ router7.get("/api/forecast/labor", requireAuth8, requireManagerRole3, async (req
       const dow = getDay(forecastDate);
       const holiday = await getHolidayFromDB(forecastDate, dbHolidays);
       let predicted = dowAverages[dow].avg;
-      if (holiday) {
-        if (holiday.type === "regular") {
-          predicted *= 0.4;
-        } else {
-          predicted *= 0.7;
-        }
-      }
       const validPredicted = isNaN(predicted) ? 8 : predicted;
       const lower = validPredicted * 0.9;
       const upper = validPredicted * 1.1;
@@ -7060,9 +7058,9 @@ router7.get("/api/forecast/payroll", requireAuth8, requireManagerRole3, async (r
       let predicted = dowAverages[dow];
       if (holiday) {
         if (holiday.type === "regular") {
-          predicted = predicted * 0.4 * 2;
+          predicted = predicted * 2;
         } else {
-          predicted = predicted * 0.7 * 1.3;
+          predicted = predicted * 1.3;
         }
       }
       const validPredicted = isNaN(predicted) ? 800 : predicted;
@@ -11566,11 +11564,14 @@ async function registerRoutes(app2) {
         deductWithholdingTax: pConfig.deductWithholdingTax ?? branchDeductionSettings.deductWithholdingTax,
         includeExceptionLogs: pConfig.includeExceptionLogs ?? branchDeductionSettings.includeExceptionLogs,
         includeNightDiff: pConfig.includeNightDiff ?? branchDeductionSettings.includeNightDiff,
-        includeHolidayPay: pConfig.includeHolidayPay
+        includeHolidayPay: pConfig.includeHolidayPay,
+        // Checked vs companySettings later
+        includeRestDayPremium: pConfig.includeRestDayPremium
         // Checked vs companySettings later
       } : branchDeductionSettings;
       const companySettings2 = await storage5.getCompanySettings();
       const globalHolidayPayEnabled = pConfig && pConfig.includeHolidayPay !== void 0 ? pConfig.includeHolidayPay : companySettings2 ? companySettings2.includeHolidayPay : false;
+      const globalRestDayPremiumEnabled = pConfig && pConfig.includeRestDayPremium !== void 0 ? pConfig.includeRestDayPremium : companySettings2 ? companySettings2.includeRestDayPremium : false;
       const activeHeadcount = employees.filter((e) => e.isActive).length;
       const branchRecord = await storage5.getBranch(branchId);
       const isBranchExempt = !!(branchRecord?.intentHolidayExempt && ["retail", "service"].includes(branchRecord?.establishmentType || "") && activeHeadcount <= 5);
@@ -11603,6 +11604,10 @@ async function registerRoutes(app2) {
             day.regularNightDiffHours = 0;
             day.overtimeNightDiffHours = 0;
           }
+        }
+        if (globalRestDayPremiumEnabled === false) {
+          payCalculation.totalGrossPay -= payCalculation.restDayPay;
+          payCalculation.restDayPay = 0;
         }
         let paidLeaveHours = 0;
         let paidLeavePay = 0;
@@ -14232,29 +14237,7 @@ var vite_config_default = defineConfig({
         // MUST land in the same chunk, otherwise Rollup may reference a
         // binding before the defining chunk has finished executing
         // (the "Cannot access 'Dn' before initialization" class of bugs).
-        manualChunks(id) {
-          if (id.includes("node_modules")) {
-            if (id.match(/@mui[\\/]icons-material/)) {
-              return "mui-icons";
-            }
-            if (id.match(/@mui[\\/]material/) || id.match(/@mui[\\/]system/)) {
-              return "mui-core";
-            }
-            if (id.match(/react[\\/]|-dom/) || id.match(/react$/) || id.match(/react-dom$/)) {
-              return "react-vendor";
-            }
-            if (id.match(/@fullcalendar/) && !id.match(/resource/)) {
-              return "vendor-calendar";
-            }
-            if (id.match(/recharts/) || id.match(/d3/)) {
-              return "vendor-charts";
-            }
-            if (id.match(/@tanstack/)) {
-              return "vendor-query";
-            }
-            return "vendor";
-          }
-        },
+        // manualChunks removed to prevent "Cannot access X before initialization" circular dependency errors
         entryFileNames: "assets/[name]-[hash].js",
         chunkFileNames: "assets/[name]-[hash].js",
         assetFileNames: "assets/[name]-[hash][extname]"

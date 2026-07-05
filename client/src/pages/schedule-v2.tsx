@@ -112,6 +112,9 @@ export default function ScheduleV2() {
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
   const [timeOffModalOpen, setTimeOffModalOpen] = useState(false);
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
+  const [takeTradeModalOpen, setTakeTradeModalOpen] = useState(false);
+  const [selectedTrade, setSelectedTrade] = useState<any>(null);
+  const [takeTradeAction, setTakeTradeAction] = useState<'take' | 'accept' | 'decline' | null>(null);
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [selectedTimeOffId, setSelectedTimeOffId] = useState<string | null>(null);
 
@@ -1503,10 +1506,24 @@ export default function ScheduleV2() {
               onRejectTimeOff={(id, reason, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason, leavePaymentStatus })}
               onApproveTrade={(id) => approveTradeMutation.mutate({ id, status: 'approved' })}
               onRejectTrade={(id) => approveTradeMutation.mutate({ id, status: 'rejected' })}
-              onAcceptTrade={(id) => respondTradeMutation.mutate({ id, status: 'accepted' })}
-              onDeclineTrade={(id) => respondTradeMutation.mutate({ id, status: 'rejected' })}
-              onCancelTrade={(id) => deleteTradeMutation.mutate(id)}
-              onTakeOpenTrade={(id) => takeOpenTradeMutation.mutate(id)}
+              onAcceptTrade={(id) => {
+                const t = shiftTrades.find(t => t.id === id);
+                setSelectedTrade(t);
+                setTakeTradeAction('accept');
+                setTakeTradeModalOpen(true);
+              }}
+              onDeclineTrade={(id) => {
+                const t = shiftTrades.find(t => t.id === id);
+                setSelectedTrade(t);
+                setTakeTradeAction('decline');
+                setTakeTradeModalOpen(true);
+              }}
+              onTakeOpenTrade={(id) => {
+                const t = shiftTrades.find(t => t.id === id);
+                setSelectedTrade(t);
+                setTakeTradeAction('take');
+                setTakeTradeModalOpen(true);
+              }}
             />
           </Box>
         )}
@@ -1581,10 +1598,25 @@ export default function ScheduleV2() {
           onRejectTimeOff={(id, reason, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason, leavePaymentStatus })}
           onApproveTrade={(id) => approveTradeMutation.mutate({ id, status: 'approved' })}
           onRejectTrade={(id) => approveTradeMutation.mutate({ id, status: 'rejected' })}
-          onAcceptTrade={(id) => respondTradeMutation.mutate({ id, status: 'accepted' })}
-          onDeclineTrade={(id) => respondTradeMutation.mutate({ id, status: 'rejected' })}
+          onAcceptTrade={(id) => {
+            const t = shiftTrades.find(t => t.id === id);
+            setSelectedTrade(t);
+            setTakeTradeAction('accept');
+            setTakeTradeModalOpen(true);
+          }}
+          onDeclineTrade={(id) => {
+            const t = shiftTrades.find(t => t.id === id);
+            setSelectedTrade(t);
+            setTakeTradeAction('decline');
+            setTakeTradeModalOpen(true);
+          }}
           onCancelTrade={(id) => deleteTradeMutation.mutate(id)}
-          onTakeOpenTrade={(id) => takeOpenTradeMutation.mutate(id)}
+          onTakeOpenTrade={(id) => {
+            const t = shiftTrades.find(t => t.id === id);
+            setSelectedTrade(t);
+            setTakeTradeAction('take');
+            setTakeTradeModalOpen(true);
+          }}
         />
       </Drawer>
 

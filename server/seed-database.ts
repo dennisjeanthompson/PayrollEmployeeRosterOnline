@@ -56,6 +56,7 @@ async function cleanTransactionalData() {
     'service_charge_distributions',
     'archived_payroll_periods',
     'payroll_entries',
+    'thirteenth_month_ledger',
     'payroll_periods',
     'approvals',
     'shift_trades',
