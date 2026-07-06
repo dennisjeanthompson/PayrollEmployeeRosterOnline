@@ -45,11 +45,28 @@ export async function calculateSSS(monthlyBasicSalary: number): Promise<number> 
     const activeYear = latestBrackets.length > 0 ? latestBrackets[0].year : new Date().getFullYear();
     const brackets = await db.select().from(sssContributionTable).where(eq(sssContributionTable.year, activeYear));
     
-    for (const b of brackets) {
+    const sorted = [...brackets].sort((a, b) => parseFloat(a.minCompensation) - parseFloat(b.minCompensation));
+
+    for (const b of sorted) {
       if (monthlyBasicSalary >= parseFloat(b.minCompensation) && monthlyBasicSalary <= parseFloat(b.maxCompensation)) {
         return parseFloat(b.employeeShare);
       }
     }
+
+    // Salary above the highest bracket → use the last bracket's contribution
+    if (sorted.length > 0) {
+      const highest = sorted[sorted.length - 1];
+      if (monthlyBasicSalary > parseFloat(highest.maxCompensation)) {
+        return parseFloat(highest.employeeShare);
+      }
+      // Salary in a gap between brackets → use the bracket just below
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        if (monthlyBasicSalary >= parseFloat(sorted[i].minCompensation)) {
+          return parseFloat(sorted[i].employeeShare);
+        }
+      }
+    }
+
     return 0;
   } catch (error) {
     console.error('Error calculating SSS:', error);
@@ -97,6 +114,7 @@ export async function calculatePagibig(monthlyBasicSalary: number): Promise<numb
     const rate = activeRate?.employeeRate ? (parseFloat(activeRate.employeeRate) / 100) : 0.02;
     
     let baseSalary = monthlyBasicSalary;
+    if (baseSalary < 1000) baseSalary = 1000; // HDMF minimum salary credit floor
     if (baseSalary > cap) baseSalary = cap;
     
     const contribution = baseSalary * rate;

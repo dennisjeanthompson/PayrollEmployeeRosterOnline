@@ -437,6 +437,10 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     // Only clean up on unmount if this is the last component using the socket
     // The socket will stay alive as a singleton
     return () => {
+      if (notificationInvalidationTimer) {
+        clearTimeout(notificationInvalidationTimer);
+        notificationInvalidationTimer = null;
+      }
       // Don't disconnect - let the socket stay connected as singleton
       socketRef.current = null;
     };

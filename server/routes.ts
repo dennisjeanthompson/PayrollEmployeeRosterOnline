@@ -400,7 +400,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "userId and newPassword are required" });
       }
       
-      if (newPassword.length < 6) {
+      if (!newPassword.trim() || newPassword.trim().length < 6) {
         return res.status(400).json({ message: "Password must be at least 6 characters" });
       }
       
@@ -1691,6 +1691,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Start date cannot be after end date." });
       }
 
+      // Require a scheduled shift on the request date (mirrors the manager path validation)
+      if (['late', 'overtime', 'undertime', 'absent'].includes(type)) {
+        const targetDateStr = start.toISOString().split('T')[0];
+        const userShifts = await storage.getShiftsByUser(userId);
+        const hasShift = userShifts.some(s =>
+          new Date(s.startTime).toISOString().split('T')[0] === targetDateStr
+        );
+        if (!hasShift) {
+          return res.status(400).json({ message: `Cannot request ${type} without a scheduled shift on this date.` });
+        }
+      }
+
       const log = await storage.createAdjustmentLog({
         employeeId: userId,
         branchId: req.user!.branchId!,
@@ -2748,9 +2760,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Add gross allowances to gross Pay (after basic basicPay computations)
         grossPay += totalAllowanceAmount;
 
-        // sssLoan and pagibigLoan are kept at 0 to satisfy database schema requirements.
-        let sssLoan = 0;
-        let pagibigLoan = 0;
+        const sssLoan = parseFloat(employee.sssLoanDeduction || '0') || 0;
+        const pagibigLoan = parseFloat(employee.pagibigLoanDeduction || '0') || 0;
         
         // Include lateness, absences (stored in lateDeduction), and undertime in otherDeductions
         // so they are explicitly visible as deductions on the payslip.
@@ -2766,7 +2777,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           philHealthContribution +
           pagibigContribution +
           mweWithholdingTax +
-          otherDeductions;
+          otherDeductions +
+          sssLoan +
+          pagibigLoan;
 
         // Ensure Employee Net Pay does not drop below 0 due to excessive combined deductions 
         const netPay = Math.max(0, grossPay - totalDeductions);
@@ -5762,7 +5775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Enforce minimum password length (same as admin reset-password route)
-        if (newPassword.length < 6) {
+        if (!newPassword.trim() || newPassword.trim().length < 6) {
           return res.status(400).json({ message: "New password must be at least 6 characters long." });
         }
         
