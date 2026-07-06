@@ -763,7 +763,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userTrades.forEach(t => {
           if (t.status === 'pending' || t.status === 'accepted') tradeShiftIds.add(t.shiftId);
         });
+        console.log(`[SHIFT-TRADE-DEBUG] Employee ${userId}: openTrades=${openTrades.length}, userTrades=${userTrades.length}, tradeShiftIds=${JSON.stringify([...tradeShiftIds])}`);
+        const beforeCount = activeShifts.length;
         activeShifts = activeShifts.filter(shift => shift.userId === userId || tradeShiftIds.has(shift.id));
+        console.log(`[SHIFT-TRADE-DEBUG] Employee ${userId}: shifts before=${beforeCount}, after=${activeShifts.length}, tradeShiftsIncluded=${activeShifts.filter(s => s.userId !== userId).map(s => ({id: s.id, userId: s.userId, start: s.startTime}))}`);
       }
       
       if (activeShifts.length > 0) {
