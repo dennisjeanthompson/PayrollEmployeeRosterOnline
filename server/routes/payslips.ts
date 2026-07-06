@@ -119,8 +119,8 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
     
     // Get deduction rates for effective date display
     const deductionRates = await storage.getAllDeductionRates();
-const ratesEffectiveFrom = deductionRates.length > 0 && deductionRates[0].createdAt
-        ? toLocalDateString(deductionRates[0].createdAt)
+const ratesEffectiveFrom = (deductionRates.length > 0 && deductionRates[0].createdAt)
+      ? toLocalDateString(deductionRates[0].createdAt)
       : '2025-01-01';
     
     // Parse pay breakdown if available

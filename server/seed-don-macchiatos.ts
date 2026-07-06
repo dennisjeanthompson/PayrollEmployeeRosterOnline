@@ -213,10 +213,10 @@ async function main() {
         // Let's use UTC directly.
         // PHT is UTC+8. So 8am PHT = 0 UTC. 8pm PHT = 12 UTC. 12pm PHT = 4 UTC. 5pm PHT = 9 UTC.
         
-        let utcStartH, utcEndH;
+        let utcStartH = 0, utcEndH = 0;
         if (startH === 8) utcStartH = 0;
         else if (startH === 12) utcStartH = 4;
-        
+
         if (endH === 20) utcEndH = 12;
         else if (endH === 17) utcEndH = 9;
         else if (endH === 12) utcEndH = 4;

@@ -501,7 +501,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (user.password === password) {
           // Password matches, now hash it for future logins
           const hashedPassword = await bcrypt.hash(password, 10);
-          await storage.updateUser(user.id, { password }); // db-storage will hash it
+          await storage.updateUser(user.id, { password: hashedPassword });
           isPasswordValid = true;
         }
       } else {
@@ -3228,9 +3228,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (empRecord) {
         payslipData.has13thMonth = true;
         payslipData.thirteenthMonthAmount = empRecord.amount;
-        
-        // Add to netPay (13th month is usually not added to gross pay to keep it separate from standard computations, but added directly to net pay)
-        payslipData.netPay = (parseFloat(payslipData.netPay as string) + parseFloat(empRecord.amount)).toString();
+
+        const thirteenthAmount = parseFloat(empRecord.amount);
+        if (!isNaN(thirteenthAmount)) {
+          payslipData.netPay = (parseFloat(payslipData.netPay as string) + thirteenthAmount).toString();
+        }
       }
     }
 

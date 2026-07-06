@@ -593,10 +593,10 @@ export default function MuiAnalytics() {
                             borderRadius: 8,
                             fontSize: 13,
                           }}
-                          labelFormatter={(label, payload: any[]) => {
+                          labelFormatter={((label: any, payload: any[]) => {
                             const holiday = payload?.[0]?.payload?.isHoliday;
                             return holiday ? `${label} — 🎌 ${holiday}` : label;
-                          }}
+                          }) as any}
                         />
                         <Bar dataKey="scheduled" fill={theme.palette.info.main} name="Scheduled Cost" radius={[4, 4, 0, 0]} barSize={20} />
                         <Area

@@ -5,7 +5,7 @@ import { getInitials, capitalizeFirstLetter } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import Logo from "@/components/Logo";
-import React, { useState, startTransition } from "react";
+import React, { useState, useEffect, startTransition } from "react";
 
 // MUI Components
 import {
@@ -103,9 +103,11 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
   const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
 
   // Reset collapse state on mobile (always expanded in drawer)
-  if (!isDesktop && isCollapsed) {
-    setIsCollapsed(false);
-  }
+  useEffect(() => {
+    if (!isDesktop && isCollapsed) {
+      setIsCollapsed(false);
+    }
+  }, [isDesktop, isCollapsed]);
 
   const handleLogout = async () => {
     try {

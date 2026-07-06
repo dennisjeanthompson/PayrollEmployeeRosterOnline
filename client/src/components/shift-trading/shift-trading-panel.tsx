@@ -100,6 +100,14 @@ interface ShiftTrade {
 }
 
 
+function TabPanel({ children, value, index }: { children?: React.ReactNode; value: number; index: number }) {
+  return (
+    <div role="tabpanel" hidden={value !== index}>
+      {value === index && <Box sx={{ py: 1 }}>{children}</Box>}
+    </div>
+  );
+}
+
 export default function ShiftTradingPanel() {
   const theme = useTheme();
   const currentUser = getCurrentUser();

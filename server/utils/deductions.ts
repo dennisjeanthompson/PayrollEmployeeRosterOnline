@@ -45,17 +45,11 @@ export async function calculateSSS(monthlyBasicSalary: number): Promise<number> 
     const activeYear = latestBrackets.length > 0 ? latestBrackets[0].year : new Date().getFullYear();
     const brackets = await db.select().from(sssContributionTable).where(eq(sssContributionTable.year, activeYear));
     
-    console.log(`[SSS DEBUG] Monthly salary: ₱${monthlyBasicSalary.toFixed(2)}, Active Year: ${activeYear}, Total brackets found: ${brackets.length}`);
-    
     for (const b of brackets) {
       if (monthlyBasicSalary >= parseFloat(b.minCompensation) && monthlyBasicSalary <= parseFloat(b.maxCompensation)) {
-        const share = parseFloat(b.employeeShare);
-        console.log(`[SSS DEBUG] Matched bracket: MSC ₱${b.monthlySalaryCredit} (range ₱${b.minCompensation}-₱${b.maxCompensation}), Employee Share: ₱${share.toFixed(2)}`);
-        return share;
+        return parseFloat(b.employeeShare);
       }
     }
-    
-    console.warn(`[SSS DEBUG] No bracket matched for salary ₱${monthlyBasicSalary.toFixed(2)}`);
     return 0;
   } catch (error) {
     console.error('Error calculating SSS:', error);

@@ -1,6 +1,6 @@
 import { useRealtime } from "@/hooks/use-realtime";
 
-import React, { useState } from "react";
+import React, { useState, startTransition } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
@@ -99,28 +99,26 @@ export default function MuiProfileSettings() {
   const updateProfileMutation = useMutation({
     mutationFn: async (data: any) => {
       const res = await apiRequest("PUT", "/api/auth/profile", data);
-      const json = await res.json();
       if (!res.ok) {
-        throw new Error(json.message || "Failed to update profile");
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as any).message || "Failed to update profile");
       }
-      return json;
+      return res.json();
     },
     onSuccess: (data) => {
-      import("react").then(({ startTransition }) => {
-        startTransition(() => {
-          toast({ title: "Profile Updated", description: data.message });
-          setCurrentPassword("");
-          setNewPassword("");
-          setConfirmPassword("");
-          if (data.user) {
-            setTin(data.user.tin ?? "");
-            setSssNumber(data.user.sssNumber ?? "");
-            setPhilhealthNumber(data.user.philhealthNumber ?? "");
-            setPagibigNumber(data.user.pagibigNumber ?? "");
-          }
-          queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
-          if (refreshUser && typeof refreshUser === 'function') refreshUser();
-        });
+      startTransition(() => {
+        toast({ title: "Profile Updated", description: data.message });
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+        if (data.user) {
+          setTin(data.user.tin ?? "");
+          setSssNumber(data.user.sssNumber ?? "");
+          setPhilhealthNumber(data.user.philhealthNumber ?? "");
+          setPagibigNumber(data.user.pagibigNumber ?? "");
+        }
+        queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
+        if (refreshUser && typeof refreshUser === 'function') refreshUser();
       });
     },
     onError: (error: any) => {

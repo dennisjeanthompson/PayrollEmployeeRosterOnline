@@ -54,6 +54,8 @@ const BRANCH = {
   id: BRANCH_ID,
   name: 'PERO – La Union Bauang',
   address: 'Bauang, La Union',
+  phone: '(072) 888-5678',
+  isActive: true,
 };
 // We will fetch existing users from the database.
 
