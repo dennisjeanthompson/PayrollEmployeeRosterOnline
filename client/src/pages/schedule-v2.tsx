@@ -1512,7 +1512,7 @@ export default function ScheduleV2() {
               onRejectTimeOff={(id, reason, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason, leavePaymentStatus })}
               onApproveTrade={(id) => approveTradeMutation.mutate({ id, status: 'approved' })}
               onRejectTrade={(id) => approveTradeMutation.mutate({ id, status: 'rejected' })}
-              onCancelTrade={(id) => approveTradeMutation.mutate({ id, status: 'cancelled' })}
+              onCancelTrade={(id) => deleteTradeMutation.mutate(id)}
               onAcceptTrade={(id) => {
                 const t = shiftTrades.find(t => t.id === id);
                 setSelectedTrade(t);
