@@ -1416,11 +1416,17 @@ export default function ScheduleV2() {
                 isLoading={shiftsLoading || employeesLoading}
                 employees={employees.filter(e => 
                   e.id === currentUser?.id || 
-                  shiftTrades.some(t => t.shiftId && shifts.find(s => s.id === t.shiftId)?.userId === e.id && (t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId && t.status === 'pending')))
+                  shiftTrades.some(t => 
+                    (t.fromUserId === e.id || t.requesterId === e.id) && 
+                    (t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId && t.status === 'pending'))
+                  )
                 )}
                 shifts={shifts.filter(s => 
                   s.userId === currentUser?.id || 
-                  shiftTrades.some(t => t.shiftId === s.id && (t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId && t.status === 'pending')))
+                  shiftTrades.some(t => 
+                    t.shiftId === s.id && 
+                    (t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId && t.status === 'pending'))
+                  )
                 )}
                 weekStart={weekStart}
                 holidays={holidays}
