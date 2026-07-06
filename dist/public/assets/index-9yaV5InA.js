@@ -1,1 +1,0 @@
-import{c}from"./button-DsVwFHUV.js";import{r as e}from"./main-CrtabdP6.js";const s=c("X",[["path",{d:"M18 6 6 18",key:"1bl5f8"}],["path",{d:"m6 6 12 12",key:"d8bk6v"}]]);function f(t){const r=e.useRef(t);return e.useEffect(()=>{r.current=t}),e.useMemo(()=>(...a)=>r.current?.(...a),[])}var n=globalThis?.document?e.useLayoutEffect:()=>{};export{s as X,n as a,f as u};

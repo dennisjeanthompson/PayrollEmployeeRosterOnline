@@ -745,10 +745,25 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter out shifts for inactive employees
       let activeShifts = shiftsWithUsers.filter(shift => shift.user?.isActive);
       
-      // PRIVACY: If user is an employee, ONLY show their own shifts
+      // PRIVACY: If user is an employee, show their own shifts + shifts from open/targeted trades
       if (req.user!.role === 'employee') {
         const userId = req.user!.id;
-        activeShifts = activeShifts.filter(shift => shift.userId === userId);
+        // Fetch pending trades so we can include traded shifts from other employees
+        const [userTrades, openTrades] = await Promise.all([
+          storage.getShiftTradesByUser(userId),
+          storage.getAvailableShiftTrades(branchId),
+        ]);
+        // Collect shift IDs from trades relevant to this employee
+        const tradeShiftIds = new Set<string>();
+        // Open market trades (no target user) — visible to everyone
+        openTrades.forEach(t => {
+          if (!t.toUserId && t.status === 'pending') tradeShiftIds.add(t.shiftId);
+        });
+        // Trades where this employee is involved (requester or target)
+        userTrades.forEach(t => {
+          if (t.status === 'pending' || t.status === 'accepted') tradeShiftIds.add(t.shiftId);
+        });
+        activeShifts = activeShifts.filter(shift => shift.userId === userId || tradeShiftIds.has(shift.id));
       }
       
       if (activeShifts.length > 0) {
