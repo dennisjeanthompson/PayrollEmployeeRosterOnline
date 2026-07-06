@@ -499,9 +499,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Password is stored as plain text - compare directly and then hash it
         
         if (user.password === password) {
-          // Password matches, now hash it for future logins
-          const hashedPassword = await bcrypt.hash(password, 10);
-          await storage.updateUser(user.id, { password: hashedPassword });
+          // Password matches, now hash it for future logins (updateUser hashes it)
+          await storage.updateUser(user.id, { password });
           isPasswordValid = true;
         }
       } else {
@@ -763,13 +762,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userTrades.forEach(t => {
           if (t.status === 'pending' || t.status === 'accepted') tradeShiftIds.add(t.shiftId);
         });
-        console.log(`[SHIFT-TRADE-DEBUG] Employee ${userId}: openTrades=${openTrades.length}, userTrades=${userTrades.length}, tradeShiftIds=${JSON.stringify([...tradeShiftIds])}`);
-        const beforeCount = activeShifts.length;
         activeShifts = activeShifts.filter(shift => shift.userId === userId || tradeShiftIds.has(shift.id));
-        console.log(`[SHIFT-TRADE-DEBUG] Employee ${userId}: shifts before=${beforeCount}, after=${activeShifts.length}, tradeShiftsIncluded=${activeShifts.filter(s => s.userId !== userId).map(s => ({id: s.id, userId: s.userId, start: s.startTime}))}`);
-      }
-      
-      if (activeShifts.length > 0) {
       }
 
       res.json({ shifts: activeShifts });
@@ -3226,12 +3219,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const records = await storage.get13thMonthRecords(new Date(periodEnd || entry.createdAt!).getFullYear());
       const empRecord = records.find(r => r.payslipId === entry.id || (r.employeeId === entry.userId && r.status === 'released'));
       if (empRecord) {
-        payslipData.has13thMonth = true;
-        payslipData.thirteenthMonthAmount = empRecord.amount;
-
         const thirteenthAmount = parseFloat(empRecord.amount);
         if (!isNaN(thirteenthAmount)) {
-          payslipData.netPay = (parseFloat(payslipData.netPay as string) + thirteenthAmount).toString();
+          payslipData.has13thMonth = true;
+          payslipData.thirteenthMonthAmount = thirteenthAmount.toString();
+          payslipData.netPay = ((parseFloat(payslipData.netPay as string) || 0) + thirteenthAmount).toString();
         }
       }
     }

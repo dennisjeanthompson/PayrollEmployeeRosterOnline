@@ -1531,7 +1531,6 @@ export default function ScheduleV2() {
                 setTakeTradeAction('take');
                 setTakeTradeModalOpen(true);
               }}
-              onCancelTrade={(id) => deleteTradeMutation.mutate(id)}
             />
           </Box>
         )}
