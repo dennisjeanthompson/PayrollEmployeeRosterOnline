@@ -99,6 +99,7 @@ interface PayslipPreviewProps {
   entryId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  hideExceptionLog?: boolean;
 }
 
 // ============================================================
@@ -370,7 +371,7 @@ const formatCurrency = (amount: number): string => {
 // MAIN COMPONENT
 // ============================================================
 
-export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewProps) {
+export function PayslipPreview({ entryId, open, onOpenChange, hideExceptionLog = false }: PayslipPreviewProps) {
   const { toast } = useToast();
 
   const { data, isLoading, error } = useQuery({
@@ -612,8 +613,8 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
     doc.text(formatCurrency(payslipData.netPay), pageWidth - 25, y + 8, { align: "right" });
     y += 15;
 
-    // Exception Logs Addendum
-    if (payslipData.includedExceptions && payslipData.includedExceptions.length > 0) {
+    // Exception Logs Addendum (omitted for employee-facing PDF)
+    if (!hideExceptionLog && payslipData.includedExceptions && payslipData.includedExceptions.length > 0) {
       if (y > 240) {
         doc.addPage();
         y = 20;
@@ -863,8 +864,8 @@ export function PayslipPreview({ entryId, open, onOpenChange }: PayslipPreviewPr
               </tbody>
             </table>
 
-            {/* Exception Log Addendum */}
-            {payslip.includedExceptions && payslip.includedExceptions.length > 0 && (
+            {/* Exception Log Addendum — hidden for employee-facing view */}
+            {!hideExceptionLog && payslip.includedExceptions && payslip.includedExceptions.length > 0 && (
               <div style={{ marginTop: 24, breakBefore: "auto" }}>
                 <div style={{ background: '#333', color: 'white', padding: '8px 12px', fontSize: 13, fontWeight: 'bold' }}>
                   EXCEPTION LOG ADDENDUM (Included in Calculation)

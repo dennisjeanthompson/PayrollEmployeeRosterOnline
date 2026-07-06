@@ -3668,7 +3668,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/shift-trades/:id", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
-      const { status } = req.body;
+      const { status, notes } = req.body;
       const userId = req.user!.id;
 
       const trade = await storage.getShiftTrade(id);
@@ -3708,6 +3708,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!trade.toUserId && (status === "accepted" || status === "pending")) {
         updateData.toUserId = userId;
       }
+      if (status === "rejected" && notes) {
+        updateData.notes = notes;
+      }
 
       const updatedTrade = await storage.updateShiftTrade(id, updateData);
 
@@ -3744,7 +3747,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/shift-trades/:id/approve", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
-      const { status } = req.body;
+      const { status, notes } = req.body;
       const managerId = req.user!.id;
 
       if (!["approved", "rejected"].includes(status)) {
@@ -3781,7 +3784,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const updatedTrade = await storage.updateShiftTrade(id, {
         status,
         approvedBy: managerId,
-        approvedAt: new Date()
+        approvedAt: new Date(),
+        ...(status === "rejected" && notes ? { notes } : {}),
       });
 
       // Enrich with shift data

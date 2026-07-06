@@ -705,6 +705,7 @@ export default function MuiPayroll() {
               entryId={selectedPayslip.id}
               open={payslipDialogOpen}
               onOpenChange={setPayslipDialogOpen}
+              hideExceptionLog={true}
             />
           </Suspense>
         )}

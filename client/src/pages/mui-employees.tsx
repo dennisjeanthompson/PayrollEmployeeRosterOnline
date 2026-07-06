@@ -1128,7 +1128,8 @@ export default function MuiEmployees() {
                       type="number"
                       value={formData.hourlyRate}
                       onChange={(e) => setFormData({ ...formData, hourlyRate: e.target.value })}
-                      inputProps={{ step: "any", min: "0" }}
+                      inputProps={{ step: "0.01", min: "1", max: "10000" }}
+                      helperText="₱1 – ₱10,000 per hour"
                       required
                     />
                   </Grid>

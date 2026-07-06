@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { dbStorage } from "../db-storage";
+import { createAuditLog } from "./audit";
 
 const requireAuth = (req: Request, res: Response, next: NextFunction) => {
   if (!req.session?.user) {
@@ -83,7 +84,14 @@ export function registerBranchesRoutes(router: Router) {
         isActive: result.data.isActive,
       });
 
-      console.log('Branch created:', newBranch);
+      await createAuditLog({
+        action: 'branch_create',
+        entityType: 'branch',
+        entityId: newBranch.id,
+        userId: (req as any).user.id,
+        newValues: { name: newBranch.name, address: newBranch.address, phone: newBranch.phone },
+        branchId: newBranch.id,
+      });
       res.status(201).json(newBranch);
     } catch (error) {
       console.error("Error creating branch:", error);
@@ -119,11 +127,22 @@ export function registerBranchesRoutes(router: Router) {
         });
       }
 
+      const existingBranch = await dbStorage.getBranch(id);
       const updatedBranch = await dbStorage.updateBranch(id, result.data);
 
       if (!updatedBranch) {
         return res.status(404).json({ message: "Branch not found" });
       }
+
+      await createAuditLog({
+        action: 'branch_update',
+        entityType: 'branch',
+        entityId: id,
+        userId: (req as any).user.id,
+        oldValues: existingBranch ? { name: existingBranch.name, address: existingBranch.address, phone: existingBranch.phone, isActive: existingBranch.isActive } : undefined,
+        newValues: result.data,
+        branchId: id,
+      });
 
       res.json(updatedBranch);
     } catch (error) {
@@ -145,6 +164,15 @@ export function registerBranchesRoutes(router: Router) {
       if (!updatedBranch) {
         return res.status(404).json({ message: "Active branch not found" });
       }
+
+      await createAuditLog({
+        action: 'branch_deactivate',
+        entityType: 'branch',
+        entityId: id,
+        userId: (req as any).user.id,
+        newValues: { isActive: false },
+        branchId: id,
+      });
 
       res.json({ message: "Branch deactivated successfully" });
     } catch (error) {

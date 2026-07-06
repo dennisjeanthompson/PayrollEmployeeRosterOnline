@@ -282,10 +282,13 @@ router.post('/api/employees', requireAuth, requireRole(['manager', 'admin']), as
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Validate hourlyRate is a valid non-negative number
+    // Validate hourlyRate: must be > 0 and ≤ ₱10,000/hr
     const parsedRate = parseFloat(String(hourlyRate));
-    if (isNaN(parsedRate) || parsedRate < 0) {
-      return res.status(400).json({ message: 'hourlyRate must be a non-negative number' });
+    if (isNaN(parsedRate) || parsedRate <= 0) {
+      return res.status(400).json({ message: 'Hourly rate must be greater than ₱0.' });
+    }
+    if (parsedRate > 10000) {
+      return res.status(400).json({ message: 'Hourly rate cannot exceed ₱10,000 per hour.' });
     }
 
     const calculatedDailyRate = parsedRate * 8;
@@ -434,8 +437,11 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']),
     // Convert hourlyRate to string if it exists (database stores as text)
     if (updates.hourlyRate !== undefined) {
       const rate = parseFloat(String(updates.hourlyRate));
-      if (isNaN(rate) || rate < 0) {
-        return res.status(400).json({ message: 'hourlyRate must be a non-negative number' });
+      if (isNaN(rate) || rate <= 0) {
+        return res.status(400).json({ message: 'Hourly rate must be greater than ₱0.' });
+      }
+      if (rate > 10000) {
+        return res.status(400).json({ message: 'Hourly rate cannot exceed ₱10,000 per hour.' });
       }
 
       const calculatedDailyRate = rate * 8;

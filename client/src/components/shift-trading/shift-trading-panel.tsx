@@ -117,6 +117,11 @@ export default function ShiftTradingPanel() {
   const [respondDialogOpen, setRespondDialogOpen] = useState(false);
   const [tradeToRespond, setTradeToRespond] = useState<ShiftTrade | null>(null);
 
+  // Reject trade dialog state
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectingTrade, setRejectingTrade] = useState<{ id: string; type: "respond" | "approve" } | null>(null);
+  const [rejectNotes, setRejectNotes] = useState("");
+
   // Real-time shifts query with polling
   const { data: shiftsData, isLoading: shiftsLoading, refetch: refetchShifts } = useQuery({
     queryKey: ["employee-shifts"],
@@ -178,9 +183,10 @@ export default function ShiftTradingPanel() {
 
   // Respond to trade mutation
   const respondToTradeMutation = useMutation({
-    mutationFn: async ({ tradeId, accept }: { tradeId: string; accept: boolean }) => {
+    mutationFn: async ({ tradeId, accept, notes }: { tradeId: string; accept: boolean; notes?: string }) => {
       const response = await apiRequest("PATCH", `/api/shift-trades/${tradeId}`, {
         status: accept ? "accepted" : "rejected",
+        ...(!accept && notes ? { notes } : {}),
       });
       return response.json();
     },
@@ -202,9 +208,10 @@ export default function ShiftTradingPanel() {
 
   // Manager approval mutation
   const approveTradeAsManagerMutation = useMutation({
-    mutationFn: async ({ tradeId, approve }: { tradeId: string; approve: boolean }) => {
+    mutationFn: async ({ tradeId, approve, notes }: { tradeId: string; approve: boolean; notes?: string }) => {
       const response = await apiRequest("PATCH", `/api/shift-trades/${tradeId}/approve`, {
         status: approve ? "approved" : "rejected",
+        ...(!approve && notes ? { notes } : {}),
       });
       return response.json();
     },
@@ -447,9 +454,11 @@ export default function ShiftTradingPanel() {
                     color="error"
                     size="small"
                     startIcon={<CancelIcon />}
-                    onClick={() =>
-                      approveTradeAsManagerMutation.mutate({ tradeId: trade.id, approve: false })
-                    }
+                    onClick={() => {
+                      setRejectingTrade({ id: trade.id, type: "approve" });
+                      setRejectNotes("");
+                      setRejectDialogOpen(true);
+                    }}
                     disabled={approveTradeAsManagerMutation.isPending}
                   >
                     Reject
@@ -655,8 +664,10 @@ export default function ShiftTradingPanel() {
             variant="outlined"
             color="error"
             onClick={() => {
-              respondToTradeMutation.mutate({ tradeId: tradeToRespond!.id, accept: false });
               setRespondDialogOpen(false);
+              setRejectingTrade({ id: tradeToRespond!.id, type: "respond" });
+              setRejectNotes("");
+              setRejectDialogOpen(true);
             }}
           >
             Decline
@@ -670,6 +681,56 @@ export default function ShiftTradingPanel() {
             }}
           >
             Accept Trade
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Reject Trade Dialog — reason + confirmation */}
+      <Dialog open={rejectDialogOpen} onClose={() => setRejectDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Reject Trade Request</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Stack spacing={2}>
+            <Typography variant="body2" color="text.secondary">
+              Provide an optional reason. This will be visible to the requester.
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="Reason for rejection (optional)"
+              value={rejectNotes}
+              onChange={(e) => setRejectNotes(e.target.value)}
+              placeholder="e.g. Schedule conflict, insufficient notice…"
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setRejectDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            disabled={respondToTradeMutation.isPending || approveTradeAsManagerMutation.isPending}
+            onClick={() => {
+              if (!rejectingTrade) return;
+              if (rejectingTrade.type === "respond") {
+                respondToTradeMutation.mutate({
+                  tradeId: rejectingTrade.id,
+                  accept: false,
+                  notes: rejectNotes || undefined,
+                });
+              } else {
+                approveTradeAsManagerMutation.mutate({
+                  tradeId: rejectingTrade.id,
+                  approve: false,
+                  notes: rejectNotes || undefined,
+                });
+              }
+              setRejectDialogOpen(false);
+              setRejectingTrade(null);
+              setRejectNotes("");
+            }}
+          >
+            Confirm Rejection
           </Button>
         </DialogActions>
       </Dialog>
