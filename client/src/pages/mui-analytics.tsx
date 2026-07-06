@@ -593,7 +593,7 @@ export default function MuiAnalytics() {
                             borderRadius: 8,
                             fontSize: 13,
                           }}
-                          labelFormatter={(label, payload) => {
+                          labelFormatter={(label, payload: any[]) => {
                             const holiday = payload?.[0]?.payload?.isHoliday;
                             return holiday ? `${label} — 🎌 ${holiday}` : label;
                           }}

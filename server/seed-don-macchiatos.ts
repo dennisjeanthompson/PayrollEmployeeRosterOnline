@@ -222,10 +222,10 @@ async function main() {
         else if (endH === 12) utcEndH = 4;
 
         const start = new Date(date);
-        start.setUTCHours(utcStartH, 0, 0, 0);
+        start.setUTCHours(utcStartH || 0, 0, 0, 0);
         
         const end = new Date(date);
-        end.setUTCHours(utcEndH, 0, 0, 0);
+        end.setUTCHours(utcEndH || 0, 0, 0, 0);
 
         await db.insert(shifts).values({
           id: uuid(),

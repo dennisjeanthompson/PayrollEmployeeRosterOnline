@@ -50,6 +50,11 @@ const uuid = () => crypto.randomUUID();
 // ═══════════════════════════════════════════════════════════════════════════
 
 const BRANCH_ID = 'branch-launion';
+const BRANCH = {
+  id: BRANCH_ID,
+  name: 'PERO – La Union Bauang',
+  address: 'Bauang, La Union',
+};
 // We will fetch existing users from the database.
 
 // La Union uses Region I wage order — daily minimum ~₱400 → ~₱50/hr

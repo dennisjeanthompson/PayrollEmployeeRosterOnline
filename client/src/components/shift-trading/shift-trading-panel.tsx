@@ -39,6 +39,32 @@ import {
   alpha,
 } from "@mui/material";
 
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+function TabPanel(props: TabPanelProps) {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`shift-trade-tabpanel-${index}`}
+      aria-labelledby={`shift-trade-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ p: 0 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+}
+
 // Icons
 import SwapIcon from '@mui/icons-material/SwapHoriz';
 import RefreshIcon from '@mui/icons-material/RefreshRounded';
