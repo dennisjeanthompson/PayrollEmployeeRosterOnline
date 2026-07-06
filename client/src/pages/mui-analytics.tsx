@@ -137,19 +137,14 @@ export default function MuiAnalytics() {
       "forecast-payroll",
       "forecast-peaks",
       "forecast-staffing",
-    ],
-  });
-  const [forecastDays, setForecastDays] = useState<number>(14);
-
-  useRealtime({
-    queryKeys: [
       "/api/analytics/trends",
       "/api/forecast/labor",
       "/api/forecast/payroll",
       "/api/forecast/peaks",
-      "/api/forecast/staffing"
-    ]
+      "/api/forecast/staffing",
+    ],
   });
+  const [forecastDays, setForecastDays] = useState<number>(14);
 
   // ── Data queries ──
   const {

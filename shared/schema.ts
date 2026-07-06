@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, boolean, timestamp, integer, numeric, serial, json } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, integer, numeric, serial, json, index } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -69,7 +69,10 @@ export const shifts = pgTable("shifts", {
   deletedAt: timestamp("deleted_at"),
   deletedBy: text("deleted_by").references(() => users.id),
   deletionReason: text("deletion_reason"),
-});
+}, (table) => [
+  index("shifts_branch_start_idx").on(table.branchId, table.startTime),
+  index("shifts_user_idx").on(table.userId),
+]);
 
 export const shiftTrades = pgTable("shift_trades", {
   id: text("id").primaryKey(),
@@ -129,7 +132,9 @@ export const payrollEntries = pgTable("payroll_entries", {
   createdAt: timestamp("created_at").defaultNow(),
   paidAt: timestamp("paid_at"),
   has13thMonth: boolean("has_13th_month").default(false),
-});
+}, (table) => [
+  index("payroll_entries_period_idx").on(table.payrollPeriodId),
+]);
 
 export const approvals = pgTable("approvals", {
   id: text("id").primaryKey(),
@@ -171,7 +176,9 @@ export const notifications = pgTable("notifications", {
   isRead: boolean("is_read").default(false),
   data: text("data"),
   createdAt: timestamp("created_at").defaultNow(),
-});
+}, (table) => [
+  index("notifications_user_idx").on(table.userId),
+]);
 
 export const setupStatus = pgTable("setup_status", {
   id: text("id").primaryKey(),
