@@ -377,11 +377,11 @@ function AdminDashboard({ currentUser }: any) {
               </Box>
               <CardContent>
                 <Stack spacing={2}>
-                  {staffOverview?.map((s: any, idx: number) => {
+                  {staffOverview?.map((s: any) => {
                     const max = Math.max(...(staffOverview.map((st:any) => st.headcount) || [1]));
                     const pct = max > 0 ? (s.headcount / max) * 100 : 0;
                     return (
-                      <Box key={idx}>
+                      <Box key={s.branchName}>
                         <Stack direction="row" justifyContent="space-between" sx={{ mb: 0.5 }}>
                           <Typography variant="body2" fontWeight={600} noWrap sx={{ maxWidth: '80%' }}>{s.branchName}</Typography>
                           <Typography variant="body2" color="text.secondary">{s.headcount}</Typography>
@@ -403,7 +403,7 @@ function AdminDashboard({ currentUser }: any) {
                </Box>
                <List disablePadding>
                  {recentActivity?.map((log: any, idx: number) => (
-                   <ListItem key={idx} divider={idx < recentActivity.length - 1} sx={{ px: 2.5, py: 1.5 }}>
+                   <ListItem key={log.id ?? idx} divider={idx < recentActivity.length - 1} sx={{ px: 2.5, py: 1.5 }}>
                       <ListItemIcon sx={{ minWidth: 36 }}><HistoryIcon fontSize="small" color="secondary" /></ListItemIcon>
                       <ListItemText 
                         primary={log.action} 

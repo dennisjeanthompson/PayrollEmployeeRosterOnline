@@ -535,8 +535,8 @@ export default function RequestsPanel({
               </AccordionSummary>
               <AccordionDetails sx={{ px: 0, pt: 0, pb: 2 }}>
                 <Stack spacing={1}>
-                  {scheduleAlerts.map((alert, i: number) => (
-                    <Box key={i} sx={{ 
+                  {scheduleAlerts.map((alert) => (
+                    <Box key={alert.message} sx={{
                       p: 1.5, borderRadius: 2,
                       bgcolor: alert.type === 'error' ? alpha('#EF4444', 0.1) : alpha('#F59E0B', 0.1), 
                       border: `1px solid ${alert.type === 'error' ? alpha('#EF4444', 0.2) : alpha('#F59E0B', 0.2)}`,

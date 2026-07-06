@@ -261,18 +261,22 @@ export class DatabaseStorage implements IStorage {
    * Check if an employee has any related data (shifts, payroll, etc.)
    */
   async employeeHasRelatedData(id: string): Promise<{ hasShifts: boolean; hasPayroll: boolean; hasTotal: number }> {
-    const userShifts = await this.getShiftsByUser(id);
-    const payroll = await this.getPayrollEntriesByUser(id);
-    const timeOff = await this.getTimeOffRequestsByUser(id);
-    const trades = await this.getShiftTradesByUser(id);
-    const adjLogs = await db.select().from(adjustmentLogs).where(eq(adjustmentLogs.employeeId, id));
-    const docs = await db.select().from(employeeDocuments).where(eq(employeeDocuments.userId, id));
-    
-    const total = userShifts.length + payroll.length + timeOff.length + trades.length + adjLogs.length + docs.length;
+    const count = (table: any, col: any) =>
+      db.select({ n: sql<number>`count(*)::int` }).from(table).where(eq(col, id)).then(r => r[0]?.n ?? 0);
+
+    const [shiftsN, payrollN, timeOffN, tradesN, adjN, docsN] = await Promise.all([
+      count(shifts, shifts.userId),
+      count(payrollEntries, payrollEntries.userId),
+      count(timeOffRequests, timeOffRequests.userId),
+      db.select({ n: sql<number>`count(*)::int` }).from(shiftTrades).where(or(eq(shiftTrades.fromUserId, id), eq(shiftTrades.toUserId, id))).then(r => r[0]?.n ?? 0),
+      count(adjustmentLogs, adjustmentLogs.employeeId),
+      count(employeeDocuments, employeeDocuments.userId),
+    ]);
+
     return {
-      hasShifts: userShifts.length > 0,
-      hasPayroll: payroll.length > 0,
-      hasTotal: total,
+      hasShifts: shiftsN > 0,
+      hasPayroll: payrollN > 0,
+      hasTotal: shiftsN + payrollN + timeOffN + tradesN + adjN + docsN,
     };
   }
 
