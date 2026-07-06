@@ -354,7 +354,6 @@ router.post('/audit-log', requireAuth, async (req: Request, res: Response) => {
     };
     
     await createAuditLog(auditEntry);
-    console.log('[Payslip Audit]', auditEntry);
     
     res.json({ success: true, logged: true });
   } catch (error) {
@@ -408,10 +407,8 @@ router.get('/audit-log', requireManagerOrAdmin, async (req: Request, res: Respon
  * Generate a PDF payslip from payslip data
  */
 router.post('/generate-pdf', requireAuth, async (req: Request, res: Response) => {
-  console.log('[Payslips] POST /generate-pdf called');
   try {
     const { payslip_data, format = 'pdf', include_qr = true } = req.body;
-    console.log('[Payslips] Received payslip_data:', !!payslip_data, 'format:', format);
     
     // Validate required data
     if (!payslip_data) {

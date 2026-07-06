@@ -696,7 +696,7 @@ export async function createAdminAccount() {
       isActive: true,
     });
 
-    console.log('✅ Admin account created (username: admin, password: admin123)');
+    console.log('✅ Admin account created (username: admin)');
   } catch (error) {
     console.error('❌ Error creating admin account:', error);
     throw error;

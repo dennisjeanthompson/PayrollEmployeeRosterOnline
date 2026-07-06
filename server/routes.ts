@@ -384,7 +384,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         fixed,
         skipped,
         fixedUsers,
-        newPassword: passwordToHash,
       });
     } catch (error) {
       console.error('Fix passwords error:', error);
@@ -2521,7 +2520,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         const hourlyRate = parseFloat(employee.hourlyRate);
         if (isNaN(hourlyRate) || hourlyRate <= 0) {
-          console.warn(`[PAYROLL SKIP] ${employee.firstName} ${employee.lastName} — invalid hourlyRate "${employee.hourlyRate}", skipping.`);
           continue;
         }
         const payCalculation = calculatePeriodPay(shifts, hourlyRate, periodHolidays, -1, isHolidayExempt); // -1 = no default rest day
@@ -2756,7 +2754,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         
         // Include lateness, absences (stored in lateDeduction), and undertime in otherDeductions
         // so they are explicitly visible as deductions on the payslip.
-        const otherDeductions = parseFloat(employee.otherDeductions || '0') + lateDeduction + undertimeDeduction;
+        const otherDeductions = (parseFloat(employee.otherDeductions || '0') || 0) + lateDeduction + undertimeDeduction;
 
         // ─── Feature 1: MWE Exemption (BIR TRAIN Law) ─────────────────────────
         // If employee is flagged as Minimum Wage Earner, withholding tax is 0.

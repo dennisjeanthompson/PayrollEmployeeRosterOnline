@@ -144,9 +144,11 @@ export async function calculateWithholdingTax(monthlyBasicSalary: number): Promi
           for (let j = 0; j < i; j++) {
             const prev = activeRates[j];
             const prevMin = parseFloat(prev.minSalary);
-            const prevMax = prev.maxSalary ? parseFloat(prev.maxSalary) : 0;
+            const prevMax = prev.maxSalary ? parseFloat(prev.maxSalary) : null;
             const prevRate = prev.employeeRate ? parseFloat(prev.employeeRate) / 100 : 0;
-            baseTax += (prevMax - prevMin) * prevRate;
+            if (prevMax !== null) {
+              baseTax += (prevMax - prevMin) * prevRate;
+            }
           }
           annualTax = baseTax + (annualSalary - min) * rate;
         }

@@ -102,22 +102,23 @@ export class DatabaseStorage implements IStorage {
         throw new Error("Cannot delete employee with existing payroll records. Deactivate them instead.");
       }
 
-      // Clean up remaining FK references before deleting user
-      await db.delete(notifications).where(eq(notifications.userId, id));
-      await db.delete(approvals).where(
-        or(eq(approvals.requestedBy, id), eq(approvals.approvedBy, id))
-      );
-      await db.delete(employeeDocuments).where(
-        or(eq(employeeDocuments.userId, id), eq(employeeDocuments.uploadedBy, id))
-      );
-      await db.delete(timeOffRequests).where(
-        or(eq(timeOffRequests.userId, id), eq(timeOffRequests.approvedBy, id))
-      );
-      await db.delete(adjustmentLogs).where(
-        or(eq(adjustmentLogs.employeeId, id), eq(adjustmentLogs.loggedBy, id), eq(adjustmentLogs.approvedBy, id))
-      );
-
-      await db.delete(users).where(eq(users.id, id));
+      // Clean up remaining FK references and delete user atomically
+      await db.transaction(async (tx) => {
+        await tx.delete(notifications).where(eq(notifications.userId, id));
+        await tx.delete(approvals).where(
+          or(eq(approvals.requestedBy, id), eq(approvals.approvedBy, id))
+        );
+        await tx.delete(employeeDocuments).where(
+          or(eq(employeeDocuments.userId, id), eq(employeeDocuments.uploadedBy, id))
+        );
+        await tx.delete(timeOffRequests).where(
+          or(eq(timeOffRequests.userId, id), eq(timeOffRequests.approvedBy, id))
+        );
+        await tx.delete(adjustmentLogs).where(
+          or(eq(adjustmentLogs.employeeId, id), eq(adjustmentLogs.loggedBy, id), eq(adjustmentLogs.approvedBy, id))
+        );
+        await tx.delete(users).where(eq(users.id, id));
+      });
       return true;
     } catch (error: any) {
       console.error('Error deleting user:', error);
