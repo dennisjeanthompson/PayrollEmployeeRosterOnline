@@ -2214,19 +2214,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
 
   // ─── Deduction Settings (Per-Branch Toggle) ────────────────────────────────
-  app.get("/api/deduction-settings", requireAuth, asyncHandler(async (req, res) => {
-    try {
-      const branchId = req.user!.branchId;
-      const rows = await db.select().from(deductionSettingsTable).where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
-      if (rows.length === 0) {
-        // Return defaults (all enabled)
-        return res.json({ settings: { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: true, includeExceptionLogs: true, includeHolidayPay: false } });
-      }
-      res.json({ settings: rows[0] });
-    } catch (error: any) {
-      res.status(500).json({ message: error.message || "Failed to fetch deduction settings" });
-    }
-  }));
+  // NOTE: canonical GET is registered below at the Deduction Settings Routes section (requireRole manager)
 
   app.put("/api/deduction-settings", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
@@ -2680,12 +2668,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        const periodStartDate = new Date(period.startDate);
-        const periodEndDate = new Date(period.endDate);
-        const daysInPeriod = Math.ceil((periodEndDate.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1000)) + 1;
-        
         // DOLE Standard: Estimate monthly salary based on hourly rate * MONTHLY_WORKING_HOURS
-        // (average 22 working days * 8 hours), which aligns exactly with the 
+        // (average 22 working days * 8 hours), which aligns exactly with the
         // Employee Deductions UI estimates and ensures MSC brackets don't drop during absences.
         const monthlyBasicSalary = hourlyRate * MONTHLY_WORKING_HOURS;
 
@@ -2693,10 +2677,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const { calculateAllDeductions, calculateWithholdingTax } = await import('./utils/deductions');
 
         // Philippine statutory deductions use MONTHLY salary basis.
-        // SSS, PhilHealth, Pag-IBIG are computed once per month.
-        // For semi-monthly (15-day) periods, we calculate on the monthly equivalent
-        // but only deduct HALF per cutoff (the other half comes from the 2nd cutoff).
-        const isSemiMonthly = daysInPeriod < 28; // 15-day period = semi-monthly
+        // SSS, PhilHealth, Pag-IBIG are computed once per month; the fraction
+        // below pro-rates them to the payroll frequency (monthly=1, semi/bi-weekly=0.5, weekly=0.25).
+        const freq = companySettings?.payrollFrequency || 'semi-monthly';
+        const periodFraction = freq === 'monthly' ? 1 : freq === 'weekly' ? 0.25 : 0.5;
 
         // Step 1: Calculate SSS, PhilHealth, Pag-IBIG on monthly basis
         // Uses actual branch deduction settings from DB (loaded above the loop)
@@ -2709,8 +2693,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         };
         const mandatoryBreakdown = await calculateAllDeductions(monthlyBasicSalary, mandatorySettings);
 
-        // For semi-monthly payroll, each cutoff pays half the monthly contribution
-        const periodFraction = isSemiMonthly ? 0.5 : 1;
         const sssContribution = Math.round(mandatoryBreakdown.sssContribution * periodFraction * 100) / 100;
         const philHealthContribution = Math.round(mandatoryBreakdown.philHealthContribution * periodFraction * 100) / 100;
         const pagibigContribution = Math.round(mandatoryBreakdown.pagibigContribution * periodFraction * 100) / 100;
@@ -3084,14 +3066,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     // Get payroll entry directly by ID
     const entry = await storage.getPayrollEntry(entryId);
-    
+
     if (!entry) {
       return res.status(404).json({ message: "Payroll entry not found" });
-    }
-    
-    // Verify the entry belongs to the current user or user is admin/manager
-    if (entry.userId !== userId && req.user!.role !== 'admin' && req.user!.role !== 'manager') {
-      return res.status(403).json({ message: "Unauthorized access to payroll entry" });
     }
 
     // Get user details — use the EMPLOYEE's userId from the entry, not the logged-in user
@@ -3100,6 +3077,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(404).json({ message: "Employee not found" });
     }
     const user = employeeUser;
+
+    // Authorization: employees see only their own payslip; managers see only their branch
+    if (entry.userId !== userId) {
+      if (req.user!.role === 'admin') {
+        // admin can access any payslip
+      } else if (req.user!.role === 'manager') {
+        if (employeeUser.branchId !== req.user!.branchId) {
+          return res.status(403).json({ message: "Unauthorized access to payroll entry" });
+        }
+      } else {
+        return res.status(403).json({ message: "Unauthorized access to payroll entry" });
+      }
+    }
 
     // Parse the pay breakdown JSON if it exists
     let breakdown = null;
@@ -3352,6 +3342,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!archived) {
         return res.status(404).json({ message: "Archived period not found" });
+      }
+
+      // Branch ownership check (admins can access any branch)
+      if (req.user!.role !== 'admin' && archived.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Unauthorized access to archived payroll" });
       }
 
       // Parse the entries snapshot
@@ -5809,25 +5804,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Mount employee uploads router - PROTECTED
   // MOVED UP to avoid conflict with /api/employees/:id
   
-  // Debug endpoint to force seeding
+  // Debug endpoint to force seeding (development only)
   app.post("/api/debug/seed", requireAuth, asyncHandler(async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ message: "Not found" });
+    }
     try {
-      // Manual role check with debug output
       if (!['admin', 'manager'].includes(req.user!.role)) {
-        return res.status(403).json({ 
-          message: "Insufficient permissions", 
-          yourRole: req.user!.role,
-          userId: req.user!.id
-        });
+        return res.status(403).json({ message: "Insufficient permissions" });
       }
 
       await seedSampleUsers();
       await seedSampleSchedulesAndPayroll();
-      
+
       const userCount = await storage.getUsersByBranch(req.user!.branchId);
-      
-      res.json({ 
-        message: "Seeding completed successfully", 
+
+      res.json({
+        message: "Seeding completed successfully",
         usersFound: userCount.length,
         timestamp: new Date().toISOString()
       });
@@ -5837,8 +5830,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
-  // Full database reset + reseed (admin only)
+  // Full database reset + reseed (development only)
   app.post("/api/debug/reset-and-reseed", requireAuth, requireRole(["admin"]), asyncHandler(async (req, res) => {
+    if (process.env.NODE_ENV === 'production') {
+      return res.status(404).json({ message: "Not found" });
+    }
     try {
 
       // 1. Drop all tables
@@ -5951,11 +5947,23 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.put("/api/13th-month/release", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: "ids array is required" });
-    
+
+    // Build the set of 13th-month record IDs that belong to this manager's branch
+    const branchEmployees = await storage.getUsersByBranch(req.user!.branchId);
+    const branchEmployeeIds = new Set(branchEmployees.map(e => e.id));
+    const year = new Date().getFullYear();
+    const allRecords = await storage.get13thMonthRecords(year);
+    const branchRecordIds = new Set(
+      allRecords.filter(r => branchEmployeeIds.has(r.employeeId)).map(r => r.id)
+    );
+
+    let released = 0;
     for (const id of ids) {
-       await storage.update13thMonthRecord(id, { status: 'released', releasedAt: new Date() });
+      if (!branchRecordIds.has(id)) continue; // skip records not in this branch
+      await storage.update13thMonthRecord(id, { status: 'released', releasedAt: new Date() });
+      released++;
     }
-    res.json({ message: "Records released successfully" });
+    res.json({ message: "Records released successfully", released });
   }));
 
   return httpServer;
