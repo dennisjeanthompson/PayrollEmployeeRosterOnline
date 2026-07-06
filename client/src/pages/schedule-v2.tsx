@@ -1421,13 +1421,7 @@ export default function ScheduleV2() {
                     (t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId && t.status === 'pending'))
                   )
                 )}
-                shifts={shifts.filter(s => 
-                  s.userId === currentUser?.id || 
-                  shiftTrades.some(t => 
-                    t.shiftId === s.id && 
-                    (t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId && t.status === 'pending'))
-                  )
-                )}
+                shifts={shifts}
                 weekStart={weekStart}
                 holidays={holidays}
                 isManager={false}
