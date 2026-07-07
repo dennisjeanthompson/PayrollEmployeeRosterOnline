@@ -106,6 +106,9 @@ export default function RequestsPanel({
   const [tradeRejectReason, setTradeRejectReason] = useState('');
   const [tradeRejectAction, setTradeRejectAction] = useState<'reject' | 'decline'>('reject');
 
+  // Locally dismissed open-market trade IDs (Pass / Not Interested)
+  const [dismissedTradeIds, setDismissedTradeIds] = useState<Set<string>>(new Set());
+
   const handleOpenTradeRejectDialog = (id: string, action: 'reject' | 'decline') => {
     setTradeRejectingId(id);
     setTradeRejectReason('');
@@ -428,7 +431,7 @@ export default function RequestsPanel({
             </Box>
           ) : (
             <Stack spacing={1.5}>
-              {pendingTrades.map(trade => {
+              {pendingTrades.filter(t => !dismissedTradeIds.has(String(t.id))).map(trade => {
                 const isRequester = String(trade.requesterId) === String(currentUserId) || String(trade.fromUserId) === String(currentUserId);
                 const isTarget = String(trade.targetUserId) === String(currentUserId) || String(trade.toUserId) === String(currentUserId);
                 const hasTarget = !!(trade.targetUserId || trade.toUserId);
@@ -514,12 +517,19 @@ export default function RequestsPanel({
                           </>
                         )}
 
-                        {/* Any non-requester employee can take an open-market trade */}
+                        {/* Any non-requester employee can take or pass on an open-market trade */}
                         {isOpenTrade && isPending && !isRequester && !isManager && (
-                          <Button size="small" variant="contained" color="primary"
-                            onClick={() => onTakeOpenTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
-                            Take This Shift
-                          </Button>
+                          <>
+                            <Button size="small" variant="contained" color="primary"
+                              onClick={() => onTakeOpenTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                              Take This Shift
+                            </Button>
+                            <Button size="small" variant="outlined" color="inherit"
+                              onClick={() => setDismissedTradeIds(prev => new Set([...prev, String(trade.id)]))}
+                              sx={{ flex: 1, textTransform: 'none', fontWeight: 600, borderRadius: 2 }}>
+                              Not Interested
+                            </Button>
+                          </>
                         )}
 
                         {/* Requester: cancel own trade */}
