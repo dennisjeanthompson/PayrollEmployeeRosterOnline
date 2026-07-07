@@ -665,14 +665,19 @@ export default function MuiEmployees() {
       headerAlign: "right",
       renderCell: (params: GridRenderCellParams<Employee>) => {
         const rate = parseFloat(params.row.hourlyRate || "0");
+        if (rate === 0) {
+          return (
+            <Chip
+              label="Not set"
+              size="small"
+              color="warning"
+              variant="outlined"
+              sx={{ fontWeight: 700, fontSize: '0.7rem' }}
+            />
+          );
+        }
         return (
-          <Typography 
-            variant="body2" 
-            sx={{ 
-              fontWeight: 600,
-              color: rate === 0 ? 'text.disabled' : 'text.primary'
-            }}
-          >
+          <Typography variant="body2" sx={{ fontWeight: 600 }}>
             ₱{rate.toLocaleString('en-PH')}/hr
           </Typography>
         );
@@ -1129,7 +1134,7 @@ export default function MuiEmployees() {
                       value={formData.hourlyRate}
                       onChange={(e) => setFormData({ ...formData, hourlyRate: e.target.value })}
                       inputProps={{ step: "0.01", min: "1", max: "10000" }}
-                      helperText="₱1 – ₱10,000 per hour"
+                      helperText=""
                       required
                     />
                   </Grid>

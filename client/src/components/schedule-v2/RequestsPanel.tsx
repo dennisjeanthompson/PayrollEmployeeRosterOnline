@@ -489,9 +489,9 @@ export default function RequestsPanel({
                           </Button>
                         )}
                         {isOpenTrade && isPending && isManager && (
-                          <Button size="small" variant="outlined" color="error" startIcon={<DeleteIcon />}
-                            onClick={() => onCancelTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
-                            Delete Trade
+                          <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
+                            onClick={() => onRejectTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                            Reject Trade
                           </Button>
                         )}
 

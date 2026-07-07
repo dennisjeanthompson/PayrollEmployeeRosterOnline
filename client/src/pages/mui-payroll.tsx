@@ -506,21 +506,12 @@ export default function MuiPayroll() {
                               {formatCurrency(entry.netPay)}
                             </TableCell>
                             <TableCell align="center">
-                              <Stack direction="row" alignItems="center" justifyContent="center" spacing={1}>
-                                <Chip 
-                                  icon={<AdjustmentIcon sx={{ fontSize: '14px !important' }} />}
-                                  label="Audit Trail" 
-                                  size="small" 
-                                  variant="outlined"
-                                  sx={{ color: 'info.main', borderColor: alpha(theme.palette.info.main, 0.4), fontWeight: 600 }}
-                                />
-                                <Chip
-                                  label="Generated"
-                                  color="success"
-                                  size="small"
-                                  icon={<CheckCircleIcon />}
-                                />
-                              </Stack>
+                              <Chip
+                                label="Generated"
+                                color="success"
+                                size="small"
+                                icon={<CheckCircleIcon />}
+                              />
                             </TableCell>
                             <TableCell align="center">
                               <Stack direction="row" spacing={0.5} justifyContent="center">
@@ -657,17 +648,11 @@ export default function MuiPayroll() {
                             <ReceiptIcon />
                           </Avatar>
                           <Stack direction="row" spacing={1}>
-                            <Chip 
-                              icon={<AdjustmentIcon sx={{ fontSize: '12px !important' }} />}
-                              label="Audit Trail" 
-                              size="small" 
-                              sx={{ bgcolor: alpha(theme.palette.info.main, 0.1), color: 'info.main', fontWeight: 700, fontSize: '0.65rem', borderRadius: 1.5 }}
-                            />
-                            <Chip 
-                              label="Generated" 
-                              size="small" 
-                              color="success" 
-                              sx={{ fontWeight: 800, fontSize: '0.65rem', borderRadius: 1.5 }} 
+                            <Chip
+                              label="Generated"
+                              size="small"
+                              color="success"
+                              sx={{ fontWeight: 800, fontSize: '0.65rem', borderRadius: 1.5 }}
                             />
                           </Stack>
                         </Stack>
