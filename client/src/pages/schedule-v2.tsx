@@ -2761,6 +2761,63 @@ export default function ScheduleV2() {
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* ——— ACCEPT / DECLINE / TAKE TRADE CONFIRMATION DIALOG ——— */}
+      <Dialog open={takeTradeModalOpen} onClose={() => setTakeTradeModalOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>
+          {takeTradeAction === 'accept' && 'Accept Trade Request'}
+          {takeTradeAction === 'decline' && 'Decline Trade Request'}
+          {takeTradeAction === 'take' && 'Take This Shift'}
+        </DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {selectedTrade?.shift && (
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>Shift details</Typography>
+                <Typography variant="body2" fontWeight={700}>
+                  {selectedTrade.shift.startTime
+                    ? new Date(selectedTrade.shift.startTime).toLocaleDateString('en-PH', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })
+                    : ''}
+                </Typography>
+                <Typography variant="body2">
+                  {selectedTrade.shift.startTime && selectedTrade.shift.endTime
+                    ? `${new Date(selectedTrade.shift.startTime).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })} – ${new Date(selectedTrade.shift.endTime).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })}`
+                    : ''}
+                </Typography>
+              </Box>
+            )}
+            <Typography variant="body2" color="text.secondary">
+              {takeTradeAction === 'accept' && 'Accepting this trade will assign you to cover this shift, pending manager approval.'}
+              {takeTradeAction === 'decline' && 'Are you sure you want to decline this trade request?'}
+              {takeTradeAction === 'take' && 'You will take over this shift from a colleague. A manager will need to approve the swap.'}
+            </Typography>
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={() => setTakeTradeModalOpen(false)} sx={{ textTransform: 'none' }}>Cancel</Button>
+          <Button
+            variant="contained"
+            color={takeTradeAction === 'decline' ? 'error' : 'primary'}
+            disabled={respondTradeMutation.isPending || takeOpenTradeMutation.isPending}
+            sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+            onClick={() => {
+              if (!selectedTrade) return;
+              if (takeTradeAction === 'accept') {
+                respondTradeMutation.mutate({ id: selectedTrade.id, status: 'accepted' });
+              } else if (takeTradeAction === 'decline') {
+                respondTradeMutation.mutate({ id: selectedTrade.id, status: 'rejected' });
+              } else if (takeTradeAction === 'take') {
+                takeOpenTradeMutation.mutate(selectedTrade.id);
+              }
+              setTakeTradeModalOpen(false);
+            }}
+          >
+            {takeTradeAction === 'accept' && 'Accept Trade'}
+            {takeTradeAction === 'decline' && 'Decline Trade'}
+            {takeTradeAction === 'take' && 'Take Shift'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 }
