@@ -374,12 +374,25 @@ export default function ScheduleV2() {
     const pendingTimeOff = timeOffRequests.filter(r => r.status === 'pending').length;
     const pendingTrades = shiftTrades.filter(t => {
       if (t.status !== 'pending' && t.status !== 'accepted') return false;
-      // Auto-expire past shifts
       if (t.shift?.startTime && new Date(t.shift.startTime) < new Date()) return false;
       return true;
     }).length;
     return pendingTimeOff + pendingTrades;
   }, [timeOffRequests, shiftTrades]);
+
+  // For employees: count trades they need to personally respond to
+  const employeePendingCount = useMemo(() => {
+    if (isManager) return 0;
+    return shiftTrades.filter(t => {
+      if (t.status !== 'pending') return false;
+      if (t.shift?.startTime && new Date(t.shift.startTime) < new Date()) return false;
+      // Incoming direct trade targeted at this employee
+      const isTarget = String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id);
+      // Open-market trade they haven't created
+      const isOpenForMe = !t.targetUserId && !t.toUserId && String(t.fromUserId) !== String(currentUser?.id) && String(t.requesterId) !== String(currentUser?.id);
+      return isTarget || isOpenForMe;
+    }).length;
+  }, [shiftTrades, currentUser, isManager]);
 
   // Weekly hours summary
   const weeklyTotalHours = useMemo(() => {
@@ -1069,15 +1082,13 @@ export default function ScheduleV2() {
 
         {/* Right side: View Toggles & Actions */}
         <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
-          {isManager && (
-            <Tooltip title={`${pendingCount} pending requests`}>
-              <IconButton onClick={() => isMobile ? setDrawerOpen(true) : setIsSidebarOpen(!isSidebarOpen)} sx={{ position: 'relative', mr: 1, bgcolor: alpha(theme.palette.warning.main, 0.1) }}>
-                <Badge badgeContent={pendingCount} color="warning" max={99}>
-                  <InboxIcon sx={{ color: 'warning.main', fontSize: 20 }} />
-                </Badge>
-              </IconButton>
-            </Tooltip>
-          )}
+          <Tooltip title={isManager ? `${pendingCount} pending requests` : `${employeePendingCount} incoming trade${employeePendingCount !== 1 ? 's' : ''}`}>
+            <IconButton onClick={() => isMobile ? setDrawerOpen(true) : setIsSidebarOpen(!isSidebarOpen)} sx={{ position: 'relative', mr: 1, bgcolor: alpha(theme.palette.warning.main, 0.1) }}>
+              <Badge badgeContent={isManager ? pendingCount : employeePendingCount} color="warning" max={99}>
+                <InboxIcon sx={{ color: 'warning.main', fontSize: 20 }} />
+              </Badge>
+            </IconButton>
+          </Tooltip>
 
           <ButtonGroup size="small" variant="outlined" sx={{ height: 32 }}>
             <Button
