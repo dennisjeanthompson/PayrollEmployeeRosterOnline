@@ -429,8 +429,8 @@ export default function RequestsPanel({
           ) : (
             <Stack spacing={1.5}>
               {pendingTrades.map(trade => {
-                const isRequester = trade.requesterId === currentUserId || trade.fromUserId === currentUserId;
-                const isTarget = trade.targetUserId === currentUserId || trade.toUserId === currentUserId;
+                const isRequester = String(trade.requesterId) === String(currentUserId) || String(trade.fromUserId) === String(currentUserId);
+                const isTarget = String(trade.targetUserId) === String(currentUserId) || String(trade.toUserId) === String(currentUserId);
                 const hasTarget = !!(trade.targetUserId || trade.toUserId);
                 const isOpenTrade = !hasTarget;
                 const isPending = trade.status === 'pending';
