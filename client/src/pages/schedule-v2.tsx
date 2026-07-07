@@ -115,6 +115,8 @@ export default function ScheduleV2() {
   const [takeTradeModalOpen, setTakeTradeModalOpen] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState<any>(null);
   const [takeTradeAction, setTakeTradeAction] = useState<'take' | 'accept' | 'decline' | null>(null);
+  const [tradeDeclineReason, setTradeDeclineReason] = useState('');
+  const [showTradeDeclineReason, setShowTradeDeclineReason] = useState(false);
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [selectedTimeOffId, setSelectedTimeOffId] = useState<string | null>(null);
 
@@ -1441,7 +1443,20 @@ export default function ScheduleV2() {
                 adjustmentLogs={adjustmentLogs}
                 currentUserId={currentUser?.id || ''}
                 onCreateShift={() => {}}
-                onEditShift={() => {}}
+                onEditShift={(shift) => {
+                  const trade = shiftTrades.find(t =>
+                    t.shiftId === shift.id &&
+                    t.status === 'pending' &&
+                    (String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id))
+                  );
+                  if (trade) {
+                    setSelectedTrade(trade);
+                    setTakeTradeAction('accept');
+                    setShowTradeDeclineReason(false);
+                    setTradeDeclineReason('');
+                    setTakeTradeModalOpen(true);
+                  }
+                }}
                 onOpenRequests={() => setDrawerOpen(true)}
                 onMoveShift={() => {}}
                 overtimeThreshold={overtimeThreshold}
@@ -2763,11 +2778,10 @@ export default function ScheduleV2() {
         </DialogActions>
       </Dialog>
 
-      {/* ——— ACCEPT / DECLINE / TAKE TRADE CONFIRMATION DIALOG ——— */}
-      <Dialog open={takeTradeModalOpen} onClose={() => setTakeTradeModalOpen(false)} maxWidth="xs" fullWidth>
-        <DialogTitle>
-          {takeTradeAction === 'accept' && 'Accept Trade Request'}
-          {takeTradeAction === 'decline' && 'Decline Trade Request'}
+      {/* ——— RESPOND / TAKE TRADE DIALOG ——— */}
+      <Dialog open={takeTradeModalOpen} onClose={() => { setTakeTradeModalOpen(false); setShowTradeDeclineReason(false); setTradeDeclineReason(''); }} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+        <DialogTitle fontWeight={800}>
+          {takeTradeAction === 'accept' && 'Respond to Trade Request'}
           {takeTradeAction === 'take' && 'Take This Shift'}
         </DialogTitle>
         <DialogContent>
@@ -2787,36 +2801,101 @@ export default function ScheduleV2() {
                 </Typography>
               </Box>
             )}
-            <Typography variant="body2" color="text.secondary">
-              {takeTradeAction === 'accept' && 'Accepting this trade will assign you to cover this shift, pending manager approval.'}
-              {takeTradeAction === 'decline' && 'Are you sure you want to decline this trade request?'}
-              {takeTradeAction === 'take' && 'You will take over this shift from a colleague. A manager will need to approve the swap.'}
-            </Typography>
+            {takeTradeAction === 'accept' && !showTradeDeclineReason && (
+              <Typography variant="body2" color="text.secondary">
+                Accepting will assign you to cover this shift, pending manager approval. You can also decline if you're unavailable.
+              </Typography>
+            )}
+            {takeTradeAction === 'take' && (
+              <Typography variant="body2" color="text.secondary">
+                You will take over this shift from a colleague. A manager will need to approve the swap.
+              </Typography>
+            )}
+            {showTradeDeclineReason && (
+              <Stack spacing={1}>
+                <Typography variant="body2" color="text.secondary">
+                  Provide an optional reason for declining. The requester will be notified.
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  label="Reason (optional)"
+                  value={tradeDeclineReason}
+                  onChange={(e) => setTradeDeclineReason(e.target.value)}
+                  placeholder="e.g. I already have plans that day..."
+                  autoFocus
+                />
+              </Stack>
+            )}
           </Stack>
         </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
-          <Button onClick={() => setTakeTradeModalOpen(false)} sx={{ textTransform: 'none' }}>Cancel</Button>
-          <Button
-            variant="contained"
-            color={takeTradeAction === 'decline' ? 'error' : 'primary'}
-            disabled={respondTradeMutation.isPending || takeOpenTradeMutation.isPending}
-            sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
-            onClick={() => {
-              if (!selectedTrade) return;
-              if (takeTradeAction === 'accept') {
-                respondTradeMutation.mutate({ id: selectedTrade.id, status: 'accepted' });
-              } else if (takeTradeAction === 'decline') {
-                respondTradeMutation.mutate({ id: selectedTrade.id, status: 'rejected' });
-              } else if (takeTradeAction === 'take') {
-                takeOpenTradeMutation.mutate(selectedTrade.id);
-              }
-              setTakeTradeModalOpen(false);
-            }}
-          >
-            {takeTradeAction === 'accept' && 'Accept Trade'}
-            {takeTradeAction === 'decline' && 'Decline Trade'}
-            {takeTradeAction === 'take' && 'Take Shift'}
-          </Button>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1, flexWrap: 'wrap' }}>
+          {takeTradeAction === 'accept' && !showTradeDeclineReason && (
+            <>
+              <Button onClick={() => { setTakeTradeModalOpen(false); setShowTradeDeclineReason(false); setTradeDeclineReason(''); }} sx={{ textTransform: 'none' }}>Cancel</Button>
+              <Button
+                variant="outlined"
+                color="error"
+                disabled={respondTradeMutation.isPending}
+                sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                onClick={() => setShowTradeDeclineReason(true)}
+              >
+                Decline
+              </Button>
+              <Button
+                variant="contained"
+                color="success"
+                disabled={respondTradeMutation.isPending}
+                sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                onClick={() => {
+                  if (!selectedTrade) return;
+                  respondTradeMutation.mutate({ id: selectedTrade.id, status: 'accepted' });
+                  setTakeTradeModalOpen(false);
+                }}
+              >
+                Accept Trade
+              </Button>
+            </>
+          )}
+          {takeTradeAction === 'accept' && showTradeDeclineReason && (
+            <>
+              <Button onClick={() => setShowTradeDeclineReason(false)} sx={{ textTransform: 'none' }}>Back</Button>
+              <Button
+                variant="contained"
+                color="error"
+                disabled={respondTradeMutation.isPending}
+                sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                onClick={() => {
+                  if (!selectedTrade) return;
+                  respondTradeMutation.mutate({ id: selectedTrade.id, status: 'rejected', notes: tradeDeclineReason.trim() || undefined });
+                  setTakeTradeModalOpen(false);
+                  setShowTradeDeclineReason(false);
+                  setTradeDeclineReason('');
+                }}
+              >
+                Confirm Decline
+              </Button>
+            </>
+          )}
+          {takeTradeAction === 'take' && (
+            <>
+              <Button onClick={() => setTakeTradeModalOpen(false)} sx={{ textTransform: 'none' }}>Cancel</Button>
+              <Button
+                variant="contained"
+                color="primary"
+                disabled={takeOpenTradeMutation.isPending}
+                sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+                onClick={() => {
+                  if (!selectedTrade) return;
+                  takeOpenTradeMutation.mutate(selectedTrade.id);
+                  setTakeTradeModalOpen(false);
+                }}
+              >
+                Take Shift
+              </Button>
+            </>
+          )}
         </DialogActions>
       </Dialog>
     </Box>
