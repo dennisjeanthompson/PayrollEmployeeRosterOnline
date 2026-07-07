@@ -319,8 +319,8 @@ export default function MuiShiftTrading() {
   const employees = Array.isArray(employeesResponse?.employees) ? employeesResponse.employees : (Array.isArray(employeesResponse) ? employeesResponse : []);
 
   // Filter trades
-  const myRequests = trades.filter((t) => t.requesterId === currentUser?.id);
-  const incomingRequests = trades.filter((t) => t.targetUserId === currentUser?.id);
+  const myRequests = trades.filter((t) => String(t.requesterId) === String(currentUser?.id) || String(t.fromUserId) === String(currentUser?.id));
+  const incomingRequests = trades.filter((t) => String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id));
   const pendingApprovals = trades.filter((t) => (t.status === "pending" || t.status === "accepted") && isManagerRole);
 
   // **FIXED**: Filter to ONLY show future shifts with proper date handling
