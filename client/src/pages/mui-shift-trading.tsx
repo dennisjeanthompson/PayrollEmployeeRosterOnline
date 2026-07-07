@@ -555,15 +555,18 @@ export default function MuiShiftTrading() {
           )}
           {type === "approval" && isManagerRole && (
             <>
-              <Button
-                variant="contained"
-                color="success"
-                startIcon={<CheckIcon />}
-                onClick={() => approveTradeAsManager.mutate({ id: trade.id, approve: true })}
-                disabled={approveTradeAsManager.isPending}
-              >
-                Approve
-              </Button>
+              {/* Approve only when a target employee has been assigned */}
+              {(trade.toUserId || trade.targetUserId) && (
+                <Button
+                  variant="contained"
+                  color="success"
+                  startIcon={<CheckIcon />}
+                  onClick={() => approveTradeAsManager.mutate({ id: trade.id, approve: true })}
+                  disabled={approveTradeAsManager.isPending}
+                >
+                  Approve
+                </Button>
+              )}
               <Button
                 variant="outlined"
                 color="error"

@@ -478,7 +478,7 @@ export default function RequestsPanel({
 
                       {/* Action buttons based on role */}
                       <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
-                        {/* Manager: approve/reject accepted trades */}
+                        {/* Manager: approve/reject trades that have a target assigned */}
                         {isManager && hasTarget && (isPending || isAccepted) && !isRequester && (
                           <>
                             <Button size="small" variant="contained" color="success" startIcon={<CheckIcon />}
@@ -492,7 +492,15 @@ export default function RequestsPanel({
                           </>
                         )}
 
-                        {/* Target: accept/decline pending direct trade */}
+                        {/* Manager: can only reject an open-market trade no one has taken yet */}
+                        {isOpenTrade && isManager && isPending && (
+                          <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
+                            onClick={() => handleOpenTradeRejectDialog(trade.id, 'reject')} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                            Reject Trade
+                          </Button>
+                        )}
+
+                        {/* Target employee: accept/decline a direct trade */}
                         {isTarget && isPending && !isManager && (
                           <>
                             <Button size="small" variant="contained" color="primary" startIcon={<CheckIcon />}
@@ -506,24 +514,12 @@ export default function RequestsPanel({
                           </>
                         )}
 
-                        {/* Anyone can take an open trade */}
+                        {/* Any non-requester employee can take an open-market trade */}
                         {isOpenTrade && isPending && !isRequester && !isManager && (
                           <Button size="small" variant="contained" color="primary"
                             onClick={() => onTakeOpenTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
                             Take This Shift
                           </Button>
-                        )}
-                        {isOpenTrade && isManager && (isPending || isAccepted) && (
-                          <>
-                            <Button size="small" variant="contained" color="success" startIcon={<CheckIcon />}
-                              onClick={() => onApproveTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
-                              Approve
-                            </Button>
-                            <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
-                              onClick={() => handleOpenTradeRejectDialog(trade.id, 'reject')} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
-                              Reject
-                            </Button>
-                          </>
                         )}
 
                         {/* Requester: cancel own trade */}

@@ -1414,11 +1414,11 @@ export default function ScheduleV2() {
               /* Employee week view: show their shifts only, as vertical cards */
               <WeeklyGrid
                 isLoading={shiftsLoading || employeesLoading}
-                employees={employees.filter(e => 
-                  e.id === currentUser?.id || 
-                  shiftTrades.some(t => 
-                    (t.fromUserId === e.id || t.requesterId === e.id) && 
-                    (t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId && t.status === 'pending'))
+                employees={employees.filter(e =>
+                  String(e.id) === String(currentUser?.id) ||
+                  shiftTrades.some(t =>
+                    (String(t.fromUserId) === String(e.id) || String(t.requesterId) === String(e.id)) &&
+                    (String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id) || (!t.targetUserId && !t.toUserId && t.status === 'pending'))
                   )
                 )}
                 shifts={shifts}
@@ -1426,7 +1426,7 @@ export default function ScheduleV2() {
                 holidays={holidays}
                 isManager={false}
                 timeOffRequests={timeOffRequests.filter(r => r.userId === currentUser?.id)}
-                shiftTrades={shiftTrades.filter(t => t.requesterId === currentUser?.id || t.fromUserId === currentUser?.id || t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId))}
+                shiftTrades={shiftTrades.filter(t => String(t.requesterId) === String(currentUser?.id) || String(t.fromUserId) === String(currentUser?.id) || String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id) || (!t.targetUserId && !t.toUserId))}
                 adjustmentLogs={adjustmentLogs}
                 currentUserId={currentUser?.id || ''}
                 onCreateShift={() => {}}
@@ -1467,7 +1467,7 @@ export default function ScheduleV2() {
                 date={selectedDay}
                 currentUserId={currentUser?.id || ''}
                 timeOffRequests={timeOffRequests.filter(r => r.userId === currentUser?.id)}
-                shiftTrades={shiftTrades.filter(t => t.requesterId === currentUser?.id || t.fromUserId === currentUser?.id || t.targetUserId === currentUser?.id || t.toUserId === currentUser?.id || (!t.targetUserId && !t.toUserId))}
+                shiftTrades={shiftTrades.filter(t => String(t.requesterId) === String(currentUser?.id) || String(t.fromUserId) === String(currentUser?.id) || String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id) || (!t.targetUserId && !t.toUserId))}
                 onDateChange={setSelectedDay}
               />
             )
