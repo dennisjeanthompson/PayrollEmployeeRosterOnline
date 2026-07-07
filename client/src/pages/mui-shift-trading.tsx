@@ -321,7 +321,7 @@ export default function MuiShiftTrading() {
   // Filter trades
   const myRequests = trades.filter((t) => t.requesterId === currentUser?.id);
   const incomingRequests = trades.filter((t) => t.targetUserId === currentUser?.id);
-  const pendingApprovals = trades.filter((t) => t.status === "pending" && isManagerRole);
+  const pendingApprovals = trades.filter((t) => (t.status === "pending" || t.status === "accepted") && isManagerRole);
 
   // **FIXED**: Filter to ONLY show future shifts with proper date handling
   const futureShifts = myShifts.filter((shift: any) => {
@@ -524,21 +524,32 @@ export default function MuiShiftTrading() {
       </Stack>
 
       {/* Actions */}
-      {trade.status === "pending" && (
+      {(trade.status === "pending" || trade.status === "accepted") && (
         <Stack direction="row" spacing={2} sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: "divider" }}>
-          {type === "incoming" && (
+          {type === "incoming" && trade.status === "pending" && (
             <>
               <Button
                 variant="contained"
                 color="success"
                 startIcon={<CheckIcon />}
+                onClick={() => respondToTrade.mutate({ id: trade.id, accept: true })}
+                disabled={respondToTrade.isPending}
+              >
+                Accept
+              </Button>
+              <Button
+                variant="outlined"
+                color="error"
+                startIcon={<CloseIcon />}
                 onClick={() => {
                   setTradeToRespond(trade);
+                  setShowDeclineReason(false);
+                  setDeclineReason("");
                   setRespondDialogOpen(true);
                 }}
                 disabled={respondToTrade.isPending}
               >
-                Respond
+                Decline
               </Button>
             </>
           )}
@@ -1046,98 +1057,57 @@ export default function MuiShiftTrading() {
           </DialogActions>
         </Dialog>
 
-        {/* Respond Trade Dialog */}
+        {/* Decline Trade Dialog — reason + confirmation */}
         <Dialog
           open={respondDialogOpen}
-          onClose={() => { setRespondDialogOpen(false); setShowDeclineReason(false); setDeclineReason(""); }}
-          maxWidth="sm"
+          onClose={() => { setRespondDialogOpen(false); setDeclineReason(""); }}
+          maxWidth="xs"
           fullWidth
           PaperProps={{ sx: { borderRadius: 3 } }}
         >
-          <DialogTitle>{showDeclineReason ? "Decline Trade — Add Reason" : "Respond to Trade Request"}</DialogTitle>
+          <DialogTitle>Decline Trade Request</DialogTitle>
           <DialogContent>
-            {!showDeclineReason ? (
-              <>
-                <Typography variant="body1" sx={{ mb: 2 }}>
-                  Please review the shift details before responding.
-                </Typography>
-                {tradeToRespond?.shift && (
-                  <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
-                    <Stack spacing={1}>
-                      <Typography variant="subtitle2" color="text.secondary">Shift to take over:</Typography>
-                      <Typography variant="body1" fontWeight="bold">
-                        {tradeToRespond.shift.date ? format(parseISO(tradeToRespond.shift.date), "EEEE, MMM d, yyyy") : 'N/A'}
-                      </Typography>
-                      <Typography variant="body1">
-                        {tradeToRespond.shift.startTime && tradeToRespond.shift.endTime
-                          ? `${format(parseISO(tradeToRespond.shift.startTime), "h:mm a")} - ${format(parseISO(tradeToRespond.shift.endTime), "h:mm a")}`
-                          : 'N/A'}
-                      </Typography>
-                    </Stack>
-                  </Paper>
-                )}
-                {tradeToRespond?.reason && (
-                  <Typography variant="body2" sx={{ mb: 2, fontStyle: "italic" }}>
-                    Reason: "{tradeToRespond.reason}"
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {tradeToRespond?.shift && (
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="body2" fontWeight={700}>
+                    {tradeToRespond.shift.date ? format(parseISO(tradeToRespond.shift.date), "EEE, MMM d, yyyy") : 'N/A'}
                   </Typography>
-                )}
-                <Typography variant="body2" color="text.secondary">
-                  If accepted, this shift will be transferred to your schedule, pending manager approval.
-                </Typography>
-              </>
-            ) : (
-              <Stack spacing={2} sx={{ pt: 1 }}>
-                <Typography variant="body2" color="text.secondary">
-                  Provide an optional reason for declining. The requester will be notified.
-                </Typography>
-                <TextField
-                  fullWidth
-                  multiline
-                  rows={3}
-                  label="Reason (optional)"
-                  value={declineReason}
-                  onChange={(e) => setDeclineReason(e.target.value)}
-                  placeholder="e.g. I already have plans that day..."
-                  autoFocus
-                />
-              </Stack>
-            )}
+                  <Typography variant="body2" color="text.secondary">
+                    {tradeToRespond.shift.startTime && tradeToRespond.shift.endTime
+                      ? `${format(parseISO(tradeToRespond.shift.startTime), "h:mm a")} – ${format(parseISO(tradeToRespond.shift.endTime), "h:mm a")}`
+                      : 'N/A'}
+                  </Typography>
+                </Box>
+              )}
+              <Typography variant="body2" color="text.secondary">
+                Provide an optional reason. The requester will be notified.
+              </Typography>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Reason (optional)"
+                value={declineReason}
+                onChange={(e) => setDeclineReason(e.target.value)}
+                placeholder="e.g. I already have plans that day..."
+                autoFocus
+              />
+            </Stack>
           </DialogContent>
           <DialogActions sx={{ p: 3 }}>
-            {!showDeclineReason ? (
-              <>
-                <Button onClick={() => { setRespondDialogOpen(false); setShowDeclineReason(false); setDeclineReason(""); }}>Cancel</Button>
-                <Button variant="outlined" color="error" onClick={() => setShowDeclineReason(true)}>
-                  Decline
-                </Button>
-                <Button
-                  variant="contained"
-                  color="success"
-                  onClick={() => {
-                    respondToTrade.mutate({ id: tradeToRespond!.id, accept: true });
-                    setRespondDialogOpen(false);
-                  }}
-                >
-                  Accept Trade
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button onClick={() => setShowDeclineReason(false)}>Back</Button>
-                <Button
-                  variant="contained"
-                  color="error"
-                  onClick={() => {
-                    respondToTrade.mutate({ id: tradeToRespond!.id, accept: false, notes: declineReason.trim() || undefined });
-                    setRespondDialogOpen(false);
-                    setShowDeclineReason(false);
-                    setDeclineReason("");
-                  }}
-                >
-                  Confirm Decline
-                </Button>
-              </>
-            )}
+            <Button onClick={() => { setRespondDialogOpen(false); setDeclineReason(""); }}>Cancel</Button>
+            <Button
+              variant="contained"
+              color="error"
+              onClick={() => {
+                respondToTrade.mutate({ id: tradeToRespond!.id, accept: false, notes: declineReason.trim() || undefined });
+                setRespondDialogOpen(false);
+                setDeclineReason("");
+              }}
+            >
+              Confirm Decline
+            </Button>
           </DialogActions>
         </Dialog>
 
