@@ -154,12 +154,12 @@ export default function ShiftTradingPanel() {
   // Create trade mutation
   const createTradeMutation = useMutation({
     mutationFn: async () => {
-      if (!selectedShift || !targetEmployee || !reason.trim()) {
+      if (!selectedShift || !reason.trim()) {
         throw new Error("Please fill all fields");
       }
       const response = await apiRequest("POST", "/api/shift-trades", {
         shiftId: selectedShift,
-        targetUserId: targetEmployee,
+        ...(targetEmployee ? { targetUserId: targetEmployee } : {}),
         reason,
         urgency,
       });
@@ -244,7 +244,11 @@ export default function ShiftTradingPanel() {
 
   // Filter trades by type
   const myOutgoingTrades = trades.filter((t: ShiftTrade) => t.fromUserId === currentUser?.id);
-  const incomingTrades = trades.filter((t: ShiftTrade) => t.toUserId === currentUser?.id && t.status === "pending");
+  // Incoming = direct trades to me OR open-market trades from others (no specific target)
+  const incomingTrades = trades.filter((t: ShiftTrade) =>
+    t.status === "pending" &&
+    (t.toUserId === currentUser?.id || (!t.toUserId && t.fromUserId !== currentUser?.id))
+  );
   const managerPendingTrades = isManagerRole ? trades.filter((t: ShiftTrade) => t.status === "accepted") : [];
 
   // Available shifts for creating trade (future shifts only)
@@ -361,12 +365,14 @@ export default function ShiftTradingPanel() {
                   To
                 </Typography>
                 <Stack direction="row" spacing={1} alignItems="center">
-                  <Avatar sx={{ width: 32, height: 32, bgcolor: "success.main", fontSize: "0.75rem" }}>
+                  <Avatar sx={{ width: 32, height: 32, bgcolor: trade.toUserId ? "success.main" : "text.disabled", fontSize: "0.75rem" }}>
                     {trade.toUserId ? getInitials(trade.toUser?.firstName, trade.toUser?.lastName) : "?"}
                   </Avatar>
                   <Box>
                     <Typography variant="body2" fontWeight={600}>
-                      {trade.toUser ? `${trade.toUser.firstName} ${trade.toUser.lastName}` : "Unassigned"}
+                      {trade.toUser ? `${trade.toUser.firstName} ${trade.toUser.lastName}` : (
+                        <Chip label="Open Market" size="small" color="info" variant="outlined" sx={{ fontSize: "0.7rem" }} />
+                      )}
                     </Typography>
                   </Box>
                 </Stack>
@@ -573,12 +579,15 @@ export default function ShiftTradingPanel() {
             </FormControl>
 
             <FormControl fullWidth>
-              <InputLabel>Target Employee</InputLabel>
+              <InputLabel>Target Employee (optional)</InputLabel>
               <Select
                 value={targetEmployee}
-                label="Target Employee"
+                label="Target Employee (optional)"
                 onChange={(e) => setTargetEmployee(e.target.value)}
               >
+                <MenuItem value="">
+                  <em>Any Employee (Open Market)</em>
+                </MenuItem>
                 {employees
                   .filter((emp: { id: number; firstName: string; lastName: string }) =>
                     String(emp.id) !== String(currentUser?.id)
@@ -620,7 +629,7 @@ export default function ShiftTradingPanel() {
           <Button
             variant="contained"
             onClick={() => createTradeMutation.mutate()}
-            disabled={createTradeMutation.isPending || !selectedShift || !targetEmployee || !reason.trim()}
+            disabled={createTradeMutation.isPending || !selectedShift || !reason.trim()}
           >
             {createTradeMutation.isPending ? "Creating..." : "Create Request"}
           </Button>
