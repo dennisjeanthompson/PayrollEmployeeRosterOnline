@@ -513,11 +513,17 @@ export default function RequestsPanel({
                             Take This Shift
                           </Button>
                         )}
-                        {isOpenTrade && isPending && isManager && (
-                          <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
-                            onClick={() => handleOpenTradeRejectDialog(trade.id, 'reject')} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
-                            Reject Trade
-                          </Button>
+                        {isOpenTrade && isManager && (isPending || isAccepted) && (
+                          <>
+                            <Button size="small" variant="contained" color="success" startIcon={<CheckIcon />}
+                              onClick={() => onApproveTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                              Approve
+                            </Button>
+                            <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
+                              onClick={() => handleOpenTradeRejectDialog(trade.id, 'reject')} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                              Reject
+                            </Button>
+                          </>
                         )}
 
                         {/* Requester: cancel own trade */}
