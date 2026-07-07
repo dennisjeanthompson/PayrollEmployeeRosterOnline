@@ -40,9 +40,9 @@ interface RequestsPanelProps {
   onApproveTimeOff: (id: string, leavePaymentStatus: 'paid' | 'unpaid') => void;
   onRejectTimeOff: (id: string, reason: string, leavePaymentStatus: 'unpaid' | 'awol') => void;
   onApproveTrade: (id: string) => void;
-  onRejectTrade: (id: string) => void;
+  onRejectTrade: (id: string, notes?: string) => void;
   onAcceptTrade: (id: string) => void;
-  onDeclineTrade: (id: string) => void;
+  onDeclineTrade: (id: string, notes?: string) => void;
   onCancelTrade: (id: string) => void;
   onTakeOpenTrade: (id: string) => void;
 }
@@ -99,6 +99,31 @@ export default function RequestsPanel({
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
   const [rejectPaymentStatus, setRejectPaymentStatus] = useState<'unpaid' | 'awol'>('unpaid');
+
+  // Trade reject/decline dialog state
+  const [tradeRejectDialogOpen, setTradeRejectDialogOpen] = useState(false);
+  const [tradeRejectingId, setTradeRejectingId] = useState<string | null>(null);
+  const [tradeRejectReason, setTradeRejectReason] = useState('');
+  const [tradeRejectAction, setTradeRejectAction] = useState<'reject' | 'decline'>('reject');
+
+  const handleOpenTradeRejectDialog = (id: string, action: 'reject' | 'decline') => {
+    setTradeRejectingId(id);
+    setTradeRejectReason('');
+    setTradeRejectAction(action);
+    setTradeRejectDialogOpen(true);
+  };
+
+  const handleConfirmTradeReject = () => {
+    if (!tradeRejectingId) return;
+    if (tradeRejectAction === 'reject') {
+      onRejectTrade(tradeRejectingId, tradeRejectReason.trim() || undefined);
+    } else {
+      onDeclineTrade(tradeRejectingId, tradeRejectReason.trim() || undefined);
+    }
+    setTradeRejectDialogOpen(false);
+    setTradeRejectingId(null);
+    setTradeRejectReason('');
+  };
 
   // Approve Menu state
   const [approveAnchorEl, setApproveAnchorEl] = useState<null | HTMLElement>(null);
@@ -461,7 +486,7 @@ export default function RequestsPanel({
                               Approve
                             </Button>
                             <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
-                              onClick={() => onRejectTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                              onClick={() => handleOpenTradeRejectDialog(trade.id, 'reject')} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
                               Reject
                             </Button>
                           </>
@@ -475,7 +500,7 @@ export default function RequestsPanel({
                               Accept
                             </Button>
                             <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
-                              onClick={() => onDeclineTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                              onClick={() => handleOpenTradeRejectDialog(trade.id, 'decline')} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
                               Decline
                             </Button>
                           </>
@@ -490,7 +515,7 @@ export default function RequestsPanel({
                         )}
                         {isOpenTrade && isPending && isManager && (
                           <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
-                            onClick={() => onRejectTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
+                            onClick={() => handleOpenTradeRejectDialog(trade.id, 'reject')} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
                             Reject Trade
                           </Button>
                         )}
@@ -622,6 +647,41 @@ export default function RequestsPanel({
             sx={{ borderRadius: 2, textTransform: 'none', fontWeight: 700 }}
           >
             Confirm Rejection
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Trade Reject / Decline Dialog */}
+      <Dialog open={tradeRejectDialogOpen} onClose={() => setTradeRejectDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{tradeRejectAction === 'reject' ? 'Reject Trade Request' : 'Decline Trade Request'}</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Typography variant="body2" color="text.secondary">
+              {tradeRejectAction === 'reject'
+                ? 'Provide an optional reason. Both employees will be notified.'
+                : 'Provide an optional reason. The requester will be notified.'}
+            </Typography>
+            <TextField
+              fullWidth
+              multiline
+              rows={3}
+              label="Reason (optional)"
+              value={tradeRejectReason}
+              onChange={(e) => setTradeRejectReason(e.target.value)}
+              placeholder="e.g. Insufficient staffing for that shift..."
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 2, pb: 2 }}>
+          <Button onClick={() => setTradeRejectDialogOpen(false)} sx={{ textTransform: 'none' }}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="error"
+            startIcon={<CloseIcon />}
+            onClick={handleConfirmTradeReject}
+            sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+          >
+            {tradeRejectAction === 'reject' ? 'Confirm Rejection' : 'Confirm Decline'}
           </Button>
         </DialogActions>
       </Dialog>

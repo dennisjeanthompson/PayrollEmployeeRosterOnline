@@ -250,6 +250,13 @@ export default function MuiShiftTrading() {
 
   const [respondDialogOpen, setRespondDialogOpen] = useState(false);
   const [tradeToRespond, setTradeToRespond] = useState<ShiftTrade | null>(null);
+  const [declineReason, setDeclineReason] = useState("");
+  const [showDeclineReason, setShowDeclineReason] = useState(false);
+
+  // Manager reject dialog state
+  const [managerRejectDialogOpen, setManagerRejectDialogOpen] = useState(false);
+  const [managerRejectingId, setManagerRejectingId] = useState<string | null>(null);
+  const [managerRejectReason, setManagerRejectReason] = useState("");
 
   const [viewMode, setViewMode] = useState<"list" | "calendar">("calendar");
 
@@ -366,9 +373,10 @@ export default function MuiShiftTrading() {
 
   // Respond to trade mutation
   const respondToTrade = useMutation({
-    mutationFn: async ({ id, accept }: { id: string; accept: boolean }) => {
+    mutationFn: async ({ id, accept, notes }: { id: string; accept: boolean; notes?: string }) => {
       const response = await apiRequest("PATCH", `/api/shift-trades/${id}`, {
         status: accept ? "accepted" : "rejected",
+        ...(!accept && notes ? { notes } : {}),
       });
       return response.json();
     },
@@ -385,9 +393,10 @@ export default function MuiShiftTrading() {
 
   // Approve/reject trade mutation (for managers)
   const approveTradeAsManager = useMutation({
-    mutationFn: async ({ id, approve }: { id: string; approve: boolean }) => {
+    mutationFn: async ({ id, approve, notes }: { id: string; approve: boolean; notes?: string }) => {
       const response = await apiRequest("PATCH", `/api/shift-trades/${id}/approve`, {
         status: approve ? "approved" : "rejected",
+        ...(!approve && notes ? { notes } : {}),
       });
       return response.json();
     },
@@ -548,7 +557,11 @@ export default function MuiShiftTrading() {
                 variant="outlined"
                 color="error"
                 startIcon={<CloseIcon />}
-                onClick={() => approveTradeAsManager.mutate({ id: trade.id, approve: false })}
+                onClick={() => {
+                  setManagerRejectingId(trade.id);
+                  setManagerRejectReason("");
+                  setManagerRejectDialogOpen(true);
+                }}
                 disabled={approveTradeAsManager.isPending}
               >
                 Reject
@@ -1036,61 +1049,132 @@ export default function MuiShiftTrading() {
         {/* Respond Trade Dialog */}
         <Dialog
           open={respondDialogOpen}
-          onClose={() => setRespondDialogOpen(false)}
+          onClose={() => { setRespondDialogOpen(false); setShowDeclineReason(false); setDeclineReason(""); }}
           maxWidth="sm"
           fullWidth
           PaperProps={{ sx: { borderRadius: 3 } }}
         >
-          <DialogTitle>Respond to Trade Request</DialogTitle>
+          <DialogTitle>{showDeclineReason ? "Decline Trade — Add Reason" : "Respond to Trade Request"}</DialogTitle>
           <DialogContent>
-            <Typography variant="body1" sx={{ mb: 2 }}>
-              Please review the shift details before responding.
-            </Typography>
-            {tradeToRespond?.shift && (
-              <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
-                <Stack spacing={1}>
-                  <Typography variant="subtitle2" color="text.secondary">Shift to take over:</Typography>
-                  <Typography variant="body1" fontWeight="bold">
-                    {tradeToRespond.shift.date ? format(parseISO(tradeToRespond.shift.date), "EEEE, MMM d, yyyy") : 'N/A'}
+            {!showDeclineReason ? (
+              <>
+                <Typography variant="body1" sx={{ mb: 2 }}>
+                  Please review the shift details before responding.
+                </Typography>
+                {tradeToRespond?.shift && (
+                  <Paper variant="outlined" sx={{ p: 2, mb: 2, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
+                    <Stack spacing={1}>
+                      <Typography variant="subtitle2" color="text.secondary">Shift to take over:</Typography>
+                      <Typography variant="body1" fontWeight="bold">
+                        {tradeToRespond.shift.date ? format(parseISO(tradeToRespond.shift.date), "EEEE, MMM d, yyyy") : 'N/A'}
+                      </Typography>
+                      <Typography variant="body1">
+                        {tradeToRespond.shift.startTime && tradeToRespond.shift.endTime
+                          ? `${format(parseISO(tradeToRespond.shift.startTime), "h:mm a")} - ${format(parseISO(tradeToRespond.shift.endTime), "h:mm a")}`
+                          : 'N/A'}
+                      </Typography>
+                    </Stack>
+                  </Paper>
+                )}
+                {tradeToRespond?.reason && (
+                  <Typography variant="body2" sx={{ mb: 2, fontStyle: "italic" }}>
+                    Reason: "{tradeToRespond.reason}"
                   </Typography>
-                  <Typography variant="body1">
-                    {tradeToRespond.shift.startTime && tradeToRespond.shift.endTime 
-                      ? `${format(parseISO(tradeToRespond.shift.startTime), "h:mm a")} - ${format(parseISO(tradeToRespond.shift.endTime), "h:mm a")}` 
-                      : 'N/A'}
-                  </Typography>
-                </Stack>
-              </Paper>
+                )}
+                <Typography variant="body2" color="text.secondary">
+                  If accepted, this shift will be transferred to your schedule, pending manager approval.
+                </Typography>
+              </>
+            ) : (
+              <Stack spacing={2} sx={{ pt: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Provide an optional reason for declining. The requester will be notified.
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={3}
+                  label="Reason (optional)"
+                  value={declineReason}
+                  onChange={(e) => setDeclineReason(e.target.value)}
+                  placeholder="e.g. I already have plans that day..."
+                  autoFocus
+                />
+              </Stack>
             )}
-            {tradeToRespond?.reason && (
-              <Typography variant="body2" sx={{ mb: 2, fontStyle: "italic" }}>
-                Reason: "{tradeToRespond.reason}"
-              </Typography>
-            )}
-            <Typography variant="body2" color="text.secondary">
-              If accepted, this shift will be transferred to your schedule, pending manager approval.
-            </Typography>
           </DialogContent>
           <DialogActions sx={{ p: 3 }}>
-            <Button onClick={() => setRespondDialogOpen(false)}>Cancel</Button>
-            <Button
-              variant="outlined"
-              color="error"
-              onClick={() => {
-                respondToTrade.mutate({ id: tradeToRespond!.id, accept: false });
-                setRespondDialogOpen(false);
-              }}
-            >
-              Decline
-            </Button>
+            {!showDeclineReason ? (
+              <>
+                <Button onClick={() => { setRespondDialogOpen(false); setShowDeclineReason(false); setDeclineReason(""); }}>Cancel</Button>
+                <Button variant="outlined" color="error" onClick={() => setShowDeclineReason(true)}>
+                  Decline
+                </Button>
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={() => {
+                    respondToTrade.mutate({ id: tradeToRespond!.id, accept: true });
+                    setRespondDialogOpen(false);
+                  }}
+                >
+                  Accept Trade
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button onClick={() => setShowDeclineReason(false)}>Back</Button>
+                <Button
+                  variant="contained"
+                  color="error"
+                  onClick={() => {
+                    respondToTrade.mutate({ id: tradeToRespond!.id, accept: false, notes: declineReason.trim() || undefined });
+                    setRespondDialogOpen(false);
+                    setShowDeclineReason(false);
+                    setDeclineReason("");
+                  }}
+                >
+                  Confirm Decline
+                </Button>
+              </>
+            )}
+          </DialogActions>
+        </Dialog>
+
+        {/* Manager Reject Trade Dialog */}
+        <Dialog open={managerRejectDialogOpen} onClose={() => setManagerRejectDialogOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+          <DialogTitle>Reject Trade Request</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Provide an optional reason. Both employees will be notified.
+              </Typography>
+              <TextField
+                fullWidth
+                multiline
+                rows={3}
+                label="Reason (optional)"
+                value={managerRejectReason}
+                onChange={(e) => setManagerRejectReason(e.target.value)}
+                placeholder="e.g. Insufficient staffing for that shift..."
+                autoFocus
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ p: 3 }}>
+            <Button onClick={() => setManagerRejectDialogOpen(false)}>Cancel</Button>
             <Button
               variant="contained"
-              color="success"
+              color="error"
               onClick={() => {
-                respondToTrade.mutate({ id: tradeToRespond!.id, accept: true });
-                setRespondDialogOpen(false);
+                if (!managerRejectingId) return;
+                approveTradeAsManager.mutate({ id: managerRejectingId, approve: false, notes: managerRejectReason.trim() || undefined });
+                setManagerRejectDialogOpen(false);
+                setManagerRejectingId(null);
+                setManagerRejectReason("");
               }}
             >
-              Accept Trade
+              Confirm Rejection
             </Button>
           </DialogActions>
         </Dialog>

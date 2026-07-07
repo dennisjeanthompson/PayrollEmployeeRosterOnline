@@ -747,8 +747,8 @@ export default function ScheduleV2() {
   });
 
   const respondTradeMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const res = await apiRequest('PATCH', `/api/shift-trades/${id}`, { status });
+    mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
+      const res = await apiRequest('PATCH', `/api/shift-trades/${id}`, { status, ...(notes ? { notes } : {}) });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
       return res.json();
     },
@@ -764,8 +764,8 @@ export default function ScheduleV2() {
   });
 
   const approveTradeMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const res = await apiRequest('PATCH', `/api/shift-trades/${id}/approve`, { status });
+    mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
+      const res = await apiRequest('PATCH', `/api/shift-trades/${id}/approve`, { status, ...(notes ? { notes } : {}) });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
       return res.json();
     },
@@ -1511,7 +1511,7 @@ export default function ScheduleV2() {
               onApproveTimeOff={(id, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'approved', leavePaymentStatus })}
               onRejectTimeOff={(id, reason, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason, leavePaymentStatus })}
               onApproveTrade={(id) => approveTradeMutation.mutate({ id, status: 'approved' })}
-              onRejectTrade={(id) => approveTradeMutation.mutate({ id, status: 'rejected' })}
+              onRejectTrade={(id, notes) => approveTradeMutation.mutate({ id, status: 'rejected', notes })}
               onCancelTrade={(id) => deleteTradeMutation.mutate(id)}
               onAcceptTrade={(id) => {
                 const t = shiftTrades.find(t => t.id === id);
@@ -1519,12 +1519,7 @@ export default function ScheduleV2() {
                 setTakeTradeAction('accept');
                 setTakeTradeModalOpen(true);
               }}
-              onDeclineTrade={(id) => {
-                const t = shiftTrades.find(t => t.id === id);
-                setSelectedTrade(t);
-                setTakeTradeAction('decline');
-                setTakeTradeModalOpen(true);
-              }}
+              onDeclineTrade={(id, notes) => respondTradeMutation.mutate({ id, status: 'rejected', notes })}
               onTakeOpenTrade={(id) => {
                 const t = shiftTrades.find(t => t.id === id);
                 setSelectedTrade(t);
@@ -1604,19 +1599,14 @@ export default function ScheduleV2() {
           onApproveTimeOff={(id, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'approved', leavePaymentStatus })}
           onRejectTimeOff={(id, reason, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason, leavePaymentStatus })}
           onApproveTrade={(id) => approveTradeMutation.mutate({ id, status: 'approved' })}
-          onRejectTrade={(id) => approveTradeMutation.mutate({ id, status: 'rejected' })}
+          onRejectTrade={(id, notes) => approveTradeMutation.mutate({ id, status: 'rejected', notes })}
           onAcceptTrade={(id) => {
             const t = shiftTrades.find(t => t.id === id);
             setSelectedTrade(t);
             setTakeTradeAction('accept');
             setTakeTradeModalOpen(true);
           }}
-          onDeclineTrade={(id) => {
-            const t = shiftTrades.find(t => t.id === id);
-            setSelectedTrade(t);
-            setTakeTradeAction('decline');
-            setTakeTradeModalOpen(true);
-          }}
+          onDeclineTrade={(id, notes) => respondTradeMutation.mutate({ id, status: 'rejected', notes })}
           onCancelTrade={(id) => deleteTradeMutation.mutate(id)}
           onTakeOpenTrade={(id) => {
             const t = shiftTrades.find(t => t.id === id);
