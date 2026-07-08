@@ -211,7 +211,7 @@ export default function RequestsPanel({
       reqEnd.setHours(23,59,59,999);
       
       const overlappingShifts = shifts.filter(s => {
-        if (s.userId !== req.userId) return false;
+        if (String(s.userId) !== String(req.userId)) return false;
         const sTime = new Date(s.startTime);
         return sTime >= reqStart && sTime <= reqEnd;
       });
@@ -482,7 +482,7 @@ export default function RequestsPanel({
                       {/* Action buttons based on role */}
                       <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
                         {/* Manager: approve/reject trades that have a target assigned */}
-                        {isManager && hasTarget && (isPending || isAccepted) && !isRequester && (
+                        {isManager && hasTarget && (isPending || isAccepted) && (
                           <>
                             <Button size="small" variant="contained" color="success" startIcon={<CheckIcon />}
                               onClick={() => onApproveTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
@@ -496,7 +496,7 @@ export default function RequestsPanel({
                         )}
 
                         {/* Manager: can only reject an open-market trade no one has taken yet */}
-                        {isOpenTrade && isManager && isPending && (
+                        {isOpenTrade && isManager && isPending && !isRequester && (
                           <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
                             onClick={() => handleOpenTradeRejectDialog(trade.id, 'reject')} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
                             Reject Trade

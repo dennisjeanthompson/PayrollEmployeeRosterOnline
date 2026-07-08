@@ -114,7 +114,7 @@ export default function ScheduleV2() {
   const [tradeModalOpen, setTradeModalOpen] = useState(false);
   const [takeTradeModalOpen, setTakeTradeModalOpen] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState<any>(null);
-  const [takeTradeAction, setTakeTradeAction] = useState<'take' | 'accept' | 'decline' | null>(null);
+  const [takeTradeAction, setTakeTradeAction] = useState<'take' | 'accept' | null>(null);
   const [tradeDeclineReason, setTradeDeclineReason] = useState('');
   const [showTradeDeclineReason, setShowTradeDeclineReason] = useState(false);
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
@@ -1177,7 +1177,7 @@ export default function ScheduleV2() {
                 </MenuItem>
                 <MenuItem onClick={() => {
                   setActionsMenuAnchor(null);
-                  const myFutureShifts = shifts.filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date());
+                  const myFutureShifts = shifts.filter(s => String(s.userId) === String(currentUser?.id) && new Date(s.startTime) > new Date());
                   if (myFutureShifts.length === 0) { toast.info('No future shifts to trade'); return; }
                   setTradeModalOpen(true);
                 }}>
@@ -1246,7 +1246,7 @@ export default function ScheduleV2() {
                   variant="outlined"
                   startIcon={<SwapIcon />}
                   onClick={() => {
-                    const myFutureShifts = shifts.filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date());
+                    const myFutureShifts = shifts.filter(s => String(s.userId) === String(currentUser?.id) && new Date(s.startTime) > new Date());
                     if (myFutureShifts.length === 0) { toast.info('No future shifts to trade'); return; }
                     setTradeModalOpen(true);
                   }}
@@ -1431,15 +1431,15 @@ export default function ScheduleV2() {
                   String(e.id) === String(currentUser?.id) ||
                   shiftTrades.some(t =>
                     (String(t.fromUserId) === String(e.id) || String(t.requesterId) === String(e.id)) &&
-                    (String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id) || (!t.targetUserId && !t.toUserId && t.status === 'pending'))
+                    (String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id))
                   )
                 )}
                 shifts={shifts}
                 weekStart={weekStart}
                 holidays={holidays}
                 isManager={false}
-                timeOffRequests={timeOffRequests.filter(r => r.userId === currentUser?.id)}
-                shiftTrades={shiftTrades.filter(t => String(t.requesterId) === String(currentUser?.id) || String(t.fromUserId) === String(currentUser?.id) || String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id) || (!t.targetUserId && !t.toUserId))}
+                timeOffRequests={timeOffRequests.filter(r => String(r.userId) === String(currentUser?.id))}
+                shiftTrades={shiftTrades.filter(t => String(t.requesterId) === String(currentUser?.id) || String(t.fromUserId) === String(currentUser?.id) || String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id) || (!t.targetUserId && !t.toUserId && String(t.fromUserId) !== String(currentUser?.id) && String(t.requesterId) !== String(currentUser?.id)))}
                 adjustmentLogs={adjustmentLogs}
                 currentUserId={currentUser?.id || ''}
                 onCreateShift={() => {}}
@@ -1492,8 +1492,8 @@ export default function ScheduleV2() {
                 shifts={shifts}
                 date={selectedDay}
                 currentUserId={currentUser?.id || ''}
-                timeOffRequests={timeOffRequests.filter(r => r.userId === currentUser?.id)}
-                shiftTrades={shiftTrades.filter(t => String(t.requesterId) === String(currentUser?.id) || String(t.fromUserId) === String(currentUser?.id) || String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id) || (!t.targetUserId && !t.toUserId))}
+                timeOffRequests={timeOffRequests.filter(r => String(r.userId) === String(currentUser?.id))}
+                shiftTrades={shiftTrades.filter(t => String(t.requesterId) === String(currentUser?.id) || String(t.fromUserId) === String(currentUser?.id) || String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id) || (!t.targetUserId && !t.toUserId && String(t.fromUserId) !== String(currentUser?.id) && String(t.requesterId) !== String(currentUser?.id)))}
                 onDateChange={setSelectedDay}
               />
             )
@@ -1573,7 +1573,7 @@ export default function ScheduleV2() {
           <Tooltip title="Trade Shift" placement="left">
             <IconButton
               onClick={() => {
-                const myFuture = shifts.filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date());
+                const myFuture = shifts.filter(s => String(s.userId) === String(currentUser?.id) && new Date(s.startTime) > new Date());
                 if (myFuture.length === 0) { toast.info('No future shifts to trade'); return; }
                 setTradeModalOpen(true);
               }}
@@ -2040,7 +2040,7 @@ export default function ScheduleV2() {
               <InputLabel>Your Shift</InputLabel>
               <Select value={tradeForm.shiftId} label="Your Shift" onChange={e => setTradeForm(p => ({ ...p, shiftId: e.target.value }))}>
                 {shifts
-                  .filter(s => s.userId === currentUser?.id && new Date(s.startTime) > new Date())
+                  .filter(s => String(s.userId) === String(currentUser?.id) && new Date(s.startTime) > new Date())
                   .map(s => (
                     <MenuItem key={s.id} value={s.id}>
                       {safeFormat(new Date(s.startTime), 'MMM d, h:mm a')} – {safeFormat(new Date(s.endTime), 'h:mm a')} {s.position && `(${s.position})`}
@@ -2860,7 +2860,7 @@ export default function ScheduleV2() {
           )}
           {takeTradeAction === 'accept' && showTradeDeclineReason && (
             <>
-              <Button onClick={() => setShowTradeDeclineReason(false)} sx={{ textTransform: 'none' }}>Back</Button>
+              <Button onClick={() => { setShowTradeDeclineReason(false); setTradeDeclineReason(''); }} sx={{ textTransform: 'none' }}>Back</Button>
               <Button
                 variant="contained"
                 color="error"

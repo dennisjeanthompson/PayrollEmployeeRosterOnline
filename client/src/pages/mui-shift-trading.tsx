@@ -792,8 +792,8 @@ export default function MuiShiftTrading() {
                    if (trade.status === 'accepted') color = theme.palette.info.main;
                    if (trade.status === 'rejected') color = theme.palette.error.main;
                    
-                   const isIncoming = trade.targetUserId === currentUser?.id;
-                   const isOutgoing = trade.requesterId === currentUser?.id;
+                   const isIncoming = String(trade.targetUserId) === String(currentUser?.id);
+                   const isOutgoing = String(trade.requesterId) === String(currentUser?.id);
                    
                    // Use shift data if available
                    const start = trade.shift?.startTime;
