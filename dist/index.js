@@ -108,7 +108,7 @@ __export(schema_exports, {
   wageOrders: () => wageOrders,
   workerAllowances: () => workerAllowances
 });
-import { pgTable, text, boolean, timestamp, integer, numeric, serial, json } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, integer, numeric, serial, json, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 var session, branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, companySettings, auditLogs, timeOffPolicy, employeeDocuments, adjustmentLogs, adjustmentLogComments, leaveCredits, sssContributionTable, wageOrders, allowanceTypes, workerAllowances, deMinimisYtd, employeeTaxYtd, thirteenthMonthPay, insertBranchSchema, insertUserSchema, insertShiftSchema, insertShiftTradeSchema, insertPayrollPeriodSchema, insertPayrollEntrySchema, insertApprovalSchema, insertTimeOffRequestSchema, insertNotificationSchema, insertDeductionSettingsSchema, insertDeductionRatesSchema, insertHolidaySchema, insertArchivedPayrollPeriodSchema, insertAuditLogSchema, insertTimeOffPolicySchema, insertAdjustmentLogSchema, insertAdjustmentLogCommentSchema, insertLeaveCreditsSchema, insertCompanySettingsSchema, serviceChargePools, insertServiceChargePoolSchema, insertSssContributionTableSchema, insertWageOrderSchema, insertAllowanceTypeSchema, insertWorkerAllowanceSchema, insertDeMinimisYtdSchema, insertEmployeeTaxYtdSchema, insertThirteenthMonthPaySchema;
@@ -184,7 +184,10 @@ var init_schema = __esm({
       deletedAt: timestamp("deleted_at"),
       deletedBy: text("deleted_by").references(() => users.id),
       deletionReason: text("deletion_reason")
-    });
+    }, (table) => [
+      index("shifts_branch_start_idx").on(table.branchId, table.startTime),
+      index("shifts_user_idx").on(table.userId)
+    ]);
     shiftTrades = pgTable("shift_trades", {
       id: text("id").primaryKey(),
       shiftId: text("shift_id").references(() => shifts.id).notNull(),
@@ -242,7 +245,9 @@ var init_schema = __esm({
       createdAt: timestamp("created_at").defaultNow(),
       paidAt: timestamp("paid_at"),
       has13thMonth: boolean("has_13th_month").default(false)
-    });
+    }, (table) => [
+      index("payroll_entries_period_idx").on(table.payrollPeriodId)
+    ]);
     approvals = pgTable("approvals", {
       id: text("id").primaryKey(),
       type: text("type").notNull(),
@@ -283,7 +288,9 @@ var init_schema = __esm({
       isRead: boolean("is_read").default(false),
       data: text("data"),
       createdAt: timestamp("created_at").defaultNow()
-    });
+    }, (table) => [
+      index("notifications_user_idx").on(table.userId)
+    ]);
     setupStatus = pgTable("setup_status", {
       id: text("id").primaryKey(),
       isSetupComplete: boolean("is_setup_complete").default(false),
@@ -789,20 +796,22 @@ var init_db_storage = __esm({
           if (userPayroll.length > 0) {
             throw new Error("Cannot delete employee with existing payroll records. Deactivate them instead.");
           }
-          await db.delete(notifications).where(eq(notifications.userId, id));
-          await db.delete(approvals).where(
-            or(eq(approvals.requestedBy, id), eq(approvals.approvedBy, id))
-          );
-          await db.delete(employeeDocuments).where(
-            or(eq(employeeDocuments.userId, id), eq(employeeDocuments.uploadedBy, id))
-          );
-          await db.delete(timeOffRequests).where(
-            or(eq(timeOffRequests.userId, id), eq(timeOffRequests.approvedBy, id))
-          );
-          await db.delete(adjustmentLogs).where(
-            or(eq(adjustmentLogs.employeeId, id), eq(adjustmentLogs.loggedBy, id), eq(adjustmentLogs.approvedBy, id))
-          );
-          await db.delete(users).where(eq(users.id, id));
+          await db.transaction(async (tx) => {
+            await tx.delete(notifications).where(eq(notifications.userId, id));
+            await tx.delete(approvals).where(
+              or(eq(approvals.requestedBy, id), eq(approvals.approvedBy, id))
+            );
+            await tx.delete(employeeDocuments).where(
+              or(eq(employeeDocuments.userId, id), eq(employeeDocuments.uploadedBy, id))
+            );
+            await tx.delete(timeOffRequests).where(
+              or(eq(timeOffRequests.userId, id), eq(timeOffRequests.approvedBy, id))
+            );
+            await tx.delete(adjustmentLogs).where(
+              or(eq(adjustmentLogs.employeeId, id), eq(adjustmentLogs.loggedBy, id), eq(adjustmentLogs.approvedBy, id))
+            );
+            await tx.delete(users).where(eq(users.id, id));
+          });
           return true;
         } catch (error) {
           console.error("Error deleting user:", error);
@@ -904,17 +913,19 @@ var init_db_storage = __esm({
        * Check if an employee has any related data (shifts, payroll, etc.)
        */
       async employeeHasRelatedData(id) {
-        const userShifts = await this.getShiftsByUser(id);
-        const payroll = await this.getPayrollEntriesByUser(id);
-        const timeOff = await this.getTimeOffRequestsByUser(id);
-        const trades = await this.getShiftTradesByUser(id);
-        const adjLogs = await db.select().from(adjustmentLogs).where(eq(adjustmentLogs.employeeId, id));
-        const docs = await db.select().from(employeeDocuments).where(eq(employeeDocuments.userId, id));
-        const total = userShifts.length + payroll.length + timeOff.length + trades.length + adjLogs.length + docs.length;
+        const count = (table, col) => db.select({ n: sql2`count(*)::int` }).from(table).where(eq(col, id)).then((r) => r[0]?.n ?? 0);
+        const [shiftsN, payrollN, timeOffN, tradesN, adjN, docsN] = await Promise.all([
+          count(shifts, shifts.userId),
+          count(payrollEntries, payrollEntries.userId),
+          count(timeOffRequests, timeOffRequests.userId),
+          db.select({ n: sql2`count(*)::int` }).from(shiftTrades).where(or(eq(shiftTrades.fromUserId, id), eq(shiftTrades.toUserId, id))).then((r) => r[0]?.n ?? 0),
+          count(adjustmentLogs, adjustmentLogs.employeeId),
+          count(employeeDocuments, employeeDocuments.userId)
+        ]);
         return {
-          hasShifts: userShifts.length > 0,
-          hasPayroll: payroll.length > 0,
-          hasTotal: total
+          hasShifts: shiftsN > 0,
+          hasPayroll: payrollN > 0,
+          hasTotal: shiftsN + payrollN + timeOffN + tradesN + adjN + docsN
         };
       }
       async getUsersByBranch(branchId) {
@@ -959,6 +970,14 @@ var init_db_storage = __esm({
       async updateBranch(id, branch) {
         await db.update(branches).set(branch).where(eq(branches.id, id));
         return this.getBranch(id);
+      }
+      async deleteBranch(id) {
+        const assignedUsers = await db.select({ id: users.id }).from(users).where(eq(users.branchId, id));
+        if (assignedUsers.length > 0) {
+          return { deleted: false, employeeCount: assignedUsers.length };
+        }
+        await db.update(branches).set({ isActive: false }).where(eq(branches.id, id));
+        return { deleted: true, employeeCount: 0 };
       }
       // Shifts
       /**
@@ -1037,6 +1056,11 @@ var init_db_storage = __esm({
             eq(shifts.isDeleted, false)
           )
         ).orderBy(shifts.startTime);
+      }
+      async getShiftsByUserOnDate(userId, date) {
+        return db.select().from(shifts).where(
+          and(eq(shifts.userId, userId), eq(shifts.date, date), eq(shifts.isDeleted, false))
+        );
       }
       async getShiftsByBranch(branchId, startDate, endDate) {
         if (startDate && endDate) {
@@ -3692,15 +3716,23 @@ async function calculateSSS(monthlyBasicSalary) {
     const latestBrackets = await db.select().from(sssContributionTable).orderBy(desc3(sssContributionTable.year)).limit(1);
     const activeYear = latestBrackets.length > 0 ? latestBrackets[0].year : (/* @__PURE__ */ new Date()).getFullYear();
     const brackets = await db.select().from(sssContributionTable).where(eq3(sssContributionTable.year, activeYear));
-    console.log(`[SSS DEBUG] Monthly salary: \u20B1${monthlyBasicSalary.toFixed(2)}, Active Year: ${activeYear}, Total brackets found: ${brackets.length}`);
-    for (const b of brackets) {
+    const sorted = [...brackets].sort((a, b) => parseFloat(a.minCompensation) - parseFloat(b.minCompensation));
+    for (const b of sorted) {
       if (monthlyBasicSalary >= parseFloat(b.minCompensation) && monthlyBasicSalary <= parseFloat(b.maxCompensation)) {
-        const share = parseFloat(b.employeeShare);
-        console.log(`[SSS DEBUG] Matched bracket: MSC \u20B1${b.monthlySalaryCredit} (range \u20B1${b.minCompensation}-\u20B1${b.maxCompensation}), Employee Share: \u20B1${share.toFixed(2)}`);
-        return share;
+        return parseFloat(b.employeeShare);
       }
     }
-    console.warn(`[SSS DEBUG] No bracket matched for salary \u20B1${monthlyBasicSalary.toFixed(2)}`);
+    if (sorted.length > 0) {
+      const highest = sorted[sorted.length - 1];
+      if (monthlyBasicSalary > parseFloat(highest.maxCompensation)) {
+        return parseFloat(highest.employeeShare);
+      }
+      for (let i = sorted.length - 1; i >= 0; i--) {
+        if (monthlyBasicSalary >= parseFloat(sorted[i].minCompensation)) {
+          return parseFloat(sorted[i].employeeShare);
+        }
+      }
+    }
     return 0;
   } catch (error) {
     console.error("Error calculating SSS:", error);
@@ -3731,6 +3763,7 @@ async function calculatePagibig(monthlyBasicSalary) {
     const cap = activeRate?.maxSalary ? parseFloat(activeRate.maxSalary) : 1e4;
     const rate = activeRate?.employeeRate ? parseFloat(activeRate.employeeRate) / 100 : 0.02;
     let baseSalary = monthlyBasicSalary;
+    if (baseSalary < 1e3) baseSalary = 1e3;
     if (baseSalary > cap) baseSalary = cap;
     const contribution = baseSalary * rate;
     return Math.round(contribution * 100) / 100;
@@ -3759,9 +3792,11 @@ async function calculateWithholdingTax(monthlyBasicSalary) {
           for (let j = 0; j < i; j++) {
             const prev = activeRates[j];
             const prevMin = parseFloat(prev.minSalary);
-            const prevMax = prev.maxSalary ? parseFloat(prev.maxSalary) : 0;
+            const prevMax = prev.maxSalary ? parseFloat(prev.maxSalary) : null;
             const prevRate = prev.employeeRate ? parseFloat(prev.employeeRate) / 100 : 0;
-            baseTax += (prevMax - prevMin) * prevRate;
+            if (prevMax !== null) {
+              baseTax += (prevMax - prevMin) * prevRate;
+            }
           }
           annualTax = baseTax + (annualSalary - min) * rate;
         }
@@ -3938,132 +3973,7 @@ import { z as z4 } from "zod";
 // server/routes/branches.ts
 init_db_storage();
 import { z as z2 } from "zod";
-var requireAuth = (req, res, next) => {
-  if (!req.session?.user) {
-    return res.status(401).json({ message: "Not authenticated" });
-  }
-  req.user = req.session.user;
-  next();
-};
-var requireManagerOrAdmin = (req, res, next) => {
-  const role = req.user?.role;
-  if (role !== "manager" && role !== "admin") {
-    return res.status(403).json({ message: "Insufficient permissions" });
-  }
-  next();
-};
-var requireAdmin = (req, res, next) => {
-  const role = req.user?.role;
-  if (role !== "admin") {
-    return res.status(403).json({ message: "Admin permissions required" });
-  }
-  next();
-};
-function registerBranchesRoutes(router11) {
-  router11.get("/api/branches", requireAuth, async (req, res) => {
-    try {
-      const allBranches = await dbStorage.getAllBranches();
-      res.json({ branches: allBranches });
-    } catch (error) {
-      console.error("Error fetching branches:", error);
-      res.status(500).json({ message: "Failed to fetch branches" });
-    }
-  });
-  router11.get("/api/branches/:id", requireAuth, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const branch = await dbStorage.getBranch(id);
-      if (!branch) {
-        return res.status(404).json({ message: "Branch not found" });
-      }
-      res.json(branch);
-    } catch (error) {
-      console.error("Error fetching branch:", error);
-      res.status(500).json({ message: "Failed to fetch branch" });
-    }
-  });
-  router11.post("/api/branches", requireAuth, requireAdmin, async (req, res) => {
-    try {
-      console.log("Received request body:", req.body);
-      const schema = z2.object({
-        name: z2.string().min(1, "Name is required"),
-        address: z2.string().min(1, "Address is required"),
-        phone: z2.string().optional(),
-        isActive: z2.boolean().default(true)
-      });
-      const result = schema.safeParse(req.body);
-      if (!result.success) {
-        console.log("Validation error:", result.error);
-        return res.status(400).json({
-          message: "Validation error",
-          errors: result.error.flatten().fieldErrors
-        });
-      }
-      const newBranch = await dbStorage.createBranch({
-        name: result.data.name,
-        address: result.data.address,
-        phone: result.data.phone,
-        isActive: result.data.isActive
-      });
-      console.log("Branch created:", newBranch);
-      res.status(201).json(newBranch);
-    } catch (error) {
-      console.error("Error creating branch:", error);
-      res.status(500).json({
-        message: "Failed to create branch",
-        error: error instanceof Error ? error.message : "Unknown error"
-      });
-    }
-  });
-  const handleUpdate = async (req, res) => {
-    try {
-      const { id } = req.params;
-      if (req.user?.role === "manager" && req.user?.branchId !== id) {
-        return res.status(403).json({ message: "Managers can only modify their own branch" });
-      }
-      const schema = z2.object({
-        name: z2.string().min(1, "Name is required").optional(),
-        address: z2.string().min(1, "Address is required").optional(),
-        phone: z2.string().optional(),
-        isActive: z2.boolean().optional()
-      });
-      const result = schema.safeParse(req.body);
-      if (!result.success) {
-        return res.status(400).json({
-          message: "Validation error",
-          errors: result.error.flatten().fieldErrors
-        });
-      }
-      const updatedBranch = await dbStorage.updateBranch(id, result.data);
-      if (!updatedBranch) {
-        return res.status(404).json({ message: "Branch not found" });
-      }
-      res.json(updatedBranch);
-    } catch (error) {
-      console.error("Error updating branch:", error);
-      res.status(500).json({ message: "Failed to update branch" });
-    }
-  };
-  router11.put("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
-  router11.patch("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
-  router11.delete("/api/branches/:id", requireAuth, requireAdmin, async (req, res) => {
-    try {
-      const { id } = req.params;
-      const updatedBranch = await dbStorage.updateBranch(id, { isActive: false });
-      if (!updatedBranch) {
-        return res.status(404).json({ message: "Active branch not found" });
-      }
-      res.json({ message: "Branch deactivated successfully" });
-    } catch (error) {
-      console.error("Error deactivating branch:", error);
-      res.status(500).json({ message: "Failed to deactivate branch" });
-    }
-  });
-}
-
-// server/routes/employees.ts
-init_db_storage();
-import { Router as Router2 } from "express";
+import { v4 as uuidv42 } from "uuid";
 
 // server/routes/audit.ts
 init_db_storage();
@@ -4074,7 +3984,7 @@ function setAuditRealTimeManager(rtm) {
   _realTimeManager = rtm;
 }
 var router = Router();
-var requireAuth2 = (req, res, next) => {
+var requireAuth = (req, res, next) => {
   if (!req.session?.user) {
     return res.status(401).json({ message: "Not authenticated" });
   }
@@ -4087,7 +3997,7 @@ var requireManagerRole = (req, res, next) => {
   }
   next();
 };
-router.get("/api/audit-logs", requireAuth2, requireManagerRole, async (req, res) => {
+router.get("/api/audit-logs", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const {
       entityType,
@@ -4125,7 +4035,7 @@ router.get("/api/audit-logs", requireAuth2, requireManagerRole, async (req, res)
     res.status(500).json({ message: "Failed to fetch audit logs" });
   }
 });
-router.post("/api/audit-logs", requireAuth2, requireManagerRole, async (req, res) => {
+router.post("/api/audit-logs", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const { action, entityType, entityId, oldValues, newValues, reason } = req.body;
     if (!action || !entityType || !entityId) {
@@ -4158,7 +4068,7 @@ router.post("/api/audit-logs", requireAuth2, requireManagerRole, async (req, res
     res.status(500).json({ message: "Failed to create audit log" });
   }
 });
-router.get("/api/audit-logs/stats", requireAuth2, requireManagerRole, async (req, res) => {
+router.get("/api/audit-logs/stats", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const stats = await dbStorage.getAuditLogStats();
     res.json({ stats });
@@ -4167,7 +4077,7 @@ router.get("/api/audit-logs/stats", requireAuth2, requireManagerRole, async (req
     res.status(500).json({ message: "Failed to fetch audit log stats" });
   }
 });
-router.get("/api/audit-logs/export", requireAuth2, requireManagerRole, async (req, res) => {
+router.get("/api/audit-logs/export", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const { entityType, action, startDate, endDate } = req.query;
     const logs = await dbStorage.getAuditLogs({
@@ -4241,7 +4151,183 @@ async function createAuditLog(params) {
   }
 }
 
+// server/routes/branches.ts
+var requireAuth2 = (req, res, next) => {
+  if (!req.session?.user) {
+    return res.status(401).json({ message: "Not authenticated" });
+  }
+  req.user = req.session.user;
+  next();
+};
+var requireManagerOrAdmin = (req, res, next) => {
+  const role = req.user?.role;
+  if (role !== "manager" && role !== "admin") {
+    return res.status(403).json({ message: "Insufficient permissions" });
+  }
+  next();
+};
+var requireAdmin = (req, res, next) => {
+  const role = req.user?.role;
+  if (role !== "admin") {
+    return res.status(403).json({ message: "Admin permissions required" });
+  }
+  next();
+};
+function registerBranchesRoutes(router11) {
+  router11.get("/api/branches", requireAuth2, async (req, res) => {
+    try {
+      const allBranches = await dbStorage.getAllBranches();
+      res.json({ branches: allBranches });
+    } catch (error) {
+      console.error("Error fetching branches:", error);
+      res.status(500).json({ message: "Failed to fetch branches" });
+    }
+  });
+  router11.get("/api/branches/:id", requireAuth2, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const branch = await dbStorage.getBranch(id);
+      if (!branch) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
+      res.json(branch);
+    } catch (error) {
+      console.error("Error fetching branch:", error);
+      res.status(500).json({ message: "Failed to fetch branch" });
+    }
+  });
+  router11.post("/api/branches", requireAuth2, requireAdmin, async (req, res) => {
+    try {
+      console.log("Received request body:", req.body);
+      const schema = z2.object({
+        name: z2.string().min(1, "Name is required"),
+        address: z2.string().min(1, "Address is required"),
+        phone: z2.string().optional(),
+        isActive: z2.boolean().default(true)
+      });
+      const result = schema.safeParse(req.body);
+      if (!result.success) {
+        console.log("Validation error:", result.error);
+        return res.status(400).json({
+          message: "Validation error",
+          errors: result.error.flatten().fieldErrors
+        });
+      }
+      const newBranch = await dbStorage.createBranch({
+        name: result.data.name,
+        address: result.data.address,
+        phone: result.data.phone,
+        isActive: result.data.isActive
+      });
+      await createAuditLog({
+        action: "branch_create",
+        entityType: "branch",
+        entityId: newBranch.id,
+        userId: req.user.id,
+        newValues: { name: newBranch.name, address: newBranch.address, phone: newBranch.phone },
+        branchId: newBranch.id
+      });
+      res.status(201).json(newBranch);
+    } catch (error) {
+      console.error("Error creating branch:", error);
+      res.status(500).json({
+        message: "Failed to create branch",
+        error: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+  const handleUpdate = async (req, res) => {
+    try {
+      const { id } = req.params;
+      if (req.user?.role === "manager" && req.user?.branchId !== id) {
+        return res.status(403).json({ message: "Managers can only modify their own branch" });
+      }
+      const schema = z2.object({
+        name: z2.string().min(1, "Name is required").optional(),
+        address: z2.string().min(1, "Address is required").optional(),
+        phone: z2.string().optional(),
+        isActive: z2.boolean().optional()
+      });
+      const result = schema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({
+          message: "Validation error",
+          errors: result.error.flatten().fieldErrors
+        });
+      }
+      const existingBranch = await dbStorage.getBranch(id);
+      if (!existingBranch) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
+      const updatedBranch = await dbStorage.updateBranch(id, result.data);
+      if (!updatedBranch) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
+      const action = existingBranch.isActive && result.data.isActive === false ? "branch_delete" : "branch_update";
+      try {
+        await dbStorage.createAuditLog({
+          id: uuidv42(),
+          action,
+          entityType: "branch",
+          entityId: id,
+          userId: req.user.id,
+          oldValues: JSON.stringify({ name: existingBranch.name, address: existingBranch.address, phone: existingBranch.phone, isActive: existingBranch.isActive }),
+          newValues: JSON.stringify(result.data),
+          reason: null,
+          ipAddress: null,
+          userAgent: null
+        });
+      } catch (auditErr) {
+        console.error("Branch audit log failed:", auditErr);
+      }
+      res.json(updatedBranch);
+    } catch (error) {
+      console.error("Error updating branch:", error);
+      res.status(500).json({ message: "Failed to update branch" });
+    }
+  };
+  router11.put("/api/branches/:id", requireAuth2, requireManagerOrAdmin, handleUpdate);
+  router11.patch("/api/branches/:id", requireAuth2, requireManagerOrAdmin, handleUpdate);
+  router11.delete("/api/branches/:id", requireAuth2, requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const existing = await dbStorage.getBranch(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
+      const { deleted, employeeCount } = await dbStorage.deleteBranch(id);
+      if (!deleted) {
+        return res.status(400).json({
+          message: `Cannot delete branch \u2014 it still has ${employeeCount} employee(s) assigned. Reassign or remove them first.`
+        });
+      }
+      try {
+        await dbStorage.createAuditLog({
+          id: uuidv42(),
+          action: "branch_delete",
+          entityType: "branch",
+          entityId: id,
+          userId: req.user.id,
+          oldValues: JSON.stringify({ name: existing.name, address: existing.address, phone: existing.phone, isActive: existing.isActive }),
+          newValues: null,
+          reason: null,
+          ipAddress: null,
+          userAgent: null
+        });
+      } catch (auditErr) {
+        console.error("Branch delete audit log failed:", auditErr);
+      }
+      res.json({ message: "Branch deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting branch:", error);
+      res.status(500).json({ message: "Failed to delete branch" });
+    }
+  });
+}
+
 // server/routes/employees.ts
+init_db_storage();
+import { Router as Router2 } from "express";
 var storage = dbStorage;
 function createEmployeeRouter(realTimeManager) {
   const router11 = Router2();
@@ -4454,8 +4540,11 @@ function createEmployeeRouter(realTimeManager) {
         return res.status(400).json({ message: "Missing required fields" });
       }
       const parsedRate = parseFloat(String(hourlyRate));
-      if (isNaN(parsedRate) || parsedRate < 0) {
-        return res.status(400).json({ message: "hourlyRate must be a non-negative number" });
+      if (isNaN(parsedRate) || parsedRate <= 0) {
+        return res.status(400).json({ message: "Hourly rate must be greater than \u20B10." });
+      }
+      if (parsedRate > 1e4) {
+        return res.status(400).json({ message: "Hourly rate cannot exceed \u20B110,000 per hour." });
       }
       const calculatedDailyRate = parsedRate * 8;
       const allowedRoles = req.session.user?.role === "admin" ? ["employee", "manager", "admin"] : ["employee"];
@@ -4566,8 +4655,11 @@ function createEmployeeRouter(realTimeManager) {
       }
       if (updates.hourlyRate !== void 0) {
         const rate = parseFloat(String(updates.hourlyRate));
-        if (isNaN(rate) || rate < 0) {
-          return res.status(400).json({ message: "hourlyRate must be a non-negative number" });
+        if (isNaN(rate) || rate <= 0) {
+          return res.status(400).json({ message: "Hourly rate must be greater than \u20B10." });
+        }
+        if (rate > 1e4) {
+          return res.status(400).json({ message: "Hourly rate cannot exceed \u20B110,000 per hour." });
         }
         const calculatedDailyRate = rate * 8;
         updates.hourlyRate = String(rate);
@@ -5765,7 +5857,6 @@ router4.post("/audit-log", requireAuth5, async (req, res) => {
       userAgent: req.headers["user-agent"]
     };
     await createAuditLog(auditEntry);
-    console.log("[Payslip Audit]", auditEntry);
     res.json({ success: true, logged: true });
   } catch (error) {
     console.error("Error logging audit event:", error);
@@ -5803,10 +5894,8 @@ router4.get("/audit-log", requireManagerOrAdmin2, async (req, res) => {
   }
 });
 router4.post("/generate-pdf", requireAuth5, async (req, res) => {
-  console.log("[Payslips] POST /generate-pdf called");
   try {
     const { payslip_data, format: format4 = "pdf", include_qr = true } = req.body;
-    console.log("[Payslips] Received payslip_data:", !!payslip_data, "format:", format4);
     if (!payslip_data) {
       return res.status(400).json({
         success: false,
@@ -6525,19 +6614,13 @@ router6.get("/api/reports/summary", requireAuth7, requireManagerRole2, async (re
     });
     let totalGross = 0, totalDeductions = 0, totalNet = 0, totalHours = 0;
     let totalSSS = 0, totalPhilHealth = 0, totalPagibig = 0, totalTax = 0;
-    console.log(`
-=== REPORTS SUMMARY API [${targetMonth + 1}/${targetYear}] ===`);
-    console.log(`Branch: ${branchId}, Active Employees: ${activeEmployees.length}`);
-    console.log(`Found ${monthPeriods.length} overlapping periods.`);
     const { calculateAllDeductions: calculateAllDeductions2, calculateWithholdingTax: calculateWithholdingTax2 } = await Promise.resolve().then(() => (init_deductions(), deductions_exports));
     for (const period of monthPeriods) {
       const entries = await dbStorage.getPayrollEntriesByPeriod(period.id);
-      console.log(`>> Period ${period.id}: Found ${entries.length} entries. startDate: ${period.startDate}, endDate: ${period.endDate}`);
       const startDateObj = new Date(period.startDate);
       const endDateObj = new Date(period.endDate);
       const daysInPeriod = Math.round((endDateObj.getTime() - startDateObj.getTime()) / (1e3 * 60 * 60 * 24)) + 1;
       const periodFraction = daysInPeriod < 28 ? 0.5 : 1;
-      console.log(`   Period days: ${daysInPeriod}, fraction multiplier: ${periodFraction}`);
       for (const entry of entries) {
         totalGross += parseFloat(String(entry.grossPay ?? "0")) || 0;
         totalDeductions += parseFloat(String(entry.totalDeductions ?? "0")) || 0;
@@ -6550,7 +6633,6 @@ router6.get("/api/reports/summary", requireAuth7, requireManagerRole2, async (re
         if (currentSSS === 0 && currentPhilHealth === 0 && currentPagibig === 0) {
           const basicPay = parseFloat(String(entry.basicPay ?? "0")) || 0;
           const monthlyBasicSalary = basicPay / periodFraction;
-          console.log(`   [User: ${entry.userId}] DB stored "0". Recalculating... BasicPay: ${basicPay}, MonthlyEq: ${monthlyBasicSalary}`);
           if (monthlyBasicSalary > 0) {
             const mandatoryBreakdown = await calculateAllDeductions2(monthlyBasicSalary, {
               deductSSS: true,
@@ -6571,10 +6653,8 @@ router6.get("/api/reports/summary", requireAuth7, requireManagerRole2, async (re
                 currentTax = Math.round(monthlyTax * periodFraction * 100) / 100;
               }
             }
-            console.log(`     Calculated -> SSS: ${currentSSS}, PH: ${currentPhilHealth}, PI: ${currentPagibig}, Tax: ${currentTax}`);
           }
         } else {
-          console.log(`   [User: ${entry.userId}] Found saved deductions -> SSS: ${currentSSS}, PH: ${currentPhilHealth}, PI: ${currentPagibig}, Tax: ${currentTax}`);
         }
         totalSSS += currentSSS;
         totalPhilHealth += currentPhilHealth;
@@ -6582,8 +6662,6 @@ router6.get("/api/reports/summary", requireAuth7, requireManagerRole2, async (re
         totalTax += currentTax;
       }
     }
-    console.log(`=== GRAND TOTALS -> SSS: ${totalSSS}, PH: ${totalPhilHealth}, PI: ${totalPagibig}, Tax: ${totalTax} ===
-`);
     res.json({
       summary: {
         totalEmployees: employees.length,
@@ -6658,51 +6736,6 @@ router6.get("/api/reports/remittance", requireAuth7, requireManagerRole2, async 
   } catch (error) {
     console.error("Error fetching remittances:", error);
     res.status(500).json({ message: "Failed to fetch remittances" });
-  }
-});
-router6.get("/api/reports/debug", requireAuth7, requireManagerRole2, async (req, res) => {
-  try {
-    const branchId = req.user.branchId;
-    const { month, year } = req.query;
-    const now = /* @__PURE__ */ new Date();
-    const targetMonth = month ? parseInt(month) - 1 : now.getMonth();
-    const targetYear = year ? parseInt(year) : now.getFullYear();
-    const startDate = new Date(targetYear, targetMonth, 1);
-    const endDate = new Date(targetYear, targetMonth + 1, 0, 23, 59, 59);
-    const allPeriods = await dbStorage.getPayrollPeriodsByBranch(branchId);
-    const monthPeriods = allPeriods.filter((p) => {
-      const periodEnd = new Date(p.endDate);
-      const periodStart = new Date(p.startDate);
-      return periodEnd >= startDate && periodStart <= endDate;
-    });
-    const rawEntries = [];
-    for (const period of monthPeriods) {
-      const entries = await dbStorage.getPayrollEntriesByPeriod(period.id);
-      for (const entry of entries) {
-        rawEntries.push({
-          id: entry.id,
-          userId: entry.userId,
-          periodId: period.id,
-          grossPay: entry.grossPay,
-          totalDeductions: entry.totalDeductions,
-          netPay: entry.netPay,
-          sssContribution: entry.sssContribution,
-          philHealthContribution: entry.philHealthContribution,
-          pagibigContribution: entry.pagibigContribution,
-          withholdingTax: entry.withholdingTax
-        });
-      }
-    }
-    res.json({
-      branchId,
-      targetMonth: targetMonth + 1,
-      targetYear,
-      periodsFound: monthPeriods.length,
-      entriesFound: rawEntries.length,
-      entries: rawEntries
-    });
-  } catch (error) {
-    res.status(500).json({ message: "Debug failed", error: String(error) });
   }
 });
 
@@ -8569,7 +8602,7 @@ async function createAdminAccount() {
       branchId: mainBranchId,
       isActive: true
     });
-    console.log("\u2705 Admin account created (username: admin, password: admin123)");
+    console.log("\u2705 Admin account created (username: admin)");
   } catch (error) {
     console.error("\u274C Error creating admin account:", error);
     throw error;
@@ -9998,8 +10031,7 @@ async function registerRoutes(app2) {
         message: `Fixed ${fixed} unhashed passwords, ${skipped} were already hashed`,
         fixed,
         skipped,
-        fixedUsers,
-        newPassword: passwordToHash
+        fixedUsers
       });
     } catch (error) {
       console.error("Fix passwords error:", error);
@@ -10012,7 +10044,7 @@ async function registerRoutes(app2) {
       if (!userId || !newPassword) {
         return res.status(400).json({ message: "userId and newPassword are required" });
       }
-      if (newPassword.length < 6) {
+      if (!newPassword.trim() || newPassword.trim().length < 6) {
         return res.status(400).json({ message: "Password must be at least 6 characters" });
       }
       const user = await storage5.getUser(userId);
@@ -10083,7 +10115,6 @@ async function registerRoutes(app2) {
       let isPasswordValid = false;
       if (!isBcryptHash) {
         if (user.password === password) {
-          const hashedPassword = await bcrypt3.hash(password, 10);
           await storage5.updateUser(user.id, { password });
           isPasswordValid = true;
         }
@@ -10265,9 +10296,18 @@ async function registerRoutes(app2) {
       let activeShifts = shiftsWithUsers.filter((shift) => shift.user?.isActive);
       if (req.user.role === "employee") {
         const userId = req.user.id;
-        activeShifts = activeShifts.filter((shift) => shift.userId === userId);
-      }
-      if (activeShifts.length > 0) {
+        const [userTrades, openTrades] = await Promise.all([
+          storage5.getShiftTradesByUser(userId),
+          storage5.getAvailableShiftTrades(branchId)
+        ]);
+        const tradeShiftIds = /* @__PURE__ */ new Set();
+        openTrades.forEach((t) => {
+          if (!t.toUserId && t.status === "pending") tradeShiftIds.add(t.shiftId);
+        });
+        userTrades.forEach((t) => {
+          if (t.status === "pending" || t.status === "accepted") tradeShiftIds.add(t.shiftId);
+        });
+        activeShifts = activeShifts.filter((shift) => shift.userId === userId || tradeShiftIds.has(shift.id));
       }
       res.json({ shifts: activeShifts });
     } catch (error) {
@@ -10976,6 +11016,16 @@ async function registerRoutes(app2) {
       if (start.getTime() > end.getTime()) {
         return res.status(400).json({ message: "Start date cannot be after end date." });
       }
+      if (["late", "overtime", "undertime", "absent"].includes(type)) {
+        const targetDateStr = start.toISOString().split("T")[0];
+        const userShifts = await storage5.getShiftsByUser(userId);
+        const hasShift = userShifts.some(
+          (s) => new Date(s.startTime).toISOString().split("T")[0] === targetDateStr
+        );
+        if (!hasShift) {
+          return res.status(400).json({ message: `Cannot request ${type} without a scheduled shift on this date.` });
+        }
+      }
       const log2 = await storage5.createAdjustmentLog({
         employeeId: userId,
         branchId: req.user.branchId,
@@ -11384,18 +11434,6 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: error.message || "Failed to fetch admin dashboard stats" });
     }
   }));
-  app2.get("/api/deduction-settings", requireAuth9, asyncHandler(async (req, res) => {
-    try {
-      const branchId = req.user.branchId;
-      const rows = await db.select().from(deductionSettings).where(eq6(deductionSettings.branchId, branchId)).limit(1);
-      if (rows.length === 0) {
-        return res.json({ settings: { deductSSS: true, deductPhilHealth: true, deductPagibig: true, deductWithholdingTax: true, includeExceptionLogs: true, includeHolidayPay: false } });
-      }
-      res.json({ settings: rows[0] });
-    } catch (error) {
-      res.status(500).json({ message: error.message || "Failed to fetch deduction settings" });
-    }
-  }));
   app2.put("/api/deduction-settings", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const branchId = req.user.branchId;
@@ -11625,7 +11663,6 @@ async function registerRoutes(app2) {
         if (shifts2.length === 0 && approvedLeaves.length === 0) continue;
         const hourlyRate = parseFloat(employee.hourlyRate);
         if (isNaN(hourlyRate) || hourlyRate <= 0) {
-          console.warn(`[PAYROLL SKIP] ${employee.firstName} ${employee.lastName} \u2014 invalid hourlyRate "${employee.hourlyRate}", skipping.`);
           continue;
         }
         const payCalculation = calculatePeriodPay(shifts2, hourlyRate, periodHolidays, -1, isHolidayExempt);
@@ -11732,12 +11769,10 @@ async function registerRoutes(app2) {
             grossPay += calcAmount;
           }
         }
-        const periodStartDate = new Date(period.startDate);
-        const periodEndDate = new Date(period.endDate);
-        const daysInPeriod = Math.ceil((periodEndDate.getTime() - periodStartDate.getTime()) / (24 * 60 * 60 * 1e3)) + 1;
         const monthlyBasicSalary = hourlyRate * MONTHLY_WORKING_HOURS;
         const { calculateAllDeductions: calculateAllDeductions2, calculateWithholdingTax: calculateWithholdingTax2 } = await Promise.resolve().then(() => (init_deductions(), deductions_exports));
-        const isSemiMonthly = daysInPeriod < 28;
+        const freq = companySettings2?.payrollFrequency || "semi-monthly";
+        const periodFraction = freq === "monthly" ? 1 : freq === "weekly" ? 0.25 : 0.5;
         const skipStatutory = ["bonus", "13th_month", "final_pay", "correction", "off_cycle"].includes(period.runType || "");
         const mandatorySettings = {
           deductSSS: skipStatutory ? false : runConfig.deductSSS ?? true,
@@ -11747,7 +11782,6 @@ async function registerRoutes(app2) {
           // Tax computed separately below using runConfig
         };
         const mandatoryBreakdown = await calculateAllDeductions2(monthlyBasicSalary, mandatorySettings);
-        const periodFraction = isSemiMonthly ? 0.5 : 1;
         const sssContribution = Math.round(mandatoryBreakdown.sssContribution * periodFraction * 100) / 100;
         const philHealthContribution = Math.round(mandatoryBreakdown.philHealthContribution * periodFraction * 100) / 100;
         const pagibigContribution = Math.round(mandatoryBreakdown.pagibigContribution * periodFraction * 100) / 100;
@@ -11782,11 +11816,11 @@ async function registerRoutes(app2) {
         const monthlyTax = await calculateWithholdingTax2(monthlyTaxableIncome);
         const withholdingTax = Math.round(monthlyTax * periodFraction * 100) / 100;
         grossPay += totalAllowanceAmount;
-        let sssLoan = 0;
-        let pagibigLoan = 0;
-        const otherDeductions = parseFloat(employee.otherDeductions || "0") + lateDeduction + undertimeDeduction;
+        const sssLoan = parseFloat(employee.sssLoanDeduction || "0") || 0;
+        const pagibigLoan = parseFloat(employee.pagibigLoanDeduction || "0") || 0;
+        const otherDeductions = (parseFloat(employee.otherDeductions || "0") || 0) + lateDeduction + undertimeDeduction;
         const mweWithholdingTax = !runConfig.deductWithholdingTax || employee.isMwe ? 0 : withholdingTax;
-        const totalDeductions = sssContribution + philHealthContribution + pagibigContribution + mweWithholdingTax + otherDeductions;
+        const totalDeductions = sssContribution + philHealthContribution + pagibigContribution + mweWithholdingTax + otherDeductions + sssLoan + pagibigLoan;
         const netPay = Math.max(0, grossPay - totalDeductions);
         let has13thMonth = false;
         let thirteentMonthRecord = null;
@@ -12024,14 +12058,21 @@ async function registerRoutes(app2) {
     if (!entry) {
       return res.status(404).json({ message: "Payroll entry not found" });
     }
-    if (entry.userId !== userId && req.user.role !== "admin" && req.user.role !== "manager") {
-      return res.status(403).json({ message: "Unauthorized access to payroll entry" });
-    }
     const employeeUser = await storage5.getUser(entry.userId);
     if (!employeeUser) {
       return res.status(404).json({ message: "Employee not found" });
     }
     const user = employeeUser;
+    if (entry.userId !== userId) {
+      if (req.user.role === "admin") {
+      } else if (req.user.role === "manager") {
+        if (employeeUser.branchId !== req.user.branchId) {
+          return res.status(403).json({ message: "Unauthorized access to payroll entry" });
+        }
+      } else {
+        return res.status(403).json({ message: "Unauthorized access to payroll entry" });
+      }
+    }
     let breakdown = null;
     try {
       if (entry.payBreakdown) {
@@ -12128,9 +12169,12 @@ async function registerRoutes(app2) {
       const records = await storage5.get13thMonthRecords(new Date(periodEnd || entry.createdAt).getFullYear());
       const empRecord = records.find((r) => r.payslipId === entry.id || r.employeeId === entry.userId && r.status === "released");
       if (empRecord) {
-        payslipData.has13thMonth = true;
-        payslipData.thirteenthMonthAmount = empRecord.amount;
-        payslipData.netPay = (parseFloat(payslipData.netPay) + parseFloat(empRecord.amount)).toString();
+        const thirteenthAmount = parseFloat(empRecord.amount);
+        if (!isNaN(thirteenthAmount)) {
+          payslipData.has13thMonth = true;
+          payslipData.thirteenthMonthAmount = thirteenthAmount.toString();
+          payslipData.netPay = ((parseFloat(payslipData.netPay) || 0) + thirteenthAmount).toString();
+        }
       }
     }
     res.json({ payslip: payslipData });
@@ -12212,6 +12256,9 @@ async function registerRoutes(app2) {
       const archived = await storage5.getArchivedPayrollPeriod(id);
       if (!archived) {
         return res.status(404).json({ message: "Archived period not found" });
+      }
+      if (req.user.role !== "admin" && archived.branchId !== req.user.branchId) {
+        return res.status(403).json({ message: "Unauthorized access to archived payroll" });
       }
       const entries = JSON.parse(archived.entriesSnapshot || "[]");
       res.json({
@@ -12452,7 +12499,7 @@ async function registerRoutes(app2) {
   app2.patch("/api/shift-trades/:id", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
-      const { status } = req.body;
+      const { status, notes } = req.body;
       const userId = req.user.id;
       const trade = await storage5.getShiftTrade(id);
       if (!trade) {
@@ -12478,6 +12525,9 @@ async function registerRoutes(app2) {
       const updateData = { status };
       if (!trade.toUserId && (status === "accepted" || status === "pending")) {
         updateData.toUserId = userId;
+      }
+      if (status === "rejected" && notes) {
+        updateData.notes = notes;
       }
       const updatedTrade = await storage5.updateShiftTrade(id, updateData);
       const shift = await storage5.getShift(trade.shiftId);
@@ -12506,7 +12556,7 @@ async function registerRoutes(app2) {
   app2.patch("/api/shift-trades/:id/approve", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
-      const { status } = req.body;
+      const { status, notes } = req.body;
       const managerId = req.user.id;
       if (!["approved", "rejected"].includes(status)) {
         return res.status(400).json({ message: "Invalid status" });
@@ -12526,14 +12576,20 @@ async function registerRoutes(app2) {
         return res.status(400).json({ message: "Cannot approve trade without a target user" });
       }
       if (status === "approved") {
-        await storage5.updateShift(trade.shiftId, {
-          userId: trade.toUserId
-        });
+        await storage5.updateShift(trade.shiftId, { userId: trade.toUserId });
+        if (tradeShift.date) {
+          const targetSameDayShifts = await storage5.getShiftsByUserOnDate(trade.toUserId, tradeShift.date);
+          const swapShift = targetSameDayShifts.find((s) => s.id !== trade.shiftId);
+          if (swapShift) {
+            await storage5.updateShift(swapShift.id, { userId: trade.fromUserId });
+          }
+        }
       }
       const updatedTrade = await storage5.updateShiftTrade(id, {
         status,
         approvedBy: managerId,
-        approvedAt: /* @__PURE__ */ new Date()
+        approvedAt: /* @__PURE__ */ new Date(),
+        ...status === "rejected" && notes ? { notes } : {}
       });
       const shift = await storage5.getShift(trade.shiftId);
       const shiftDate = shift?.startTime ? format3(new Date(shift.startTime), "MMM d") : "a shift";
@@ -12717,17 +12773,21 @@ async function registerRoutes(app2) {
       if (!trade.toUserId) {
         return res.status(400).json({ message: "Cannot approve trade without a target user" });
       }
+      const targetSameDayShifts = tradeShift.date ? await storage5.getShiftsByUserOnDate(trade.toUserId, tradeShift.date) : [];
+      const swapShift = targetSameDayShifts.find((s) => s.id !== trade.shiftId);
       const overlappingShift = await storage5.checkShiftOverlap(
         trade.toUserId,
         new Date(tradeShift.startTime),
-        new Date(tradeShift.endTime)
+        new Date(tradeShift.endTime),
+        swapShift?.id
       );
       if (overlappingShift) {
         return res.status(409).json({ message: "Approval failed: The target employee now has an overlapping shift" });
       }
-      await storage5.updateShift(trade.shiftId, {
-        userId: trade.toUserId
-      });
+      await storage5.updateShift(trade.shiftId, { userId: trade.toUserId });
+      if (swapShift) {
+        await storage5.updateShift(swapShift.id, { userId: trade.fromUserId });
+      }
       const updatedTrade = await storage5.updateShiftTrade(id, {
         status: "approved",
         approvedBy: managerId,
@@ -14067,7 +14127,7 @@ async function registerRoutes(app2) {
         if (!password) {
           return res.status(400).json({ message: "Current password is required to set a new password" });
         }
-        if (newPassword.length < 6) {
+        if (!newPassword.trim() || newPassword.trim().length < 6) {
           return res.status(400).json({ message: "New password must be at least 6 characters long." });
         }
         const validPassword = await bcrypt3.compare(password, user.password);
@@ -14094,13 +14154,12 @@ async function registerRoutes(app2) {
     }
   }));
   app2.post("/api/debug/seed", requireAuth9, asyncHandler(async (req, res) => {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(404).json({ message: "Not found" });
+    }
     try {
       if (!["admin", "manager"].includes(req.user.role)) {
-        return res.status(403).json({
-          message: "Insufficient permissions",
-          yourRole: req.user.role,
-          userId: req.user.id
-        });
+        return res.status(403).json({ message: "Insufficient permissions" });
       }
       await seedSampleUsers();
       await seedSampleSchedulesAndPayroll();
@@ -14116,6 +14175,9 @@ async function registerRoutes(app2) {
     }
   }));
   app2.post("/api/debug/reset-and-reseed", requireAuth9, requireRole3(["admin"]), asyncHandler(async (req, res) => {
+    if (process.env.NODE_ENV === "production") {
+      return res.status(404).json({ message: "Not found" });
+    }
     try {
       await resetDatabase();
       await initializeDatabase();
@@ -14197,10 +14259,20 @@ async function registerRoutes(app2) {
   app2.put("/api/13th-month/release", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const { ids } = req.body;
     if (!ids || !Array.isArray(ids)) return res.status(400).json({ message: "ids array is required" });
+    const branchEmployees = await storage5.getUsersByBranch(req.user.branchId);
+    const branchEmployeeIds = new Set(branchEmployees.map((e) => e.id));
+    const year = (/* @__PURE__ */ new Date()).getFullYear();
+    const allRecords = await storage5.get13thMonthRecords(year);
+    const branchRecordIds = new Set(
+      allRecords.filter((r) => branchEmployeeIds.has(r.employeeId)).map((r) => r.id)
+    );
+    let released = 0;
     for (const id of ids) {
+      if (!branchRecordIds.has(id)) continue;
       await storage5.update13thMonthRecord(id, { status: "released", releasedAt: /* @__PURE__ */ new Date() });
+      released++;
     }
-    res.json({ message: "Records released successfully" });
+    res.json({ message: "Records released successfully", released });
   }));
   return httpServer;
 }
