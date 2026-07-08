@@ -1,6 +1,5 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
-import { v4 as uuidv4 } from "uuid";
 import { dbStorage } from "../db-storage";
 import { createAuditLog } from "./audit";
 
@@ -143,22 +142,16 @@ export function registerBranchesRoutes(router: Router) {
         ? 'branch_delete'
         : 'branch_update';
 
-      try {
-        await dbStorage.createAuditLog({
-          id: uuidv4(),
-          action,
-          entityType: 'branch',
-          entityId: id,
-          userId: (req as any).user.id,
-          oldValues: JSON.stringify({ name: existingBranch.name, address: existingBranch.address, phone: existingBranch.phone, isActive: existingBranch.isActive }),
-          newValues: JSON.stringify(result.data),
-          reason: null,
-          ipAddress: null,
-          userAgent: null,
-        });
-      } catch (auditErr) {
-        console.error("Branch audit log failed:", auditErr);
-      }
+      // No branchId passed — the broadcast then targets the acting user's branch room,
+      // which is where the admin viewing the audit page actually is
+      await createAuditLog({
+        action,
+        entityType: 'branch',
+        entityId: id,
+        userId: (req as any).user.id,
+        oldValues: { name: existingBranch.name, address: existingBranch.address, phone: existingBranch.phone, isActive: existingBranch.isActive },
+        newValues: result.data,
+      });
 
       res.json(updatedBranch);
     } catch (error) {
@@ -189,23 +182,14 @@ export function registerBranchesRoutes(router: Router) {
         });
       }
 
-      // Write audit log directly — bypass the createAuditLog helper's silent catch
-      try {
-        await dbStorage.createAuditLog({
-          id: uuidv4(),
-          action: 'branch_delete',
-          entityType: 'branch',
-          entityId: id,
-          userId: (req as any).user.id,
-          oldValues: JSON.stringify({ name: existing.name, address: existing.address, phone: existing.phone, isActive: existing.isActive }),
-          newValues: null,
-          reason: null,
-          ipAddress: null,
-          userAgent: null,
-        });
-      } catch (auditErr) {
-        console.error("Branch delete audit log failed:", auditErr);
-      }
+      // No branchId passed — the broadcast then targets the acting user's branch room
+      await createAuditLog({
+        action: 'branch_delete',
+        entityType: 'branch',
+        entityId: id,
+        userId: (req as any).user.id,
+        oldValues: { name: existing.name, address: existing.address, phone: existing.phone, isActive: existing.isActive },
+      });
 
       res.json({ message: "Branch deleted successfully" });
     } catch (error) {

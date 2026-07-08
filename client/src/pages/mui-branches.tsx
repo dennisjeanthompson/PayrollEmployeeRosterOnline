@@ -149,6 +149,7 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [deletingBranch, setDeletingBranch] = useState<Branch | null>(null);
   const [expandedBranch, setExpandedBranch] = useState<string | null>(null);
+  const [showInactive, setShowInactive] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     address: "",
@@ -201,6 +202,9 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
   const branches: Branch[] = Array.isArray(branchesResponse?.branches) ? branchesResponse.branches : (Array.isArray(branchesResponse) ? branchesResponse : []);
   const allEmployees: Employee[] = Array.isArray(employeesResponse?.employees) ? employeesResponse.employees : (Array.isArray(employeesResponse) ? employeesResponse : []);
   const activeBranches = branches.filter((b: Branch) => b.isActive);
+  const inactiveBranchCount = branches.length - activeBranches.length;
+  // Deleted/deactivated branches are hidden unless the admin opts in via the toggle
+  const visibleBranches = showInactive ? branches : activeBranches;
 
   // Sync local selection with global user branch if it changes externally (e.g., from top nav)
   useEffect(() => {
@@ -211,25 +215,23 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
 
   // Filter branches based on view mode and role
   const displayedBranches = useMemo(() => {
-    let list: Branch[];
     if (viewMode === 'all' && canSwitchBranch) {
-      list = branches;
-    } else if (selectedBranchId) {
-      list = branches.filter((b: Branch) => b.id === selectedBranchId);
-    } else if (isManagerRole && !isAdminRole && currentUser?.branchId) {
-      // Branch managers see only their own branch
-      list = branches.filter((b: Branch) => b.id === currentUser.branchId);
-    } else {
-      list = branches;
+      return visibleBranches;
     }
-    // Never show deleted (inactive) branches in the card grid
-    return list.filter((b: Branch) => b.isActive);
-  }, [branches, viewMode, selectedBranchId, canSwitchBranch, isManagerRole, isAdminRole, currentUser?.branchId]);
+    if (selectedBranchId) {
+      return visibleBranches.filter((b: Branch) => b.id === selectedBranchId);
+    }
+    // Branch managers see only their own branch
+    if (isManagerRole && !isAdminRole && currentUser?.branchId) {
+      return visibleBranches.filter((b: Branch) => b.id === currentUser.branchId);
+    }
+    return visibleBranches;
+  }, [visibleBranches, viewMode, selectedBranchId, canSwitchBranch, isManagerRole, isAdminRole, currentUser?.branchId]);
 
   // Calculate stats based on displayed branches
   const displayedTotalEmployees = displayedBranches.reduce((sum: number, b: Branch) => sum + (b.employeeCount || 0), 0);
   const displayedActiveBranches = displayedBranches.filter((b: Branch) => b.isActive);
-  const totalEmployees = branches.reduce((sum: number, b: Branch) => sum + (b.employeeCount || 0), 0);
+  const totalEmployees = visibleBranches.reduce((sum: number, b: Branch) => sum + (b.employeeCount || 0), 0);
 
   // Get employees for a specific branch
   const getBranchEmployees = (branchId: string) => 
@@ -575,7 +577,7 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
               <Box>
                 <Typography variant="h6" fontWeight={600}>Company Overview</Typography>
                 <Typography variant="caption" color="text.secondary">
-                  Cross-branch summary across all {branches.length} locations
+                  Cross-branch summary across all {visibleBranches.length} locations
                 </Typography>
               </Box>
             </Stack>
@@ -594,7 +596,7 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {branches.filter((b: Branch) => b.isActive).map((branch: Branch) => {
+                  {visibleBranches.map((branch: Branch) => {
                     const branchEmployees = getBranchEmployees(branch.id);
                     const managers = branchEmployees.filter((e: Employee) => e.role === 'manager' || e.role === 'admin');
                     const regularEmployees = branchEmployees.filter((e: Employee) => e.role === 'employee');
@@ -646,7 +648,7 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
                   })}
                   {/* Totals row */}
                   <TableRow sx={{ bgcolor: alpha(theme.palette.primary.main, 0.03) }}>
-                    <TableCell sx={{ fontWeight: 700 }}>Total ({branches.length} branches)</TableCell>
+                    <TableCell sx={{ fontWeight: 700 }}>Total ({visibleBranches.length} branches)</TableCell>
                     <TableCell align="center">
                       <Chip label={`${activeBranches.length} active`} size="small" color="success" sx={{ height: 22 }} />
                     </TableCell>
@@ -663,6 +665,26 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
               </Table>
             </TableContainer>
           </Paper>
+        )}
+
+        {/* Show inactive (deleted/deactivated) branches — admin recovery path */}
+        {isAdminRole && inactiveBranchCount > 0 && (
+          <Stack direction="row" justifyContent="flex-end" sx={{ mb: 1 }}>
+            <FormControlLabel
+              control={
+                <Switch
+                  size="small"
+                  checked={showInactive}
+                  onChange={(e) => setShowInactive(e.target.checked)}
+                />
+              }
+              label={
+                <Typography variant="caption" color="text.secondary">
+                  Show inactive branches ({inactiveBranchCount})
+                </Typography>
+              }
+            />
+          </Stack>
         )}
 
         {/* Branches Grid */}

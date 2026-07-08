@@ -1057,9 +1057,16 @@ var init_db_storage = __esm({
           )
         ).orderBy(shifts.startTime);
       }
-      async getShiftsByUserOnDate(userId, date) {
+      async getShiftsByUserOnDate(userId, referenceTime) {
+        const dayStart = new Date(Date.UTC(referenceTime.getUTCFullYear(), referenceTime.getUTCMonth(), referenceTime.getUTCDate()));
+        const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1e3);
         return db.select().from(shifts).where(
-          and(eq(shifts.userId, userId), eq(shifts.date, date), eq(shifts.isDeleted, false))
+          and(
+            eq(shifts.userId, userId),
+            gte(shifts.startTime, dayStart),
+            lt(shifts.startTime, dayEnd),
+            eq(shifts.isDeleted, false)
+          )
         );
       }
       async getShiftsByBranch(branchId, startDate, endDate) {
@@ -3973,7 +3980,6 @@ import { z as z4 } from "zod";
 // server/routes/branches.ts
 init_db_storage();
 import { z as z2 } from "zod";
-import { v4 as uuidv42 } from "uuid";
 
 // server/routes/audit.ts
 init_db_storage();
@@ -4264,22 +4270,14 @@ function registerBranchesRoutes(router11) {
         return res.status(404).json({ message: "Branch not found" });
       }
       const action = existingBranch.isActive && result.data.isActive === false ? "branch_delete" : "branch_update";
-      try {
-        await dbStorage.createAuditLog({
-          id: uuidv42(),
-          action,
-          entityType: "branch",
-          entityId: id,
-          userId: req.user.id,
-          oldValues: JSON.stringify({ name: existingBranch.name, address: existingBranch.address, phone: existingBranch.phone, isActive: existingBranch.isActive }),
-          newValues: JSON.stringify(result.data),
-          reason: null,
-          ipAddress: null,
-          userAgent: null
-        });
-      } catch (auditErr) {
-        console.error("Branch audit log failed:", auditErr);
-      }
+      await createAuditLog({
+        action,
+        entityType: "branch",
+        entityId: id,
+        userId: req.user.id,
+        oldValues: { name: existingBranch.name, address: existingBranch.address, phone: existingBranch.phone, isActive: existingBranch.isActive },
+        newValues: result.data
+      });
       res.json(updatedBranch);
     } catch (error) {
       console.error("Error updating branch:", error);
@@ -4301,22 +4299,13 @@ function registerBranchesRoutes(router11) {
           message: `Cannot delete branch \u2014 it still has ${employeeCount} employee(s) assigned. Reassign or remove them first.`
         });
       }
-      try {
-        await dbStorage.createAuditLog({
-          id: uuidv42(),
-          action: "branch_delete",
-          entityType: "branch",
-          entityId: id,
-          userId: req.user.id,
-          oldValues: JSON.stringify({ name: existing.name, address: existing.address, phone: existing.phone, isActive: existing.isActive }),
-          newValues: null,
-          reason: null,
-          ipAddress: null,
-          userAgent: null
-        });
-      } catch (auditErr) {
-        console.error("Branch delete audit log failed:", auditErr);
-      }
+      await createAuditLog({
+        action: "branch_delete",
+        entityType: "branch",
+        entityId: id,
+        userId: req.user.id,
+        oldValues: { name: existing.name, address: existing.address, phone: existing.phone, isActive: existing.isActive }
+      });
       res.json({ message: "Branch deleted successfully" });
     } catch (error) {
       console.error("Error deleting branch:", error);
@@ -12576,13 +12565,30 @@ async function registerRoutes(app2) {
         return res.status(400).json({ message: "Cannot approve trade without a target user" });
       }
       if (status === "approved") {
+        const targetSameDayShifts = await storage5.getShiftsByUserOnDate(trade.toUserId, new Date(tradeShift.startTime));
+        const swapShift = targetSameDayShifts.filter((s) => s.id !== trade.shiftId).sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
+        const targetOverlap = await storage5.checkShiftOverlap(
+          trade.toUserId,
+          new Date(tradeShift.startTime),
+          new Date(tradeShift.endTime),
+          swapShift?.id
+        );
+        if (targetOverlap) {
+          return res.status(409).json({ message: "Approval failed: the target employee has an overlapping shift" });
+        }
+        let canSwapBack = false;
+        if (swapShift) {
+          const requesterOverlap = await storage5.checkShiftOverlap(
+            trade.fromUserId,
+            new Date(swapShift.startTime),
+            new Date(swapShift.endTime),
+            trade.shiftId
+          );
+          canSwapBack = !requesterOverlap;
+        }
         await storage5.updateShift(trade.shiftId, { userId: trade.toUserId });
-        if (tradeShift.date) {
-          const targetSameDayShifts = await storage5.getShiftsByUserOnDate(trade.toUserId, tradeShift.date);
-          const swapShift = targetSameDayShifts.find((s) => s.id !== trade.shiftId);
-          if (swapShift) {
-            await storage5.updateShift(swapShift.id, { userId: trade.fromUserId });
-          }
+        if (swapShift && canSwapBack) {
+          await storage5.updateShift(swapShift.id, { userId: trade.fromUserId });
         }
       }
       const updatedTrade = await storage5.updateShiftTrade(id, {
@@ -12753,93 +12759,6 @@ async function registerRoutes(app2) {
     } catch (error) {
       console.error("Take shift trade error:", error);
       res.status(500).json({ message: error.message || "Failed to take shift" });
-    }
-  }));
-  app2.put("/api/shift-trades/:id/approve", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
-    try {
-      const { id } = req.params;
-      const managerId = req.user.id;
-      const trade = await storage5.getShiftTrade(id);
-      if (!trade) {
-        return res.status(404).json({ message: "Trade not found" });
-      }
-      const tradeShift = await storage5.getShift(trade.shiftId);
-      if (!tradeShift || tradeShift.branchId !== req.user.branchId) {
-        return res.status(403).json({ message: "Not authorized for this branch" });
-      }
-      if (trade.status === "approved" || trade.status === "rejected") {
-        return res.status(409).json({ message: `Trade has already been ${trade.status}` });
-      }
-      if (!trade.toUserId) {
-        return res.status(400).json({ message: "Cannot approve trade without a target user" });
-      }
-      const targetSameDayShifts = tradeShift.date ? await storage5.getShiftsByUserOnDate(trade.toUserId, tradeShift.date) : [];
-      const swapShift = targetSameDayShifts.find((s) => s.id !== trade.shiftId);
-      const overlappingShift = await storage5.checkShiftOverlap(
-        trade.toUserId,
-        new Date(tradeShift.startTime),
-        new Date(tradeShift.endTime),
-        swapShift?.id
-      );
-      if (overlappingShift) {
-        return res.status(409).json({ message: "Approval failed: The target employee now has an overlapping shift" });
-      }
-      await storage5.updateShift(trade.shiftId, { userId: trade.toUserId });
-      if (swapShift) {
-        await storage5.updateShift(swapShift.id, { userId: trade.fromUserId });
-      }
-      const updatedTrade = await storage5.updateShiftTrade(id, {
-        status: "approved",
-        approvedBy: managerId,
-        approvedAt: /* @__PURE__ */ new Date()
-      });
-      const shift = await storage5.getShift(trade.shiftId);
-      const shiftDate = shift?.startTime ? format3(new Date(shift.startTime), "MMM d") : "a shift";
-      const notificationRequester = await storage5.createNotification({
-        userId: trade.fromUserId,
-        type: "shift_trade",
-        title: "Shift Trade Approved \u2705",
-        message: `Great news! Your trade for the ${shiftDate} shift has been approved.`,
-        data: JSON.stringify({
-          shiftDate,
-          status: "approved"
-        })
-      });
-      realTimeManager.broadcastNotification(notificationRequester);
-      const notificationTarget = await storage5.createNotification({
-        userId: trade.toUserId,
-        type: "shift_trade",
-        title: "New Shift Assigned",
-        message: `You've been assigned a new shift on ${shiftDate} from an approved trade.`,
-        data: JSON.stringify({
-          shiftDate,
-          status: "approved"
-        })
-      });
-      realTimeManager.broadcastNotification(notificationTarget);
-      const enrichedTrade = {
-        ...updatedTrade,
-        shift: shift ? {
-          date: shift.startTime ? new Date(shift.startTime).toISOString().split("T")[0] : null,
-          startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
-          endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null,
-          position: shift.position
-        } : null
-      };
-      realTimeManager.broadcastTradeApproved(id, enrichedTrade, shift);
-      await createAuditLog({
-        action: "trade_approve",
-        entityType: "shift_trade",
-        entityId: id,
-        userId: managerId,
-        newValues: { status: "approved", fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId },
-        ipAddress: req.ip || req.socket?.remoteAddress,
-        userAgent: req.headers["user-agent"]
-      });
-      res.json({ trade: enrichedTrade });
-    } catch (error) {
-      console.error("Approve trade error:", error);
-      res.status(500).json({ message: error.message || "Failed to approve trade" });
     }
   }));
   app2.put("/api/shift-trades/:id/reject", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {

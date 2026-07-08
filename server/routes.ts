@@ -3775,16 +3775,41 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (status === "approved") {
+        // Find the target's earliest other shift that day — it gets swapped back to the requester
+        const targetSameDayShifts = await storage.getShiftsByUserOnDate(trade.toUserId!, new Date(tradeShift.startTime));
+        const swapShift = targetSameDayShifts
+          .filter(s => s.id !== trade.shiftId)
+          .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
+
+        // Target must not end up double-booked (their swap shift is excluded — it's being moved away)
+        const targetOverlap = await storage.checkShiftOverlap(
+          trade.toUserId!,
+          new Date(tradeShift.startTime),
+          new Date(tradeShift.endTime),
+          swapShift?.id
+        );
+        if (targetOverlap) {
+          return res.status(409).json({ message: "Approval failed: the target employee has an overlapping shift" });
+        }
+
+        // Requester must not end up double-booked by the swap-back; if they would be, transfer only
+        let canSwapBack = false;
+        if (swapShift) {
+          const requesterOverlap = await storage.checkShiftOverlap(
+            trade.fromUserId,
+            new Date(swapShift.startTime),
+            new Date(swapShift.endTime),
+            trade.shiftId
+          );
+          canSwapBack = !requesterOverlap;
+        }
+
         // Transfer the traded shift to the target employee
         await storage.updateShift(trade.shiftId, { userId: trade.toUserId! });
 
-        // Swap: if the target also has a shift on the same date, give it to the requester
-        if (tradeShift.date) {
-          const targetSameDayShifts = await storage.getShiftsByUserOnDate(trade.toUserId!, tradeShift.date);
-          const swapShift = targetSameDayShifts.find(s => s.id !== trade.shiftId);
-          if (swapShift) {
-            await storage.updateShift(swapShift.id, { userId: trade.fromUserId });
-          }
+        // Swap the target's same-day shift back to the requester
+        if (swapShift && canSwapBack) {
+          await storage.updateShift(swapShift.id, { userId: trade.fromUserId });
         }
       }
 
@@ -3998,125 +4023,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Take shift trade error:", error);
       res.status(500).json({ message: error.message || "Failed to take shift" });
-    }
-  }));
-
-  app.put("/api/shift-trades/:id/approve", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
-    try {
-      const { id } = req.params;
-      const managerId = req.user!.id;
-
-      const trade = await storage.getShiftTrade(id);
-      if (!trade) {
-        return res.status(404).json({ message: "Trade not found" });
-      }
-
-      // Verify trade belongs to manager's branch
-      const tradeShift = await storage.getShift(trade.shiftId);
-      if (!tradeShift || tradeShift.branchId !== req.user!.branchId) {
-        return res.status(403).json({ message: "Not authorized for this branch" });
-      }
-
-      // Prevent re-approving already-finalized trades
-      if (trade.status === 'approved' || trade.status === 'rejected') {
-        return res.status(409).json({ message: `Trade has already been ${trade.status}` });
-      }
-
-      if (!trade.toUserId) {
-        return res.status(400).json({ message: "Cannot approve trade without a target user" });
-      }
-
-      // Find target's same-day shift (will be swapped to requester, so exclude from overlap check)
-      const targetSameDayShifts = tradeShift.date
-        ? await storage.getShiftsByUserOnDate(trade.toUserId, tradeShift.date)
-        : [];
-      const swapShift = targetSameDayShifts.find(s => s.id !== trade.shiftId);
-
-      // Final overlapping check — exclude the swap shift since it's being moved away
-      const overlappingShift = await storage.checkShiftOverlap(
-        trade.toUserId,
-        new Date(tradeShift.startTime),
-        new Date(tradeShift.endTime),
-        swapShift?.id
-      );
-      if (overlappingShift) {
-        return res.status(409).json({ message: "Approval failed: The target employee now has an overlapping shift" });
-      }
-
-      // 1. Transfer the traded shift to the target employee
-      await storage.updateShift(trade.shiftId, { userId: trade.toUserId });
-
-      // 2. Swap: give the target's same-day shift back to the requester
-      if (swapShift) {
-        await storage.updateShift(swapShift.id, { userId: trade.fromUserId });
-      }
-
-      // 3. Update trade status
-      const updatedTrade = await storage.updateShiftTrade(id, {
-        status: "approved",
-        approvedBy: managerId,
-        approvedAt: new Date()
-      });
-
-      // 3. Create notifications
-      const shift = await storage.getShift(trade.shiftId);
-      const shiftDate = shift?.startTime ? format(new Date(shift.startTime), "MMM d") : "a shift";
-
-      const notificationRequester = await storage.createNotification({
-        userId: trade.fromUserId,
-        type: 'shift_trade',
-        title: 'Shift Trade Approved ✅',
-        message: `Great news! Your trade for the ${shiftDate} shift has been approved.`,
-        data: JSON.stringify({ 
-          shiftDate,
-          status: 'approved'
-        })
-      } as any);
-      realTimeManager.broadcastNotification(notificationRequester);
-
-      const notificationTarget = await storage.createNotification({
-        userId: trade.toUserId,
-        type: 'shift_trade',
-        title: 'New Shift Assigned',
-        message: `You've been assigned a new shift on ${shiftDate} from an approved trade.`,
-        data: JSON.stringify({ 
-          shiftDate,
-          status: 'approved'
-        })
-      } as any);
-      realTimeManager.broadcastNotification(notificationTarget);
-
-      // Enrich with shift data (shift already fetched above)
-      const enrichedTrade = {
-        ...updatedTrade,
-        shift: shift ? {
-          date: shift.startTime ? new Date(shift.startTime).toISOString().split('T')[0] : null,
-          startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
-          endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null,
-          position: shift.position,
-        } : null,
-      };
-
-      
-      // CRITICAL: Broadcast real-time approval with updated shift
-      // This triggers instant schedule updates on all clients
-      realTimeManager.broadcastTradeApproved(id, enrichedTrade, shift!);
-
-      // Audit log for trade approval
-      await createAuditLog({
-        action: 'trade_approve',
-        entityType: 'shift_trade',
-        entityId: id,
-        userId: managerId,
-        newValues: { status: 'approved', fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId },
-        ipAddress: req.ip || req.socket?.remoteAddress,
-        userAgent: req.headers["user-agent"],
-      });
-
-      res.json({ trade: enrichedTrade });
-    } catch (error: any) {
-      console.error("Approve trade error:", error);
-      res.status(500).json({ message: error.message || "Failed to approve trade" });
     }
   }));
 

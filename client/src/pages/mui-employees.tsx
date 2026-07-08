@@ -137,6 +137,7 @@ interface Employee {
 interface Branch {
   id: string;
   name: string;
+  isActive: boolean;
 }
 
 const getRoleColor = (role: string): "primary" | "secondary" | "default" => {
@@ -1163,7 +1164,7 @@ export default function MuiEmployees() {
                         onChange={(e) => setFormData({ ...formData, branchId: e.target.value })}
                         required
                       >
-                        {branchesData.map((branch) => (
+                        {branchesData.filter((branch) => branch.isActive).map((branch) => (
                           <MenuItem key={branch.id} value={branch.id}>
                             {branch.name}
                           </MenuItem>

@@ -1,0 +1,1 @@
+import{ad as n,ax as o,ae as f}from"./main-D_QQEEva.js";import{a as s}from"./format-CT7mg8ZD.js";function d(e,t,r){const a=n(e,r?.in);return isNaN(t)?o(r?.in||e,NaN):(t&&a.setDate(a.getDate()+t),a)}function m(e,t,r){const[a,i]=f(r?.in,e,t);return+s(a)==+s(i)}export{d as a,m as i};

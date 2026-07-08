@@ -447,9 +447,17 @@ export class DatabaseStorage implements IStorage {
       .orderBy(shifts.startTime);
   }
 
-  async getShiftsByUserOnDate(userId: string, date: string): Promise<Shift[]> {
+  async getShiftsByUserOnDate(userId: string, referenceTime: Date): Promise<Shift[]> {
+    // Shifts have no date column — match by UTC calendar day of startTime
+    const dayStart = new Date(Date.UTC(referenceTime.getUTCFullYear(), referenceTime.getUTCMonth(), referenceTime.getUTCDate()));
+    const dayEnd = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
     return db.select().from(shifts).where(
-      and(eq(shifts.userId, userId), eq(shifts.date, date), eq(shifts.isDeleted, false))
+      and(
+        eq(shifts.userId, userId),
+        gte(shifts.startTime, dayStart),
+        lt(shifts.startTime, dayEnd),
+        eq(shifts.isDeleted, false)
+      )
     );
   }
 

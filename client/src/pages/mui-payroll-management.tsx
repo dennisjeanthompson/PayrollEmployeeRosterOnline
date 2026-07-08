@@ -774,7 +774,7 @@ export default function MuiPayrollManagement() {
                 sx={{ borderRadius: 3 }}
               >
                 <MenuItem value="all">All Branches</MenuItem>
-                {allBranches.map((b: any) => (
+                {allBranches.filter((b: any) => b.isActive).map((b: any) => (
                   <MenuItem key={b.id} value={b.id}>{b.name}</MenuItem>
                 ))}
               </Select>
