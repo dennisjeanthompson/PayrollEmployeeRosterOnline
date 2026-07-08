@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
+import { v4 as uuidv4 } from "uuid";
 import { dbStorage } from "../db-storage";
 import { createAuditLog } from "./audit";
 
@@ -128,21 +129,36 @@ export function registerBranchesRoutes(router: Router) {
       }
 
       const existingBranch = await dbStorage.getBranch(id);
-      const updatedBranch = await dbStorage.updateBranch(id, result.data);
+      if (!existingBranch) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
 
+      const updatedBranch = await dbStorage.updateBranch(id, result.data);
       if (!updatedBranch) {
         return res.status(404).json({ message: "Branch not found" });
       }
 
-      await createAuditLog({
-        action: 'branch_update',
-        entityType: 'branch',
-        entityId: id,
-        userId: (req as any).user.id,
-        oldValues: existingBranch ? { name: existingBranch.name, address: existingBranch.address, phone: existingBranch.phone, isActive: existingBranch.isActive } : undefined,
-        newValues: result.data,
-        branchId: id,
-      });
+      // Detect if this is a deactivation (treat as delete in audit log)
+      const action = existingBranch.isActive && result.data.isActive === false
+        ? 'branch_delete'
+        : 'branch_update';
+
+      try {
+        await dbStorage.createAuditLog({
+          id: uuidv4(),
+          action,
+          entityType: 'branch',
+          entityId: id,
+          userId: (req as any).user.id,
+          oldValues: JSON.stringify({ name: existingBranch.name, address: existingBranch.address, phone: existingBranch.phone, isActive: existingBranch.isActive }),
+          newValues: JSON.stringify(result.data),
+          reason: null,
+          ipAddress: null,
+          userAgent: null,
+        });
+      } catch (auditErr) {
+        console.error("Branch audit log failed:", auditErr);
+      }
 
       res.json(updatedBranch);
     } catch (error) {
@@ -154,7 +170,8 @@ export function registerBranchesRoutes(router: Router) {
   router.put("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
   router.patch("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
 
-  // Delete a branch (hard delete — blocked if employees are still assigned)
+  // Delete a branch — soft-deletes (isActive=false) to avoid FK constraint issues.
+  // Hard delete blocked if employees are still assigned.
   router.delete("/api/branches/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
@@ -164,22 +181,31 @@ export function registerBranchesRoutes(router: Router) {
         return res.status(404).json({ message: "Branch not found" });
       }
 
-      const result = await dbStorage.deleteBranch(id);
-
-      if (!result.deleted) {
+      // Block if employees are still assigned
+      const { deleted, employeeCount } = await dbStorage.deleteBranch(id);
+      if (!deleted) {
         return res.status(400).json({
-          message: `Cannot delete branch — it still has ${result.employeeCount} employee(s) assigned. Reassign or remove them first.`,
+          message: `Cannot delete branch — it still has ${employeeCount} employee(s) assigned. Reassign or remove them first.`,
         });
       }
 
-      await createAuditLog({
-        action: 'branch_delete',
-        entityType: 'branch',
-        entityId: id,
-        userId: (req as any).user.id,
-        oldValues: { name: existing.name, address: existing.address, phone: existing.phone, isActive: existing.isActive },
-        branchId: id,
-      });
+      // Write audit log directly — bypass the createAuditLog helper's silent catch
+      try {
+        await dbStorage.createAuditLog({
+          id: uuidv4(),
+          action: 'branch_delete',
+          entityType: 'branch',
+          entityId: id,
+          userId: (req as any).user.id,
+          oldValues: JSON.stringify({ name: existing.name, address: existing.address, phone: existing.phone, isActive: existing.isActive }),
+          newValues: null,
+          reason: null,
+          ipAddress: null,
+          userAgent: null,
+        });
+      } catch (auditErr) {
+        console.error("Branch delete audit log failed:", auditErr);
+      }
 
       res.json({ message: "Branch deleted successfully" });
     } catch (error) {
