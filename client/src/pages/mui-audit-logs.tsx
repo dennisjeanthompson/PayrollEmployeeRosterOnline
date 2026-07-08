@@ -125,6 +125,10 @@ const actionColors: Record<string, "success" | "warning" | "error" | "info" | "d
   holiday_create: "success",
   holiday_update: "warning",
   holiday_delete: "error",
+  branch_create: "success",
+  branch_update: "warning",
+  branch_delete: "error",
+  branch_deactivate: "error",
   create: "success",
   update: "warning",
   delete: "error",
@@ -153,6 +157,7 @@ const entityTypeLabels: Record<string, string> = {
   shift_trade: "Shift Trade",
   time_off_request: "Time Off",
   holiday: "Holiday",
+  branch: "Branch",
 };
 
 function JsonViewer({ data, label }: { data: string | null; label: string }) {

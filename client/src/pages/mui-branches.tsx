@@ -295,19 +295,23 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
     },
   });
 
-  // Delete branch mutation (soft delete)
+  // Delete branch mutation (hard delete)
   const deleteBranch = useMutation({
     mutationFn: async (id: string) => {
-      await apiRequest("DELETE", `/api/branches/${id}`);
+      const res = await apiRequest("DELETE", `/api/branches/${id}`);
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as any).message || "Failed to delete branch");
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["branches"] });
-      toast({ title: "Branch deactivated" });
+      toast({ title: "Branch deleted successfully" });
       setDeleteDialogOpen(false);
       setDeletingBranch(null);
     },
-    onError: () => {
-      toast({ title: "Failed to delete branch", variant: "destructive" });
+    onError: (err: any) => {
+      toast({ title: err.message || "Failed to delete branch", variant: "destructive" });
     },
   });
 
@@ -728,7 +732,13 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
                           <EditIcon fontSize="small" />
                         </IconButton>
                       </Tooltip>
-                      {/* Removed soft-delete trash icon, as the toggle switch accomplishes deactivation more cleanly */}
+                      {isAdminRole && (
+                        <Tooltip title="Delete Branch">
+                          <IconButton size="small" color="error" onClick={() => handleDelete(branch)}>
+                            <DeleteIcon fontSize="small" />
+                          </IconButton>
+                        </Tooltip>
+                      )}
                     </Stack>
                   )}
                 </Stack>

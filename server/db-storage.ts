@@ -338,6 +338,15 @@ export class DatabaseStorage implements IStorage {
     return this.getBranch(id);
   }
 
+  async deleteBranch(id: string): Promise<{ deleted: boolean; employeeCount: number }> {
+    const assignedUsers = await db.select({ id: users.id }).from(users).where(eq(users.branchId, id));
+    if (assignedUsers.length > 0) {
+      return { deleted: false, employeeCount: assignedUsers.length };
+    }
+    await db.delete(branches).where(eq(branches.id, id));
+    return { deleted: true, employeeCount: 0 };
+  }
+
   // Shifts
   
   /**

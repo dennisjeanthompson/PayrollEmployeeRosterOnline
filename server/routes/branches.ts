@@ -154,30 +154,37 @@ export function registerBranchesRoutes(router: Router) {
   router.put("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
   router.patch("/api/branches/:id", requireAuth, requireManagerOrAdmin, handleUpdate);
 
-  // Delete a branch (soft delete by setting isActive to false)
+  // Delete a branch (hard delete — blocked if employees are still assigned)
   router.delete("/api/branches/:id", requireAuth, requireAdmin, async (req: Request, res: Response) => {
     try {
       const { id } = req.params;
 
-      const updatedBranch = await dbStorage.updateBranch(id, { isActive: false });
+      const existing = await dbStorage.getBranch(id);
+      if (!existing) {
+        return res.status(404).json({ message: "Branch not found" });
+      }
 
-      if (!updatedBranch) {
-        return res.status(404).json({ message: "Active branch not found" });
+      const result = await dbStorage.deleteBranch(id);
+
+      if (!result.deleted) {
+        return res.status(400).json({
+          message: `Cannot delete branch — it still has ${result.employeeCount} employee(s) assigned. Reassign or remove them first.`,
+        });
       }
 
       await createAuditLog({
-        action: 'branch_deactivate',
+        action: 'branch_delete',
         entityType: 'branch',
         entityId: id,
         userId: (req as any).user.id,
-        newValues: { isActive: false },
+        oldValues: { name: existing.name, address: existing.address, phone: existing.phone, isActive: existing.isActive },
         branchId: id,
       });
 
-      res.json({ message: "Branch deactivated successfully" });
+      res.json({ message: "Branch deleted successfully" });
     } catch (error) {
-      console.error("Error deactivating branch:", error);
-      res.status(500).json({ message: "Failed to deactivate branch" });
+      console.error("Error deleting branch:", error);
+      res.status(500).json({ message: "Failed to delete branch" });
     }
   });
 }
