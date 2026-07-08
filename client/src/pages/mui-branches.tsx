@@ -211,17 +211,19 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
 
   // Filter branches based on view mode and role
   const displayedBranches = useMemo(() => {
+    let list: Branch[];
     if (viewMode === 'all' && canSwitchBranch) {
-      return branches;
+      list = branches;
+    } else if (selectedBranchId) {
+      list = branches.filter((b: Branch) => b.id === selectedBranchId);
+    } else if (isManagerRole && !isAdminRole && currentUser?.branchId) {
+      // Branch managers see only their own branch
+      list = branches.filter((b: Branch) => b.id === currentUser.branchId);
+    } else {
+      list = branches;
     }
-    if (selectedBranchId) {
-      return branches.filter((b: Branch) => b.id === selectedBranchId);
-    }
-    // Branch managers see only their own branch
-    if (isManagerRole && !isAdminRole && currentUser?.branchId) {
-      return branches.filter((b: Branch) => b.id === currentUser.branchId);
-    }
-    return branches;
+    // Never show deleted (inactive) branches in the card grid
+    return list.filter((b: Branch) => b.isActive);
   }, [branches, viewMode, selectedBranchId, canSwitchBranch, isManagerRole, isAdminRole, currentUser?.branchId]);
 
   // Calculate stats based on displayed branches
@@ -592,7 +594,7 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {branches.map((branch: Branch) => {
+                  {branches.filter((b: Branch) => b.isActive).map((branch: Branch) => {
                     const branchEmployees = getBranchEmployees(branch.id);
                     const managers = branchEmployees.filter((e: Employee) => e.role === 'manager' || e.role === 'admin');
                     const regularEmployees = branchEmployees.filter((e: Employee) => e.role === 'employee');
