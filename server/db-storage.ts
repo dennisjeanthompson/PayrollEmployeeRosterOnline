@@ -446,6 +446,12 @@ export class DatabaseStorage implements IStorage {
       .orderBy(shifts.startTime);
   }
 
+  async getShiftsByUserOnDate(userId: string, date: string): Promise<Shift[]> {
+    return db.select().from(shifts).where(
+      and(eq(shifts.userId, userId), eq(shifts.date, date), eq(shifts.isDeleted, false))
+    );
+  }
+
   async getShiftsByBranch(branchId: string, startDate?: Date, endDate?: Date): Promise<Shift[]> {
     if (startDate && endDate) {
       return db.select().from(shifts).where(

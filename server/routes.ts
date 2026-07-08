@@ -3775,10 +3775,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (status === "approved") {
-        // Update shift ownership
-        await storage.updateShift(trade.shiftId, {
-          userId: trade.toUserId!
-        });
+        // Transfer the traded shift to the target employee
+        await storage.updateShift(trade.shiftId, { userId: trade.toUserId! });
+
+        // Swap: if the target also has a shift on the same date, give it to the requester
+        if (tradeShift.date) {
+          const targetSameDayShifts = await storage.getShiftsByUserOnDate(trade.toUserId!, tradeShift.date);
+          const swapShift = targetSameDayShifts.find(s => s.id !== trade.shiftId);
+          if (swapShift) {
+            await storage.updateShift(swapShift.id, { userId: trade.fromUserId });
+          }
+        }
       }
 
       const updatedTrade = await storage.updateShiftTrade(id, {
@@ -4019,22 +4026,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Cannot approve trade without a target user" });
       }
 
-      // Final overlapping check before finalizing trade
+      // Find target's same-day shift (will be swapped to requester, so exclude from overlap check)
+      const targetSameDayShifts = tradeShift.date
+        ? await storage.getShiftsByUserOnDate(trade.toUserId, tradeShift.date)
+        : [];
+      const swapShift = targetSameDayShifts.find(s => s.id !== trade.shiftId);
+
+      // Final overlapping check — exclude the swap shift since it's being moved away
       const overlappingShift = await storage.checkShiftOverlap(
-        trade.toUserId, 
-        new Date(tradeShift.startTime), 
-        new Date(tradeShift.endTime)
+        trade.toUserId,
+        new Date(tradeShift.startTime),
+        new Date(tradeShift.endTime),
+        swapShift?.id
       );
       if (overlappingShift) {
         return res.status(409).json({ message: "Approval failed: The target employee now has an overlapping shift" });
       }
 
-      // 1. Update the shift ownership
-      await storage.updateShift(trade.shiftId, {
-        userId: trade.toUserId
-      });
+      // 1. Transfer the traded shift to the target employee
+      await storage.updateShift(trade.shiftId, { userId: trade.toUserId });
 
-      // 2. Update trade status
+      // 2. Swap: give the target's same-day shift back to the requester
+      if (swapShift) {
+        await storage.updateShift(swapShift.id, { userId: trade.fromUserId });
+      }
+
+      // 3. Update trade status
       const updatedTrade = await storage.updateShiftTrade(id, {
         status: "approved",
         approvedBy: managerId,
