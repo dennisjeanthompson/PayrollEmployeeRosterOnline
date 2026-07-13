@@ -1267,6 +1267,52 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Broadcast real-time shift update
       realTimeManager.broadcastShiftUpdated(shift);
 
+      // Notify affected employee(s) of the change
+      const updatedDate = format(new Date(shift.startTime), "MMM d, yyyy");
+      const updatedTime = `${format(new Date(shift.startTime), "h:mm a")} – ${format(new Date(shift.endTime), "h:mm a")}`;
+      const wasReassigned = updateData.userId && updateData.userId !== existingShift.userId;
+
+      if (wasReassigned) {
+        // Notify the employee who LOST the shift
+        if (existingShift.userId !== req.user!.id) {
+          const removedNotif = await storage.createNotification({
+            userId: existingShift.userId,
+            branchId: shift.branchId,
+            type: 'schedule',
+            title: 'Shift Reassigned',
+            message: `Your shift on ${updatedDate} (${updatedTime}) has been reassigned to another employee.`,
+            isRead: false,
+            data: JSON.stringify({ shiftId: id, shiftDate: updatedDate }),
+          } as any);
+          realTimeManager.broadcastNotification(removedNotif);
+        }
+        // Notify the employee who GAINED the shift
+        if (updateData.userId !== req.user!.id) {
+          const assignedNotif = await storage.createNotification({
+            userId: updateData.userId!,
+            branchId: shift.branchId,
+            type: 'shift_assigned',
+            title: 'Shift Assigned',
+            message: `You have been assigned a shift on ${updatedDate} (${updatedTime}).`,
+            isRead: false,
+            data: JSON.stringify({ shiftId: id, shiftDate: updatedDate, shiftTime: updatedTime }),
+          } as any);
+          realTimeManager.broadcastNotification(assignedNotif);
+        }
+      } else if ((updateData.startTime || updateData.endTime) && shift.userId !== req.user!.id) {
+        // Time changed for the same employee
+        const timeNotif = await storage.createNotification({
+          userId: shift.userId,
+          branchId: shift.branchId,
+          type: 'schedule',
+          title: 'Shift Updated',
+          message: `Your shift on ${updatedDate} has been updated to ${updatedTime}.`,
+          isRead: false,
+          data: JSON.stringify({ shiftId: id, shiftDate: updatedDate, shiftTime: updatedTime }),
+        } as any);
+        realTimeManager.broadcastNotification(timeNotif);
+      }
+
       // Audit log for shift update
       await createAuditLog({
         action: 'shift_update',
@@ -1323,6 +1369,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Broadcast real-time shift deletion
       realTimeManager.broadcastShiftDeleted(id, shift.branchId);
+
+      // Notify the employee whose shift was removed (skip if manager is deleting their own)
+      if (shift.userId !== req.user!.id) {
+        const shiftDate = format(new Date(shift.startTime), "MMM d, yyyy");
+        const shiftTime = `${format(new Date(shift.startTime), "h:mm a")} – ${format(new Date(shift.endTime), "h:mm a")}`;
+        const notification = await storage.createNotification({
+          userId: shift.userId,
+          branchId: shift.branchId,
+          type: 'schedule',
+          title: 'Shift Removed',
+          message: `Your shift on ${shiftDate} (${shiftTime}) has been removed from the schedule.`,
+          isRead: false,
+          data: JSON.stringify({ shiftId: id, shiftDate, shiftTime }),
+        } as any);
+        realTimeManager.broadcastNotification(notification);
+      }
 
       // Audit log for shift deletion
       await createAuditLog({
@@ -5470,12 +5532,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter to only show branch-specific notifications for the active branch (or global null branch notifications)
       const branchFiltered = notifications.filter((n: any) => !n.branchId || n.branchId === activeBranchId);
 
-      // Employees should not see internal manager/admin exception logs.
-      const filteredNotifications = req.user!.role === 'employee'
-        ? branchFiltered.filter((notification: any) => notification.type !== 'adjustment')
-        : branchFiltered;
-
-      res.json({ notifications: filteredNotifications });
+      res.json({ notifications: branchFiltered });
     } catch (error: any) {
       console.error('Get notifications error:', error);
       res.status(500).json({ message: error.message || "Failed to fetch notifications" });

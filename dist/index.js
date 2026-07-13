@@ -10698,6 +10698,46 @@ async function registerRoutes(app2) {
         return res.status(404).json({ message: "Shift not found" });
       }
       realTimeManager.broadcastShiftUpdated(shift);
+      const updatedDate = format3(new Date(shift.startTime), "MMM d, yyyy");
+      const updatedTime = `${format3(new Date(shift.startTime), "h:mm a")} \u2013 ${format3(new Date(shift.endTime), "h:mm a")}`;
+      const wasReassigned = updateData.userId && updateData.userId !== existingShift.userId;
+      if (wasReassigned) {
+        if (existingShift.userId !== req.user.id) {
+          const removedNotif = await storage5.createNotification({
+            userId: existingShift.userId,
+            branchId: shift.branchId,
+            type: "schedule",
+            title: "Shift Reassigned",
+            message: `Your shift on ${updatedDate} (${updatedTime}) has been reassigned to another employee.`,
+            isRead: false,
+            data: JSON.stringify({ shiftId: id, shiftDate: updatedDate })
+          });
+          realTimeManager.broadcastNotification(removedNotif);
+        }
+        if (updateData.userId !== req.user.id) {
+          const assignedNotif = await storage5.createNotification({
+            userId: updateData.userId,
+            branchId: shift.branchId,
+            type: "shift_assigned",
+            title: "Shift Assigned",
+            message: `You have been assigned a shift on ${updatedDate} (${updatedTime}).`,
+            isRead: false,
+            data: JSON.stringify({ shiftId: id, shiftDate: updatedDate, shiftTime: updatedTime })
+          });
+          realTimeManager.broadcastNotification(assignedNotif);
+        }
+      } else if ((updateData.startTime || updateData.endTime) && shift.userId !== req.user.id) {
+        const timeNotif = await storage5.createNotification({
+          userId: shift.userId,
+          branchId: shift.branchId,
+          type: "schedule",
+          title: "Shift Updated",
+          message: `Your shift on ${updatedDate} has been updated to ${updatedTime}.`,
+          isRead: false,
+          data: JSON.stringify({ shiftId: id, shiftDate: updatedDate, shiftTime: updatedTime })
+        });
+        realTimeManager.broadcastNotification(timeNotif);
+      }
       await createAuditLog({
         action: "shift_update",
         entityType: "shift",
@@ -10741,6 +10781,20 @@ async function registerRoutes(app2) {
         console.error("Failed to cleanup related exception logs:", e);
       }
       realTimeManager.broadcastShiftDeleted(id, shift.branchId);
+      if (shift.userId !== req.user.id) {
+        const shiftDate = format3(new Date(shift.startTime), "MMM d, yyyy");
+        const shiftTime = `${format3(new Date(shift.startTime), "h:mm a")} \u2013 ${format3(new Date(shift.endTime), "h:mm a")}`;
+        const notification = await storage5.createNotification({
+          userId: shift.userId,
+          branchId: shift.branchId,
+          type: "schedule",
+          title: "Shift Removed",
+          message: `Your shift on ${shiftDate} (${shiftTime}) has been removed from the schedule.`,
+          isRead: false,
+          data: JSON.stringify({ shiftId: id, shiftDate, shiftTime })
+        });
+        realTimeManager.broadcastNotification(notification);
+      }
       await createAuditLog({
         action: "shift_delete",
         entityType: "shift",
@@ -13898,8 +13952,7 @@ async function registerRoutes(app2) {
       const activeBranchId = req.user.branchId;
       const notifications2 = await storage5.getUserNotifications(userId);
       const branchFiltered = notifications2.filter((n) => !n.branchId || n.branchId === activeBranchId);
-      const filteredNotifications = req.user.role === "employee" ? branchFiltered.filter((notification) => notification.type !== "adjustment") : branchFiltered;
-      res.json({ notifications: filteredNotifications });
+      res.json({ notifications: branchFiltered });
     } catch (error) {
       console.error("Get notifications error:", error);
       res.status(500).json({ message: error.message || "Failed to fetch notifications" });
