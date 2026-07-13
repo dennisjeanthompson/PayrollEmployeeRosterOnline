@@ -952,7 +952,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await createAuditLog({
         action: 'shift_bulk_delete',
-        entityType: 'shift',
+        entityType: 'branch',
         entityId: branchId,
         userId: req.user!.id,
         newValues: {
@@ -1071,7 +1071,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       await createAuditLog({
         action: 'shift_bulk_create',
-        entityType: 'shift',
+        entityType: 'employee',
         entityId: employeeId,
         userId: req.user!.id,
         newValues: {
@@ -2298,11 +2298,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updated = await db.select().from(deductionSettingsTable).where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
 
+      const prev = existing[0] ?? null;
       await createAuditLog({
         action: 'deduction_settings_update',
         entityType: 'deduction_settings',
         entityId: branchId,
         userId: req.user!.id,
+        oldValues: prev ? {
+          deductSSS: prev.deductSSS,
+          deductPhilHealth: prev.deductPhilHealth,
+          deductPagibig: prev.deductPagibig,
+          deductWithholdingTax: prev.deductWithholdingTax,
+          includeExceptionLogs: prev.includeExceptionLogs,
+          includeNightDiff: prev.includeNightDiff,
+        } : null,
         newValues: { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs, includeNightDiff },
         ipAddress: req.ip || req.socket?.remoteAddress,
         userAgent: req.headers["user-agent"],

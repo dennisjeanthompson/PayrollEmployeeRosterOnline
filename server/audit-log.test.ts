@@ -46,6 +46,10 @@ const subRouterSources = readdirSync(routerDir)
   .join('\n');
 const allRoutesSrc = readFileSync(join(__dirname, 'routes.ts'), 'utf8') + '\n' + subRouterSources;
 
+if (!allRoutesSrc.trim() || subRouterSources.trim().length === 0) {
+  throw new Error('Audit coverage scan found no route source files — ensure tests run from the TypeScript source context, not dist.');
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Strict match: action: 'foo' or action: "foo" */
