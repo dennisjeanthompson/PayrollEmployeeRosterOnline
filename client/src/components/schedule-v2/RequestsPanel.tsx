@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, Avatar, Chip, Button, Card, CardContent,
   Divider, useTheme, Stack, IconButton, Dialog, DialogTitle,
@@ -106,8 +106,21 @@ export default function RequestsPanel({
   const [tradeRejectReason, setTradeRejectReason] = useState('');
   const [tradeRejectAction, setTradeRejectAction] = useState<'reject' | 'decline'>('reject');
 
-  // Locally dismissed open-market trade IDs (Pass / Not Interested)
-  const [dismissedTradeIds, setDismissedTradeIds] = useState<Set<string>>(new Set());
+  // Locally dismissed open-market trade IDs — persisted in localStorage so they survive refresh
+  const storageKey = `notInterested_${currentUserId}`;
+  const [dismissedTradeIds, setDismissedTradeIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem(storageKey);
+      return saved ? new Set<string>(JSON.parse(saved)) : new Set<string>();
+    } catch {
+      return new Set<string>();
+    }
+  });
+  useEffect(() => {
+    try {
+      localStorage.setItem(storageKey, JSON.stringify([...dismissedTradeIds]));
+    } catch {}
+  }, [dismissedTradeIds, storageKey]);
 
   // Not Interested confirmation dialog
   const [notInterestedDialogOpen, setNotInterestedDialogOpen] = useState(false);

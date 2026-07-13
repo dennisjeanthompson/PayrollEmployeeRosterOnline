@@ -330,18 +330,6 @@ function AdminDashboard({ currentUser }: any) {
         </Paper>
       )}
 
-      {/* System Alerts Panel */}
-      {alerts && alerts.length > 0 && (
-        <Paper sx={{ p: 2, borderRadius: 3, borderLeft: `4px solid ${theme.palette.warning.main}`, bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
-          <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
-            <BellIcon color="warning" fontSize="small" />
-            <Typography variant="subtitle2" fontWeight={700} color="warning.dark">System Alerts ({alerts.length})</Typography>
-          </Stack>
-          <ul style={{ margin: 0, paddingLeft: '20px', color: theme.palette.text.secondary, fontSize: '0.875rem' }}>
-            {alerts.map((a: string, i: number) => <li key={i}>{a}</li>)}
-          </ul>
-        </Paper>
-      )}
 
       {/* 2. Stat Cards */}
       <Grid container spacing={2}>
