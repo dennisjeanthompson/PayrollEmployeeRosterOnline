@@ -109,6 +109,10 @@ export default function RequestsPanel({
   // Locally dismissed open-market trade IDs (Pass / Not Interested)
   const [dismissedTradeIds, setDismissedTradeIds] = useState<Set<string>>(new Set());
 
+  // Not Interested confirmation dialog
+  const [notInterestedDialogOpen, setNotInterestedDialogOpen] = useState(false);
+  const [notInterestedTradeId, setNotInterestedTradeId] = useState<string | null>(null);
+
   const handleOpenTradeRejectDialog = (id: string, action: 'reject' | 'decline') => {
     setTradeRejectingId(id);
     setTradeRejectReason('');
@@ -525,7 +529,7 @@ export default function RequestsPanel({
                               Take This Shift
                             </Button>
                             <Button size="small" variant="outlined" color="inherit"
-                              onClick={() => setDismissedTradeIds(prev => new Set([...prev, String(trade.id)]))}
+                              onClick={() => { setNotInterestedTradeId(String(trade.id)); setNotInterestedDialogOpen(true); }}
                               sx={{ flex: 1, textTransform: 'none', fontWeight: 600, borderRadius: 2 }}>
                               Not Interested
                             </Button>
@@ -694,6 +698,32 @@ export default function RequestsPanel({
             sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
           >
             {tradeRejectAction === 'reject' ? 'Confirm Rejection' : 'Confirm Decline'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Not Interested Confirmation Dialog */}
+      <Dialog open={notInterestedDialogOpen} onClose={() => setNotInterestedDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>Not Interested?</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary">
+            Are you sure you want to pass on this shift? It will be removed from your view, but others can still take it.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setNotInterestedDialogOpen(false)}>Go Back</Button>
+          <Button
+            variant="contained"
+            color="error"
+            onClick={() => {
+              if (notInterestedTradeId) {
+                setDismissedTradeIds(prev => new Set([...prev, notInterestedTradeId]));
+              }
+              setNotInterestedDialogOpen(false);
+              setNotInterestedTradeId(null);
+            }}
+          >
+            Yes, Not Interested
           </Button>
         </DialogActions>
       </Dialog>

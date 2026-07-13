@@ -1,1 +1,0 @@
-import{ae as n,ay as f,af as o}from"./main-B4G4b7VE.js";import{a as s}from"./format-m5_UbcDM.js";function m(e,t,r){const a=n(e,r?.in);return isNaN(t)?f(r?.in||e,NaN):(t&&a.setDate(a.getDate()+t),a)}function u(e,t,r){const[a,i]=o(r?.in,e,t);return+s(a)==+s(i)}export{m as a,u as i};
