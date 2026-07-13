@@ -2,7 +2,7 @@ import { db } from './db';
 import { branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, auditLogs, timeOffPolicy, adjustmentLogs, employeeDocuments, companySettings, thirteenthMonthPay } from '@shared/schema';
 import type { IStorage } from './storage';
 import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftTrade, InsertShiftTrade, PayrollPeriod, InsertPayrollPeriod, PayrollEntry, InsertPayrollEntry, Approval, InsertApproval, TimeOffRequest, InsertTimeOffRequest, Notification, InsertNotification, DeductionSettings, InsertDeductionSettings, DeductionRate, InsertDeductionRate, Holiday, InsertHoliday, ArchivedPayrollPeriod, InsertArchivedPayrollPeriod, TimeOffPolicy, InsertTimeOffPolicy, AuditLog, InsertAuditLog, AdjustmentLog, InsertAdjustmentLog, CompanySettings, InsertCompanySettings, ThirteenthMonthPay, InsertThirteenthMonthPay } from '@shared/schema';
-import { eq, and, gte, lte, gt, lt, ne, desc, or, sql, isNull } from 'drizzle-orm';
+import { eq, and, gte, lte, gt, lt, ne, desc, or, sql, isNull, inArray } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcrypt';
 
@@ -543,7 +543,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPendingShiftTrades(branchId: string): Promise<ShiftTrade[]> {
-    // Get trades that are pending and have a target user (ready for approval)
+    // Get trades awaiting manager approval: status is 'pending' (taken but not yet accepted) OR
+    // 'accepted' (target employee agreed) and the trade has a target user assigned.
     const result = await db.select({
       trade: shiftTrades,
       shift: shifts,
@@ -552,12 +553,12 @@ export class DatabaseStorage implements IStorage {
     .leftJoin(shifts, eq(shiftTrades.shiftId, shifts.id))
     .where(
       and(
-        eq(shiftTrades.status, 'pending'),
+        inArray(shiftTrades.status, ['pending', 'accepted']),
         eq(shifts.branchId, branchId)
       )
     );
-    
-    // Filter to only trades with a target user (pending approval)
+
+    // Only include trades that have a target user (not open/unclaimed ones)
     return result.map(r => r.trade).filter(t => t.toUserId !== null && t.toUserId !== undefined);
   }
 

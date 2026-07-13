@@ -3880,6 +3880,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Enrich with shift data
       const shift = await storage.getShift(trade.shiftId);
+      const shiftDate = shift?.startTime ? format(new Date(shift.startTime), "MMM d") : "a shift";
       const enrichedTrade = {
         ...updatedTrade,
         shift: shift ? {
@@ -3889,17 +3890,73 @@ export async function registerRoutes(app: Express): Promise<Server> {
           position: shift.position,
         } : null,
       };
-      
-      
-      // Broadcast real-time events based on status
+
+      // Fetch names for notifications
+      const responder = await storage.getUser(userId);
+      const responderName = responder ? `${responder.firstName} ${responder.lastName}` : 'An employee';
+
       if (status === "accepted") {
+        // Notify the requester that their trade was accepted
+        const nReq = await storage.createNotification({
+          userId: trade.fromUserId,
+          type: 'shift_trade',
+          title: 'Trade Request Accepted',
+          message: `${responderName} accepted your ${shiftDate} shift trade. It is now awaiting manager approval.`,
+          data: JSON.stringify({ shiftDate, status: 'accepted' }),
+        } as any);
+        realTimeManager.broadcastNotification(nReq);
+
+        // Notify all branch managers so they know to review it
+        const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
+        const managers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
+        for (const manager of managers) {
+          const nMgr = await storage.createNotification({
+            userId: manager.id,
+            type: 'trade_request',
+            title: 'Shift Trade Awaiting Approval',
+            message: `${responderName} accepted a shift trade for ${shiftDate}. Please review and approve.`,
+            data: JSON.stringify({ shiftDate, responderName, status: 'pending_approval' }),
+          } as any);
+          realTimeManager.broadcastNotification(nMgr);
+        }
+
         realTimeManager.broadcastTradeAccepted(id, enrichedTrade, shift);
+
+        await createAuditLog({
+          action: 'trade_accept',
+          entityType: 'shift_trade',
+          entityId: id,
+          userId,
+          newValues: { fromUserId: trade.fromUserId, toUserId: userId, shiftId: trade.shiftId },
+          ipAddress: req.ip || req.socket?.remoteAddress,
+          userAgent: req.headers['user-agent'],
+        });
       } else if (status === "rejected") {
-        realTimeManager.broadcastTradeRejected(id, enrichedTrade, undefined, req.user!.branchId);
+        // Notify the requester that their trade was declined
+        const nReq = await storage.createNotification({
+          userId: trade.fromUserId,
+          type: 'shift_trade',
+          title: 'Trade Request Declined',
+          message: `${responderName} declined your ${shiftDate} shift trade request.${notes ? ` Reason: ${notes}` : ''}`,
+          data: JSON.stringify({ shiftDate, status: 'rejected' }),
+        } as any);
+        realTimeManager.broadcastNotification(nReq);
+
+        realTimeManager.broadcastTradeRejected(id, enrichedTrade, notes, req.user!.branchId);
+
+        await createAuditLog({
+          action: 'trade_reject',
+          entityType: 'shift_trade',
+          entityId: id,
+          userId,
+          newValues: { fromUserId: trade.fromUserId, reason: notes ?? null },
+          ipAddress: req.ip || req.socket?.remoteAddress,
+          userAgent: req.headers['user-agent'],
+        });
       } else {
         realTimeManager.broadcastTradeStatusChanged(id, status, enrichedTrade, req.user!.branchId);
       }
-      
+
       res.json({ trade: enrichedTrade });
     } catch (error: any) {
       console.error("Respond to trade error:", error);
@@ -3938,6 +3995,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Cannot approve trade without a target user" });
       }
 
+      let didSwap = false;
       if (status === "approved") {
         // Find the target's earliest other shift that day — it gets swapped back to the requester
         const targetSameDayShifts = await storage.getShiftsByUserOnDate(trade.toUserId!, new Date(tradeShift.startTime));
@@ -3974,6 +4032,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Swap the target's same-day shift back to the requester
         if (swapShift && canSwapBack) {
           await storage.updateShift(swapShift.id, { userId: trade.fromUserId });
+          didSwap = true;
         }
       }
 
@@ -4007,24 +4066,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const managerName = manager ? `${manager.firstName} ${manager.lastName}` : 'A manager';
 
       if (status === "approved") {
-        // Notify requester
+        // Notify requester — clarify whether they received a shift back or just gave theirs away
+        const requesterMsg = didSwap
+          ? `Your trade for the ${shiftDate} shift was approved by ${managerName}. ${toName} will cover your shift and you've been assigned their shift in return.`
+          : `Your trade for the ${shiftDate} shift was approved by ${managerName}. ${toName} will cover your shift. No same-day swap shift was available, so this was a one-way transfer.`;
         const nReq = await storage.createNotification({
           userId: trade.fromUserId,
           type: 'shift_trade',
-          title: 'Shift Trade Approved ✅',
-          message: `Great news! Your trade for the ${shiftDate} shift has been approved by ${managerName}. ${toName} will now cover this shift.`,
-          data: JSON.stringify({ shiftDate, status: 'approved' })
+          title: 'Shift Trade Approved',
+          message: requesterMsg,
+          data: JSON.stringify({ shiftDate, status: 'approved', didSwap })
         } as any);
         realTimeManager.broadcastNotification(nReq);
 
-        // Notify target
+        // Notify target — clarify if they gave a shift back or just received one
         if (trade.toUserId) {
+          const targetMsg = didSwap
+            ? `You've been assigned ${fromName}'s ${shiftDate} shift (approved trade). Your same-day shift has been moved to ${fromName}.`
+            : `You've been assigned ${fromName}'s ${shiftDate} shift from an approved trade.`;
           const nTarget = await storage.createNotification({
             userId: trade.toUserId,
             type: 'shift_trade',
             title: 'New Shift Assigned',
-            message: `You've been assigned ${fromName}'s ${shiftDate} shift from an approved trade.`,
-            data: JSON.stringify({ shiftDate, status: 'approved' })
+            message: targetMsg,
+            data: JSON.stringify({ shiftDate, status: 'approved', didSwap })
           } as any);
           realTimeManager.broadcastNotification(nTarget);
         }
@@ -4128,7 +4193,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const updatedTrade = await storage.updateShiftTrade(id, {
         toUserId: userId,
-        status: "pending", // Still needs manager approval
+        status: "accepted", // Employee agreed; still needs manager approval
       });
 
       // Enrich with shift data
