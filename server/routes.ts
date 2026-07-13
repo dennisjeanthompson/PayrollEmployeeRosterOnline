@@ -3784,9 +3784,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      // 3. Notify managers not already notified
-      const managers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
-      for (const manager of managers) {
+      // 3. Notify managers + admins not already notified
+      const branchManagers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
+      const allAdmins = await storage.getAdminUsers();
+      const managersAndAdmins = [...branchManagers, ...allAdmins].filter((u, _, arr) =>
+        arr.findIndex(x => x.id === u.id) === arr.indexOf(u)
+      );
+      for (const manager of managersAndAdmins) {
         if (manager.id === req.user!.id || notifiedUserIds.has(manager.id)) continue;
 
         const notificationManager = await storage.createNotification({
@@ -3794,13 +3798,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: 'trade_request',
           title: 'New Shift Trade Posted',
           message: `${requesterName} has posted a shift trade for ${shiftDate}.`,
-          data: JSON.stringify({ 
+          data: JSON.stringify({
             shiftDate,
             requesterName,
             tradeType: trade.toUserId ? 'direct' : 'open'
           })
         } as any);
         realTimeManager.broadcastNotification(notificationManager);
+        notifiedUserIds.add(manager.id);
       }
 
       // Broadcast real-time event for UI state updates (badges, list updates)
@@ -3906,10 +3911,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         } as any);
         realTimeManager.broadcastNotification(nReq);
 
-        // Notify all branch managers so they know to review it
+        // Notify all branch managers + admins so they know to review it
         const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
-        const managers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
-        for (const manager of managers) {
+        const branchManagers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
+        const allAdmins = await storage.getAdminUsers();
+        const managersAndAdmins = [...branchManagers, ...allAdmins].filter((u, _, arr) =>
+          arr.findIndex(x => x.id === u.id) === arr.indexOf(u)
+        );
+        for (const manager of managersAndAdmins) {
           const nMgr = await storage.createNotification({
             userId: manager.id,
             type: 'trade_request',
@@ -4227,16 +4236,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
       } as any);
       realTimeManager.broadcastNotification(notificationRequester);
 
-      // 2. Notify all managers in the branch
+      // 2. Notify all managers + admins in the branch
       const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
-      const managers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
-      for (const manager of managers) {
+      const branchManagers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
+      const allAdmins = await storage.getAdminUsers();
+      const managersAndAdmins = [...branchManagers, ...allAdmins].filter((u, _, arr) =>
+        arr.findIndex(x => x.id === u.id) === arr.indexOf(u)
+      );
+      for (const manager of managersAndAdmins) {
         const notificationManager = await storage.createNotification({
           userId: manager.id,
           type: 'trade_request',
           title: 'Shift Trade Awaiting Approval',
           message: `${takerName} has taken a shift trade from another employee. Please review it.`,
-          data: JSON.stringify({ 
+          data: JSON.stringify({
             shiftDate,
             takerName,
             status: 'pending_approval'
@@ -5105,9 +5118,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Get the employee who made the request
       const employee = await storage.getUser(req.user!.id);
 
-      // Get all managers in the branch to notify them
+      // Get all managers in the branch + admins to notify them
       const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
-      const managers = branchUsers.filter(user => user.role === 'manager');
+      const branchManagers = branchUsers.filter(user => user.role === 'manager');
+      const allAdmins = await storage.getAdminUsers();
+      const managers = [...branchManagers, ...allAdmins].filter((u, _, arr) =>
+        arr.findIndex(x => x.id === u.id) === arr.indexOf(u)
+      );
 
       // Create notifications for all managers with short notice info
       const shortNoticeText = shortNotice ? ` ⚠️ SHORT NOTICE (${advanceDays} days)` : '';
