@@ -211,12 +211,23 @@ export default function MuiDashboard() {
 // Admin Dashboard Component
 function AdminDashboard({ currentUser }: any) {
   const theme = useTheme();
-  
+  const [, setLocation] = useLocation();
+
   const { data, isLoading } = useQuery<any>({
     queryKey: ["/api/dashboard/admin"],
     staleTime: 10 * 1000,
     refetchInterval: 30 * 1000, // Refresh every 30s
   });
+
+  // Reuse the shared notifications cache — no extra network request
+  const { data: notifData } = useQuery<{ notifications: any[] }>({
+    queryKey: ["/api/notifications"],
+    queryFn: async () => { const r = await apiRequest("GET", "/api/notifications"); return r.json(); },
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+  const unreadNotifications = notifData?.notifications?.filter(n => !n.isRead) ?? [];
 
   if (isLoading) {
     return (
@@ -272,7 +283,54 @@ function AdminDashboard({ currentUser }: any) {
         </Box>
       </Paper>
 
-      {/* 5. Alerts Panel */}
+      {/* Unread Notifications Panel */}
+      {unreadNotifications.length > 0 && (
+        <Paper sx={{ p: 2, borderRadius: 3, borderLeft: `4px solid ${theme.palette.info.main}`, bgcolor: alpha(theme.palette.info.main, 0.04) }}>
+          <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1.5 }}>
+            <Stack direction="row" alignItems="center" spacing={1}>
+              <BellIcon color="info" fontSize="small" />
+              <Typography variant="subtitle2" fontWeight={700} color="info.dark">
+                Unread Notifications ({unreadNotifications.length})
+              </Typography>
+            </Stack>
+            <Typography
+              variant="caption"
+              sx={{ color: 'info.main', fontWeight: 600, cursor: 'pointer', '&:hover': { textDecoration: 'underline' } }}
+              onClick={() => setLocation('/notifications')}
+            >
+              View all
+            </Typography>
+          </Stack>
+          <Stack spacing={0.75}>
+            {unreadNotifications.slice(0, 5).map((n: any) => (
+              <Box
+                key={n.id}
+                onClick={() => setLocation('/notifications')}
+                sx={{
+                  px: 1.5, py: 1, borderRadius: 2, cursor: 'pointer',
+                  bgcolor: alpha(theme.palette.info.main, 0.04),
+                  border: `1px solid ${alpha(theme.palette.info.main, 0.12)}`,
+                  '&:hover': { bgcolor: alpha(theme.palette.info.main, 0.08) },
+                }}
+              >
+                <Typography variant="body2" fontWeight={600} sx={{ color: 'text.primary', fontSize: '0.8rem' }}>
+                  {n.title}
+                </Typography>
+                <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  {n.message}
+                </Typography>
+              </Box>
+            ))}
+            {unreadNotifications.length > 5 && (
+              <Typography variant="caption" sx={{ color: 'text.secondary', pl: 0.5 }}>
+                +{unreadNotifications.length - 5} more — <span style={{ color: theme.palette.info.main, cursor: 'pointer' }} onClick={() => setLocation('/notifications')}>see all</span>
+              </Typography>
+            )}
+          </Stack>
+        </Paper>
+      )}
+
+      {/* System Alerts Panel */}
       {alerts && alerts.length > 0 && (
         <Paper sx={{ p: 2, borderRadius: 3, borderLeft: `4px solid ${theme.palette.warning.main}`, bgcolor: alpha(theme.palette.warning.main, 0.05) }}>
           <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>

@@ -5,7 +5,8 @@ import { getInitials, capitalizeFirstLetter } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import Logo from "@/components/Logo";
-import React, { useState, useEffect, startTransition } from "react";
+import React, { useState, useEffect, startTransition, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 // MUI Components
 import {
@@ -120,6 +121,20 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
     }
   };
 
+  // Unread notification count — drives the badge on the Notifications nav item
+  const { data: notifData } = useQuery<{ notifications: { isRead: boolean }[] }>({
+    queryKey: ['/api/notifications'],
+    queryFn: async () => { const r = await apiRequest('GET', '/api/notifications'); return r.json(); },
+    enabled: !!currentUser,
+    staleTime: 30 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+  const unreadCount = useMemo(
+    () => notifData?.notifications?.filter(n => !n.isRead).length ?? 0,
+    [notifData]
+  );
+
   const filterByRole = (items: NavItem[]) =>
     items.filter((item) => item.roles.includes(currentUser?.role || "employee"));
 
@@ -141,6 +156,7 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
   const NavItem = ({ item }: { item: NavItem }) => {
     const isActive = location === item.href;
     const Icon = item.icon;
+    const showBadge = item.badge && unreadCount > 0;
 
     return (
       <ListItem disablePadding sx={{ mb: 0.5 }}>
@@ -180,30 +196,17 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
                 justifyContent: "center",
               }}
             >
-              {item.badge ? (
+              {showBadge ? (
                 <Badge
-                  variant="dot"
+                  badgeContent={unreadCount}
                   color="error"
-                  sx={{
-                    "& .MuiBadge-dot": {
-                      animation: "pulse 2s infinite",
-                    },
-                  }}
+                  max={99}
+                  sx={{ "& .MuiBadge-badge": { fontSize: 10, minWidth: 16, height: 16, animation: "pulse 2s infinite" } }}
                 >
-                  <Icon
-                    sx={{
-                      color: isActive ? "primary.main" : "text.secondary",
-                      fontSize: 22,
-                    }}
-                  />
+                  <Icon sx={{ color: isActive ? "primary.main" : "text.secondary", fontSize: 22 }} />
                 </Badge>
               ) : (
-                <Icon
-                  sx={{
-                    color: isActive ? "primary.main" : "text.secondary",
-                    fontSize: 22,
-                  }}
-                />
+                <Icon sx={{ color: isActive ? "primary.main" : "text.secondary", fontSize: 22 }} />
               )}
             </ListItemIcon>
             {!isCollapsed && (

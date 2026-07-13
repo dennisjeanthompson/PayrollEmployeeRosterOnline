@@ -5529,8 +5529,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const activeBranchId = req.user!.branchId;
       const notifications = await storage.getUserNotifications(userId);
 
-      // Filter to only show branch-specific notifications for the active branch (or global null branch notifications)
-      const branchFiltered = notifications.filter((n: any) => !n.branchId || n.branchId === activeBranchId);
+      // Admins see all their notifications across every branch they've ever been notified on.
+      // Managers/employees only see notifications for their current active branch.
+      const isAdminUser = req.user!.role === 'admin';
+      const branchFiltered = isAdminUser
+        ? notifications
+        : notifications.filter((n: any) => !n.branchId || n.branchId === activeBranchId);
 
       res.json({ notifications: branchFiltered });
     } catch (error: any) {
