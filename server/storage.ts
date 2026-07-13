@@ -490,7 +490,8 @@ export class MemStorage implements IStorage {
       status: insertTrade.status || 'pending',
       urgency: insertTrade.urgency || 'normal',
       notes: insertTrade.notes || null,
-      approvedBy: insertTrade.approvedBy || null
+      approvedBy: insertTrade.approvedBy || null,
+      passedByUserIds: [],
     };
     this.shiftTrades.set(id, trade);
     return trade;
@@ -509,12 +510,25 @@ export class MemStorage implements IStorage {
     return updatedTrade;
   }
 
-  async getAvailableShiftTrades(branchId: string): Promise<ShiftTrade[]> {
+  async getAvailableShiftTrades(branchId: string, userId?: string): Promise<ShiftTrade[]> {
     return Array.from(this.shiftTrades.values()).filter(trade => {
-      // Get the shift to check branch
       const shift = this.shifts.get(trade.shiftId);
-      return shift && shift.branchId === branchId && trade.status === 'pending';
+      if (!shift || shift.branchId !== branchId || trade.status !== 'pending') return false;
+      if (userId) {
+        const passed = (trade.passedByUserIds as string[] | null) ?? [];
+        if (passed.includes(userId)) return false;
+      }
+      return true;
     });
+  }
+
+  async passTradeForUser(tradeId: string, userId: string): Promise<void> {
+    const trade = this.shiftTrades.get(tradeId);
+    if (!trade) return;
+    const current = (trade.passedByUserIds as string[] | null) ?? [];
+    if (!current.includes(userId)) {
+      this.shiftTrades.set(tradeId, { ...trade, passedByUserIds: [...current, userId] });
+    }
   }
 
   async getPendingShiftTrades(branchId: string): Promise<ShiftTrade[]> {
