@@ -31,9 +31,10 @@ export interface IStorage {
   createShiftTrade(trade: InsertShiftTrade): Promise<ShiftTrade>;
   getShiftTrade(id: string): Promise<ShiftTrade | undefined>;
   updateShiftTrade(id: string, trade: Partial<InsertShiftTrade>): Promise<ShiftTrade | undefined>;
-  getAvailableShiftTrades(branchId: string): Promise<ShiftTrade[]>;
+  getAvailableShiftTrades(branchId: string, userId?: string): Promise<ShiftTrade[]>;
   getPendingShiftTrades(branchId: string): Promise<ShiftTrade[]>;
   getShiftTradesByUser(userId: string): Promise<ShiftTrade[]>;
+  passTradeForUser(tradeId: string, userId: string): Promise<void>;
 
   // Payroll
   createPayrollPeriod(period: InsertPayrollPeriod): Promise<PayrollPeriod>;

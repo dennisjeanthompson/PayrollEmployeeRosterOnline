@@ -45,6 +45,7 @@ interface RequestsPanelProps {
   onDeclineTrade: (id: string, notes?: string) => void;
   onCancelTrade: (id: string) => void;
   onTakeOpenTrade: (id: string) => void;
+  onPassTrade?: (id: string) => void;
 }
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
@@ -90,6 +91,7 @@ export default function RequestsPanel({
   onDeclineTrade,
   onCancelTrade,
   onTakeOpenTrade,
+  onPassTrade,
 }: RequestsPanelProps) {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -736,6 +738,7 @@ export default function RequestsPanel({
               if (notInterestedTradeId) {
                 setDismissedTradeIds(prev => new Set([...prev, notInterestedTradeId]));
                 setDismissSnackbarOpen(true);
+                onPassTrade?.(notInterestedTradeId);
               }
               setNotInterestedDialogOpen(false);
               setNotInterestedTradeId(null);

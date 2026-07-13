@@ -86,6 +86,7 @@ export const shiftTrades = pgTable("shift_trades", {
   requestedAt: timestamp("requested_at").defaultNow(),
   approvedAt: timestamp("approved_at"),
   approvedBy: text("approved_by").references(() => users.id),
+  passedByUserIds: json("passed_by_user_ids").$type<string[]>().default([]),
 });
 
 export const payrollPeriods = pgTable("payroll_periods", {

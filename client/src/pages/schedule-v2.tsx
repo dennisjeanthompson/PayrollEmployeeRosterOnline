@@ -903,6 +903,18 @@ export default function ScheduleV2() {
     onError: (err: Error) => toast.error(err.message),
   });
 
+  const passOpenTradeMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest('PUT', `/api/shift-trades/${id}/pass`);
+      if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['shift-trades'] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
   // ——— HANDLERS ——————————————————————————————————————————————————————————————————————
   const handleCreateShift = useCallback((employeeId: string, date: Date) => {
     const start = setMinutes(setHours(date, 8), 0);
@@ -1552,6 +1564,7 @@ export default function ScheduleV2() {
                 setTakeTradeAction('take');
                 setTakeTradeModalOpen(true);
               }}
+              onPassTrade={(id) => passOpenTradeMutation.mutate(id)}
             />
           </Box>
         )}
@@ -1640,6 +1653,7 @@ export default function ScheduleV2() {
             setTakeTradeAction('take');
             setTakeTradeModalOpen(true);
           }}
+          onPassTrade={(id) => passOpenTradeMutation.mutate(id)}
         />
       </Drawer>
 

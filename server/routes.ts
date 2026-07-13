@@ -3531,8 +3531,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 1. Get all trades for the user (as requester or target)
       const myTrades = await storage.getShiftTradesByUser(userId);
 
-      // 2. Get Open Market trades (available for pickup by anyone in branch)
-      const openTrades = await storage.getAvailableShiftTrades(branchId);
+      // 2. Get Open Market trades (available for pickup by anyone in branch, excluding passed ones)
+      const openTrades = await storage.getAvailableShiftTrades(branchId, userId);
       
       // 3. Get pending trades for managers (needing approval)
       let managerTrades: any[] = [];
@@ -3600,8 +3600,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get("/api/shift-trades/available", requireAuth, asyncHandler(async (req, res) => {
     const branchId = req.user!.branchId;
     const userId = req.user!.id;
-    const trades = await storage.getAvailableShiftTrades(branchId);
-    
+    const trades = await storage.getAvailableShiftTrades(branchId, userId);
+
     // Filter trades:
     // 1. Open trades (toUserId is null)
     // 2. Direct trades to me (toUserId === userId)
@@ -4280,6 +4280,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error: any) {
       console.error("Take shift trade error:", error);
       res.status(500).json({ message: error.message || "Failed to take shift" });
+    }
+  }));
+
+  app.put("/api/shift-trades/:id/pass", requireAuth, asyncHandler(async (req, res) => {
+    try {
+      const { id } = req.params;
+      const userId = req.user!.id;
+
+      const trade = await storage.getShiftTrade(id);
+      if (!trade) return res.status(404).json({ message: "Trade not found" });
+      if (trade.fromUserId === userId) return res.status(400).json({ message: "Cannot pass on your own trade" });
+
+      await storage.passTradeForUser(id, userId);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ message: error.message || "Failed to pass on trade" });
     }
   }));
 

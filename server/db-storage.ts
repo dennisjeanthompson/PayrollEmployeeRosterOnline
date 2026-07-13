@@ -528,8 +528,7 @@ export class DatabaseStorage implements IStorage {
     return this.getShiftTrade(id);
   }
 
-  async getAvailableShiftTrades(branchId: string): Promise<ShiftTrade[]> {
-    // Get all pending trades for shifts in this branch that don't have a target user yet (open trades)
+  async getAvailableShiftTrades(branchId: string, userId?: string): Promise<ShiftTrade[]> {
     const result = await db.select({
       trade: shiftTrades,
       shift: shifts,
@@ -542,9 +541,26 @@ export class DatabaseStorage implements IStorage {
         eq(shifts.branchId, branchId)
       )
     );
-    
-    // Filter to only trades without a target user (truly available)
-    return result.map(r => r.trade).filter(t => !t.toUserId);
+
+    return result.map(r => r.trade).filter(t => {
+      if (t.toUserId) return false;
+      if (userId) {
+        const passed = (t.passedByUserIds as string[] | null) ?? [];
+        if (passed.includes(userId)) return false;
+      }
+      return true;
+    });
+  }
+
+  async passTradeForUser(tradeId: string, userId: string): Promise<void> {
+    const trade = await this.getShiftTrade(tradeId);
+    if (!trade) throw new Error('Trade not found');
+    const current = (trade.passedByUserIds as string[] | null) ?? [];
+    if (!current.includes(userId)) {
+      await db.update(shiftTrades)
+        .set({ passedByUserIds: [...current, userId] })
+        .where(eq(shiftTrades.id, tradeId));
+    }
   }
 
   async getPendingShiftTrades(branchId: string): Promise<ShiftTrade[]> {
