@@ -61,7 +61,26 @@ export default function MuiLogin() {
       }
 
       const data = await response.json();
-      setAuthState({ user: data.user, isAuthenticated: true });
+      let loggedInUser = data.user;
+
+      // Admin always opens Don Macchiatos on every sign-in
+      if (loggedInUser?.role === 'admin') {
+        try {
+          const branchRes = await apiRequest('GET', '/api/branches');
+          const branchData = await branchRes.json();
+          const donMacchiatos = branchData.branches?.find(
+            (b: any) => b.name === 'Don Macchiatos' && b.isActive !== false
+          );
+          if (donMacchiatos && donMacchiatos.id !== loggedInUser.branchId) {
+            const switchRes = await apiRequest('PUT', '/api/auth/switch-branch', { branchId: donMacchiatos.id });
+            if (switchRes.ok) loggedInUser = { ...loggedInUser, branchId: donMacchiatos.id };
+          }
+        } catch {
+          // best-effort — don't block login if branch switch fails
+        }
+      }
+
+      setAuthState({ user: loggedInUser, isAuthenticated: true });
 
       // Redirect user based on role to correct routes
       if (data.user?.role === 'admin' || data.user?.role === 'manager') {
