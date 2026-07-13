@@ -1,5 +1,6 @@
 import type { Express, Request, Response, NextFunction } from "express";
 import { createServer, type Server } from "http";
+import rateLimit from "express-rate-limit";
 import session, { Session } from "express-session";
 import PgSession from "connect-pg-simple";
 import cors from "cors";
@@ -207,10 +208,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       schemaName: 'public',
       pruneSessionInterval: false, // Disable automatic pruning to avoid stalling on cold connections
     }),
-    secret: process.env.SESSION_SECRET || (() => {
+    secret: (() => {
+      if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
       if (process.env.NODE_ENV === 'production') {
-        console.warn('[WARN] SESSION_SECRET env var is not set! Using auto-generated fallback. Sessions will be invalidated on each restart.');
-        return crypto.randomBytes(64).toString('hex');
+        throw new Error('SESSION_SECRET environment variable is required in production.');
       }
       return 'cafe-dev-secret-key-local-only';
     })(),
@@ -477,7 +478,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
 
   // Auth routes
-  app.post("/api/auth/login", asyncHandler(async (req: Request, res: Response) => {
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 20,                   // 20 attempts per window per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many login attempts. Please try again in 15 minutes." },
+  });
+
+  app.post("/api/auth/login", loginLimiter, asyncHandler(async (req: Request, res: Response) => {
     try {
       const { username, password } = z.object({
         username: z.string().min(1),
@@ -489,23 +498,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
-      // Check if password is a valid bcrypt hash
+      // Reject any account whose password is not yet hashed — admin must reset it
       const isBcryptHash = user.password && (user.password.startsWith('$2b$') || user.password.startsWith('$2a$'));
-      
-      let isPasswordValid = false;
-      
       if (!isBcryptHash) {
-        // Password is stored as plain text - compare directly and then hash it
-        
-        if (user.password === password) {
-          // Password matches, now hash it for future logins (updateUser hashes it)
-          await storage.updateUser(user.id, { password });
-          isPasswordValid = true;
-        }
-      } else {
-        // Normal bcrypt comparison
-        isPasswordValid = await bcrypt.compare(password, user.password);
+        return res.status(401).json({ message: "Your account password needs to be reset. Please contact your administrator." });
       }
+
+      const isPasswordValid = await bcrypt.compare(password, user.password);
       
       if (!isPasswordValid) {
         return res.status(401).json({ message: "Invalid credentials" });
@@ -5114,7 +5113,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await storage.updateTimeOffRequest(id, { isPaid: finalIsPaid, leavePaymentStatus: paymentStatus } as any);
     // Audit note if marked as AWOL/unpaid
     if (paymentStatus === 'awol') {
-      console.log(`[Time-Off] ${request.userId} marked AWOL for ${request.startDate}–${request.endDate}`);
+      console.error(`[Time-Off] ${request.userId} marked AWOL for ${request.startDate}–${request.endDate}`);
     }
 
     // Sync with approvals table

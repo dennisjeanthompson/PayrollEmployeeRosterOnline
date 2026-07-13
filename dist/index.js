@@ -3972,6 +3972,7 @@ import compression from "compression";
 init_db_storage();
 init_schema();
 import { createServer } from "http";
+import rateLimit from "express-rate-limit";
 import session2 from "express-session";
 import PgSession from "connect-pg-simple";
 import cors from "cors";
@@ -9871,10 +9872,10 @@ async function registerRoutes(app2) {
       pruneSessionInterval: false
       // Disable automatic pruning to avoid stalling on cold connections
     }),
-    secret: process.env.SESSION_SECRET || (() => {
+    secret: (() => {
+      if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
       if (process.env.NODE_ENV === "production") {
-        console.warn("[WARN] SESSION_SECRET env var is not set! Using auto-generated fallback. Sessions will be invalidated on each restart.");
-        return crypto3.randomBytes(64).toString("hex");
+        throw new Error("SESSION_SECRET environment variable is required in production.");
       }
       return "cafe-dev-secret-key-local-only";
     })(),
@@ -10090,7 +10091,16 @@ async function registerRoutes(app2) {
       res.status(500).json({ message: "Failed to render debug reports" });
     }
   }));
-  app2.post("/api/auth/login", asyncHandler(async (req, res) => {
+  const loginLimiter = rateLimit({
+    windowMs: 15 * 60 * 1e3,
+    // 15 minutes
+    max: 20,
+    // 20 attempts per window per IP
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many login attempts. Please try again in 15 minutes." }
+  });
+  app2.post("/api/auth/login", loginLimiter, asyncHandler(async (req, res) => {
     try {
       const { username, password } = z4.object({
         username: z4.string().min(1),
@@ -10101,15 +10111,10 @@ async function registerRoutes(app2) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
       const isBcryptHash = user.password && (user.password.startsWith("$2b$") || user.password.startsWith("$2a$"));
-      let isPasswordValid = false;
       if (!isBcryptHash) {
-        if (user.password === password) {
-          await storage5.updateUser(user.id, { password });
-          isPasswordValid = true;
-        }
-      } else {
-        isPasswordValid = await bcrypt3.compare(password, user.password);
+        return res.status(401).json({ message: "Your account password needs to be reset. Please contact your administrator." });
       }
+      const isPasswordValid = await bcrypt3.compare(password, user.password);
       if (!isPasswordValid) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
@@ -13606,7 +13611,7 @@ async function registerRoutes(app2) {
     const finalIsPaid = paymentStatus === "paid" && isPaid;
     await storage5.updateTimeOffRequest(id, { isPaid: finalIsPaid, leavePaymentStatus: paymentStatus });
     if (paymentStatus === "awol") {
-      console.log(`[Time-Off] ${request.userId} marked AWOL for ${request.startDate}\u2013${request.endDate}`);
+      console.error(`[Time-Off] ${request.userId} marked AWOL for ${request.startDate}\u2013${request.endDate}`);
     }
     try {
       const pendingApprovals = await storage5.getPendingApprovals(req.user.branchId);
