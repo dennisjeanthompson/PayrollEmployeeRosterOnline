@@ -99,7 +99,8 @@ export default function MuiNotifications() {
   const isDark = theme.palette.mode === 'dark';
   const isMobile = useMediaQuery(theme.breakpoints.down('sm'));
   const isManagerRole = isManager();
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const isAdminRole = user?.role === 'admin';
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [, setLocation] = useLocation();
@@ -125,6 +126,15 @@ export default function MuiNotifications() {
     refetchOnWindowFocus: isAuthenticated,
   });
   const isLoading = isAuthenticated && isNotificationsLoading;
+
+  const { data: dashboardData } = useQuery<{ alerts: string[] }>({
+    queryKey: ["/api/dashboard/admin"],
+    queryFn: async () => { const r = await apiRequest("GET", "/api/dashboard/admin"); return r.json(); },
+    enabled: isAdminRole,
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+  const systemAlerts: string[] = dashboardData?.alerts ?? [];
 
   const all: Notification[] = resp?.notifications || [];
   const unread = useMemo(() => all.filter(n => !n.isRead), [all]);
@@ -290,6 +300,39 @@ export default function MuiNotifications() {
 
       {/* â”€â”€â”€ Content â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
       <Box sx={{ px: { xs: 2, sm: 3, md: 4 }, py: { xs: 2, sm: 3 } }}>
+
+        {/* System Alerts — admin only */}
+        {isAdminRole && systemAlerts.length > 0 && (
+          <Box sx={{
+            mb: 3,
+            bgcolor: isDark ? 'rgba(245,158,11,0.08)' : '#FFFBEB',
+            border: `1px solid ${isDark ? 'rgba(245,158,11,0.25)' : '#FDE68A'}`,
+            borderRadius: 3,
+            overflow: 'hidden',
+          }}>
+            <Box sx={{
+              px: 2.5, py: 1.5,
+              borderBottom: `1px solid ${isDark ? 'rgba(245,158,11,0.2)' : '#FDE68A'}`,
+              display: 'flex', alignItems: 'center', gap: 1,
+            }}>
+              <WarningIcon sx={{ fontSize: 18, color: '#D97706' }} />
+              <Typography sx={{ fontWeight: 700, fontSize: '0.85rem', color: '#D97706' }}>
+                System Alerts ({systemAlerts.length})
+              </Typography>
+            </Box>
+            <Stack divider={<Box sx={{ height: '1px', bgcolor: isDark ? 'rgba(245,158,11,0.1)' : '#FEF3C7' }} />}>
+              {systemAlerts.map((alert, i) => (
+                <Box key={i} sx={{ px: 2.5, py: 1.25, display: 'flex', alignItems: 'flex-start', gap: 1.5 }}>
+                  <DotIcon sx={{ fontSize: 8, color: '#F59E0B', mt: 0.75, flexShrink: 0 }} />
+                  <Typography sx={{ fontSize: '0.83rem', color: isDark ? '#FDE68A' : '#92400E', lineHeight: 1.5 }}>
+                    {alert}
+                  </Typography>
+                </Box>
+              ))}
+            </Stack>
+          </Box>
+        )}
+
         {isLoading ? (
           <Stack spacing={1}>
             {[1, 2, 3, 4, 5, 6].map(i => (

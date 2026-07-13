@@ -1,0 +1,1 @@
+import{ae as n,ay as f,af as o}from"./main-CpYb43xP.js";import{a as s}from"./format-Ywe7VlGt.js";function m(e,t,r){const a=n(e,r?.in);return isNaN(t)?f(r?.in||e,NaN):(t&&a.setDate(a.getDate()+t),a)}function u(e,t,r){const[a,i]=o(r?.in,e,t);return+s(a)==+s(i)}export{m as a,u as i};

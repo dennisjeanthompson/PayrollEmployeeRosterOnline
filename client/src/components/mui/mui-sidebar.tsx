@@ -130,10 +130,19 @@ export default function MuiSidebar({ mobileOpen = false, onMobileClose }: MuiSid
     refetchOnWindowFocus: false,
     refetchOnMount: false,
   });
-  const unreadCount = useMemo(
-    () => notifData?.notifications?.filter(n => !n.isRead).length ?? 0,
-    [notifData]
-  );
+  const { data: dashboardData } = useQuery<{ alerts: string[] }>({
+    queryKey: ['/api/dashboard/admin'],
+    queryFn: async () => { const r = await apiRequest('GET', '/api/dashboard/admin'); return r.json(); },
+    enabled: currentUser?.role === 'admin',
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+  const unreadCount = useMemo(() => {
+    const unreadNotifs = notifData?.notifications?.filter(n => !n.isRead).length ?? 0;
+    const alertCount = currentUser?.role === 'admin' ? (dashboardData?.alerts?.length ?? 0) : 0;
+    return unreadNotifs + alertCount;
+  }, [notifData, dashboardData, currentUser?.role]);
 
   const filterByRole = (items: NavItem[]) =>
     items.filter((item) => item.roles.includes(currentUser?.role || "employee"));
