@@ -1,4 +1,5 @@
 import { useState, useEffect, startTransition } from "react";
+import { useRealtime } from "@/hooks/use-realtime";
 import { 
   Box, 
   BottomNavigation, 
@@ -28,6 +29,8 @@ interface MobileLayoutProps {
 export default function MobileLayout({ children }: MobileLayoutProps) {
   const [location, setLocation] = useLocation();
   const [value, setValue] = useState(0);
+  // Keep socket alive for the entire employee session so notifications arrive in real-time.
+  useRealtime();
   const currentUser = getCurrentUser();
   const [sidebarOpen, setSidebarOpen] = useState(false);
 

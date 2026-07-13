@@ -5,6 +5,7 @@ import { queryClient, apiRequest } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { getAuthState, setAuthState, subscribeToAuth } from "./lib/auth";
 import { Toaster } from "@/components/ui/toaster";
+import { useRealtime } from "@/hooks/use-realtime";
 
 // React-Toastify for modern toast notifications
 import { ToastContainer } from 'react-toastify';
@@ -141,6 +142,9 @@ function RouteLoader({ children }: { children: React.ReactNode }) {
 // Desktop Layout with MUI Components
 function DesktopLayout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  // Ensure socket is always connected for the entire desktop session so the
+  // notification bell updates in real-time regardless of which page is active.
+  useRealtime();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
