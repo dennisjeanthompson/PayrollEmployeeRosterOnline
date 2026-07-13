@@ -39,10 +39,33 @@ function showErrorOverlay(title: string, message: string, stack?: string) {
   `;
 }
 
+function handleChunkLoadError() {
+  const RELOAD_KEY = 'chunkReloadAttempt';
+  const attempts = parseInt(sessionStorage.getItem(RELOAD_KEY) || '0', 10);
+  if (attempts < 2) {
+    sessionStorage.setItem(RELOAD_KEY, String(attempts + 1));
+    window.location.href = window.location.pathname + '?bust=' + Date.now();
+  }
+  // After 2 attempts, fall through to show the normal error overlay
+}
+
+// Vite chunk load errors → force a cache-busting reload instead of showing error overlay
+window.addEventListener('vite:preloadError', () => {
+  handleChunkLoadError();
+});
+
 // Global error handler for unhandled promise rejections
 window.addEventListener('unhandledrejection', (event) => {
-  console.error('❌ Unhandled promise rejection:', event.reason);
   const errorMsg = event.reason?.message || String(event.reason);
+
+  // Chunk load failure (stale index.html after a new deploy) — reload with cache bust
+  if (typeof errorMsg === 'string' && errorMsg.includes('Failed to fetch dynamically imported module')) {
+    event.preventDefault();
+    handleChunkLoadError();
+    return;
+  }
+
+  console.error('❌ Unhandled promise rejection:', event.reason);
   const errorStack = event.reason?.stack || '';
   showErrorOverlay('Unhandled Promise Rejection', errorMsg, errorStack);
 });
