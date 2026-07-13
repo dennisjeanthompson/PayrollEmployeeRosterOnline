@@ -950,6 +950,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      await createAuditLog({
+        action: 'shift_bulk_delete',
+        entityType: 'shift',
+        entityId: branchId,
+        userId: req.user!.id,
+        newValues: {
+          branchId,
+          employeeId: employeeId ?? 'all',
+          startDate,
+          endDate,
+          target: target ?? 'both',
+          deletedShifts,
+          deletedExceptions,
+        },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       res.json({ message: "Bulk deletion completed", deletedShifts, deletedExceptions });
     } catch (error: any) {
       console.error('Bulk delete error:', error);
@@ -1050,6 +1068,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
         realTimeManager.broadcastShiftCreated(shift);
         createdShifts.push(shift);
       }
+
+      await createAuditLog({
+        action: 'shift_bulk_create',
+        entityType: 'shift',
+        entityId: employeeId,
+        userId: req.user!.id,
+        newValues: {
+          employeeId,
+          branchId,
+          createdCount: createdShifts.length,
+          skippedCount: skipped.length,
+          startDate: bulkStartDate,
+          endDate: bulkEndDate,
+          days: bulkDays,
+        },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
 
       res.json({ message: "Bulk creation completed", createdShifts: createdShifts.length, skipped: skipped.length });
     } catch (error: any) {
@@ -2261,6 +2297,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updated = await db.select().from(deductionSettingsTable).where(eq(deductionSettingsTable.branchId, branchId)).limit(1);
+
+      await createAuditLog({
+        action: 'deduction_settings_update',
+        entityType: 'deduction_settings',
+        entityId: branchId,
+        userId: req.user!.id,
+        newValues: { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs, includeNightDiff },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       res.json({ settings: updated[0] });
     } catch (error: any) {
       res.status(500).json({ message: error.message || "Failed to update deduction settings" });
@@ -2362,6 +2409,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
           periodConfig: periodConfig || null,
         });
 
+      await createAuditLog({
+        action: 'payroll_period_create',
+        entityType: 'payroll_period',
+        entityId: period.id,
+        userId: req.user!.id,
+        newValues: { branchId, startDate, endDate, runType },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       res.json({ period });
       realTimeManager.broadcastPayrollPeriodCreated(period);
     } catch (error: any) {
@@ -2396,6 +2453,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       await storage.deletePayrollPeriod(id);
+
+      await createAuditLog({
+        action: 'payroll_period_delete',
+        entityType: 'payroll_period',
+        entityId: id,
+        userId: req.user!.id,
+        oldValues: { branchId: period.branchId, startDate: period.startDate, endDate: period.endDate, status: period.status },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       res.json({ message: "Payroll period deleted successfully" });
     } catch (error: any) {
       console.error("Delete payroll period error:", error);
@@ -3335,6 +3403,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const archived = await storage.archivePayrollPeriod(id, userId, entriesSnapshot);
 
+      await createAuditLog({
+        action: 'payroll_period_archive',
+        entityType: 'payroll_period',
+        entityId: id,
+        userId: req.user!.id,
+        oldValues: { status: period.status, startDate: period.startDate, endDate: period.endDate },
+        newValues: { status: 'archived', entriesCount: entries.length },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       res.json({
         message: "Payroll period archived successfully",
         archived
@@ -3656,7 +3735,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Broadcast real-time event for UI state updates (badges, list updates)
       realTimeManager.broadcastTradeCreated(enrichedTrade, shift);
-      
+
+      await createAuditLog({
+        action: 'trade_request',
+        entityType: 'shift_trade',
+        entityId: trade.id,
+        userId: req.user!.id,
+        newValues: {
+          shiftId: trade.shiftId,
+          fromUserId: trade.fromUserId,
+          toUserId: trade.toUserId ?? null,
+          type: trade.toUserId ? 'direct' : 'open',
+        },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
+
       res.json({ trade: enrichedTrade });
     } catch (error: any) {
       console.error("Create trade error:", error);
@@ -4018,6 +4112,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 3. Broadcast status change to update UI lists
       realTimeManager.broadcastTradeStatusChanged(id, "pending", enrichedTrade, req.user!.branchId);
+
+      await createAuditLog({
+        action: 'trade_take',
+        entityType: 'shift_trade',
+        entityId: id,
+        userId: req.user!.id,
+        newValues: {
+          shiftId: trade.shiftId,
+          fromUserId: trade.fromUserId,
+          toUserId: userId,
+          status: 'pending',
+        },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"],
+      });
 
       res.json({ trade: enrichedTrade });
     } catch (error: any) {
@@ -5154,6 +5263,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
       startDate,
       endDate,
       reason,
+    });
+
+    await createAuditLog({
+      action: 'time_off_update',
+      entityType: 'time_off_request',
+      entityId: id,
+      userId: req.user!.id,
+      oldValues: {
+        type: existingRequest.type,
+        startDate: existingRequest.startDate,
+        endDate: existingRequest.endDate,
+        reason: existingRequest.reason,
+      },
+      newValues: { type, startDate, endDate, reason },
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      userAgent: req.headers["user-agent"],
     });
 
     res.json({ request: updated });

@@ -10437,6 +10437,23 @@ async function registerRoutes(app2) {
           deletedExceptions++;
         }
       }
+      await createAuditLog({
+        action: "shift_bulk_delete",
+        entityType: "shift",
+        entityId: branchId,
+        userId: req.user.id,
+        newValues: {
+          branchId,
+          employeeId: employeeId ?? "all",
+          startDate,
+          endDate,
+          target: target ?? "both",
+          deletedShifts,
+          deletedExceptions
+        },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"]
+      });
       res.json({ message: "Bulk deletion completed", deletedShifts, deletedExceptions });
     } catch (error) {
       console.error("Bulk delete error:", error);
@@ -10519,6 +10536,23 @@ async function registerRoutes(app2) {
         realTimeManager.broadcastShiftCreated(shift);
         createdShifts.push(shift);
       }
+      await createAuditLog({
+        action: "shift_bulk_create",
+        entityType: "shift",
+        entityId: employeeId,
+        userId: req.user.id,
+        newValues: {
+          employeeId,
+          branchId,
+          createdCount: createdShifts.length,
+          skippedCount: skipped.length,
+          startDate: bulkStartDate,
+          endDate: bulkEndDate,
+          days: bulkDays
+        },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"]
+      });
       res.json({ message: "Bulk creation completed", createdShifts: createdShifts.length, skipped: skipped.length });
     } catch (error) {
       console.error("Bulk create error:", error);
@@ -11452,6 +11486,15 @@ async function registerRoutes(app2) {
         }).where(eq6(deductionSettings.branchId, branchId));
       }
       const updated = await db.select().from(deductionSettings).where(eq6(deductionSettings.branchId, branchId)).limit(1);
+      await createAuditLog({
+        action: "deduction_settings_update",
+        entityType: "deduction_settings",
+        entityId: branchId,
+        userId: req.user.id,
+        newValues: { deductSSS, deductPhilHealth, deductPagibig, deductWithholdingTax, includeExceptionLogs, includeNightDiff },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"]
+      });
       res.json({ settings: updated[0] });
     } catch (error) {
       res.status(500).json({ message: error.message || "Failed to update deduction settings" });
@@ -11533,6 +11576,15 @@ async function registerRoutes(app2) {
         runType,
         periodConfig: periodConfig || null
       });
+      await createAuditLog({
+        action: "payroll_period_create",
+        entityType: "payroll_period",
+        entityId: period.id,
+        userId: req.user.id,
+        newValues: { branchId, startDate, endDate, runType },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"]
+      });
       res.json({ period });
       realTimeManager.broadcastPayrollPeriodCreated(period);
     } catch (error) {
@@ -11561,6 +11613,15 @@ async function registerRoutes(app2) {
         await storage5.deletePayrollEntry(entry.id);
       }
       await storage5.deletePayrollPeriod(id);
+      await createAuditLog({
+        action: "payroll_period_delete",
+        entityType: "payroll_period",
+        entityId: id,
+        userId: req.user.id,
+        oldValues: { branchId: period.branchId, startDate: period.startDate, endDate: period.endDate, status: period.status },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"]
+      });
       res.json({ message: "Payroll period deleted successfully" });
     } catch (error) {
       console.error("Delete payroll period error:", error);
@@ -12230,6 +12291,16 @@ async function registerRoutes(app2) {
       const entries = await storage5.getPayrollEntriesByPeriod(id);
       const entriesSnapshot = JSON.stringify(entries);
       const archived = await storage5.archivePayrollPeriod(id, userId, entriesSnapshot);
+      await createAuditLog({
+        action: "payroll_period_archive",
+        entityType: "payroll_period",
+        entityId: id,
+        userId: req.user.id,
+        oldValues: { status: period.status, startDate: period.startDate, endDate: period.endDate },
+        newValues: { status: "archived", entriesCount: entries.length },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"]
+      });
       res.json({
         message: "Payroll period archived successfully",
         archived
@@ -12479,6 +12550,20 @@ async function registerRoutes(app2) {
         realTimeManager.broadcastNotification(notificationManager);
       }
       realTimeManager.broadcastTradeCreated(enrichedTrade, shift);
+      await createAuditLog({
+        action: "trade_request",
+        entityType: "shift_trade",
+        entityId: trade.id,
+        userId: req.user.id,
+        newValues: {
+          shiftId: trade.shiftId,
+          fromUserId: trade.fromUserId,
+          toUserId: trade.toUserId ?? null,
+          type: trade.toUserId ? "direct" : "open"
+        },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"]
+      });
       res.json({ trade: enrichedTrade });
     } catch (error) {
       console.error("Create trade error:", error);
@@ -12755,6 +12840,20 @@ async function registerRoutes(app2) {
         realTimeManager.broadcastNotification(notificationManager);
       }
       realTimeManager.broadcastTradeStatusChanged(id, "pending", enrichedTrade, req.user.branchId);
+      await createAuditLog({
+        action: "trade_take",
+        entityType: "shift_trade",
+        entityId: id,
+        userId: req.user.id,
+        newValues: {
+          shiftId: trade.shiftId,
+          fromUserId: trade.fromUserId,
+          toUserId: userId,
+          status: "pending"
+        },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"]
+      });
       res.json({ trade: enrichedTrade });
     } catch (error) {
       console.error("Take shift trade error:", error);
@@ -13624,6 +13723,21 @@ async function registerRoutes(app2) {
       startDate,
       endDate,
       reason
+    });
+    await createAuditLog({
+      action: "time_off_update",
+      entityType: "time_off_request",
+      entityId: id,
+      userId: req.user.id,
+      oldValues: {
+        type: existingRequest.type,
+        startDate: existingRequest.startDate,
+        endDate: existingRequest.endDate,
+        reason: existingRequest.reason
+      },
+      newValues: { type, startDate, endDate, reason },
+      ipAddress: req.ip || req.socket?.remoteAddress,
+      userAgent: req.headers["user-agent"]
     });
     res.json({ request: updated });
   }));
