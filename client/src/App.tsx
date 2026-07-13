@@ -639,32 +639,20 @@ function App() {
       if (authData.authenticated && authData.user) {
         let user = authData.user;
 
-        // For admins: restore the last-used branch from localStorage, or default
-        // to "Don Macchiatos" on first login so they always land on the right branch.
+        // For admins: always open Don Macchiatos on every sign-in.
         if (user.role === 'admin') {
           try {
-            const lastBranchId = localStorage.getItem('lastBranchId');
-            if (lastBranchId && lastBranchId !== user.branchId) {
-              // Restore last-used branch in the server session
-              const res = await apiRequest('PUT', '/api/auth/switch-branch', { branchId: lastBranchId });
-              if (res.ok) user = { ...user, branchId: lastBranchId };
-            } else if (!lastBranchId) {
-              // First login ever — find "Don Macchiatos" and set it as the default
-              const branchRes = await apiRequest('GET', '/api/branches');
-              const branchData = await branchRes.json();
-              const donMacchiatos = branchData.branches?.find(
-                (b: any) => b.name === 'Don Macchiatos' && b.isActive !== false
-              );
-              if (donMacchiatos && donMacchiatos.id !== user.branchId) {
-                const res = await apiRequest('PUT', '/api/auth/switch-branch', { branchId: donMacchiatos.id });
-                if (res.ok) {
-                  user = { ...user, branchId: donMacchiatos.id };
-                  try { localStorage.setItem('lastBranchId', donMacchiatos.id); } catch {}
-                }
-              }
+            const branchRes = await apiRequest('GET', '/api/branches');
+            const branchData = await branchRes.json();
+            const donMacchiatos = branchData.branches?.find(
+              (b: any) => b.name === 'Don Macchiatos' && b.isActive !== false
+            );
+            if (donMacchiatos && donMacchiatos.id !== user.branchId) {
+              const res = await apiRequest('PUT', '/api/auth/switch-branch', { branchId: donMacchiatos.id });
+              if (res.ok) user = { ...user, branchId: donMacchiatos.id };
             }
           } catch {
-            // Branch restore is best-effort; don't block login
+            // Best-effort; don't block login
           }
         }
 
