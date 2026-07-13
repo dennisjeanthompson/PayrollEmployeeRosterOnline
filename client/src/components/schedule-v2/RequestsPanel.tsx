@@ -3,7 +3,7 @@ import {
   Box, Typography, Avatar, Chip, Button, Card, CardContent,
   Divider, useTheme, Stack, IconButton, Dialog, DialogTitle,
   DialogContent, DialogActions, TextField, Menu, MenuItem,
-  Accordion, AccordionSummary, AccordionDetails,
+  Accordion, AccordionSummary, AccordionDetails, Snackbar, Alert,
 } from '@mui/material';
 import { alpha } from '@mui/material/styles';
 import CheckIcon from '@mui/icons-material/Check';
@@ -125,6 +125,7 @@ export default function RequestsPanel({
   // Not Interested confirmation dialog
   const [notInterestedDialogOpen, setNotInterestedDialogOpen] = useState(false);
   const [notInterestedTradeId, setNotInterestedTradeId] = useState<string | null>(null);
+  const [dismissSnackbarOpen, setDismissSnackbarOpen] = useState(false);
 
   const handleOpenTradeRejectDialog = (id: string, action: 'reject' | 'decline') => {
     setTradeRejectingId(id);
@@ -285,10 +286,13 @@ export default function RequestsPanel({
   const pendingTimeOff = timeOffRequests.filter(r => r.status === 'pending');
   const pendingTrades = shiftTrades.filter(t => {
     if (t.status !== 'pending' && t.status !== 'accepted') return false;
-    // Auto-expire past shifts
     if (t.shift?.startTime && new Date(t.shift.startTime) < new Date()) return false;
     return true;
   });
+  const visibleTrades = React.useMemo(
+    () => pendingTrades.filter(t => !dismissedTradeIds.has(String(t.id))),
+    [pendingTrades, dismissedTradeIds],
+  );
   const recentResolved = [
     ...timeOffRequests.filter(r => r.status !== 'pending'),
     ...shiftTrades.filter(t => t.status !== 'pending' && t.status !== 'accepted'),
@@ -429,12 +433,12 @@ export default function RequestsPanel({
               <Typography variant="subtitle1" fontWeight={700}>
                 Shift Trades
               </Typography>
-              {pendingTrades.length > 0 && (
-                <Chip label={pendingTrades.length} size="small" color="secondary" sx={{ height: 22, fontWeight: 700 }} />
+              {visibleTrades.length > 0 && (
+                <Chip label={visibleTrades.length} size="small" color="secondary" sx={{ height: 22, fontWeight: 700 }} />
               )}
             </Box>
           </AccordionSummary>
-          <AccordionDetails sx={{ px: 0, pt: 0, pb: 2 }}>          {pendingTrades.length === 0 ? (
+          <AccordionDetails sx={{ px: 0, pt: 0, pb: 2 }}>          {visibleTrades.length === 0 ? (
             <Box sx={{ 
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               py: 3, gap: 1,
@@ -448,7 +452,7 @@ export default function RequestsPanel({
             </Box>
           ) : (
             <Stack spacing={1.5}>
-              {pendingTrades.filter(t => !dismissedTradeIds.has(String(t.id))).map(trade => {
+              {visibleTrades.map(trade => {
                 const isRequester = String(trade.requesterId) === String(currentUserId) || String(trade.fromUserId) === String(currentUserId);
                 const isTarget = String(trade.targetUserId) === String(currentUserId) || String(trade.toUserId) === String(currentUserId);
                 const hasTarget = !!(trade.targetUserId || trade.toUserId);
@@ -731,6 +735,7 @@ export default function RequestsPanel({
             onClick={() => {
               if (notInterestedTradeId) {
                 setDismissedTradeIds(prev => new Set([...prev, notInterestedTradeId]));
+                setDismissSnackbarOpen(true);
               }
               setNotInterestedDialogOpen(false);
               setNotInterestedTradeId(null);
@@ -740,6 +745,18 @@ export default function RequestsPanel({
           </Button>
         </DialogActions>
       </Dialog>
+
+      {/* Not Interested dismiss feedback */}
+      <Snackbar
+        open={dismissSnackbarOpen}
+        autoHideDuration={3000}
+        onClose={() => setDismissSnackbarOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setDismissSnackbarOpen(false)} severity="info" variant="filled" sx={{ fontWeight: 600 }}>
+          Trade dismissed — you won't see this shift again.
+        </Alert>
+      </Snackbar>
 
       {/* Approve Time Off Details Menu */}
       <Menu
