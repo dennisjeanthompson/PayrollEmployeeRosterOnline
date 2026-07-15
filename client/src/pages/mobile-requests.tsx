@@ -26,6 +26,7 @@ import {
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -74,11 +75,16 @@ export default function MobileRequests() {
       <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
         <Tabs value={tabIndex} onChange={(e, newValue) => setTabIndex(newValue)} aria-label="request tabs">
           <Tab icon={<CalendarMonthIcon fontSize="small"/>} iconPosition="start" label="Time Off" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
+          <Tab icon={<SwapHorizIcon fontSize="small"/>} iconPosition="start" label="Shift Trades" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
         </Tabs>
       </Box>
 
       <CustomTabPanel value={tabIndex} index={0}>
         <TimeOffTab />
+      </CustomTabPanel>
+
+      <CustomTabPanel value={tabIndex} index={1}>
+        <ShiftTradesTab />
       </CustomTabPanel>
     </Box>
   );
@@ -240,6 +246,76 @@ function TimeOffTab() {
           </DialogActions>
         </form>
       </Dialog>
+    </Box>
+  );
+}
+
+// ==========================================
+// SHIFT TRADES TAB
+// ==========================================
+function ShiftTradesTab() {
+  const { user } = useAuth();
+  const theme = useTheme();
+
+  const { data: tradesData, isLoading } = useQuery({
+    queryKey: ['/api/shift-trades'],
+  });
+  const trades = Array.isArray(tradesData) ? tradesData : ((tradesData as any)?.trades || []);
+
+  const myTrades = trades.filter((t: any) =>
+    t.fromUserId === user?.id || t.toUserId === user?.id
+  );
+
+  const getStatusColor = (status: string): 'success' | 'error' | 'warning' | 'default' => {
+    if (status === 'approved') return 'success';
+    if (status === 'rejected') return 'error';
+    if (status === 'pending') return 'warning';
+    return 'default';
+  };
+
+  return (
+    <Box>
+      <Typography variant="subtitle1" fontWeight="bold" sx={{ mb: 2 }}>My Shift Trades</Typography>
+
+      {isLoading ? (
+        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>
+      ) : myTrades.length === 0 ? (
+        <Box sx={{ textAlign: 'center', p: 4, bgcolor: alpha(theme.palette.background.paper, 0.5), borderRadius: 3 }}>
+          <SwapHorizIcon sx={{ fontSize: 40, color: 'text.disabled', mb: 1 }} />
+          <Typography color="text.secondary">No shift trade requests found.</Typography>
+        </Box>
+      ) : (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {myTrades.map((trade: any) => {
+            const isRequester = trade.fromUserId === user?.id;
+            return (
+              <Card key={trade.id} elevation={0} sx={{ border: `1px solid ${theme.palette.divider}`, borderRadius: 3 }}>
+                <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography fontWeight="bold">
+                      {isRequester ? 'Trade Request Sent' : 'Trade Request Received'}
+                    </Typography>
+                    <Chip
+                      label={(trade.status || 'pending').toUpperCase()}
+                      size="small"
+                      color={getStatusColor(trade.status || 'pending')}
+                      sx={{ height: 20, fontSize: '0.65rem', fontWeight: 'bold' }}
+                    />
+                  </Box>
+                  {trade.shiftDate && (
+                    <Typography variant="body2" color="text.secondary">
+                      {format(new Date(trade.shiftDate), 'MMM d, yyyy')}
+                    </Typography>
+                  )}
+                  {trade.reason && (
+                    <Typography variant="body2" sx={{ mt: 1, fontStyle: 'italic' }}>"{trade.reason}"</Typography>
+                  )}
+                </CardContent>
+              </Card>
+            );
+          })}
+        </Box>
+      )}
     </Box>
   );
 }
