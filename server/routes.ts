@@ -3787,8 +3787,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // 3. Notify managers + admins not already notified
       const branchManagers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
       const allAdmins = await storage.getAdminUsers();
-      const managersAndAdmins = [...branchManagers, ...allAdmins].filter((u, _, arr) =>
-        arr.findIndex(x => x.id === u.id) === arr.indexOf(u)
+      const managersAndAdmins = [...branchManagers, ...allAdmins].filter((u, idx, arr) =>
+        idx === arr.findIndex(x => x.id === u.id)
       );
       for (const manager of managersAndAdmins) {
         if (manager.id === req.user!.id || notifiedUserIds.has(manager.id)) continue;
@@ -3915,8 +3915,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
         const branchManagers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
         const allAdmins = await storage.getAdminUsers();
-        const managersAndAdmins = [...branchManagers, ...allAdmins].filter((u, _, arr) =>
-          arr.findIndex(x => x.id === u.id) === arr.indexOf(u)
+        const managersAndAdmins = [...branchManagers, ...allAdmins].filter((u, idx, arr) =>
+          idx === arr.findIndex(x => x.id === u.id)
         );
         for (const manager of managersAndAdmins) {
           const nMgr = await storage.createNotification({
@@ -4240,8 +4240,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
       const branchManagers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
       const allAdmins = await storage.getAdminUsers();
-      const managersAndAdmins = [...branchManagers, ...allAdmins].filter((u, _, arr) =>
-        arr.findIndex(x => x.id === u.id) === arr.indexOf(u)
+      const managersAndAdmins = [...branchManagers, ...allAdmins].filter((u, idx, arr) =>
+        idx === arr.findIndex(x => x.id === u.id)
       );
       for (const manager of managersAndAdmins) {
         const notificationManager = await storage.createNotification({
@@ -4976,10 +4976,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
     }
 
-    // Standard allowances (can be customized per employee in the future)
-    const vacationAllowance = 15; // 15 days per year
-    const sickAllowance = 10; // 10 days per year
-    const personalAllowance = 5; // 5 days per year
+    // Pull allowances from leaveCredits table; fall back to defaults
+    const { leaveCredits: leaveCreditsTable } = await import('@shared/schema');
+    const { and: andOp, eq: eqOp } = await import('drizzle-orm');
+    const storedCredits = await db.select().from(leaveCreditsTable).where(
+      andOp(eqOp(leaveCreditsTable.userId, userId), eqOp(leaveCreditsTable.year, currentYear))
+    );
+    const creditMap: Record<string, number> = {};
+    for (const c of storedCredits) {
+      creditMap[c.leaveType] = Number(c.totalCredits ?? 0);
+    }
+    const vacationAllowance = creditMap['vacation'] ?? 15;
+    const sickAllowance = creditMap['sick'] ?? 10;
+    const personalAllowance = creditMap['personal'] ?? 5;
 
     res.json({
       vacation: vacationAllowance - vacationUsed,
@@ -5138,8 +5147,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
       const branchManagers = branchUsers.filter(user => user.role === 'manager');
       const allAdmins = await storage.getAdminUsers();
-      const managers = [...branchManagers, ...allAdmins].filter((u, _, arr) =>
-        arr.findIndex(x => x.id === u.id) === arr.indexOf(u)
+      const managers = [...branchManagers, ...allAdmins].filter((u, idx, arr) =>
+        idx === arr.findIndex(x => x.id === u.id)
       );
 
       // Create notifications for all managers with short notice info
