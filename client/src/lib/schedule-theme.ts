@@ -48,8 +48,8 @@ export function getRoleColor(position?: string | null, role?: string | null, sta
     // Morning (amber)
     return { bg: '#F59E0B', bgLight: '#FEF3C7', bgDark: '#78350F', text: '#FFFFFF', border: '#FCD34D', label: 'Morning Shift' };
   } else if (hour >= 12 && hour < 18) {
-    // Afternoon (orange)
-    return { bg: '#F97316', bgLight: '#FFEDD5', bgDark: '#7C2D12', text: '#FFFFFF', border: '#FDBA74', label: 'Afternoon Shift' };
+    // Afternoon (indigo)
+    return { bg: '#6366F1', bgLight: '#E0E7FF', bgDark: '#312E81', text: '#FFFFFF', border: '#A5B4FC', label: 'Afternoon Shift' };
   } else {
     // Night (indigo)
     return { bg: '#6366F1', bgLight: '#E0E7FF', bgDark: '#312E81', text: '#FFFFFF', border: '#A5B4FC', label: 'Night Shift' };
@@ -121,7 +121,5 @@ export function getUniqueRoleColors(employees: Array<{ position?: string; role?:
   const morning = getRoleColor(null, null, baseDate);
   baseDate.setHours(14);
   const afternoon = getRoleColor(null, null, baseDate);
-  baseDate.setHours(20);
-  const night = getRoleColor(null, null, baseDate);
-  return [morning, afternoon, night];
+  return [morning, afternoon];
 }
