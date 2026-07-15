@@ -1291,43 +1291,6 @@ export default function ScheduleV2() {
           <Typography variant="body2" sx={{ fontWeight: 600, color: 'text.secondary', display: 'flex', alignItems: 'center', gap: 1 }}>
             {weeklyTotalHours}h scheduled
           </Typography>
-          <Divider orientation="vertical" flexItem sx={{ my: 0.5, display: { xs: 'none', sm: 'block' } }} />
-          <Typography variant="body2" sx={{ fontWeight: 600, color: currentWeekMetrics.unscheduledCount > 0 ? 'warning.main' : 'success.main' }}>
-            {currentWeekMetrics.coveredEmployees}/{employees.length} covered
-            {currentWeekMetrics.unscheduledCount > 0 && ` (${currentWeekMetrics.unscheduledCount} unscheduled)`}
-          </Typography>
-          <Divider orientation="vertical" flexItem sx={{ my: 0.5, display: { xs: 'none', sm: 'block' } }} />
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: currentWeekMetrics.overtimeCount > 0 ? 'error.main' : 'text.secondary' }}>
-              {currentWeekMetrics.overtimeCount} overtime{currentWeekMetrics.overtimeCount > 0 && ' ⚠️'}
-            </Typography>
-            <Tooltip title="Configure Overtime Threshold (hours/week)">
-              <TextField
-                size="small"
-                variant="standard"
-                type="number"
-                value={overtimeThreshold}
-                onChange={(e) => {
-                  const val = parseInt(e.target.value);
-                  if (!isNaN(val) && val > 0) setOvertimeThreshold(val);
-                }}
-                inputProps={{ style: { fontSize: '0.75rem', padding: '0 4px', width: '32px', textAlign: 'center', fontWeight: 700 } }}
-                sx={{ ml: 0.5, '& .MuiInput-underline:before': { borderBottom: 'none' }, '& .MuiInput-underline:hover:not(.Mui-disabled):before': { borderBottom: 'none' } }}
-              />
-            </Tooltip>
-          </Box>
-          <Divider orientation="vertical" flexItem sx={{ my: 0.5, display: { xs: 'none', sm: 'block' } }} />
-          <Typography variant="body2" sx={{ fontWeight: 600, color: currentWeekMetrics.lateCount > 3 ? 'error.main' : currentWeekMetrics.lateCount > 0 ? 'warning.main' : 'text.secondary' }}>
-            {currentWeekMetrics.lateCount} late
-          </Typography>
-          <Divider orientation="vertical" flexItem sx={{ my: 0.5, display: { xs: 'none', sm: 'block' } }} />
-          <Typography variant="body2" sx={{ fontWeight: 600, color: currentWeekMetrics.absentCount > 0 ? 'error.main' : 'text.secondary' }}>
-            {currentWeekMetrics.absentCount} absent
-          </Typography>
-          <Divider orientation="vertical" flexItem sx={{ my: 0.5, display: { xs: 'none', sm: 'block' } }} />
-          <Typography variant="body2" sx={{ fontWeight: 700, color: 'primary.main' }}>
-            ≈ ₱{currentWeekMetrics.estimatedLaborCost.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-          </Typography>
         </Box>
       )}
 
