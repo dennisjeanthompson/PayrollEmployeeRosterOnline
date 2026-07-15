@@ -331,7 +331,7 @@ export default function MuiLogin() {
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
                   <Button
                     variant="outlined"
-                    onClick={() => handleDemoLogin('admin', 'password123')}
+                    onClick={() => handleDemoLogin('admin', 'admin123')}
                     startIcon={<AdminPanelSettings />}
                     sx={{
                       flex: 1,
@@ -351,7 +351,7 @@ export default function MuiLogin() {
                   </Button>
                   <Button
                     variant="outlined"
-                    onClick={() => handleDemoLogin('jose', 'password123')}
+                    onClick={() => handleDemoLogin('lita', 'password123')}
                     startIcon={<SupervisorAccount />}
                     sx={{
                       flex: 1,
@@ -371,7 +371,7 @@ export default function MuiLogin() {
                   </Button>
                   <Button
                     variant="outlined"
-                    onClick={() => handleDemoLogin('beatriz', 'password123')}
+                    onClick={() => handleDemoLogin('kaye', 'password123')}
                     startIcon={<Person />}
                     sx={{
                       flex: 1,
