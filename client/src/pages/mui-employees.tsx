@@ -526,7 +526,7 @@ export default function MuiEmployees() {
     setCurrentEmployee(employee);
     setFormData({
       username: employee.username,
-      password: "password123",
+      password: "",
       firstName: employee.firstName,
       lastName: employee.lastName,
       email: employee.email,

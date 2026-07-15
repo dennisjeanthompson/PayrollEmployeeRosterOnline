@@ -645,7 +645,7 @@ function App() {
             const branchRes = await apiRequest('GET', '/api/branches');
             const branchData = await branchRes.json();
             const donMacchiatos = branchData.branches?.find(
-              (b: any) => b.name === 'Don Macchiatos' && b.isActive !== false
+              (b: any) => b.id === 'branch-don-macchiatos' && b.isActive !== false
             );
             if (donMacchiatos && donMacchiatos.id !== user.branchId) {
               const res = await apiRequest('PUT', '/api/auth/switch-branch', { branchId: donMacchiatos.id });

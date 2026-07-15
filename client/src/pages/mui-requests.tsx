@@ -1,8 +1,10 @@
 import React, { useState, startTransition } from 'react';
 import { Box, Tabs, Tab, useTheme, Typography } from '@mui/material';
 import MuiTimeOff from './mui-time-off';
+import MuiShiftTrading from './mui-shift-trading';
 import AssignmentIcon from '@mui/icons-material/Assignment';
 import CalendarMonthIcon from '@mui/icons-material/CalendarMonth';
+import SwapHorizIcon from '@mui/icons-material/SwapHoriz';
 
 export default function MuiRequests() {
   const [tabIndex, setTabIndex] = useState(0);
@@ -16,28 +18,38 @@ export default function MuiRequests() {
           <Box>
             <Typography variant="h5" fontWeight="bold">Employee Requests Hub</Typography>
             <Typography variant="body2" color="text.secondary">
-              Review and approve Time Off requests
+              Review and approve employee requests
             </Typography>
           </Box>
         </Box>
-        <Tabs 
-          value={tabIndex} 
-          onChange={(e, v) => startTransition(() => setTabIndex(v))} 
+        <Tabs
+          value={tabIndex}
+          onChange={(e, v) => startTransition(() => setTabIndex(v))}
           aria-label="manager request tabs"
           variant="scrollable"
           scrollButtons="auto"
         >
           <Tab icon={<CalendarMonthIcon fontSize="small"/>} iconPosition="start" label="Time Off" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
+          <Tab icon={<SwapHorizIcon fontSize="small"/>} iconPosition="start" label="Shift Trades" sx={{ textTransform: 'none', fontWeight: 'bold' }} />
         </Tabs>
       </Box>
 
-      <Box sx={{ 
-        display: tabIndex === 0 ? 'block' : 'none', 
+      <Box sx={{
+        display: tabIndex === 0 ? 'block' : 'none',
         '& > div': { pt: 2, minHeight: 'auto', bgcolor: 'transparent' },
         '& .MuiContainer-root': { pt: 0 },
-        '& h1': { display: 'none' } 
+        '& h1': { display: 'none' }
       }}>
         <MuiTimeOff />
+      </Box>
+
+      <Box sx={{
+        display: tabIndex === 1 ? 'block' : 'none',
+        '& > div': { pt: 2, minHeight: 'auto', bgcolor: 'transparent' },
+        '& .MuiContainer-root': { pt: 0 },
+        '& h1': { display: 'none' }
+      }}>
+        <MuiShiftTrading />
       </Box>
     </Box>
   );
