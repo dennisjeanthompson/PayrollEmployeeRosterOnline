@@ -122,6 +122,13 @@ export default function ShiftTradingPanel() {
   const [rejectingTrade, setRejectingTrade] = useState<{ id: string; type: "respond" | "approve" } | null>(null);
   const [rejectNotes, setRejectNotes] = useState("");
 
+  // Counter-shift state for accept dialog
+  const [counterShiftId, setCounterShiftId] = useState("");
+
+  // Manager approve confirmation dialog
+  const [approveDialogOpen, setApproveDialogOpen] = useState(false);
+  const [tradeToApprove, setTradeToApprove] = useState<ShiftTrade | null>(null);
+
   // Real-time shifts query with polling
   const { data: shiftsData, isLoading: shiftsLoading, refetch: refetchShifts } = useQuery({
     queryKey: ["employee-shifts"],
@@ -183,10 +190,11 @@ export default function ShiftTradingPanel() {
 
   // Respond to trade mutation
   const respondToTradeMutation = useMutation({
-    mutationFn: async ({ tradeId, accept, notes }: { tradeId: string; accept: boolean; notes?: string }) => {
+    mutationFn: async ({ tradeId, accept, notes, counterShiftId: csId }: { tradeId: string; accept: boolean; notes?: string; counterShiftId?: string }) => {
       const response = await apiRequest("PATCH", `/api/shift-trades/${tradeId}`, {
         status: accept ? "accepted" : "rejected",
         ...(!accept && notes ? { notes } : {}),
+        ...(accept && csId ? { counterShiftId: csId } : {}),
       });
       return response.json();
     },
@@ -448,9 +456,7 @@ export default function ShiftTradingPanel() {
                     color="success"
                     size="small"
                     startIcon={<CheckIcon />}
-                    onClick={() =>
-                      approveTradeAsManagerMutation.mutate({ tradeId: trade.id, approve: true })
-                    }
+                    onClick={() => { setTradeToApprove(trade); setApproveDialogOpen(true); }}
                     disabled={approveTradeAsManagerMutation.isPending}
                   >
                     Approve
@@ -637,13 +643,10 @@ export default function ShiftTradingPanel() {
       </Dialog>
 
       {/* Respond Trade Dialog */}
-      <Dialog open={respondDialogOpen} onClose={() => setRespondDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Respond to Trade Request</DialogTitle>
+      <Dialog open={respondDialogOpen} onClose={() => { setRespondDialogOpen(false); setCounterShiftId(""); }} maxWidth="sm" fullWidth>
+        <DialogTitle>Accept Trade Request</DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Stack spacing={2}>
-            <Typography variant="body1">
-              Please review the shift details before responding.
-            </Typography>
             {tradeToRespond?.shift && (
               <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
                 <Stack spacing={1}>
@@ -652,7 +655,7 @@ export default function ShiftTradingPanel() {
                     {format(parseISO(tradeToRespond.shift.date), "EEEE, MMM d, yyyy")}
                   </Typography>
                   <Typography variant="body1">
-                    {format(parseISO(tradeToRespond.shift.startTime), "h:mm a")} - {format(parseISO(tradeToRespond.shift.endTime), "h:mm a")}
+                    {format(parseISO(tradeToRespond.shift.startTime), "h:mm a")} – {format(parseISO(tradeToRespond.shift.endTime), "h:mm a")}
                   </Typography>
                 </Stack>
               </Paper>
@@ -663,17 +666,38 @@ export default function ShiftTradingPanel() {
               </Typography>
             )}
             <Typography variant="body2" color="text.secondary">
-              If accepted, this shift will be transferred to your schedule, pending manager approval.
+              Optionally offer one of your shifts in return (a true bilateral trade).
             </Typography>
+            <FormControl fullWidth>
+              <InputLabel>Counter-shift (optional)</InputLabel>
+              <Select
+                value={counterShiftId}
+                label="Counter-shift (optional)"
+                onChange={(e) => setCounterShiftId(e.target.value)}
+              >
+                <MenuItem value="">None — one-way coverage</MenuItem>
+                {availableShifts.map((shift: Shift) => (
+                  <MenuItem key={shift.id} value={shift.id}>
+                    {format(parseISO(shift.startTime), "EEE, MMM d • h:mm a")}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            {!counterShiftId && (
+              <Alert severity="warning">
+                Your colleague gives up their shift with nothing in return. Consider offering a counter-shift.
+              </Alert>
+            )}
           </Stack>
         </DialogContent>
         <DialogActions sx={{ p: 2 }}>
-          <Button onClick={() => setRespondDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => { setRespondDialogOpen(false); setCounterShiftId(""); }}>Cancel</Button>
           <Button
             variant="outlined"
             color="error"
             onClick={() => {
               setRespondDialogOpen(false);
+              setCounterShiftId("");
               setRejectingTrade({ id: tradeToRespond!.id, type: "respond" });
               setRejectNotes("");
               setRejectDialogOpen(true);
@@ -685,11 +709,60 @@ export default function ShiftTradingPanel() {
             variant="contained"
             color="success"
             onClick={() => {
-              respondToTradeMutation.mutate({ tradeId: tradeToRespond!.id, accept: true });
+              respondToTradeMutation.mutate({ tradeId: tradeToRespond!.id, accept: true, counterShiftId: counterShiftId || undefined });
               setRespondDialogOpen(false);
+              setCounterShiftId("");
             }}
           >
-            Accept Trade
+            Confirm Accept
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Manager Approve Confirmation Dialog */}
+      <Dialog open={approveDialogOpen} onClose={() => setApproveDialogOpen(false)} maxWidth="sm" fullWidth>
+        <DialogTitle>Approve Shift Trade</DialogTitle>
+        <DialogContent sx={{ pt: 2 }}>
+          <Stack spacing={2}>
+            {tradeToApprove?.shift && (
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha(theme.palette.info.main, 0.05) }}>
+                <Typography variant="subtitle2" color="text.secondary">Shift being traded</Typography>
+                <Typography variant="body1" fontWeight="bold">
+                  {format(parseISO(tradeToApprove.shift.date), "EEEE, MMM d, yyyy")}
+                </Typography>
+                <Typography variant="body1">
+                  {format(parseISO(tradeToApprove.shift.startTime), "h:mm a")} – {format(parseISO(tradeToApprove.shift.endTime), "h:mm a")}
+                </Typography>
+              </Paper>
+            )}
+            {(tradeToApprove as any)?.counterShift ? (
+              <Paper variant="outlined" sx={{ p: 2, bgcolor: alpha(theme.palette.secondary.main, 0.08), borderColor: 'secondary.main' }}>
+                <Typography variant="subtitle2" color="text.secondary">Counter-shift offered in return</Typography>
+                <Typography variant="body1" fontWeight="bold">
+                  {format(parseISO((tradeToApprove as any).counterShift.date), "EEEE, MMM d, yyyy")}
+                </Typography>
+                <Typography variant="body1">
+                  {format(parseISO((tradeToApprove as any).counterShift.startTime), "h:mm a")} – {format(parseISO((tradeToApprove as any).counterShift.endTime), "h:mm a")}
+                </Typography>
+              </Paper>
+            ) : (
+              <Alert severity="warning">No counter-shift was offered — this will be a one-way transfer.</Alert>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button onClick={() => setApproveDialogOpen(false)}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="success"
+            startIcon={<CheckIcon />}
+            onClick={() => {
+              approveTradeAsManagerMutation.mutate({ tradeId: tradeToApprove!.id, approve: true });
+              setApproveDialogOpen(false);
+              setTradeToApprove(null);
+            }}
+          >
+            Confirm Approve
           </Button>
         </DialogActions>
       </Dialog>
