@@ -76,7 +76,7 @@ const managementNavigation: NavItem[] = [
   { name: "Holidays", href: "/holiday-calendar", icon: CalendarIcon, roles: ["manager", "admin"] },
   { name: "Employee Requests", href: "/requests", icon: AssignmentIcon, roles: ["manager"] },
   { name: "Forecasting", href: "/analytics", icon: TrendingUpIcon, roles: ["manager", "admin"] },
-  { name: "Branches", href: "/branches", icon: StoreIcon, roles: ["manager", "admin"] },
+  { name: "Branches", href: "/branches", icon: StoreIcon, roles: ["admin"] },
 ];
 
 const settingsNavigation: NavItem[] = [
