@@ -200,7 +200,9 @@ var init_schema = __esm({
       requestedAt: timestamp("requested_at").defaultNow(),
       approvedAt: timestamp("approved_at"),
       approvedBy: text("approved_by").references(() => users.id),
-      passedByUserIds: json("passed_by_user_ids").$type().default([])
+      passedByUserIds: json("passed_by_user_ids").$type().default([]),
+      counterShiftId: text("counter_shift_id").references(() => shifts.id),
+      expiresAt: timestamp("expires_at")
     });
     payrollPeriods = pgTable("payroll_periods", {
       id: text("id").primaryKey(),
@@ -606,6 +608,8 @@ var init_schema = __esm({
       requestedAt: z.date().optional(),
       approvedAt: z.date().optional(),
       approvedBy: z.string().uuid().optional(),
+      counterShiftId: z.string().uuid().optional().nullable(),
+      expiresAt: z.date().optional().nullable(),
       createdAt: z.date().optional(),
       updatedAt: z.date().optional()
     });
@@ -8120,6 +8124,13 @@ async function initializeDatabase() {
     } catch (err) {
       console.log("\u26A0\uFE0F Could not apply soft delete migrations:", err);
     }
+    try {
+      await db.execute(sql3`ALTER TABLE shift_trades ADD COLUMN IF NOT EXISTS counter_shift_id TEXT REFERENCES shifts(id)`);
+      await db.execute(sql3`ALTER TABLE shift_trades ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`);
+      console.log("\u2705 Shift trade counter_shift_id and expires_at migrations checked/applied");
+    } catch (err) {
+      console.log("\u26A0\uFE0F Could not apply shift trade migrations:", err);
+    }
     await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS shifts (
         id TEXT PRIMARY KEY,
@@ -8153,7 +8164,9 @@ async function initializeDatabase() {
         notes TEXT,
         requested_at TIMESTAMP DEFAULT NOW(),
         approved_at TIMESTAMP,
-        approved_by TEXT REFERENCES users(id)
+        approved_by TEXT REFERENCES users(id),
+        counter_shift_id TEXT REFERENCES shifts(id),
+        expires_at TIMESTAMP
       )
     `);
     await db.execute(sql3`
@@ -12238,7 +12251,7 @@ async function registerRoutes(app2) {
     let includedExceptions = [];
     try {
       const { payrollPeriods: payrollPeriods2, adjustmentLogs: adjustmentLogs2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq8, and: and4, gte: gte2, lte: lte3, inArray: inArray2 } = await import("drizzle-orm");
+      const { eq: eq8, and: and4, gte: gte2, lte: lte3, inArray: inArray3 } = await import("drizzle-orm");
       const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const periods = await db2.select().from(payrollPeriods2).where(eq8(payrollPeriods2.id, entry.payrollPeriodId)).limit(1);
       if (periods.length > 0) {
@@ -12251,7 +12264,7 @@ async function registerRoutes(app2) {
             eq8(adjustmentLogs2.employeeId, entry.userId),
             gte2(adjustmentLogs2.startDate, new Date(periodStart)),
             lte3(adjustmentLogs2.startDate, new Date(periodEnd)),
-            inArray2(adjustmentLogs2.status, ["employee_verified", "approved"])
+            inArray3(adjustmentLogs2.status, ["employee_verified", "approved"])
           )
         );
         includedExceptions = logs;
@@ -12448,26 +12461,37 @@ async function registerRoutes(app2) {
       });
       const allTrades = Array.from(tradeMap.values());
       const shiftIds = [...new Set(allTrades.map((t) => t.shiftId))];
+      const counterShiftIds = [...new Set(allTrades.map((t) => t.counterShiftId).filter(Boolean))];
       const userIds = [...new Set(allTrades.flatMap((t) => [t.fromUserId, t.toUserId].filter(Boolean)))];
-      const [shifts2, users2] = await Promise.all([
+      const [shifts2, counterShifts, users2] = await Promise.all([
         Promise.all(shiftIds.map((sid) => storage5.getShift(sid))),
+        Promise.all(counterShiftIds.map((sid) => storage5.getShift(sid))),
         Promise.all(userIds.map((uid) => storage5.getUser(uid)))
       ]);
       const shiftMap2 = new Map(shifts2.filter(Boolean).map((s) => [s.id, s]));
+      const counterShiftMap = new Map(counterShifts.filter(Boolean).map((s) => [s.id, s]));
       const userMap = new Map(users2.filter(Boolean).map((u) => [u.id, u]));
       const enrichedTrades = allTrades.map((trade) => {
         const shift = shiftMap2.get(trade.shiftId);
         const requester = userMap.get(trade.fromUserId);
         const targetUser = trade.toUserId ? userMap.get(trade.toUserId) : null;
+        const cShift = trade.counterShiftId ? counterShiftMap.get(trade.counterShiftId) : null;
         return {
           ...trade,
           // EXPLICIT IDS: Add both property name variants for frontend compatibility
           requesterId: trade.fromUserId,
           targetUserId: trade.toUserId || null,
+          requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
           shift: shift ? {
             date: shift.startTime ? new Date(shift.startTime).toISOString().split("T")[0] : null,
             startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
             endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null
+          } : null,
+          counterShift: cShift ? {
+            date: cShift.startTime ? new Date(cShift.startTime).toISOString().split("T")[0] : null,
+            startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
+            endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
+            position: cShift.position ?? null
           } : null,
           requester: requester ? {
             firstName: requester.firstName || "",
@@ -12495,18 +12519,28 @@ async function registerRoutes(app2) {
     );
     const tradesWithDetails = await Promise.all(
       filteredTrades.map(async (trade) => {
-        const shift = await storage5.getShift(trade.shiftId);
-        const requesterUser = await storage5.getUser(trade.fromUserId);
+        const [shift, requesterUser, cShift] = await Promise.all([
+          storage5.getShift(trade.shiftId),
+          storage5.getUser(trade.fromUserId),
+          trade.counterShiftId ? storage5.getShift(trade.counterShiftId) : Promise.resolve(null)
+        ]);
         return {
           ...trade,
           // Add aliased properties for frontend compatibility
           requesterId: trade.fromUserId,
           targetUserId: trade.toUserId || "",
+          requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
           shift: shift ? {
             ...shift,
             date: shift.startTime ? new Date(shift.startTime).toISOString().split("T")[0] : null,
             startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
             endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null
+          } : null,
+          counterShift: cShift ? {
+            date: cShift.startTime ? new Date(cShift.startTime).toISOString().split("T")[0] : null,
+            startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
+            endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
+            position: cShift.position ?? null
           } : null,
           // Use consistent property names
           requester: requesterUser ? {
@@ -12526,19 +12560,29 @@ async function registerRoutes(app2) {
     const trades = await storage5.getPendingShiftTrades(branchId);
     const tradesWithDetails = await Promise.all(
       trades.map(async (trade) => {
-        const shift = await storage5.getShift(trade.shiftId);
-        const requesterUser = await storage5.getUser(trade.fromUserId);
-        const targetUserData = trade.toUserId ? await storage5.getUser(trade.toUserId) : null;
+        const [shift, requesterUser, targetUserData, cShift] = await Promise.all([
+          storage5.getShift(trade.shiftId),
+          storage5.getUser(trade.fromUserId),
+          trade.toUserId ? storage5.getUser(trade.toUserId) : Promise.resolve(null),
+          trade.counterShiftId ? storage5.getShift(trade.counterShiftId) : Promise.resolve(null)
+        ]);
         return {
           ...trade,
           // Add aliased properties for frontend compatibility
           requesterId: trade.fromUserId,
           targetUserId: trade.toUserId || "",
+          requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
           shift: shift ? {
             ...shift,
             date: shift.startTime ? new Date(shift.startTime).toISOString().split("T")[0] : null,
             startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
             endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null
+          } : null,
+          counterShift: cShift ? {
+            date: cShift.startTime ? new Date(cShift.startTime).toISOString().split("T")[0] : null,
+            startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
+            endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
+            position: cShift.position ?? null
           } : null,
           // Use consistent property names
           requester: requesterUser ? {
@@ -12638,7 +12682,7 @@ async function registerRoutes(app2) {
       const branchManagers = branchUsers.filter((u) => u.role === "manager" || u.role === "admin");
       const allAdmins = await storage5.getAdminUsers();
       const managersAndAdmins = [...branchManagers, ...allAdmins].filter(
-        (u, _, arr) => arr.findIndex((x) => x.id === u.id) === arr.indexOf(u)
+        (u, idx, arr) => idx === arr.findIndex((x) => x.id === u.id)
       );
       for (const manager of managersAndAdmins) {
         if (manager.id === req.user.id || notifiedUserIds.has(manager.id)) continue;
@@ -12680,7 +12724,7 @@ async function registerRoutes(app2) {
   app2.patch("/api/shift-trades/:id", requireAuth9, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
-      const { status, notes } = req.body;
+      const { status, notes, counterShiftId } = req.body;
       const userId = req.user.id;
       const trade = await storage5.getShiftTrade(id);
       if (!trade) {
@@ -12700,15 +12744,41 @@ async function registerRoutes(app2) {
       if (trade.fromUserId === userId && status === "accepted") {
         return res.status(400).json({ message: "You cannot accept your own trade request" });
       }
+      if (!trade.toUserId && status === "rejected" && trade.fromUserId !== userId) {
+        return res.status(403).json({ message: "Only the requester can cancel an open trade" });
+      }
       if (trade.toUserId && trade.toUserId !== userId) {
         return res.status(403).json({ message: "You cannot respond to this trade" });
       }
+      const isCancellation = status === "rejected" && trade.fromUserId === userId && !trade.toUserId;
       const updateData = { status };
       if (!trade.toUserId && (status === "accepted" || status === "pending")) {
         updateData.toUserId = userId;
       }
       if (status === "rejected" && notes) {
         updateData.notes = notes;
+      }
+      if (status === "accepted" && counterShiftId) {
+        const counterShift = await storage5.getShift(counterShiftId);
+        if (!counterShift) {
+          return res.status(404).json({ message: "Counter shift not found" });
+        }
+        if (counterShift.userId !== userId) {
+          return res.status(403).json({ message: "You can only offer your own shifts as a counter" });
+        }
+        if (new Date(counterShift.startTime) <= /* @__PURE__ */ new Date()) {
+          return res.status(400).json({ message: "Counter shift must be in the future" });
+        }
+        const overlap = await storage5.checkShiftOverlap(
+          trade.fromUserId,
+          new Date(counterShift.startTime),
+          new Date(counterShift.endTime),
+          trade.shiftId
+        );
+        if (overlap) {
+          return res.status(409).json({ message: "The requester already has an overlapping shift during your counter-shift time" });
+        }
+        updateData.counterShiftId = counterShiftId;
       }
       const updatedTrade = await storage5.updateShiftTrade(id, updateData);
       const shift = await storage5.getShift(trade.shiftId);
@@ -12737,7 +12807,7 @@ async function registerRoutes(app2) {
         const branchManagers = branchUsers.filter((u) => u.role === "manager" || u.role === "admin");
         const allAdmins = await storage5.getAdminUsers();
         const managersAndAdmins = [...branchManagers, ...allAdmins].filter(
-          (u, _, arr) => arr.findIndex((x) => x.id === u.id) === arr.indexOf(u)
+          (u, idx, arr) => idx === arr.findIndex((x) => x.id === u.id)
         );
         for (const manager of managersAndAdmins) {
           const nMgr = await storage5.createNotification({
@@ -12755,7 +12825,7 @@ async function registerRoutes(app2) {
           entityType: "shift_trade",
           entityId: id,
           userId,
-          newValues: { fromUserId: trade.fromUserId, toUserId: userId, shiftId: trade.shiftId },
+          newValues: { fromUserId: trade.fromUserId, toUserId: userId, shiftId: trade.shiftId, counterShiftId: counterShiftId ?? null },
           ipAddress: req.ip || req.socket?.remoteAddress,
           userAgent: req.headers["user-agent"]
         });
@@ -12770,11 +12840,18 @@ async function registerRoutes(app2) {
         realTimeManager.broadcastNotification(nReq);
         realTimeManager.broadcastTradeRejected(id, enrichedTrade, notes, req.user.branchId);
         await createAuditLog({
-          action: "trade_reject",
+          action: isCancellation ? "trade_cancel" : "trade_reject",
           entityType: "shift_trade",
           entityId: id,
           userId,
-          newValues: { fromUserId: trade.fromUserId, reason: notes ?? null },
+          reason: notes ?? void 0,
+          newValues: {
+            fromUserId: trade.fromUserId,
+            toUserId: trade.toUserId ?? null,
+            shiftId: trade.shiftId,
+            isCancellation,
+            declineReason: notes ?? null
+          },
           ipAddress: req.ip || req.socket?.remoteAddress,
           userAgent: req.headers["user-agent"]
         });
@@ -12811,31 +12888,30 @@ async function registerRoutes(app2) {
       }
       let didSwap = false;
       if (status === "approved") {
-        const targetSameDayShifts = await storage5.getShiftsByUserOnDate(trade.toUserId, new Date(tradeShift.startTime));
-        const swapShift = targetSameDayShifts.filter((s) => s.id !== trade.shiftId).sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
         const targetOverlap = await storage5.checkShiftOverlap(
           trade.toUserId,
           new Date(tradeShift.startTime),
           new Date(tradeShift.endTime),
-          swapShift?.id
+          trade.counterShiftId ?? void 0
         );
         if (targetOverlap) {
           return res.status(409).json({ message: "Approval failed: the target employee has an overlapping shift" });
         }
-        let canSwapBack = false;
-        if (swapShift) {
-          const requesterOverlap = await storage5.checkShiftOverlap(
-            trade.fromUserId,
-            new Date(swapShift.startTime),
-            new Date(swapShift.endTime),
-            trade.shiftId
-          );
-          canSwapBack = !requesterOverlap;
-        }
         await storage5.updateShift(trade.shiftId, { userId: trade.toUserId });
-        if (swapShift && canSwapBack) {
-          await storage5.updateShift(swapShift.id, { userId: trade.fromUserId });
-          didSwap = true;
+        if (trade.counterShiftId) {
+          const counterShift = await storage5.getShift(trade.counterShiftId);
+          if (counterShift) {
+            const requesterOverlap = await storage5.checkShiftOverlap(
+              trade.fromUserId,
+              new Date(counterShift.startTime),
+              new Date(counterShift.endTime),
+              trade.shiftId
+            );
+            if (!requesterOverlap) {
+              await storage5.updateShift(trade.counterShiftId, { userId: trade.fromUserId });
+              didSwap = true;
+            }
+          }
         }
       }
       const updatedTrade = await storage5.updateShiftTrade(id, {
@@ -12888,7 +12964,7 @@ async function registerRoutes(app2) {
           entityType: "shift_trade",
           entityId: id,
           userId: managerId,
-          newValues: { status: "approved", fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId },
+          newValues: { status: "approved", fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId, counterShiftId: trade.counterShiftId ?? null, didSwap },
           ipAddress: req.ip || req.socket?.remoteAddress,
           userAgent: req.headers["user-agent"]
         });
@@ -12916,7 +12992,8 @@ async function registerRoutes(app2) {
           entityType: "shift_trade",
           entityId: id,
           userId: managerId,
-          newValues: { status: "rejected", fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId },
+          reason: notes ?? void 0,
+          newValues: { status: "rejected", fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId, managerReason: notes ?? null },
           ipAddress: req.ip || req.socket?.remoteAddress,
           userAgent: req.headers["user-agent"]
         });
@@ -12991,7 +13068,7 @@ async function registerRoutes(app2) {
       const branchManagers = branchUsers.filter((u) => u.role === "manager" || u.role === "admin");
       const allAdmins = await storage5.getAdminUsers();
       const managersAndAdmins = [...branchManagers, ...allAdmins].filter(
-        (u, _, arr) => arr.findIndex((x) => x.id === u.id) === arr.indexOf(u)
+        (u, idx, arr) => idx === arr.findIndex((x) => x.id === u.id)
       );
       for (const manager of managersAndAdmins) {
         const notificationManager = await storage5.createNotification({
@@ -13557,9 +13634,18 @@ async function registerRoutes(app2) {
         }
       }
     }
-    const vacationAllowance = 15;
-    const sickAllowance = 10;
-    const personalAllowance = 5;
+    const { leaveCredits: leaveCreditsTable } = await Promise.resolve().then(() => (init_schema(), schema_exports));
+    const { and: andOp, eq: eqOp } = await import("drizzle-orm");
+    const storedCredits = await db.select().from(leaveCreditsTable).where(
+      andOp(eqOp(leaveCreditsTable.userId, userId), eqOp(leaveCreditsTable.year, currentYear))
+    );
+    const creditMap = {};
+    for (const c of storedCredits) {
+      creditMap[c.leaveType] = Number(c.totalCredits ?? 0);
+    }
+    const vacationAllowance = creditMap["vacation"] ?? 15;
+    const sickAllowance = creditMap["sick"] ?? 10;
+    const personalAllowance = creditMap["personal"] ?? 5;
     res.json({
       vacation: vacationAllowance - vacationUsed,
       sick: sickAllowance - sickUsed,
@@ -13676,7 +13762,7 @@ async function registerRoutes(app2) {
       const branchManagers = branchUsers.filter((user) => user.role === "manager");
       const allAdmins = await storage5.getAdminUsers();
       const managers = [...branchManagers, ...allAdmins].filter(
-        (u, _, arr) => arr.findIndex((x) => x.id === u.id) === arr.indexOf(u)
+        (u, idx, arr) => idx === arr.findIndex((x) => x.id === u.id)
       );
       const shortNoticeText = shortNotice ? ` \u26A0\uFE0F SHORT NOTICE (${advanceDays} days)` : "";
       for (const manager of managers) {
@@ -14722,8 +14808,9 @@ init_db();
 // server/cron.ts
 init_db();
 init_schema();
-import { lte as lte2, and as and3, eq as eq7 } from "drizzle-orm";
+import { lte as lte2, and as and3, eq as eq7, isNull as isNull2, inArray as inArray2 } from "drizzle-orm";
 import { subDays as subDays2 } from "date-fns";
+var TRADE_EXPIRY_DAYS = 7;
 function setupCronJobs() {
   console.log("\u{1F552} Setting up background cron jobs...");
   const scheduleNextPurge = () => {
@@ -14744,6 +14831,38 @@ function setupCronJobs() {
     setTimeout(runDataPurge, 1e3 * 60 * 5);
   }
 }
+async function expireOldTrades() {
+  console.log("\u{1F550} Checking for expired open shift trades...");
+  try {
+    const cutoff = subDays2(/* @__PURE__ */ new Date(), TRADE_EXPIRY_DAYS);
+    const expiredTrades = await db.select().from(shiftTrades).where(
+      and3(
+        eq7(shiftTrades.status, "pending"),
+        isNull2(shiftTrades.toUserId),
+        lte2(shiftTrades.requestedAt, cutoff)
+      )
+    );
+    if (expiredTrades.length === 0) {
+      console.log("\u2705 No expired trades found.");
+      return;
+    }
+    const expiredIds = expiredTrades.map((t) => t.id);
+    await db.update(shiftTrades).set({ status: "cancelled", notes: "Expired \u2014 no taker within 7 days" }).where(inArray2(shiftTrades.id, expiredIds));
+    for (const trade of expiredTrades) {
+      await createAuditLog({
+        action: "trade_cancel",
+        entityType: "shift_trade",
+        entityId: trade.id,
+        userId: trade.fromUserId,
+        reason: "Auto-expired after 7 days",
+        newValues: { status: "cancelled", reason: "expired", shiftId: trade.shiftId }
+      });
+    }
+    console.log(`\u2705 Expired ${expiredTrades.length} open trade(s).`);
+  } catch (err) {
+    console.error("\u274C Error expiring old trades:", err);
+  }
+}
 async function runDataPurge() {
   console.log("\u{1F9F9} Running soft-deleted data purge job...");
   try {
@@ -14762,6 +14881,7 @@ async function runDataPurge() {
       )
     );
     console.log(`\u2705 Purged soft-deleted adjustment logs older than 90 days.`);
+    await expireOldTrades();
   } catch (err) {
     console.error("\u274C Error running data purge job:", err);
   }

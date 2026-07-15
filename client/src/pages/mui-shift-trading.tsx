@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager, getCurrentUser } from "@/lib/auth";
-import { format, parseISO, isFuture } from "date-fns";
+import { format, parseISO, isFuture, addDays, differenceInDays, formatDistanceToNow } from "date-fns";
 import { apiRequest } from "@/lib/queryClient";
 import { getInitials, capitalizeFirstLetter } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
@@ -80,9 +80,11 @@ interface ShiftTrade {
   fromUserId?: string;
   toUserId?: string;
   shiftId: string;
+  counterShiftId?: string | null;
   status: string;
   reason: string;
   createdAt: string;
+  requestedAt?: string;
   requester?: {
     firstName: string;
     lastName: string;
@@ -96,6 +98,12 @@ interface ShiftTrade {
     startTime: string;
     endTime: string;
   };
+  counterShift?: {
+    date: string;
+    startTime: string;
+    endTime: string;
+    position?: string;
+  } | null;
 }
 
 interface TabPanelProps {
@@ -139,6 +147,19 @@ export default function MuiShiftTrading() {
   const [managerRejectDialogOpen, setManagerRejectDialogOpen] = useState(false);
   const [managerRejectingId, setManagerRejectingId] = useState<string | null>(null);
   const [managerRejectReason, setManagerRejectReason] = useState("");
+
+  // Accept dialog state
+  const [acceptDialogOpen, setAcceptDialogOpen] = useState(false);
+  const [tradeToAccept, setTradeToAccept] = useState<ShiftTrade | null>(null);
+  const [counterShiftId, setCounterShiftId] = useState("");
+
+  // Take dialog state
+  const [takeDialogOpen, setTakeDialogOpen] = useState(false);
+  const [tradeToTake, setTradeToTake] = useState<ShiftTrade | null>(null);
+
+  // Manager approve dialog state
+  const [managerApproveDialogOpen, setManagerApproveDialogOpen] = useState(false);
+  const [tradeToApprove, setTradeToApprove] = useState<ShiftTrade | null>(null);
 
   const [viewMode, setViewMode] = useState<"list" | "calendar">("calendar");
 
@@ -278,10 +299,11 @@ export default function MuiShiftTrading() {
 
   // Respond to trade mutation
   const respondToTrade = useMutation({
-    mutationFn: async ({ id, accept, notes }: { id: string; accept: boolean; notes?: string }) => {
+    mutationFn: async ({ id, accept, notes, counterShiftId: csId }: { id: string; accept: boolean; notes?: string; counterShiftId?: string }) => {
       const response = await apiRequest("PATCH", `/api/shift-trades/${id}`, {
         status: accept ? "accepted" : "rejected",
         ...(!accept && notes ? { notes } : {}),
+        ...(accept && csId ? { counterShiftId: csId } : {}),
       });
       return response.json();
     },
@@ -436,6 +458,33 @@ export default function MuiShiftTrading() {
             </Paper>
           )}
 
+          {trade.counterShift && (
+            <Paper
+              variant="outlined"
+              sx={{ p: 2, borderRadius: 2, bgcolor: alpha(theme.palette.secondary.main, 0.05), mb: 2, borderColor: 'secondary.main' }}
+            >
+              <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                Counter-shift offered in return
+              </Typography>
+              <Stack direction="row" spacing={3}>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <CalendarMonthIcon fontSize="small" color="action" />
+                  <Typography variant="body2">
+                    {trade.counterShift.date ? format(parseISO(trade.counterShift.date), "EEEE, MMM d, yyyy") : 'N/A'}
+                  </Typography>
+                </Stack>
+                <Stack direction="row" alignItems="center" spacing={1}>
+                  <AccessTimeIcon fontSize="small" color="action" />
+                  <Typography variant="body2">
+                    {trade.counterShift.startTime && trade.counterShift.endTime
+                      ? `${format(parseISO(trade.counterShift.startTime), "h:mm a")} – ${format(parseISO(trade.counterShift.endTime), "h:mm a")}`
+                      : 'N/A'}
+                  </Typography>
+                </Stack>
+              </Stack>
+            </Paper>
+          )}
+
           {trade.reason && (
             <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
               "{trade.reason}"
@@ -453,7 +502,7 @@ export default function MuiShiftTrading() {
                 variant="contained"
                 color="success"
                 startIcon={<CheckIcon />}
-                onClick={() => respondToTrade.mutate({ id: trade.id, accept: true })}
+                onClick={() => { setTradeToAccept(trade); setCounterShiftId(""); setAcceptDialogOpen(true); }}
                 disabled={respondToTrade.isPending}
               >
                 Accept
@@ -482,7 +531,7 @@ export default function MuiShiftTrading() {
                   variant="contained"
                   color="success"
                   startIcon={<CheckIcon />}
-                  onClick={() => approveTradeAsManager.mutate({ id: trade.id, approve: true })}
+                  onClick={() => { setTradeToApprove(trade); setManagerApproveDialogOpen(true); }}
                   disabled={approveTradeAsManager.isPending}
                 >
                   Approve
@@ -912,8 +961,22 @@ export default function MuiShiftTrading() {
                               </Stack>
                             </Paper>
                           )}
+                          {(trade.requestedAt || trade.createdAt) && (() => {
+                            const base = new Date(trade.requestedAt || trade.createdAt);
+                            const expiry = addDays(base, 7);
+                            const daysLeft = differenceInDays(expiry, new Date());
+                            return (
+                              <Chip
+                                icon={<AccessTimeIcon />}
+                                label={`Expires ${formatDistanceToNow(expiry, { addSuffix: true })}`}
+                                size="small"
+                                color={daysLeft <= 1 ? "error" : "default"}
+                                sx={{ mt: 1 }}
+                              />
+                            );
+                          })()}
                           {trade.reason && (
-                            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic", mt: 1 }}>
                               "{trade.reason}"
                             </Typography>
                           )}
@@ -924,7 +987,7 @@ export default function MuiShiftTrading() {
                           variant="contained"
                           color="info"
                           startIcon={<CheckIcon />}
-                          onClick={() => takeTrade.mutate(trade.id)}
+                          onClick={() => { setTradeToTake(trade); setTakeDialogOpen(true); }}
                           disabled={takeTrade.isPending}
                         >
                           Take This Shift
@@ -1178,6 +1241,157 @@ export default function MuiShiftTrading() {
               }}
             >
               Confirm Rejection
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Accept Trade Dialog */}
+        <Dialog open={acceptDialogOpen} onClose={() => setAcceptDialogOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+          <DialogTitle>Accept Trade Request</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {tradeToAccept?.shift && (
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="body2" fontWeight={700}>
+                    {tradeToAccept.shift.date ? format(parseISO(tradeToAccept.shift.date), "EEE, MMM d, yyyy") : 'N/A'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {tradeToAccept.shift.startTime && tradeToAccept.shift.endTime
+                      ? `${format(parseISO(tradeToAccept.shift.startTime), "h:mm a")} – ${format(parseISO(tradeToAccept.shift.endTime), "h:mm a")}`
+                      : 'N/A'}
+                  </Typography>
+                </Box>
+              )}
+              <Typography variant="body2" color="text.secondary">
+                Optionally offer one of your upcoming shifts in return (a true bilateral trade).
+              </Typography>
+              <FormControl fullWidth>
+                <InputLabel>Counter-shift (optional)</InputLabel>
+                <Select
+                  value={counterShiftId}
+                  label="Counter-shift (optional)"
+                  onChange={(e) => setCounterShiftId(e.target.value)}
+                >
+                  <MenuItem value="">None — one-way coverage</MenuItem>
+                  {futureShifts.map((shift: any) => (
+                    <MenuItem key={shift.id} value={shift.id}>
+                      {shift.startTime ? format(parseISO(shift.startTime), "EEE, MMM d • h:mm a") : shift.date}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              {!counterShiftId && (
+                <Alert severity="warning">
+                  Your colleague gives up their shift with nothing in return. Consider offering a counter-shift.
+                </Alert>
+              )}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ p: 3 }}>
+            <Button onClick={() => setAcceptDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<CheckIcon />}
+              onClick={() => {
+                respondToTrade.mutate({ id: tradeToAccept!.id, accept: true, counterShiftId: counterShiftId || undefined });
+                setAcceptDialogOpen(false);
+                setTradeToAccept(null);
+                setCounterShiftId("");
+              }}
+            >
+              Confirm Accept
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Take This Shift Dialog */}
+        <Dialog open={takeDialogOpen} onClose={() => setTakeDialogOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+          <DialogTitle>Take This Shift</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {tradeToTake?.shift && (
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="body2" fontWeight={700}>
+                    {tradeToTake.shift.date ? format(parseISO(tradeToTake.shift.date), "EEE, MMM d, yyyy") : 'N/A'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {tradeToTake.shift.startTime && tradeToTake.shift.endTime
+                      ? `${format(parseISO(tradeToTake.shift.startTime), "h:mm a")} – ${format(parseISO(tradeToTake.shift.endTime), "h:mm a")}`
+                      : 'N/A'}
+                  </Typography>
+                </Box>
+              )}
+              <Alert severity="info">
+                You will take this shift. No shift is transferred back. Manager approval is still required.
+              </Alert>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ p: 3 }}>
+            <Button onClick={() => setTakeDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="contained"
+              color="info"
+              startIcon={<CheckIcon />}
+              onClick={() => {
+                takeTrade.mutate(tradeToTake!.id);
+                setTakeDialogOpen(false);
+                setTradeToTake(null);
+              }}
+            >
+              Confirm Take
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Manager Approve Trade Dialog */}
+        <Dialog open={managerApproveDialogOpen} onClose={() => setManagerApproveDialogOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+          <DialogTitle>Approve Shift Trade</DialogTitle>
+          <DialogContent>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              {tradeToApprove?.shift && (
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                  <Typography variant="caption" color="text.secondary">Shift being traded</Typography>
+                  <Typography variant="body2" fontWeight={700}>
+                    {tradeToApprove.shift.date ? format(parseISO(tradeToApprove.shift.date), "EEE, MMM d, yyyy") : 'N/A'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {tradeToApprove.shift.startTime && tradeToApprove.shift.endTime
+                      ? `${format(parseISO(tradeToApprove.shift.startTime), "h:mm a")} – ${format(parseISO(tradeToApprove.shift.endTime), "h:mm a")}`
+                      : 'N/A'}
+                  </Typography>
+                </Box>
+              )}
+              {tradeToApprove?.counterShift ? (
+                <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha(theme.palette.secondary.main, 0.08), border: '1px solid', borderColor: 'secondary.main' }}>
+                  <Typography variant="caption" color="text.secondary">Counter-shift offered in return</Typography>
+                  <Typography variant="body2" fontWeight={700}>
+                    {tradeToApprove.counterShift.date ? format(parseISO(tradeToApprove.counterShift.date), "EEE, MMM d, yyyy") : 'N/A'}
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    {tradeToApprove.counterShift.startTime && tradeToApprove.counterShift.endTime
+                      ? `${format(parseISO(tradeToApprove.counterShift.startTime), "h:mm a")} – ${format(parseISO(tradeToApprove.counterShift.endTime), "h:mm a")}`
+                      : 'N/A'}
+                  </Typography>
+                </Box>
+              ) : (
+                <Alert severity="warning">No counter-shift was offered — this will be a one-way transfer.</Alert>
+              )}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ p: 3 }}>
+            <Button onClick={() => setManagerApproveDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="contained"
+              color="success"
+              startIcon={<CheckIcon />}
+              onClick={() => {
+                approveTradeAsManager.mutate({ id: tradeToApprove!.id, approve: true });
+                setManagerApproveDialogOpen(false);
+                setTradeToApprove(null);
+              }}
+            >
+              Confirm Approve
             </Button>
           </DialogActions>
         </Dialog>

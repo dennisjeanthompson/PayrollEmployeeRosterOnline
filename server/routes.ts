@@ -3552,14 +3552,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Batch-fetch unique shifts and users to avoid N+1 queries
       const shiftIds = [...new Set(allTrades.map(t => t.shiftId))];
+      const counterShiftIds = [...new Set(allTrades.map(t => (t as any).counterShiftId).filter(Boolean) as string[])];
       const userIds = [...new Set(allTrades.flatMap(t => [t.fromUserId, t.toUserId].filter(Boolean) as string[]))];
 
-      const [shifts, users] = await Promise.all([
+      const [shifts, counterShifts, users] = await Promise.all([
         Promise.all(shiftIds.map(sid => storage.getShift(sid))),
+        Promise.all(counterShiftIds.map(sid => storage.getShift(sid))),
         Promise.all(userIds.map(uid => storage.getUser(uid))),
       ]);
 
       const shiftMap2 = new Map(shifts.filter(Boolean).map(s => [s!.id, s!]));
+      const counterShiftMap = new Map(counterShifts.filter(Boolean).map(s => [s!.id, s!]));
       const userMap = new Map(users.filter(Boolean).map(u => [u!.id, u!]));
 
       // Enrich trades with pre-fetched data
@@ -3567,16 +3570,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
           const shift = shiftMap2.get(trade.shiftId);
           const requester = userMap.get(trade.fromUserId);
           const targetUser = trade.toUserId ? userMap.get(trade.toUserId) : null;
-          
+          const cShift = (trade as any).counterShiftId ? counterShiftMap.get((trade as any).counterShiftId) : null;
+
           return {
             ...trade,
             // EXPLICIT IDS: Add both property name variants for frontend compatibility
             requesterId: trade.fromUserId,
             targetUserId: trade.toUserId || null,
+            requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
             shift: shift ? {
               date: shift.startTime ? new Date(shift.startTime).toISOString().split('T')[0] : null,
               startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
               endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null,
+            } : null,
+            counterShift: cShift ? {
+              date: cShift.startTime ? new Date(cShift.startTime).toISOString().split('T')[0] : null,
+              startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
+              endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
+              position: cShift.position ?? null,
             } : null,
             requester: requester ? {
               firstName: requester.firstName || "",
@@ -3615,18 +3626,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // Get shift and user details with enriched shift data
     const tradesWithDetails = await Promise.all(
       filteredTrades.map(async (trade) => {
-        const shift = await storage.getShift(trade.shiftId);
-        const requesterUser = await storage.getUser(trade.fromUserId);
-        return { 
-          ...trade, 
+        const [shift, requesterUser, cShift] = await Promise.all([
+          storage.getShift(trade.shiftId),
+          storage.getUser(trade.fromUserId),
+          (trade as any).counterShiftId ? storage.getShift((trade as any).counterShiftId) : Promise.resolve(null),
+        ]);
+        return {
+          ...trade,
           // Add aliased properties for frontend compatibility
           requesterId: trade.fromUserId,
           targetUserId: trade.toUserId || "",
+          requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
           shift: shift ? {
             ...shift,
             date: shift.startTime ? new Date(shift.startTime).toISOString().split('T')[0] : null,
             startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
             endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null,
+          } : null,
+          counterShift: cShift ? {
+            date: cShift.startTime ? new Date(cShift.startTime).toISOString().split('T')[0] : null,
+            startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
+            endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
+            position: cShift.position ?? null,
           } : null,
           // Use consistent property names
           requester: requesterUser ? {
@@ -3649,19 +3670,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
     
     const tradesWithDetails = await Promise.all(
       trades.map(async (trade) => {
-        const shift = await storage.getShift(trade.shiftId);
-        const requesterUser = await storage.getUser(trade.fromUserId);
-        const targetUserData = trade.toUserId ? await storage.getUser(trade.toUserId) : null;
-        return { 
-          ...trade, 
+        const [shift, requesterUser, targetUserData, cShift] = await Promise.all([
+          storage.getShift(trade.shiftId),
+          storage.getUser(trade.fromUserId),
+          trade.toUserId ? storage.getUser(trade.toUserId) : Promise.resolve(null),
+          (trade as any).counterShiftId ? storage.getShift((trade as any).counterShiftId) : Promise.resolve(null),
+        ]);
+        return {
+          ...trade,
           // Add aliased properties for frontend compatibility
           requesterId: trade.fromUserId,
           targetUserId: trade.toUserId || "",
+          requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
           shift: shift ? {
             ...shift,
             date: shift.startTime ? new Date(shift.startTime).toISOString().split('T')[0] : null,
             startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
             endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null,
+          } : null,
+          counterShift: cShift ? {
+            date: cShift.startTime ? new Date(cShift.startTime).toISOString().split('T')[0] : null,
+            startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
+            endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
+            position: cShift.position ?? null,
           } : null,
           // Use consistent property names
           requester: requesterUser ? {
@@ -3837,7 +3868,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.patch("/api/shift-trades/:id", requireAuth, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
-      const { status, notes } = req.body;
+      const { status, notes, counterShiftId } = req.body;
       const userId = req.user!.id;
 
       const trade = await storage.getShiftTrade(id);
@@ -3877,6 +3908,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "You cannot respond to this trade" });
       }
 
+      // Distinguish cancellation (requester closes their own open trade) from rejection (colleague declines)
+      const isCancellation = status === "rejected" && trade.fromUserId === userId && !trade.toUserId;
+
       // If trade is open (no toUserId), set current user as target
       const updateData: any = { status };
       if (!trade.toUserId && (status === "accepted" || status === "pending")) {
@@ -3884,6 +3918,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (status === "rejected" && notes) {
         updateData.notes = notes;
+      }
+
+      // Validate and store counter-shift when accepting
+      if (status === "accepted" && counterShiftId) {
+        const counterShift = await storage.getShift(counterShiftId);
+        if (!counterShift) {
+          return res.status(404).json({ message: "Counter shift not found" });
+        }
+        if (counterShift.userId !== userId) {
+          return res.status(403).json({ message: "You can only offer your own shifts as a counter" });
+        }
+        if (new Date(counterShift.startTime) <= new Date()) {
+          return res.status(400).json({ message: "Counter shift must be in the future" });
+        }
+        const overlap = await storage.checkShiftOverlap(
+          trade.fromUserId,
+          new Date(counterShift.startTime),
+          new Date(counterShift.endTime),
+          trade.shiftId
+        );
+        if (overlap) {
+          return res.status(409).json({ message: "The requester already has an overlapping shift during your counter-shift time" });
+        }
+        updateData.counterShiftId = counterShiftId;
       }
 
       const updatedTrade = await storage.updateShiftTrade(id, updateData);
@@ -3941,7 +3999,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           entityType: 'shift_trade',
           entityId: id,
           userId,
-          newValues: { fromUserId: trade.fromUserId, toUserId: userId, shiftId: trade.shiftId },
+          newValues: { fromUserId: trade.fromUserId, toUserId: userId, shiftId: trade.shiftId, counterShiftId: counterShiftId ?? null },
           ipAddress: req.ip || req.socket?.remoteAddress,
           userAgent: req.headers['user-agent'],
         });
@@ -3959,11 +4017,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         realTimeManager.broadcastTradeRejected(id, enrichedTrade, notes, req.user!.branchId);
 
         await createAuditLog({
-          action: 'trade_reject',
+          action: isCancellation ? 'trade_cancel' : 'trade_reject',
           entityType: 'shift_trade',
           entityId: id,
           userId,
-          newValues: { fromUserId: trade.fromUserId, reason: notes ?? null },
+          reason: notes ?? undefined,
+          newValues: {
+            fromUserId: trade.fromUserId,
+            toUserId: trade.toUserId ?? null,
+            shiftId: trade.shiftId,
+            isCancellation,
+            declineReason: notes ?? null,
+          },
           ipAddress: req.ip || req.socket?.remoteAddress,
           userAgent: req.headers['user-agent'],
         });
@@ -4011,42 +4076,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let didSwap = false;
       if (status === "approved") {
-        // Find the target's earliest other shift that day — it gets swapped back to the requester
-        const targetSameDayShifts = await storage.getShiftsByUserOnDate(trade.toUserId!, new Date(tradeShift.startTime));
-        const swapShift = targetSameDayShifts
-          .filter(s => s.id !== trade.shiftId)
-          .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())[0];
-
-        // Target must not end up double-booked (their swap shift is excluded — it's being moved away)
+        // Check that assigning the traded shift won't double-book the target
         const targetOverlap = await storage.checkShiftOverlap(
           trade.toUserId!,
           new Date(tradeShift.startTime),
           new Date(tradeShift.endTime),
-          swapShift?.id
+          trade.counterShiftId ?? undefined
         );
         if (targetOverlap) {
           return res.status(409).json({ message: "Approval failed: the target employee has an overlapping shift" });
         }
 
-        // Requester must not end up double-booked by the swap-back; if they would be, transfer only
-        let canSwapBack = false;
-        if (swapShift) {
-          const requesterOverlap = await storage.checkShiftOverlap(
-            trade.fromUserId,
-            new Date(swapShift.startTime),
-            new Date(swapShift.endTime),
-            trade.shiftId
-          );
-          canSwapBack = !requesterOverlap;
-        }
-
         // Transfer the traded shift to the target employee
         await storage.updateShift(trade.shiftId, { userId: trade.toUserId! });
 
-        // Swap the target's same-day shift back to the requester
-        if (swapShift && canSwapBack) {
-          await storage.updateShift(swapShift.id, { userId: trade.fromUserId });
-          didSwap = true;
+        // If the acceptor offered a counter-shift, swap it to the requester
+        if (trade.counterShiftId) {
+          const counterShift = await storage.getShift(trade.counterShiftId);
+          if (counterShift) {
+            const requesterOverlap = await storage.checkShiftOverlap(
+              trade.fromUserId,
+              new Date(counterShift.startTime),
+              new Date(counterShift.endTime),
+              trade.shiftId
+            );
+            if (!requesterOverlap) {
+              await storage.updateShift(trade.counterShiftId, { userId: trade.fromUserId });
+              didSwap = true;
+            }
+          }
         }
       }
 
@@ -4117,7 +4175,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           entityType: 'shift_trade',
           entityId: id,
           userId: managerId,
-          newValues: { status: 'approved', fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId },
+          newValues: { status: 'approved', fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId, counterShiftId: trade.counterShiftId ?? null, didSwap },
           ipAddress: req.ip || req.socket?.remoteAddress,
           userAgent: req.headers["user-agent"],
         });
@@ -4150,7 +4208,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           entityType: 'shift_trade',
           entityId: id,
           userId: managerId,
-          newValues: { status: 'rejected', fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId },
+          reason: notes ?? undefined,
+          newValues: { status: 'rejected', fromUserId: trade.fromUserId, toUserId: trade.toUserId, shiftId: trade.shiftId, managerReason: notes ?? null },
           ipAddress: req.ip || req.socket?.remoteAddress,
           userAgent: req.headers["user-agent"],
         });
