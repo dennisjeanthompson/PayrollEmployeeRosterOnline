@@ -751,7 +751,13 @@ export default function ScheduleV2() {
 
   const createTradeMutation = useMutation({
     mutationFn: async (data: typeof tradeForm) => {
-      const res = await apiRequest('POST', '/api/shift-trades', data);
+      // Backend expects toUserId; targetUserId would be silently stripped by the schema
+      const payload = {
+        shiftId: data.shiftId,
+        reason: data.reason,
+        ...(data.targetUserId ? { toUserId: data.targetUserId } : {}),
+      };
+      const res = await apiRequest('POST', '/api/shift-trades', payload);
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
       return res.json();
     },

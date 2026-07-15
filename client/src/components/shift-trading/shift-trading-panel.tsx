@@ -166,7 +166,7 @@ export default function ShiftTradingPanel() {
       }
       const response = await apiRequest("POST", "/api/shift-trades", {
         shiftId: selectedShift,
-        ...(targetEmployee ? { targetUserId: targetEmployee } : {}),
+        ...(targetEmployee ? { toUserId: targetEmployee } : {}),
         reason,
         urgency,
       });
