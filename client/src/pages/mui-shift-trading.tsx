@@ -1,126 +1,3 @@
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { isManager, getCurrentUser } from "@/lib/auth";
@@ -198,6 +75,8 @@ interface ShiftTrade {
   id: string;
   requesterId: string;
   targetUserId: string;
+  fromUserId?: string;
+  toUserId?: string;
   shiftId: string;
   status: string;
   reason: string;
@@ -282,6 +161,19 @@ export default function MuiShiftTrading() {
     },
   });
 
+  // Fetch available (open) shift trades
+  const { data: availableTradesResponse } = useQuery({
+    queryKey: ["shift-trades-available"],
+    queryFn: async () => {
+      const response = await apiRequest("GET", "/api/shift-trades/available");
+      return response.json();
+    },
+    refetchOnWindowFocus: true,
+  });
+  const availableTrades: ShiftTrade[] = Array.isArray(availableTradesResponse?.trades)
+    ? availableTradesResponse.trades
+    : [];
+
   // Fetch my shifts (for creating trade requests) with real-time updates
   const { data: myShiftsResponse } = useQuery({
     queryKey: ["my-shifts"],
@@ -321,7 +213,7 @@ export default function MuiShiftTrading() {
   // Filter trades
   const myRequests = trades.filter((t) => String(t.requesterId) === String(currentUser?.id) || String(t.fromUserId) === String(currentUser?.id));
   const incomingRequests = trades.filter((t) => String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id));
-  const pendingApprovals = trades.filter((t) => (t.status === "pending" || t.status === "accepted") && isManagerRole);
+  const pendingApprovals = trades.filter((t) => t.status === "accepted" && isManagerRole);
 
   // **FIXED**: Filter to ONLY show future shifts with proper date handling
   const futureShifts = myShifts.filter((shift: any) => {
@@ -411,6 +303,22 @@ export default function MuiShiftTrading() {
     },
   });
 
+  // Take an open shift trade
+  const takeTrade = useMutation({
+    mutationFn: async (id: string) => {
+      const response = await apiRequest("PUT", `/api/shift-trades/${id}/take`, {});
+      return response.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["shift-trades"] });
+      queryClient.invalidateQueries({ queryKey: ["shift-trades-available"] });
+      toast({ title: "Shift taken", description: "The trade is now pending manager approval." });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to take shift", description: error?.message, variant: "destructive" });
+    },
+  });
+
   const getStatusChip = (status: string) => {
     switch (status) {
       case "pending":
@@ -431,7 +339,7 @@ export default function MuiShiftTrading() {
       sx={{
         p: 3,
         borderRadius: 2,
-        border: `1px solid ${'rgba(255, 255, 255, 0.08)'}`,
+        border: `1px solid ${theme.palette.divider}`,
         mb: 2,
       }}
     >
@@ -882,11 +790,21 @@ export default function MuiShiftTrading() {
                   </Stack>
                 }
               />
+              <Tab
+                label={
+                  <Stack direction="row" alignItems="center" spacing={1}>
+                    <span>Available</span>
+                    {availableTrades.length > 0 && (
+                      <Chip label={availableTrades.length} size="small" color="info" />
+                    )}
+                  </Stack>
+                }
+              />
               {isManagerRole && (
                 <Tab
                   label={
                     <Stack direction="row" alignItems="center" spacing={1}>
-                      <span>Manager Approvals</span>
+                      <span>Approvals</span>
                       {pendingApprovals.length > 0 && (
                         <Chip label={pendingApprovals.length} size="small" color="warning" />
                       )}
@@ -929,8 +847,84 @@ export default function MuiShiftTrading() {
               </Box>
             </TabPanel>
 
+            <TabPanel value={activeTab} index={2}>
+              <Box sx={{ px: 3 }}>
+                {availableTrades.length === 0 ? (
+                  <Box sx={{ py: 8, textAlign: "center" }}>
+                    <SwapHorizIcon sx={{ fontSize: 64, color: "text.disabled", mb: 2 }} />
+                    <Typography variant="h6" color="text.secondary">
+                      No available shifts to take
+                    </Typography>
+                    <Typography variant="body2" color="text.disabled">
+                      Open shift trades from your teammates will appear here
+                    </Typography>
+                  </Box>
+                ) : (
+                  availableTrades.map((trade) => (
+                    <Paper
+                      key={trade.id}
+                      sx={{ p: 3, borderRadius: 2, border: `1px solid ${theme.palette.divider}`, mb: 2 }}
+                    >
+                      <Stack direction="row" alignItems="flex-start" justifyContent="space-between">
+                        <Box sx={{ flex: 1 }}>
+                          <Stack direction="row" alignItems="center" spacing={2} sx={{ mb: 2 }}>
+                            <Avatar sx={{ bgcolor: "info.main" }}><SwapHorizIcon /></Avatar>
+                            <Box>
+                              <Typography variant="subtitle1" fontWeight={600}>
+                                Open Shift — {trade.requester?.firstName} {trade.requester?.lastName}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">
+                                {trade.createdAt ? format(parseISO(trade.createdAt), "MMM d, yyyy 'at' h:mm a") : 'N/A'}
+                              </Typography>
+                            </Box>
+                            <Chip label="Open" color="info" size="small" />
+                          </Stack>
+                          {trade.shift && (
+                            <Paper variant="outlined" sx={{ p: 2, borderRadius: 2, bgcolor: alpha(theme.palette.info.main, 0.05), mb: 2 }}>
+                              <Stack direction="row" spacing={3}>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                  <CalendarMonthIcon fontSize="small" color="action" />
+                                  <Typography variant="body2">
+                                    {trade.shift?.date ? format(parseISO(trade.shift.date), "EEEE, MMM d, yyyy") : 'N/A'}
+                                  </Typography>
+                                </Stack>
+                                <Stack direction="row" alignItems="center" spacing={1}>
+                                  <AccessTimeIcon fontSize="small" color="action" />
+                                  <Typography variant="body2">
+                                    {trade.shift?.startTime && trade.shift?.endTime
+                                      ? `${format(parseISO(trade.shift.startTime), "h:mm a")} – ${format(parseISO(trade.shift.endTime), "h:mm a")}`
+                                      : 'N/A'}
+                                  </Typography>
+                                </Stack>
+                              </Stack>
+                            </Paper>
+                          )}
+                          {trade.reason && (
+                            <Typography variant="body2" color="text.secondary" sx={{ fontStyle: "italic" }}>
+                              "{trade.reason}"
+                            </Typography>
+                          )}
+                        </Box>
+                      </Stack>
+                      <Stack direction="row" sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: "divider" }}>
+                        <Button
+                          variant="contained"
+                          color="info"
+                          startIcon={<CheckIcon />}
+                          onClick={() => takeTrade.mutate(trade.id)}
+                          disabled={takeTrade.isPending}
+                        >
+                          Take This Shift
+                        </Button>
+                      </Stack>
+                    </Paper>
+                  ))
+                )}
+              </Box>
+            </TabPanel>
+
             {isManagerRole && (
-              <TabPanel value={activeTab} index={2}>
+              <TabPanel value={activeTab} index={3}>
                 <Box sx={{ px: 3 }}>
                   {pendingApprovals.length === 0 ? (
                     <Box sx={{ py: 8, textAlign: "center" }}>
