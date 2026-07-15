@@ -29,6 +29,8 @@ import Select from "@mui/material/Select";
 import MenuItem from "@mui/material/MenuItem";
 import FormControl from "@mui/material/FormControl";
 import InputLabel from "@mui/material/InputLabel";
+import Switch from "@mui/material/Switch";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import Alert from "@mui/material/Alert";
@@ -120,6 +122,7 @@ export default function MuiShiftTrading() {
   
   const [activeTab, setActiveTab] = useState(0);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [openTrade, setOpenTrade] = useState(false);
   const [formData, setFormData] = useState({
     shiftId: "",
     targetUserId: "",
@@ -247,14 +250,24 @@ export default function MuiShiftTrading() {
   // Create trade mutation
   const createTrade = useMutation({
     mutationFn: async (data: typeof formData) => {
-      const response = await apiRequest("POST", "/api/shift-trades", data);
+      const payload: Record<string, any> = {
+        shiftId: data.shiftId,
+        reason: data.reason,
+        urgency: data.urgency,
+      };
+      if (!openTrade && data.targetUserId) {
+        payload.toUserId = data.targetUserId;
+      }
+      const response = await apiRequest("POST", "/api/shift-trades", payload);
       return response.json();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["shift-trades"] });
+      queryClient.invalidateQueries({ queryKey: ["shift-trades-available"] });
 
-      toast({ title: "Trade request sent" });
+      toast({ title: openTrade ? "Posted to trade board" : "Trade request sent" });
       setCreateDialogOpen(false);
+      setOpenTrade(false);
       setFormData({ shiftId: "", targetUserId: "", reason: "", urgency: "normal" });
     },
     onError: (error: any) => {
@@ -999,22 +1012,45 @@ export default function MuiShiftTrading() {
                 </Select>
               </FormControl>
 
-              <FormControl fullWidth>
-                <InputLabel>Trade With (Colleague)</InputLabel>
-                <Select
-                  value={formData.targetUserId}
-                  label="Trade With (Colleague)"
-                  onChange={(e) => setFormData({ ...formData, targetUserId: e.target.value })}
-                >
-                  {employees
-                    .filter((emp: any) => emp.id !== currentUser?.id && emp.isActive !== false && (!currentUser?.branchId || emp.branchId === currentUser.branchId))
-                    .map((emp: any) => (
-                      <MenuItem key={emp.id} value={emp.id}>
-                        {emp.firstName} {emp.lastName}
-                      </MenuItem>
-                    ))}
-                </Select>
-              </FormControl>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={openTrade}
+                    onChange={(e) => {
+                      setOpenTrade(e.target.checked);
+                      if (e.target.checked) setFormData({ ...formData, targetUserId: "" });
+                    }}
+                    color="info"
+                  />
+                }
+                label={
+                  <Box>
+                    <Typography variant="body2" fontWeight={600}>Post to Trade Board</Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {openTrade ? "Anyone in your branch can take this shift" : "Direct request to a specific colleague"}
+                    </Typography>
+                  </Box>
+                }
+              />
+
+              {!openTrade && (
+                <FormControl fullWidth>
+                  <InputLabel>Trade With (Colleague)</InputLabel>
+                  <Select
+                    value={formData.targetUserId}
+                    label="Trade With (Colleague)"
+                    onChange={(e) => setFormData({ ...formData, targetUserId: e.target.value })}
+                  >
+                    {employees
+                      .filter((emp: any) => emp.id !== currentUser?.id && emp.isActive !== false && (!currentUser?.branchId || emp.branchId === currentUser.branchId))
+                      .map((emp: any) => (
+                        <MenuItem key={emp.id} value={emp.id}>
+                          {emp.firstName} {emp.lastName}
+                        </MenuItem>
+                      ))}
+                  </Select>
+                </FormControl>
+              )}
 
               <FormControl fullWidth>
                 <InputLabel>Urgency Level</InputLabel>
@@ -1047,9 +1083,9 @@ export default function MuiShiftTrading() {
               variant="contained"
               startIcon={<SendIcon />}
               onClick={() => createTrade.mutate(formData)}
-              disabled={!formData.shiftId || !formData.targetUserId || !formData.reason || createTrade.isPending || futureShifts.length === 0}
+              disabled={!formData.shiftId || (!openTrade && !formData.targetUserId) || !formData.reason || createTrade.isPending || futureShifts.length === 0}
             >
-              {createTrade.isPending ? "Sending..." : "Send Trade Request"}
+              {createTrade.isPending ? "Sending..." : openTrade ? "Post to Board" : "Send Trade Request"}
             </Button>
           </DialogActions>
         </Dialog>

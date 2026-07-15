@@ -200,6 +200,7 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
       startTransition(() => {
         queryClient.invalidateQueries({ queryKey: ["shift-trades"] });
         queryClient.invalidateQueries({ queryKey: ["/api/shift-trades"] });
+        queryClient.invalidateQueries({ queryKey: ["shift-trades-available"] });
         invalidateManagerDashboardQueries(queryClient);
         // Mobile query keys
         queryClient.invalidateQueries({ queryKey: ["mobile-shift-trades-available"] });

@@ -3867,6 +3867,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "You cannot accept your own trade request" });
       }
 
+      // If trade is open (no toUserId), only the requester can cancel it
+      if (!trade.toUserId && status === "rejected" && trade.fromUserId !== userId) {
+        return res.status(403).json({ message: "Only the requester can cancel an open trade" });
+      }
+
       // If trade has a specific target user, only they can respond
       if (trade.toUserId && trade.toUserId !== userId) {
         return res.status(403).json({ message: "You cannot respond to this trade" });
