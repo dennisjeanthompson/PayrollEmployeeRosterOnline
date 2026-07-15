@@ -117,6 +117,9 @@ export default function ScheduleV2() {
   const [takeTradeAction, setTakeTradeAction] = useState<'take' | 'accept' | null>(null);
   const [tradeDeclineReason, setTradeDeclineReason] = useState('');
   const [showTradeDeclineReason, setShowTradeDeclineReason] = useState(false);
+  const [tradeCounterShiftId, setTradeCounterShiftId] = useState('');
+  const [approveTradeDialogOpen, setApproveTradeDialogOpen] = useState(false);
+  const [tradeToApproveInSchedule, setTradeToApproveInSchedule] = useState<any>(null);
   const [selectedShift, setSelectedShift] = useState<Shift | null>(null);
   const [selectedTimeOffId, setSelectedTimeOffId] = useState<string | null>(null);
 
@@ -762,8 +765,8 @@ export default function ScheduleV2() {
   });
 
   const respondTradeMutation = useMutation({
-    mutationFn: async ({ id, status, notes }: { id: string; status: string; notes?: string }) => {
-      const res = await apiRequest('PATCH', `/api/shift-trades/${id}`, { status, ...(notes ? { notes } : {}) });
+    mutationFn: async ({ id, status, notes, counterShiftId }: { id: string; status: string; notes?: string; counterShiftId?: string }) => {
+      const res = await apiRequest('PATCH', `/api/shift-trades/${id}`, { status, ...(notes ? { notes } : {}), ...(counterShiftId ? { counterShiftId } : {}) });
       if (!res.ok) { const err = await res.json(); throw new Error(err.message || 'Failed'); }
       return res.json();
     },
@@ -1511,7 +1514,7 @@ export default function ScheduleV2() {
               adjustmentLogs={adjustmentLogs}
               onApproveTimeOff={(id, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'approved', leavePaymentStatus })}
               onRejectTimeOff={(id, reason, leavePaymentStatus) => approveTimeOffMutation.mutate({ id, status: 'rejected', rejectionReason: reason, leavePaymentStatus })}
-              onApproveTrade={(id) => approveTradeMutation.mutate({ id, status: 'approved' })}
+              onApproveTrade={(id) => { const t = shiftTrades.find(t => t.id === id); setTradeToApproveInSchedule(t ?? null); setApproveTradeDialogOpen(true); }}
               onRejectTrade={(id, notes) => approveTradeMutation.mutate({ id, status: 'rejected', notes })}
               onCancelTrade={(id) => deleteTradeMutation.mutate(id)}
               onAcceptTrade={(id) => {
@@ -2756,9 +2759,9 @@ export default function ScheduleV2() {
       </Dialog>
 
       {/* ——— RESPOND / TAKE TRADE DIALOG ——— */}
-      <Dialog open={takeTradeModalOpen} onClose={() => { setTakeTradeModalOpen(false); setShowTradeDeclineReason(false); setTradeDeclineReason(''); }} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+      <Dialog open={takeTradeModalOpen} onClose={() => { setTakeTradeModalOpen(false); setShowTradeDeclineReason(false); setTradeDeclineReason(''); setTradeCounterShiftId(''); }} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
         <DialogTitle fontWeight={800}>
-          {takeTradeAction === 'accept' && 'Respond to Trade Request'}
+          {takeTradeAction === 'accept' && 'Accept Trade Request'}
           {takeTradeAction === 'take' && 'Take This Shift'}
         </DialogTitle>
         <DialogContent>
@@ -2778,11 +2781,38 @@ export default function ScheduleV2() {
                 </Typography>
               </Box>
             )}
-            {takeTradeAction === 'accept' && !showTradeDeclineReason && (
-              <Typography variant="body2" color="text.secondary">
-                Accepting will assign you to cover this shift, pending manager approval. You can also decline if you're unavailable.
-              </Typography>
-            )}
+            {takeTradeAction === 'accept' && !showTradeDeclineReason && (() => {
+              const myFuture = shifts.filter((s: any) => String(s.userId) === String(currentUser?.id) && new Date(s.startTime) > new Date());
+              return (
+                <>
+                  <Typography variant="body2" color="text.secondary">
+                    Optionally offer one of your shifts in return (a true bilateral trade).
+                  </Typography>
+                  <FormControl fullWidth size="small">
+                    <InputLabel>Counter-shift (optional)</InputLabel>
+                    <Select
+                      value={tradeCounterShiftId}
+                      label="Counter-shift (optional)"
+                      onChange={(e) => setTradeCounterShiftId(e.target.value)}
+                    >
+                      <MenuItem value="">None — one-way coverage</MenuItem>
+                      {myFuture.map((s: any) => (
+                        <MenuItem key={s.id} value={s.id}>
+                          {new Date(s.startTime).toLocaleDateString('en-PH', { weekday: 'short', month: 'short', day: 'numeric' })}
+                          {' • '}
+                          {new Date(s.startTime).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
+                  {!tradeCounterShiftId && (
+                    <Alert severity="warning" sx={{ fontSize: '0.8rem' }}>
+                      Your colleague gives up their shift with nothing in return.
+                    </Alert>
+                  )}
+                </>
+              );
+            })()}
             {takeTradeAction === 'take' && (
               <Typography variant="body2" color="text.secondary">
                 You will take over this shift from a colleague. A manager will need to approve the swap.
@@ -2810,7 +2840,7 @@ export default function ScheduleV2() {
         <DialogActions sx={{ px: 3, pb: 2, gap: 1, flexWrap: 'wrap' }}>
           {takeTradeAction === 'accept' && !showTradeDeclineReason && (
             <>
-              <Button onClick={() => { setTakeTradeModalOpen(false); setShowTradeDeclineReason(false); setTradeDeclineReason(''); }} sx={{ textTransform: 'none' }}>Cancel</Button>
+              <Button onClick={() => { setTakeTradeModalOpen(false); setShowTradeDeclineReason(false); setTradeDeclineReason(''); setTradeCounterShiftId(''); }} sx={{ textTransform: 'none' }}>Cancel</Button>
               <Button
                 variant="outlined"
                 color="error"
@@ -2827,11 +2857,12 @@ export default function ScheduleV2() {
                 sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
                 onClick={() => {
                   if (!selectedTrade) return;
-                  respondTradeMutation.mutate({ id: selectedTrade.id, status: 'accepted' });
+                  respondTradeMutation.mutate({ id: selectedTrade.id, status: 'accepted', counterShiftId: tradeCounterShiftId || undefined });
                   setTakeTradeModalOpen(false);
+                  setTradeCounterShiftId('');
                 }}
               >
-                Accept Trade
+                Confirm Accept
               </Button>
             </>
           )}
@@ -2873,6 +2904,56 @@ export default function ScheduleV2() {
               </Button>
             </>
           )}
+        </DialogActions>
+      </Dialog>
+
+      {/* Manager Approve Trade Confirmation Dialog */}
+      <Dialog open={approveTradeDialogOpen} onClose={() => setApproveTradeDialogOpen(false)} maxWidth="xs" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
+        <DialogTitle fontWeight={800}>Approve Shift Trade</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            {tradeToApproveInSchedule?.shift && (
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: 'action.hover', border: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>Shift being traded</Typography>
+                <Typography variant="body2" fontWeight={700}>
+                  {new Date(tradeToApproveInSchedule.shift.startTime).toLocaleDateString('en-PH', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+                </Typography>
+                <Typography variant="body2">
+                  {`${new Date(tradeToApproveInSchedule.shift.startTime).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })} – ${new Date(tradeToApproveInSchedule.shift.endTime).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })}`}
+                </Typography>
+              </Box>
+            )}
+            {tradeToApproveInSchedule?.counterShift ? (
+              <Box sx={{ p: 2, borderRadius: 2, bgcolor: alpha('#8B5CF6', 0.08), border: '1px solid', borderColor: '#8B5CF6' }}>
+                <Typography variant="subtitle2" color="text.secondary" gutterBottom>Counter-shift offered in return</Typography>
+                <Typography variant="body2" fontWeight={700}>
+                  {new Date(tradeToApproveInSchedule.counterShift.startTime).toLocaleDateString('en-PH', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' })}
+                </Typography>
+                <Typography variant="body2">
+                  {`${new Date(tradeToApproveInSchedule.counterShift.startTime).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })} – ${new Date(tradeToApproveInSchedule.counterShift.endTime).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit' })}`}
+                </Typography>
+              </Box>
+            ) : (
+              <Alert severity="warning" sx={{ fontSize: '0.8rem' }}>No counter-shift was offered — this will be a one-way transfer.</Alert>
+            )}
+          </Stack>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2, gap: 1 }}>
+          <Button onClick={() => setApproveTradeDialogOpen(false)} sx={{ textTransform: 'none' }}>Cancel</Button>
+          <Button
+            variant="contained"
+            color="success"
+            disabled={approveTradeMutation.isPending}
+            sx={{ textTransform: 'none', fontWeight: 700, borderRadius: 2 }}
+            onClick={() => {
+              if (!tradeToApproveInSchedule) return;
+              approveTradeMutation.mutate({ id: tradeToApproveInSchedule.id, status: 'approved' });
+              setApproveTradeDialogOpen(false);
+              setTradeToApproveInSchedule(null);
+            }}
+          >
+            Confirm Approve
+          </Button>
         </DialogActions>
       </Dialog>
     </Box>
