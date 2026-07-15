@@ -87,6 +87,8 @@ export const shiftTrades = pgTable("shift_trades", {
   approvedAt: timestamp("approved_at"),
   approvedBy: text("approved_by").references(() => users.id),
   passedByUserIds: json("passed_by_user_ids").$type<string[]>().default([]),
+  counterShiftId: text("counter_shift_id").references(() => shifts.id),
+  expiresAt: timestamp("expires_at"),
 });
 
 export const payrollPeriods = pgTable("payroll_periods", {
@@ -475,15 +477,17 @@ export const insertShiftSchema = createInsertSchema(shifts).omit({
 export const insertShiftTradeSchema = z.object({
   id: z.string().uuid().optional(),
   shiftId: z.string().uuid(),
-  fromUserId: z.string().uuid().optional(),
-  toUserId: z.string().uuid().optional(),
+  fromUserId: z.string().min(1).optional(),
+  toUserId: z.string().min(1).optional(),
   reason: z.string().min(1, "Reason is required"),
   status: z.enum(['open', 'pending', 'accepted', 'approved', 'rejected', 'cancelled']).default('pending'),
   urgency: z.enum(['urgent', 'normal', 'low']).default('normal'),
   notes: z.string().optional(),
   requestedAt: z.date().optional(),
   approvedAt: z.date().optional(),
-  approvedBy: z.string().uuid().optional(),
+  approvedBy: z.string().min(1).optional(),
+  counterShiftId: z.string().uuid().optional().nullable(),
+  expiresAt: z.date().optional().nullable(),
   createdAt: z.date().optional(),
   updatedAt: z.date().optional(),
 });
