@@ -95,7 +95,8 @@ export default function ScheduleV2() {
   const isDark = theme.palette.mode === 'dark';
   const queryClient = useQueryClient();
   const currentUser = getCurrentUser();
-  const isManager = checkIsManager();
+  const isEmployeeRoute = window.location.pathname.startsWith('/employee/');
+  const isManager = isEmployeeRoute ? false : checkIsManager();
 
   // Navigation state
   const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date(), { weekStartsOn: 1 }));
