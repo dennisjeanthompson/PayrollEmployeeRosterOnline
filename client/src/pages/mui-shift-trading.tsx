@@ -264,6 +264,10 @@ export default function MuiShiftTrading() {
       console.error('Error parsing shift date:', error);
       return false;
     }
+  }).sort((a: any, b: any) => {
+    const dateA = new Date(a.startTime || a.date).getTime();
+    const dateB = new Date(b.startTime || b.date).getTime();
+    return dateA - dateB;
   });
   
 

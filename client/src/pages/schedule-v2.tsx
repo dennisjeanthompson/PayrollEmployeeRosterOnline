@@ -2027,6 +2027,7 @@ export default function ScheduleV2() {
               <Select value={tradeForm.shiftId} label="Your Shift" onChange={e => setTradeForm(p => ({ ...p, shiftId: e.target.value }))}>
                 {shifts
                   .filter(s => String(s.userId) === String(currentUser?.id) && new Date(s.startTime) > new Date())
+                  .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
                   .map(s => (
                     <MenuItem key={s.id} value={s.id}>
                       {safeFormat(new Date(s.startTime), 'MMM d, h:mm a')} – {safeFormat(new Date(s.endTime), 'h:mm a')} {s.position && `(${s.position})`}
@@ -2788,7 +2789,9 @@ export default function ScheduleV2() {
               </Box>
             )}
             {takeTradeAction === 'accept' && !showTradeDeclineReason && (() => {
-              const myFuture = shifts.filter((s: any) => String(s.userId) === String(currentUser?.id) && new Date(s.startTime) > new Date());
+              const myFuture = shifts
+                .filter((s: any) => String(s.userId) === String(currentUser?.id) && new Date(s.startTime) > new Date())
+                .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime());
               return (
                 <>
                   <Typography variant="body2" color="text.secondary">
