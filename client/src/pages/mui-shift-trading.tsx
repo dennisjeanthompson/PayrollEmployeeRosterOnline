@@ -236,8 +236,20 @@ export default function MuiShiftTrading() {
 
   // Filter trades
   const myRequests = trades.filter((t) => String(t.requesterId) === String(currentUser?.id) || String(t.fromUserId) === String(currentUser?.id));
-  const incomingRequests = trades.filter((t) => String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id));
-  const pendingApprovals = trades.filter((t) => t.status === "accepted" && isManagerRole);
+  const incomingRequests = trades.filter((t) => {
+    const isCurrentUserTarget = String(t.targetUserId) === String(currentUser?.id) || String(t.toUserId) === String(currentUser?.id);
+    if (!isCurrentUserTarget) return false;
+    // Pending trades where the manager IS the target belong in the approvals tab instead
+    if (isManagerRole && t.status === "pending") return false;
+    return true;
+  });
+  const pendingApprovals = trades.filter((t) => {
+    if (!isManagerRole) return false;
+    if (t.status === "accepted") return true;
+    // Manager is the trade target — they confirm directly without a separate accept step
+    if (t.status === "pending" && (String(t.toUserId) === String(currentUser?.id) || String(t.targetUserId) === String(currentUser?.id))) return true;
+    return false;
+  });
 
   // **FIXED**: Filter to ONLY show future shifts with proper date handling
   const futureShifts = myShifts.filter((shift: any) => {
@@ -529,7 +541,7 @@ export default function MuiShiftTrading() {
           )}
           {type === "approval" && isManagerRole && (
             <>
-              {/* Approve only when a target employee has been assigned */}
+              {/* Approve/Confirm only when a target employee has been assigned */}
               {(trade.toUserId || trade.targetUserId) && (
                 <Button
                   variant="contained"
@@ -538,7 +550,7 @@ export default function MuiShiftTrading() {
                   onClick={() => { setTradeToApprove(trade); setManagerApproveDialogOpen(true); }}
                   disabled={approveTradeAsManager.isPending}
                 >
-                  Approve
+                  {trade.status === "pending" ? "Confirm" : "Approve"}
                 </Button>
               )}
               <Button
@@ -1350,7 +1362,7 @@ export default function MuiShiftTrading() {
 
         {/* Manager Approve Trade Dialog */}
         <Dialog open={managerApproveDialogOpen} onClose={() => setManagerApproveDialogOpen(false)} maxWidth="sm" fullWidth PaperProps={{ sx: { borderRadius: 3 } }}>
-          <DialogTitle>Approve Shift Trade</DialogTitle>
+          <DialogTitle>{tradeToApprove?.status === "pending" ? "Confirm Shift Trade" : "Approve Shift Trade"}</DialogTitle>
           <DialogContent>
             <Stack spacing={2} sx={{ pt: 1 }}>
               {tradeToApprove?.shift && (
@@ -1395,7 +1407,7 @@ export default function MuiShiftTrading() {
                 setTradeToApprove(null);
               }}
             >
-              Confirm Approve
+              {tradeToApprove?.status === "pending" ? "Confirm Trade" : "Confirm Approve"}
             </Button>
           </DialogActions>
         </Dialog>

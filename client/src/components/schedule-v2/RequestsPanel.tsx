@@ -504,12 +504,12 @@ export default function RequestsPanel({
 
                       {/* Action buttons based on role */}
                       <Box sx={{ display: 'flex', gap: 1, mt: 1.5, flexWrap: 'wrap' }}>
-                        {/* Manager: approve/reject trades that have a target assigned */}
-                        {isManager && hasTarget && (isPending || isAccepted) && (
+                        {/* Manager: approve/reject direct trades — only after target accepts, or immediately if manager IS the target */}
+                        {isManager && hasTarget && (isAccepted || (isPending && isTarget)) && (
                           <>
                             <Button size="small" variant="contained" color="success" startIcon={<CheckIcon />}
                               onClick={() => onApproveTrade(trade.id)} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>
-                              Approve
+                              {isAccepted ? 'Approve' : 'Confirm'}
                             </Button>
                             <Button size="small" variant="outlined" color="error" startIcon={<CloseIcon />}
                               onClick={() => handleOpenTradeRejectDialog(trade.id, 'reject')} sx={{ flex: 1, textTransform: 'none', fontWeight: 700, borderRadius: 2 }}>

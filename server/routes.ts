@@ -4089,7 +4089,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Cannot approve trade without a target user" });
       }
 
-      if (status === "approved" && trade.status !== "accepted") {
+      // When the manager IS the trade target, they accept + confirm in one step — no separate accept needed
+      const managerIsTarget = trade.toUserId === managerId;
+
+      if (status === "approved" && trade.status !== "accepted" && !managerIsTarget) {
         return res.status(409).json({ message: "Trade must be accepted by the target employee before a manager can approve it" });
       }
 
@@ -5334,10 +5337,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
     // If an employee's time off is approved, automatically delete any scheduled shifts 
     // that overlap with the new approved time off bridging consistency gaps.
     try {
+      const endOfLeaveDay = new Date(request.endDate);
+      endOfLeaveDay.setUTCHours(23, 59, 59, 999);
       const overlappingShifts = await storage.getShiftsByUser(
-        request.userId, 
-        new Date(request.startDate), 
-        new Date(request.endDate)
+        request.userId,
+        new Date(request.startDate),
+        endOfLeaveDay
       );
 
       for (const shift of overlappingShifts) {
