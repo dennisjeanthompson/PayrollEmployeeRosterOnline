@@ -143,6 +143,15 @@ export async function initializeDatabase() {
       console.log('⚠️ Could not apply soft delete migrations:', err);
     }
 
+    // Shift trade bidirectional swap + expiry columns
+    try {
+      await db.execute(sql`ALTER TABLE shift_trades ADD COLUMN IF NOT EXISTS counter_shift_id TEXT REFERENCES shifts(id)`);
+      await db.execute(sql`ALTER TABLE shift_trades ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`);
+      console.log('✅ Shift trade counter_shift_id and expires_at migrations checked/applied');
+    } catch (err) {
+      console.log('⚠️ Could not apply shift trade migrations:', err);
+    }
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS shifts (
         id TEXT PRIMARY KEY,
@@ -177,7 +186,9 @@ export async function initializeDatabase() {
         notes TEXT,
         requested_at TIMESTAMP DEFAULT NOW(),
         approved_at TIMESTAMP,
-        approved_by TEXT REFERENCES users(id)
+        approved_by TEXT REFERENCES users(id),
+        counter_shift_id TEXT REFERENCES shifts(id),
+        expires_at TIMESTAMP
       )
     `);
 

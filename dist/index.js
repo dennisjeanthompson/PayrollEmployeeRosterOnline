@@ -10334,20 +10334,24 @@ async function registerRoutes(app2) {
         ...shift,
         user: userMap.get(shift.userId)
       }));
-      let activeShifts = shiftsWithUsers.filter((shift) => shift.user?.isActive);
+      let activeShifts = shiftsWithUsers.filter((shift) => shift.user?.isActive !== false);
       if (req.user.role === "employee") {
         const userId = req.user.id;
-        const [userTrades, openTrades] = await Promise.all([
-          storage5.getShiftTradesByUser(userId),
-          storage5.getAvailableShiftTrades(branchId)
-        ]);
         const tradeShiftIds = /* @__PURE__ */ new Set();
-        openTrades.forEach((t) => {
-          if (!t.toUserId && t.status === "pending") tradeShiftIds.add(t.shiftId);
-        });
-        userTrades.forEach((t) => {
-          if (t.status === "pending" || t.status === "accepted") tradeShiftIds.add(t.shiftId);
-        });
+        try {
+          const [userTrades, openTrades] = await Promise.all([
+            storage5.getShiftTradesByUser(userId),
+            storage5.getAvailableShiftTrades(branchId)
+          ]);
+          openTrades.forEach((t) => {
+            if (!t.toUserId && t.status === "pending") tradeShiftIds.add(t.shiftId);
+          });
+          userTrades.forEach((t) => {
+            if (t.status === "pending" || t.status === "accepted") tradeShiftIds.add(t.shiftId);
+          });
+        } catch (tradeErr) {
+          console.warn("[GET /api/shifts/branch] Could not load trade data for employee (showing own shifts only):", tradeErr);
+        }
         activeShifts = activeShifts.filter((shift) => shift.userId === userId || tradeShiftIds.has(shift.id));
       }
       res.json({ shifts: activeShifts });

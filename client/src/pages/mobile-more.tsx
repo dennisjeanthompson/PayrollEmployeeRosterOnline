@@ -380,7 +380,7 @@ export default function MobileMore() {
             color="text.secondary"
             fontWeight={600}
           >
-            The Café Management System
+            PERO Payroll System
           </Typography>
           <Typography
             variant="caption"

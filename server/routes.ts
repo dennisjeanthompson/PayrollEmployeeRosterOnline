@@ -739,27 +739,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user: userMap.get(shift.userId)
       }));
 
-      // Filter out shifts for inactive employees
-      let activeShifts = shiftsWithUsers.filter(shift => shift.user?.isActive);
-      
+      // Filter out shifts for inactive employees (treat null isActive as active)
+      let activeShifts = shiftsWithUsers.filter(shift => shift.user?.isActive !== false);
+
       // PRIVACY: If user is an employee, show their own shifts + shifts from open/targeted trades
       if (req.user!.role === 'employee') {
         const userId = req.user!.id;
-        // Fetch pending trades so we can include traded shifts from other employees
-        const [userTrades, openTrades] = await Promise.all([
-          storage.getShiftTradesByUser(userId),
-          storage.getAvailableShiftTrades(branchId),
-        ]);
-        // Collect shift IDs from trades relevant to this employee
+        // Fetch pending trades so we can include traded shifts from other employees.
+        // Wrapped in try/catch so a schema migration lag (missing columns) never blocks
+        // employees from seeing their own schedule.
         const tradeShiftIds = new Set<string>();
-        // Open market trades (no target user) — visible to everyone
-        openTrades.forEach(t => {
-          if (!t.toUserId && t.status === 'pending') tradeShiftIds.add(t.shiftId);
-        });
-        // Trades where this employee is involved (requester or target)
-        userTrades.forEach(t => {
-          if (t.status === 'pending' || t.status === 'accepted') tradeShiftIds.add(t.shiftId);
-        });
+        try {
+          const [userTrades, openTrades] = await Promise.all([
+            storage.getShiftTradesByUser(userId),
+            storage.getAvailableShiftTrades(branchId),
+          ]);
+          openTrades.forEach(t => {
+            if (!t.toUserId && t.status === 'pending') tradeShiftIds.add(t.shiftId);
+          });
+          userTrades.forEach(t => {
+            if (t.status === 'pending' || t.status === 'accepted') tradeShiftIds.add(t.shiftId);
+          });
+        } catch (tradeErr) {
+          console.warn('[GET /api/shifts/branch] Could not load trade data for employee (showing own shifts only):', tradeErr);
+        }
         activeShifts = activeShifts.filter(shift => shift.userId === userId || tradeShiftIds.has(shift.id));
       }
 
