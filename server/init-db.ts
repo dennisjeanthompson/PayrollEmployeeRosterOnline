@@ -692,7 +692,8 @@ export async function createAdminAccount() {
     }
 
     // Create admin user
-    const hashedPassword = await bcrypt.hash('admin123', 10);
+    const adminPassword = process.env.ADMIN_PASSWORD ?? 'admin123';
+    const hashedPassword = await bcrypt.hash(adminPassword, 10);
     const adminId = randomUUID();
     
     await db.insert(users).values({
@@ -952,12 +953,17 @@ export async function seedPhilippineHolidays() {
 }
 
 export async function seedSampleUsers() {
+  if (process.env.NODE_ENV === 'production') {
+    console.log('⏭️  Skipping sample user seeding in production');
+    return;
+  }
+
   console.log('👥 Checking sample users...');
 
   try {
     // Check if we already have employees (not just admin)
     const existingEmployees = await db.select().from(users).where(eq(users.role, 'employee')).limit(1);
-    
+
     if (existingEmployees.length > 0) {
       console.log('✅ Sample employees already exist');
       return;

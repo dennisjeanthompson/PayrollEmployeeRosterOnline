@@ -434,6 +434,11 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']),
       }
     }
 
+    // Restrict branchId changes — only admins can move employees between branches
+    if (updates.branchId !== undefined && updates.branchId !== existingEmployee.branchId && req.session.user?.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admins can move employees between branches' });
+    }
+
     // Convert hourlyRate to string if it exists (database stores as text)
     if (updates.hourlyRate !== undefined) {
       const rate = parseFloat(String(updates.hourlyRate));

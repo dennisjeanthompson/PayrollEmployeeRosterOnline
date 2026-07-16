@@ -276,13 +276,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.use(leaveCreditsRouter);
 
+  const setupLimiter = rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many setup attempts. Please try again later." },
+  });
+
   // Setup endpoint (no auth required, only works if setup not complete)
-  app.post("/api/setup", asyncHandler(async (req: Request, res: Response) => {
+  app.post("/api/setup", setupLimiter, asyncHandler(async (req: Request, res: Response) => {
     try {
       // Check if setup is already complete
       const isComplete = await storage.isSetupComplete();
       if (isComplete) {
         return res.status(400).json({ message: 'Setup already completed' });
+      }
+
+      // If SETUP_TOKEN is configured, require it in the request body
+      const requiredToken = process.env.SETUP_TOKEN;
+      if (requiredToken) {
+        const providedToken = req.body?.setupToken;
+        if (!providedToken || providedToken !== requiredToken) {
+          return res.status(403).json({ message: 'Invalid or missing setup token' });
+        }
       }
 
       const { branch, manager } = z.object({
@@ -361,47 +378,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.status(200).send('OK');
   });
 
-  // Admin endpoint to fix all unhashed passwords (IMPORTANT: run once after identifying issues)
-  app.post("/api/admin/fix-passwords", requireAuth, requireRole(["admin"]), asyncHandler(async (req: Request, res: Response) => {
-    try {
-      const { defaultPassword } = req.body;
-      const passwordToHash = defaultPassword || 'password123'; // Default password if none provided
-      
-      // Get all users
-      const allBranches = await storage.getAllBranches();
-      let fixed = 0;
-      let skipped = 0;
-      const fixedUsers: string[] = [];
-      
-      for (const branch of allBranches) {
-        const users = await storage.getUsersByBranch(branch.id);
-        
-        for (const user of users) {
-          const isBcryptHash = user.password.startsWith('$2b$') || user.password.startsWith('$2a$');
-          
-          if (!isBcryptHash) {
-            // Password is not hashed, hash it now
-            await storage.updateUser(user.id, { password: passwordToHash });
-            fixedUsers.push(user.username);
-            fixed++;
-          } else {
-            skipped++;
-          }
-        }
-      }
-      
-      res.json({
-        message: `Fixed ${fixed} unhashed passwords, ${skipped} were already hashed`,
-        fixed,
-        skipped,
-        fixedUsers,
-      });
-    } catch (error) {
-      console.error('Fix passwords error:', error);
-      res.status(500).json({ message: 'Failed to fix passwords' });
-    }
-  }));
-
   // Admin endpoint to reset a specific user's password
   app.post("/api/admin/reset-password", requireAuth, requireRole(["admin", "manager"]), asyncHandler(async (req: Request, res: Response) => {
     try {
@@ -432,7 +408,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       
       await storage.updateUser(userId, { password: newPassword });
-      
+
+      await createAuditLog({
+        action: 'password_reset',
+        entityType: 'employee',
+        entityId: userId,
+        userId: currentUser.id,
+        newValues: { targetUsername: user.username, resetBy: currentUser.id },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers['user-agent'],
+      });
+
       res.json({ message: `Password reset successfully for ${user.username}` });
     } catch (error) {
       console.error('Reset password error:', error);
@@ -490,9 +476,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 20,                   // 20 attempts per window per IP
+    max: 10,                   // 10 attempts per window per IP+username
     standardHeaders: true,
     legacyHeaders: false,
+    // Key on both IP and username to prevent per-username credential stuffing
+    keyGenerator: (req) => `${req.ip ?? 'unknown'}:${String(req.body?.username ?? '').toLowerCase()}`,
     message: { message: "Too many login attempts. Please try again in 15 minutes." },
   });
 
@@ -512,19 +500,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }).parse(req.body);
 
       const user = await storage.getUserByUsername(username);
-      if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
 
-      // Reject any account whose password is not yet hashed — admin must reset it
-      const isBcryptHash = user.password && (user.password.startsWith('$2b$') || user.password.startsWith('$2a$'));
-      if (!isBcryptHash) {
-        return res.status(401).json({ message: "Your account password needs to be reset. Please contact your administrator." });
-      }
+      // Always run bcrypt.compare to equalize response time and prevent username enumeration.
+      // When no user is found we compare against a dummy hash that can never match.
+      const DUMMY_HASH = '$2b$10$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.';
+      const hashToCompare = (user?.password && (user.password.startsWith('$2b$') || user.password.startsWith('$2a$')))
+        ? user.password
+        : DUMMY_HASH;
+      const isPasswordValid = await bcrypt.compare(password, hashToCompare);
 
-      const isPasswordValid = await bcrypt.compare(password, user.password);
-      
-      if (!isPasswordValid) {
+      if (!user || !isPasswordValid) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
 
@@ -603,21 +588,22 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Fetch fresh data from DB to avoid returning stale session snapshot
         try {
           const freshUser = await storage.getUser(req.session.user.id);
-          if (freshUser) {
+          if (freshUser && freshUser.isActive) {
             const { password: _, ...userWithoutPassword } = freshUser;
-            res.json({ 
-              authenticated: true, 
+            res.json({
+              authenticated: true,
               isSetupComplete,
               user: { ...userWithoutPassword, branchId: req.session.user.branchId || userWithoutPassword.branchId }
             });
           } else {
-            // User no longer exists in DB — session is stale
+            // User no longer exists or is deactivated — treat session as invalid
+            req.session.destroy(() => {});
             res.json({ authenticated: false, isSetupComplete, user: null });
           }
         } catch (dbErr) {
-          // DB error: fall back to session data rather than logging user out
-          console.warn('[AUTH STATUS] DB fetch failed, falling back to session:', dbErr);
-          res.json({ authenticated: true, isSetupComplete, user: req.session.user });
+          // DB error: fail closed — do not trust stale session for security-sensitive status
+          console.error('[AUTH STATUS] DB fetch failed, failing closed:', dbErr);
+          res.json({ authenticated: false, isSetupComplete, user: null });
         }
       } else {
         res.json({ 
@@ -6135,13 +6121,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const updatedUser = await storage.updateUser(userId, updateData);
-      
+
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
       // Remove password from response
-      const { password: _, ...userWithoutPassword } = updatedUser!;
-      
-      res.json({ 
-        message: "Profile updated successfully", 
-        user: userWithoutPassword 
+      const { password: _, ...userWithoutPassword } = updatedUser;
+
+      res.json({
+        message: "Profile updated successfully",
+        user: userWithoutPassword
       });
 
       // Audit log could go here
