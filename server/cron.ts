@@ -1,13 +1,12 @@
 import { db } from './db';
 import { shifts, adjustmentLogs, shiftTrades } from '../shared/schema';
-import { lte, and, eq, isNull, inArray } from 'drizzle-orm';
+import { lte, and, eq, isNull, isNotNull, inArray } from 'drizzle-orm';
 import { subDays } from 'date-fns';
 import { createAuditLog } from './routes/audit';
 
-const TRADE_EXPIRY_DAYS = 7;
+const TRADE_EXPIRY_DAYS = 3;
 
 export function setupCronJobs() {
-  console.log("🕒 Setting up background cron jobs...");
 
   // Run the purge job every day at 3:00 AM
   // Since node-cron is not guaranteed to be installed, we use a simple interval
@@ -42,30 +41,28 @@ export function setupCronJobs() {
 }
 
 async function expireOldTrades() {
-  console.log("🕐 Checking for expired open shift trades...");
   try {
-    const cutoff = subDays(new Date(), TRADE_EXPIRY_DAYS);
+    const now = new Date();
 
     const expiredTrades = await db
       .select()
       .from(shiftTrades)
       .where(
         and(
-          eq(shiftTrades.status, 'pending'),
-          isNull(shiftTrades.toUserId),
-          lte(shiftTrades.requestedAt, cutoff)
+          inArray(shiftTrades.status, ['pending', 'accepted']),
+          isNotNull(shiftTrades.expiresAt),
+          lte(shiftTrades.expiresAt, now)
         )
       );
 
     if (expiredTrades.length === 0) {
-      console.log("✅ No expired trades found.");
       return;
     }
 
     const expiredIds = expiredTrades.map(t => t.id);
     await db
       .update(shiftTrades)
-      .set({ status: 'cancelled', notes: 'Expired — no taker within 7 days' })
+      .set({ status: 'cancelled', notes: `Expired — no action within ${TRADE_EXPIRY_DAYS} days` })
       .where(inArray(shiftTrades.id, expiredIds));
 
     for (const trade of expiredTrades) {
@@ -74,45 +71,35 @@ async function expireOldTrades() {
         entityType: 'shift_trade',
         entityId: trade.id,
         userId: trade.fromUserId,
-        reason: 'Auto-expired after 7 days',
+        reason: `Auto-expired after ${TRADE_EXPIRY_DAYS} days`,
         newValues: { status: 'cancelled', reason: 'expired', shiftId: trade.shiftId },
       });
     }
-
-    console.log(`✅ Expired ${expiredTrades.length} open trade(s).`);
   } catch (err) {
-    console.error("❌ Error expiring old trades:", err);
+    throw new Error(`Failed to expire old trades: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
 async function runDataPurge() {
-  console.log("🧹 Running soft-deleted data purge job...");
   try {
     const cutoffDate = subDays(new Date(), 90);
-    
-    // 1. Purge soft-deleted shifts older than 90 days
-    const shiftResult = await db.delete(shifts).where(
+
+    await db.delete(shifts).where(
       and(
         eq(shifts.isDeleted, true),
         lte(shifts.deletedAt, cutoffDate)
       )
     );
-    console.log(`✅ Purged soft-deleted shifts older than 90 days.`);
-    
-    // 2. Purge soft-deleted adjustment logs older than 90 days
-    const logResult = await db.delete(adjustmentLogs).where(
+
+    await db.delete(adjustmentLogs).where(
       and(
         eq(adjustmentLogs.isDeleted, true),
         lte(adjustmentLogs.deletedAt, cutoffDate)
       )
     );
-    console.log(`✅ Purged soft-deleted adjustment logs older than 90 days.`);
-    
-    // NOTE: Orphaned leave requests are kept permanently as requested.
 
     await expireOldTrades();
-
   } catch (err) {
-    console.error("❌ Error running data purge job:", err);
+    throw new Error(`Data purge failed: ${err instanceof Error ? err.message : String(err)}`);
   }
 }

@@ -480,17 +480,19 @@ export class MemStorage implements IStorage {
   async createShiftTrade(insertTrade: InsertShiftTrade): Promise<ShiftTrade> {
     const id = randomUUID();
     const trade: ShiftTrade = {
-      ...insertTrade,
       id,
+      shiftId: insertTrade.shiftId,
       fromUserId: insertTrade.fromUserId!,
       toUserId: insertTrade.toUserId || null,
       reason: insertTrade.reason || '',
       requestedAt: new Date(),
       approvedAt: null,
-      status: insertTrade.status || 'pending',
+      status: 'pending',
       urgency: insertTrade.urgency || 'normal',
       notes: insertTrade.notes || null,
-      approvedBy: insertTrade.approvedBy || null,
+      approvedBy: null,
+      counterShiftId: insertTrade.counterShiftId ?? null,
+      expiresAt: insertTrade.expiresAt ?? null,
       passedByUserIds: [],
     };
     this.shiftTrades.set(id, trade);

@@ -5,6 +5,7 @@ import type { User, InsertUser, Branch, InsertBranch, Shift, InsertShift, ShiftT
 import { eq, and, gte, lte, gt, lt, ne, desc, or, sql, isNull, inArray } from 'drizzle-orm';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcrypt';
+import { addDays } from 'date-fns';
 
 
 
@@ -506,11 +507,13 @@ export class DatabaseStorage implements IStorage {
       fromUserId: trade.fromUserId,
       toUserId: trade.toUserId || null,
       reason: trade.reason,
-      status: (trade.status || 'pending') as 'pending' | 'approved' | 'rejected',
+      status: 'pending' as const,
       urgency: (trade.urgency || 'normal') as 'urgent' | 'normal' | 'low',
       notes: trade.notes || null,
-      approvedAt: trade.approvedAt || null,
-      approvedBy: trade.approvedBy || null,
+      approvedAt: null,
+      approvedBy: null,
+      counterShiftId: trade.counterShiftId ?? null,
+      expiresAt: addDays(new Date(), 3),
     });
     
     const created = await this.getShiftTrade(id);

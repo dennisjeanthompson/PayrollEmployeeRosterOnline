@@ -5,7 +5,7 @@ import session, { Session } from "express-session";
 import PgSession from "connect-pg-simple";
 import cors from "cors";
 import { dbStorage } from "./db-storage";
-import { insertShiftSchema, insertShiftTradeSchema, insertTimeOffRequestSchema } from '@shared/schema';
+import { insertShiftSchema, insertShiftTradeSchema, createShiftTradeSchema, insertTimeOffRequestSchema } from '@shared/schema';
 import type { PayrollEntry } from "@shared/schema";
 import type { PayrollEntryBreakdownPayload, ShiftPayBreakdown } from "@shared/payroll-types";
 import { z } from "zod";
@@ -28,7 +28,7 @@ import { leaveCreditsRouter } from "./routes/leave-credits";
 
 
 import { db } from "./db";
-import { deductionSettings as deductionSettingsTable } from "@shared/schema";
+import { deductionSettings as deductionSettingsTable, shifts as shiftsTable, shiftTrades as shiftTradesTable } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { randomUUID as _randomUUID } from "crypto";
 import { resetDatabase, initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll, seedSampleShiftTrades, markSetupComplete } from "./init-db";
@@ -95,6 +95,15 @@ declare module 'express-session' {
   interface SessionData {
     user?: AuthUser;
   }
+}
+
+async function getBranchManagersAndAdmins(branchId: string) {
+  const branchUsers = await storage.getUsersByBranch(branchId);
+  const branchManagers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
+  const allAdmins = await storage.getAdminUsers();
+  return [...branchManagers, ...allAdmins].filter((u, idx, arr) =>
+    idx === arr.findIndex(x => x.id === u.id)
+  );
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -484,6 +493,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
     standardHeaders: true,
     legacyHeaders: false,
     message: { message: "Too many login attempts. Please try again in 15 minutes." },
+  });
+
+  const tradeMutationLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many trade requests. Please try again later." },
   });
 
   app.post("/api/auth/login", loginLimiter, asyncHandler(async (req: Request, res: Response) => {
@@ -3607,7 +3624,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ trades: enrichedTrades });
     } catch (error: any) {
       console.error("Get shift trades error:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch shift trades" });
+      res.status(500).json({ message: "Failed to fetch shift trades" });
     }
   }));
 
@@ -3716,9 +3733,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ trades: tradesWithDetails });
   }));
 
-  app.post("/api/shift-trades", requireAuth, asyncHandler(async (req, res) => {
+  app.post("/api/shift-trades", requireAuth, tradeMutationLimiter, asyncHandler(async (req, res) => {
     try {
-      const tradeData = insertShiftTradeSchema.parse(req.body);
+      const tradeData = createShiftTradeSchema.parse(req.body);
       
       // If manager, they can trade any shift. If employee, only their own.
       const shift = await storage.getShift(tradeData.shiftId);
@@ -3758,6 +3775,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const trade = await storage.createShiftTrade({
         ...tradeData,
         fromUserId: fromUserId,
+        status: 'pending' as const,
       });
 
       // Enrich trade with shift and user data
@@ -3788,12 +3806,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           type: 'trade_request',
           title: 'Direct Shift Trade Request',
           message: `${requesterName} wants to trade their ${shiftDate} shift with you.`,
-          data: JSON.stringify({ 
+          data: JSON.stringify({
             shiftDate,
             requesterName,
             tradeType: 'direct'
           })
-        } as any);
+        });
         realTimeManager.broadcastNotification(notification);
         notifiedUserIds.add(trade.toUserId);
       } else {
@@ -3807,23 +3825,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
             type: 'shift_trade',
             title: 'New Shift Available',
             message: `${requesterName} posted a ${shiftDate} shift for trade.`,
-            data: JSON.stringify({ 
+            data: JSON.stringify({
               shiftDate,
               requesterName,
               tradeType: 'open'
             })
-          } as any);
+          });
           realTimeManager.broadcastNotification(notification);
           notifiedUserIds.add(user.id);
         }
       }
 
       // 3. Notify managers + admins not already notified
-      const branchManagers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
-      const allAdmins = await storage.getAdminUsers();
-      const managersAndAdmins = [...branchManagers, ...allAdmins].filter((u, idx, arr) =>
-        idx === arr.findIndex(x => x.id === u.id)
-      );
+      const managersAndAdmins = await getBranchManagersAndAdmins(req.user!.branchId);
       for (const manager of managersAndAdmins) {
         if (manager.id === req.user!.id || notifiedUserIds.has(manager.id)) continue;
 
@@ -3837,7 +3851,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             requesterName,
             tradeType: trade.toUserId ? 'direct' : 'open'
           })
-        } as any);
+        });
         realTimeManager.broadcastNotification(notificationManager);
         notifiedUserIds.add(manager.id);
       }
@@ -3868,7 +3882,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   }));
 
   // PATCH endpoint for responding to a trade (accept/reject by target user)
-  app.patch("/api/shift-trades/:id", requireAuth, asyncHandler(async (req, res) => {
+  app.patch("/api/shift-trades/:id", requireAuth, tradeMutationLimiter, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const { status, notes, counterShiftId } = req.body;
@@ -3974,16 +3988,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: 'Trade Request Accepted',
           message: `${responderName} accepted your ${shiftDate} shift trade. It is now awaiting manager approval.`,
           data: JSON.stringify({ shiftDate, status: 'accepted' }),
-        } as any);
+        });
         realTimeManager.broadcastNotification(nReq);
 
         // Notify all branch managers + admins so they know to review it
-        const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
-        const branchManagers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
-        const allAdmins = await storage.getAdminUsers();
-        const managersAndAdmins = [...branchManagers, ...allAdmins].filter((u, idx, arr) =>
-          idx === arr.findIndex(x => x.id === u.id)
-        );
+        const managersAndAdmins = await getBranchManagersAndAdmins(req.user!.branchId);
         for (const manager of managersAndAdmins) {
           const nMgr = await storage.createNotification({
             userId: manager.id,
@@ -3991,7 +4000,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             title: 'Shift Trade Awaiting Approval',
             message: `${responderName} accepted a shift trade for ${shiftDate}. Please review and approve.`,
             data: JSON.stringify({ shiftDate, responderName, status: 'pending_approval' }),
-          } as any);
+          });
           realTimeManager.broadcastNotification(nMgr);
         }
 
@@ -4014,7 +4023,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: 'Trade Request Declined',
           message: `${responderName} declined your ${shiftDate} shift trade request.${notes ? ` Reason: ${notes}` : ''}`,
           data: JSON.stringify({ shiftDate, status: 'rejected' }),
-        } as any);
+        });
         realTimeManager.broadcastNotification(nReq);
 
         realTimeManager.broadcastTradeRejected(id, enrichedTrade, notes, req.user!.branchId);
@@ -4042,12 +4051,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ trade: enrichedTrade });
     } catch (error: any) {
       console.error("Respond to trade error:", error);
-      res.status(500).json({ message: error.message || "Failed to respond to trade" });
+      res.status(500).json({ message: "Failed to respond to trade" });
     }
   }));
 
   // PATCH endpoint for manager approval of trades
-  app.patch("/api/shift-trades/:id/approve", requireAuth, requireRole(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app.patch("/api/shift-trades/:id/approve", requireAuth, requireRole(["manager", "admin"]), tradeMutationLimiter, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const { status, notes } = req.body;
@@ -4077,9 +4086,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Cannot approve trade without a target user" });
       }
 
-      let didSwap = false;
+      if (status === "approved" && trade.status !== "accepted") {
+        return res.status(409).json({ message: "Trade must be accepted by the target employee before a manager can approve it" });
+      }
+
+      // Validate overlaps before writing anything (read phase)
+      let willSwapCounter = false;
       if (status === "approved") {
-        // Check that assigning the traded shift won't double-book the target
         const targetOverlap = await storage.checkShiftOverlap(
           trade.toUserId!,
           new Date(tradeShift.startTime),
@@ -4090,10 +4103,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(409).json({ message: "Approval failed: the target employee has an overlapping shift" });
         }
 
-        // Transfer the traded shift to the target employee
-        await storage.updateShift(trade.shiftId, { userId: trade.toUserId! });
-
-        // If the acceptor offered a counter-shift, swap it to the requester
         if (trade.counterShiftId) {
           const counterShift = await storage.getShift(trade.counterShiftId);
           if (counterShift) {
@@ -4103,20 +4112,29 @@ export async function registerRoutes(app: Express): Promise<Server> {
               new Date(counterShift.endTime),
               trade.shiftId
             );
-            if (!requesterOverlap) {
-              await storage.updateShift(trade.counterShiftId, { userId: trade.fromUserId });
-              didSwap = true;
-            }
+            if (!requesterOverlap) willSwapCounter = true;
           }
         }
       }
 
-      const updatedTrade = await storage.updateShiftTrade(id, {
-        status,
-        approvedBy: managerId,
-        approvedAt: new Date(),
-        ...(status === "rejected" && notes ? { notes } : {}),
+      // Execute all writes atomically so schedule and trade status can't diverge
+      await db.transaction(async (tx) => {
+        if (status === "approved") {
+          await tx.update(shiftsTable).set({ userId: trade.toUserId! }).where(eq(shiftsTable.id, trade.shiftId));
+          if (willSwapCounter && trade.counterShiftId) {
+            await tx.update(shiftsTable).set({ userId: trade.fromUserId }).where(eq(shiftsTable.id, trade.counterShiftId));
+          }
+        }
+        await tx.update(shiftTradesTable).set({
+          status,
+          approvedBy: managerId,
+          approvedAt: new Date(),
+          ...(status === "rejected" && notes ? { notes } : {}),
+        }).where(eq(shiftTradesTable.id, id));
       });
+
+      const didSwap = willSwapCounter;
+      const updatedTrade = await storage.getShiftTrade(id);
 
       // Enrich with shift data
       const shift = await storage.getShift(trade.shiftId);
@@ -4151,7 +4169,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: 'Shift Trade Approved',
           message: requesterMsg,
           data: JSON.stringify({ shiftDate, status: 'approved', didSwap })
-        } as any);
+        });
         realTimeManager.broadcastNotification(nReq);
 
         // Notify target — clarify if they gave a shift back or just received one
@@ -4165,7 +4183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             title: 'New Shift Assigned',
             message: targetMsg,
             data: JSON.stringify({ shiftDate, status: 'approved', didSwap })
-          } as any);
+          });
           realTimeManager.broadcastNotification(nTarget);
         }
 
@@ -4190,7 +4208,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: 'Shift Trade Rejected',
           message: `Your shift trade request for ${shiftDate} was not approved by ${managerName}. Your original shift remains unchanged.`,
           data: JSON.stringify({ shiftDate, status: 'rejected' })
-        } as any);
+        });
         realTimeManager.broadcastNotification(nReq);
 
         // Notify target too if they accepted it
@@ -4201,7 +4219,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             title: 'Trade Request Declined',
             message: `The shift trade for ${shiftDate} with ${fromName} was not approved. No changes to your schedule.`,
             data: JSON.stringify({ shiftDate, status: 'rejected' })
-          } as any);
+          });
           realTimeManager.broadcastNotification(nTarget);
         }
 
@@ -4218,15 +4236,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
-      const action = status === "approved" ? "✅ approved" : "❌ rejected";
       res.json({ trade: enrichedTrade });
     } catch (error: any) {
       console.error("Manager approve trade error:", error);
-      res.status(500).json({ message: error.message || "Failed to process trade" });
+      res.status(500).json({ message: "Failed to process trade" });
     }
   }));
 
-  app.put("/api/shift-trades/:id/take", requireAuth, asyncHandler(async (req, res) => {
+  app.put("/api/shift-trades/:id/take", requireAuth, tradeMutationLimiter, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
@@ -4295,21 +4312,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: 'shift_trade',
         title: 'Shift Trade Taken',
         message: `${takerName} has accepted your ${shiftDate} shift trade. It is now pending manager approval.`,
-        data: JSON.stringify({ 
+        data: JSON.stringify({
           shiftDate,
           takerName,
           status: 'taken'
         })
-      } as any);
+      });
       realTimeManager.broadcastNotification(notificationRequester);
 
       // 2. Notify all managers + admins in the branch
-      const branchUsers = await storage.getUsersByBranch(req.user!.branchId);
-      const branchManagers = branchUsers.filter(u => u.role === 'manager' || u.role === 'admin');
-      const allAdmins = await storage.getAdminUsers();
-      const managersAndAdmins = [...branchManagers, ...allAdmins].filter((u, idx, arr) =>
-        idx === arr.findIndex(x => x.id === u.id)
-      );
+      const managersAndAdmins = await getBranchManagersAndAdmins(req.user!.branchId);
       for (const manager of managersAndAdmins) {
         const notificationManager = await storage.createNotification({
           userId: manager.id,
@@ -4321,7 +4333,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
             takerName,
             status: 'pending_approval'
           })
-        } as any);
+        });
         realTimeManager.broadcastNotification(notificationManager);
       }
 
@@ -4346,11 +4358,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ trade: enrichedTrade });
     } catch (error: any) {
       console.error("Take shift trade error:", error);
-      res.status(500).json({ message: error.message || "Failed to take shift" });
+      res.status(500).json({ message: "Failed to take shift" });
     }
   }));
 
-  app.put("/api/shift-trades/:id/pass", requireAuth, asyncHandler(async (req, res) => {
+  app.put("/api/shift-trades/:id/pass", requireAuth, tradeMutationLimiter, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
@@ -4359,10 +4371,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!trade) return res.status(404).json({ message: "Trade not found" });
       if (trade.fromUserId === userId) return res.status(400).json({ message: "Cannot pass on your own trade" });
 
+      const tradeShift = await storage.getShift(trade.shiftId);
+      if (!tradeShift || tradeShift.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+
       await storage.passTradeForUser(id, userId);
       res.json({ success: true });
     } catch (error: any) {
-      res.status(500).json({ message: error.message || "Failed to pass on trade" });
+      res.status(500).json({ message: "Failed to pass on trade" });
     }
   }));
 
@@ -4397,11 +4414,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         type: 'shift_trade',
         title: 'Shift Trade Rejected',
         message: `Your shift trade request for ${shiftDate} was not approved. Your original shift remains unchanged.`,
-        data: JSON.stringify({ 
+        data: JSON.stringify({
           shiftDate,
           status: 'rejected'
         })
-      } as any);
+      });
       realTimeManager.broadcastNotification(notificationRequester);
 
       // Enrich with shift data (shift already fetched above)
@@ -4430,12 +4447,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ trade: enrichedTrade });
     } catch (error: any) {
       console.error("Reject trade error:", error);
-      res.status(500).json({ message: error.message || "Failed to reject trade" });
+      res.status(500).json({ message: "Failed to reject trade" });
     }
   }));
 
   // DELETE endpoint for canceling shift trades
-  app.delete("/api/shift-trades/:id", requireAuth, asyncHandler(async (req, res) => {
+  app.delete("/api/shift-trades/:id", requireAuth, tradeMutationLimiter, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user!.id;
@@ -4445,9 +4462,21 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(404).json({ message: "Trade not found" });
       }
 
-      // Only the requester can delete a pending trade
-      if (trade.fromUserId !== userId && !["admin", "manager"].includes(req.user!.role)) {
+      const tradeShift = await storage.getShift(trade.shiftId);
+      if (!tradeShift) {
+        return res.status(404).json({ message: "Trade shift not found" });
+      }
+
+      const isManager = ["admin", "manager"].includes(req.user!.role);
+      const isOwner = trade.fromUserId === userId;
+
+      if (!isOwner && !isManager) {
         return res.status(403).json({ message: "You cannot delete this trade" });
+      }
+
+      // Managers can only cancel trades within their own branch
+      if (isManager && !isOwner && tradeShift.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
       }
 
       // Only allow deletion of pending trades
@@ -4468,7 +4497,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           title: 'Shift Trade Cancelled',
           message: 'A shift trade request has been cancelled.',
           data: JSON.stringify({ tradeId: id })
-        } as any);
+        });
         realTimeManager.broadcastNotification(notificationTarget);
       }
 
@@ -4490,7 +4519,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       });
     } catch (error: any) {
       console.error("Delete shift trade error:", error);
-      res.status(500).json({ message: error.message || "Failed to cancel trade" });
+      res.status(500).json({ message: "Failed to cancel trade" });
     }
   }));
 

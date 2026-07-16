@@ -492,6 +492,16 @@ export const insertShiftTradeSchema = z.object({
   updatedAt: z.date().optional(),
 });
 
+// Client-facing create schema — strips server-controlled fields
+export const createShiftTradeSchema = z.object({
+  shiftId: z.string().uuid(),
+  toUserId: z.string().min(1).optional(),
+  reason: z.string().min(1, "Reason is required"),
+  urgency: z.enum(['urgent', 'normal', 'low']).default('normal'),
+  notes: z.string().optional(),
+  counterShiftId: z.string().uuid().optional().nullable(),
+});
+
 export const insertPayrollPeriodSchema = createInsertSchema(payrollPeriods).omit({
   id: true,
   createdAt: true,
