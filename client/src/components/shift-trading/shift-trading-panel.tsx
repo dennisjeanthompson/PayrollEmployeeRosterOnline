@@ -150,7 +150,7 @@ export default function ShiftTradingPanel() {
   });
 
   // Fetch all employees for target selection
-  const { data: employeesData } = useQuery({
+  const { data: employeesData, isError: employeesError } = useQuery({
     queryKey: ["employees"],
     queryFn: async () => {
       const response = await apiRequest("GET", "/api/employees");
@@ -584,6 +584,11 @@ export default function ShiftTradingPanel() {
               </Select>
             </FormControl>
 
+            {employeesError && (
+              <Alert severity="error" sx={{ mb: 1 }}>
+                Failed to load employees. Target selection is unavailable.
+              </Alert>
+            )}
             <FormControl fullWidth>
               <InputLabel>Target Employee (optional)</InputLabel>
               <Select

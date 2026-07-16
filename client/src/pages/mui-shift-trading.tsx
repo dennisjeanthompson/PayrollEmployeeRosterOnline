@@ -296,7 +296,7 @@ export default function MuiShiftTrading() {
       setFormData({ shiftId: "", targetUserId: "", reason: "", urgency: "normal" });
     },
     onError: (error: any) => {
-      console.error("âŒ Failed to create trade:", error);
+      console.error("Failed to create trade:", error);
       toast({ title: "Failed to send request", description: error?.message, variant: "destructive" });
     },
   });
@@ -317,7 +317,7 @@ export default function MuiShiftTrading() {
       toast({ title: accept ? "Trade accepted" : "Trade rejected" });
     },
     onError: (error: any) => {
-      console.error("âŒ Failed to respond to trade:", error);
+      console.error("Failed to respond to trade:", error);
       toast({ title: "Failed to respond to trade", description: error?.message, variant: "destructive" });
     },
   });
@@ -337,7 +337,7 @@ export default function MuiShiftTrading() {
       toast({ title: approve ? "Trade approved" : "Trade rejected" });
     },
     onError: (error: any) => {
-      console.error("âŒ Failed to approve/reject trade:", error);
+      console.error("Failed to approve/reject trade:", error);
       toast({ title: "Failed to process trade", description: error?.message, variant: "destructive" });
     },
   });

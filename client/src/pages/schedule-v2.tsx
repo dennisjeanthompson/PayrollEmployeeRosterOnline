@@ -262,7 +262,7 @@ export default function ScheduleV2() {
     });
   }, []);
 
-  // Real-time updates â€” refresh calendar data on any schedule/request event
+  // Real-time updates -- refresh calendar data on any schedule/request event
   useRealtime({
     enabled: true,
     queryKeys: ['shifts', 'time-off-requests', 'shift-trades', 'employees', 'notifications', "adjustment-logs-branch", "adjustment-logs-mine", "/api/holidays"],
@@ -497,7 +497,7 @@ export default function ScheduleV2() {
 
   const copyWeekPreview = useMemo(() => buildCopyWeekData(), [buildCopyWeekData]);
 
-  // â”€â”€â”€ MUTATIONS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+  // --- MUTATIONS --------------------------------------------------
   const createShiftMutation = useMutation({
     mutationFn: async (payload: { userId: string; startTime: string; endTime: string; branchId: string; position: string; notes?: string; breakDurationMinutes?: number }) => {
       const res = await apiRequest('POST', '/api/shifts', payload);
@@ -1630,7 +1630,7 @@ export default function ScheduleV2() {
         />
       </Drawer>
 
-      {/* â”€â”€â”€ CREATE SHIFT MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* --- CREATE SHIFT MODAL ------------------------------------ */}
       <Dialog open={createModalOpen} onClose={() => setCreateModalOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Create Shift</DialogTitle>
         <DialogContent>
@@ -1763,7 +1763,7 @@ export default function ScheduleV2() {
         </DialogActions>
       </Dialog>
 
-      {/* â”€â”€â”€ EDIT SHIFT MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* --- EDIT SHIFT MODAL -------------------------------------- */}
       <Dialog open={editModalOpen} onClose={() => setEditModalOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Edit Shift</DialogTitle>
         <DialogContent>
@@ -1897,7 +1897,7 @@ export default function ScheduleV2() {
         </DialogActions>
       </Dialog>
 
-      {/* â”€â”€â”€ DELETE CONFIRM â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* --- DELETE CONFIRM ---------------------------------------- */}
       <Dialog open={deleteConfirmOpen} onClose={() => setDeleteConfirmOpen(false)} maxWidth="xs" fullWidth>
         <DialogTitle>Delete Shift?</DialogTitle>
         <DialogContent><Typography>This action cannot be undone.</Typography></DialogContent>
@@ -1968,7 +1968,7 @@ export default function ScheduleV2() {
         );
       })()}
 
-      {/* â”€â”€â”€ TIME-OFF MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* --- TIME-OFF MODAL ---------------------------------------- */}
       <Dialog open={timeOffModalOpen} onClose={() => setTimeOffModalOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Request Time Off</DialogTitle>
         <DialogContent>
@@ -2018,7 +2018,7 @@ export default function ScheduleV2() {
         </DialogActions>
       </Dialog>
 
-      {/* â”€â”€â”€ SHIFT TRADE MODAL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */}
+      {/* --- SHIFT TRADE MODAL ------------------------------------- */}
       <Dialog open={tradeModalOpen} onClose={() => setTradeModalOpen(false)} maxWidth="sm" fullWidth fullScreen={isMobile}>
         <DialogTitle>Request Shift Trade</DialogTitle>
         <DialogContent>

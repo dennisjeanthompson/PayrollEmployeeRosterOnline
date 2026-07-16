@@ -477,15 +477,15 @@ export const insertShiftSchema = createInsertSchema(shifts).omit({
 export const insertShiftTradeSchema = z.object({
   id: z.string().uuid().optional(),
   shiftId: z.string().uuid(),
-  fromUserId: z.string().min(1).optional(),
-  toUserId: z.string().min(1).optional(),
+  fromUserId: z.string().uuid().optional(),
+  toUserId: z.string().uuid().optional(),
   reason: z.string().min(1, "Reason is required"),
   status: z.enum(['open', 'pending', 'accepted', 'approved', 'rejected', 'cancelled']).default('pending'),
   urgency: z.enum(['urgent', 'normal', 'low']).default('normal'),
   notes: z.string().optional(),
   requestedAt: z.date().optional(),
   approvedAt: z.date().optional(),
-  approvedBy: z.string().min(1).optional(),
+  approvedBy: z.string().uuid().optional(),
   counterShiftId: z.string().uuid().optional().nullable(),
   expiresAt: z.date().optional().nullable(),
   createdAt: z.date().optional(),
@@ -495,7 +495,7 @@ export const insertShiftTradeSchema = z.object({
 // Client-facing create schema — strips server-controlled fields
 export const createShiftTradeSchema = z.object({
   shiftId: z.string().uuid(),
-  toUserId: z.string().min(1).optional(),
+  toUserId: z.string().uuid().optional(),
   reason: z.string().min(1, "Reason is required"),
   urgency: z.enum(['urgent', 'normal', 'low']).default('normal'),
   notes: z.string().optional(),

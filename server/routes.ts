@@ -6,6 +6,7 @@ import PgSession from "connect-pg-simple";
 import cors from "cors";
 import { dbStorage } from "./db-storage";
 import { insertShiftSchema, insertShiftTradeSchema, createShiftTradeSchema, insertTimeOffRequestSchema } from '@shared/schema';
+import type { InsertShiftTrade } from '@shared/schema';
 import type { PayrollEntry } from "@shared/schema";
 import type { PayrollEntryBreakdownPayload, ShiftPayBreakdown } from "@shared/payroll-types";
 import { z } from "zod";
@@ -3643,43 +3644,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       t.fromUserId !== userId
     );
 
-    // Get shift and user details with enriched shift data
-    const tradesWithDetails = await Promise.all(
-      filteredTrades.map(async (trade) => {
-        const [shift, requesterUser, cShift] = await Promise.all([
-          storage.getShift(trade.shiftId),
-          storage.getUser(trade.fromUserId),
-          (trade as any).counterShiftId ? storage.getShift((trade as any).counterShiftId) : Promise.resolve(null),
-        ]);
-        return {
-          ...trade,
-          // Add aliased properties for frontend compatibility
-          requesterId: trade.fromUserId,
-          targetUserId: trade.toUserId || "",
-          requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
-          shift: shift ? {
-            ...shift,
-            date: shift.startTime ? new Date(shift.startTime).toISOString().split('T')[0] : null,
-            startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
-            endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null,
-          } : null,
-          counterShift: cShift ? {
-            date: cShift.startTime ? new Date(cShift.startTime).toISOString().split('T')[0] : null,
-            startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
-            endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
-            position: cShift.position ?? null,
-          } : null,
-          // Use consistent property names
-          requester: requesterUser ? {
-            firstName: requesterUser.firstName || "",
-            lastName: requesterUser.lastName || "",
-          } : null,
-          targetUser: null, // Available trades have no target yet
-          fromUser: requesterUser ? { id: requesterUser.id, firstName: requesterUser.firstName, lastName: requesterUser.lastName, role: requesterUser.role } : null,
-        };
-      })
-    );
-    
+    // Batch-fetch unique shifts and users
+    const shiftIds = [...new Set(filteredTrades.map(t => t.shiftId))];
+    const counterShiftIds = [...new Set(filteredTrades.map(t => t.counterShiftId).filter(Boolean) as string[])];
+    const userIds = [...new Set(filteredTrades.map(t => t.fromUserId))];
+
+    const [batchShifts, batchCounterShifts, batchUsers] = await Promise.all([
+      Promise.all(shiftIds.map(id => storage.getShift(id))),
+      Promise.all(counterShiftIds.map(id => storage.getShift(id))),
+      Promise.all(userIds.map(id => storage.getUser(id))),
+    ]);
+
+    const shiftMap = new Map(batchShifts.filter(Boolean).map(s => [s!.id, s!]));
+    const counterShiftMap = new Map(batchCounterShifts.filter(Boolean).map(s => [s!.id, s!]));
+    const userMap = new Map(batchUsers.filter(Boolean).map(u => [u!.id, u!]));
+
+    const tradesWithDetails = filteredTrades.map((trade) => {
+      const shift = shiftMap.get(trade.shiftId);
+      const requesterUser = userMap.get(trade.fromUserId);
+      const cShift = trade.counterShiftId ? counterShiftMap.get(trade.counterShiftId) : null;
+      return {
+        ...trade,
+        requesterId: trade.fromUserId,
+        targetUserId: trade.toUserId || "",
+        requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
+        shift: shift ? {
+          ...shift,
+          date: shift.startTime ? new Date(shift.startTime).toISOString().split('T')[0] : null,
+          startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
+          endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null,
+        } : null,
+        counterShift: cShift ? {
+          date: cShift.startTime ? new Date(cShift.startTime).toISOString().split('T')[0] : null,
+          startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
+          endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
+          position: cShift.position ?? null,
+        } : null,
+        requester: requesterUser ? {
+          firstName: requesterUser.firstName || "",
+          lastName: requesterUser.lastName || "",
+        } : null,
+        targetUser: null,
+        fromUser: requesterUser ? { id: requesterUser.id, firstName: requesterUser.firstName, lastName: requesterUser.lastName, role: requesterUser.role } : null,
+      };
+    });
+
     res.json({ trades: tradesWithDetails });
   }));
 
@@ -3688,48 +3697,56 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const branchId = req.user!.branchId;
     const trades = await storage.getPendingShiftTrades(branchId);
     
-    const tradesWithDetails = await Promise.all(
-      trades.map(async (trade) => {
-        const [shift, requesterUser, targetUserData, cShift] = await Promise.all([
-          storage.getShift(trade.shiftId),
-          storage.getUser(trade.fromUserId),
-          trade.toUserId ? storage.getUser(trade.toUserId) : Promise.resolve(null),
-          (trade as any).counterShiftId ? storage.getShift((trade as any).counterShiftId) : Promise.resolve(null),
-        ]);
-        return {
-          ...trade,
-          // Add aliased properties for frontend compatibility
-          requesterId: trade.fromUserId,
-          targetUserId: trade.toUserId || "",
-          requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
-          shift: shift ? {
-            ...shift,
-            date: shift.startTime ? new Date(shift.startTime).toISOString().split('T')[0] : null,
-            startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
-            endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null,
-          } : null,
-          counterShift: cShift ? {
-            date: cShift.startTime ? new Date(cShift.startTime).toISOString().split('T')[0] : null,
-            startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
-            endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
-            position: cShift.position ?? null,
-          } : null,
-          // Use consistent property names
-          requester: requesterUser ? {
-            firstName: requesterUser.firstName || "",
-            lastName: requesterUser.lastName || "",
-          } : null,
-          targetUser: targetUserData ? {
-            firstName: targetUserData.firstName || "",
-            lastName: targetUserData.lastName || "",
-          } : null,
-          // Legacy compatibility
-          fromUser: requesterUser ? { id: requesterUser.id, firstName: requesterUser.firstName, lastName: requesterUser.lastName, role: requesterUser.role } : null,
-          toUser: targetUserData ? { id: targetUserData.id, firstName: targetUserData.firstName, lastName: targetUserData.lastName, role: targetUserData.role } : null,
-        };
-      })
-    );
-    
+    // Batch-fetch unique shifts and users
+    const pShiftIds = [...new Set(trades.map(t => t.shiftId))];
+    const pCounterShiftIds = [...new Set(trades.map(t => t.counterShiftId).filter(Boolean) as string[])];
+    const pUserIds = [...new Set(trades.flatMap(t => [t.fromUserId, t.toUserId].filter(Boolean) as string[]))];
+
+    const [pBatchShifts, pBatchCounterShifts, pBatchUsers] = await Promise.all([
+      Promise.all(pShiftIds.map(id => storage.getShift(id))),
+      Promise.all(pCounterShiftIds.map(id => storage.getShift(id))),
+      Promise.all(pUserIds.map(id => storage.getUser(id))),
+    ]);
+
+    const pShiftMap = new Map(pBatchShifts.filter(Boolean).map(s => [s!.id, s!]));
+    const pCounterShiftMap = new Map(pBatchCounterShifts.filter(Boolean).map(s => [s!.id, s!]));
+    const pUserMap = new Map(pBatchUsers.filter(Boolean).map(u => [u!.id, u!]));
+
+    const tradesWithDetails = trades.map((trade) => {
+      const shift = pShiftMap.get(trade.shiftId);
+      const requesterUser = pUserMap.get(trade.fromUserId);
+      const targetUserData = trade.toUserId ? pUserMap.get(trade.toUserId) : null;
+      const cShift = trade.counterShiftId ? pCounterShiftMap.get(trade.counterShiftId) : null;
+      return {
+        ...trade,
+        requesterId: trade.fromUserId,
+        targetUserId: trade.toUserId || "",
+        requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
+        shift: shift ? {
+          ...shift,
+          date: shift.startTime ? new Date(shift.startTime).toISOString().split('T')[0] : null,
+          startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
+          endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null,
+        } : null,
+        counterShift: cShift ? {
+          date: cShift.startTime ? new Date(cShift.startTime).toISOString().split('T')[0] : null,
+          startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
+          endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
+          position: cShift.position ?? null,
+        } : null,
+        requester: requesterUser ? {
+          firstName: requesterUser.firstName || "",
+          lastName: requesterUser.lastName || "",
+        } : null,
+        targetUser: targetUserData ? {
+          firstName: targetUserData.firstName || "",
+          lastName: targetUserData.lastName || "",
+        } : null,
+        fromUser: requesterUser ? { id: requesterUser.id, firstName: requesterUser.firstName, lastName: requesterUser.lastName, role: requesterUser.role } : null,
+        toUser: targetUserData ? { id: targetUserData.id, firstName: targetUserData.firstName, lastName: targetUserData.lastName, role: targetUserData.role } : null,
+      };
+    });
+
     res.json({ trades: tradesWithDetails });
   }));
 
@@ -3929,7 +3946,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const isCancellation = status === "rejected" && trade.fromUserId === userId && !trade.toUserId;
 
       // If trade is open (no toUserId), set current user as target
-      const updateData: any = { status };
+      const updateData: Partial<InsertShiftTrade> = { status };
       if (!trade.toUserId && (status === "accepted" || status === "pending")) {
         updateData.toUserId = userId;
       }

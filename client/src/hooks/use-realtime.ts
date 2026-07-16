@@ -107,7 +107,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     socket.on("connect", () => {
       setGlobalIsConnected(true);
-      console.log("✅ Connected to real-time updates");
       // Subscribe to relevant events
       socket.emit("subscribe:employee-shifts");
       socket.emit("subscribe:shift-trades");
@@ -115,7 +114,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     socket.on("disconnect", (reason) => {
       setGlobalIsConnected(false);
-      console.log("❌ Disconnected from real-time updates:", reason);
     });
 
     socket.on("connect_error", (error) => {
@@ -209,25 +207,21 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     };
 
     socket.on("shift:created", (data) => {
-      console.log("📍 New shift created:", data);
       invalidateShiftQueries();
       onEventRef.current?.("shift:created", data);
     });
 
     socket.on("shift:updated", (data) => {
-      console.log("🔄 Shift updated:", data);
       invalidateShiftQueries();
       onEventRef.current?.("shift:updated", data);
     });
 
     socket.on("shift:deleted", (data) => {
-      console.log("🗑️ Shift deleted:", data);
       invalidateShiftQueries();
       onEventRef.current?.("shift:deleted", data);
     });
 
     socket.on("shift:ownership-changed", (data) => {
-      console.log("🔄 Shift ownership changed:", data);
       invalidateShiftQueries();
       invalidateTradeQueries();
       onEventRef.current?.("shift:ownership-changed", data);
@@ -235,21 +229,18 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     // Trade events
     socket.on("trade:created", (data) => {
-      console.log("📨 New trade request:", data);
       invalidateTradeQueries();
       invalidateShiftQueries();
       onEventRef.current?.("trade:created", data);
     });
 
     socket.on("trade:status-changed", (data) => {
-      console.log("📝 Trade status changed:", data);
       invalidateTradeQueries();
       invalidateShiftQueries();
       onEventRef.current?.("trade:status-changed", data);
     });
 
     socket.on("trade:approved", (data) => {
-      console.log("✅ Trade approved:", data);
       startTransition(() => {
         invalidateTradeQueries();
         invalidateShiftQueries();
@@ -260,7 +251,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     // Time-off events
     socket.on("time-off:created", (data) => {
-      console.log("📅 Time-off request created:", data);
       startTransition(() => {
         invalidateTimeOffQueries();
         invalidateNotifications();
@@ -269,7 +259,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     });
 
     socket.on("time-off:updated", (data) => {
-      console.log("📅 Time-off request updated:", data);
       startTransition(() => {
         invalidateTimeOffQueries();
         invalidateNotifications();
@@ -278,7 +267,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     });
 
     socket.on("time-off:approved", (data) => {
-      console.log("✅ Time-off approved:", data);
       startTransition(() => {
         invalidateTimeOffQueries();
         invalidateShiftQueries();
@@ -288,7 +276,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     });
 
     socket.on("time-off:rejected", (data) => {
-      console.log("❌ Time-off rejected:", data);
       startTransition(() => {
         invalidateTimeOffQueries();
         invalidateNotifications();
@@ -298,7 +285,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     // Availability events
     socket.on("availability:updated", (data) => {
-      console.log("👥 Availability updated:", data);
       startTransition(() => {
         queryClient.invalidateQueries({ queryKey: ["employees"] });
       });
@@ -307,7 +293,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     // Employee events - refresh the shared employee caches
     socket.on("employee:created", (data) => {
-      console.log("👤 New employee created:", data);
       startTransition(() => {
         invalidateEmployeeQueries();
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
@@ -319,7 +304,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     });
 
     socket.on("employee:updated", (data) => {
-      console.log("👤 Employee updated:", data);
       startTransition(() => {
         invalidateEmployeeQueries();
         invalidateManagerDashboardQueries(queryClient);
@@ -329,7 +313,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     });
 
     socket.on("employee:deleted", (data) => {
-      console.log("👤 Employee deleted:", data);
       startTransition(() => {
         invalidateEmployeeQueries();
         queryClient.invalidateQueries({ queryKey: ["/api/dashboard/stats"] });
@@ -342,7 +325,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     // Payroll events
     socket.on("payroll:period-created", (data) => {
-      console.log("📅 Payroll period created:", data);
       startTransition(() => {
         queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
         queryClient.invalidateQueries({ queryKey: ["current-payroll-period"] });
@@ -351,7 +333,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     });
 
     socket.on("payroll:period-updated", (data) => {
-      console.log("📅 Payroll period updated:", data);
       startTransition(() => {
         queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
         queryClient.invalidateQueries({ queryKey: ["current-payroll-period"] });
@@ -360,7 +341,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     });
 
     socket.on("payroll:processed", (data) => {
-      console.log("💰 Payroll processed:", data);
       startTransition(() => {
         queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
         queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
@@ -371,7 +351,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     });
 
     socket.on("payroll:entry-updated", (data) => {
-      console.log("💵 Payroll entry updated:", data);
       startTransition(() => {
         queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
         queryClient.invalidateQueries({ queryKey: ["payroll-entries-branch"] });
@@ -381,7 +360,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     });
 
     socket.on("payroll:sent", (data) => {
-      console.log("📧 Payslip sent:", data);
       startTransition(() => {
         queryClient.invalidateQueries({ queryKey: ["payroll-entries"] });
         queryClient.invalidateQueries({ queryKey: ["mobile-payroll"] });
@@ -391,7 +369,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     // Notification events
     socket.on("notification:created", (data) => {
-      console.log("🔔 New notification:", data);
       startTransition(() => {
         invalidateNotifications();
         // Also refresh related data based on notification type
@@ -408,7 +385,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
     });
 
     socket.on("notification", (data) => {
-      console.log("🔔 Notification event:", data);
       startTransition(() => {
         invalidateNotifications();
       });
@@ -417,7 +393,6 @@ export function useRealtime(options: UseRealtimeOptions = {}) {
 
     // Audit log events - real-time updates for audit logs page
     socket.on("audit:created", (data) => {
-      console.log("📝 New audit log:", data);
       startTransition(() => {
         queryClient.invalidateQueries({ queryKey: ["/api/audit-logs"] });
         queryClient.invalidateQueries({ queryKey: ["/api/audit-logs/stats"] });
