@@ -143,13 +143,14 @@ export async function initializeDatabase() {
       console.log('⚠️ Could not apply soft delete migrations:', err);
     }
 
-    // Shift trade bidirectional swap + expiry columns
+    // Shift trade feature columns (passed_by_user_ids, counter_shift_id, expires_at)
     try {
+      await db.execute(sql`ALTER TABLE shift_trades ADD COLUMN IF NOT EXISTS passed_by_user_ids JSONB DEFAULT '[]'::jsonb`);
       await db.execute(sql`ALTER TABLE shift_trades ADD COLUMN IF NOT EXISTS counter_shift_id TEXT REFERENCES shifts(id)`);
       await db.execute(sql`ALTER TABLE shift_trades ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`);
-      console.log('✅ Shift trade counter_shift_id and expires_at migrations checked/applied');
+      console.log('✅ Shift trade feature columns migration checked/applied');
     } catch (err) {
-      console.log('⚠️ Could not apply shift trade migrations:', err);
+      console.log('⚠️ Could not apply shift trade feature columns migration:', err);
     }
 
     await db.execute(sql`
@@ -187,6 +188,7 @@ export async function initializeDatabase() {
         requested_at TIMESTAMP DEFAULT NOW(),
         approved_at TIMESTAMP,
         approved_by TEXT REFERENCES users(id),
+        passed_by_user_ids JSONB DEFAULT '[]'::jsonb,
         counter_shift_id TEXT REFERENCES shifts(id),
         expires_at TIMESTAMP
       )

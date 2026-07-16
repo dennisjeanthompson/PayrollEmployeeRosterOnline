@@ -8125,11 +8125,12 @@ async function initializeDatabase() {
       console.log("\u26A0\uFE0F Could not apply soft delete migrations:", err);
     }
     try {
+      await db.execute(sql3`ALTER TABLE shift_trades ADD COLUMN IF NOT EXISTS passed_by_user_ids JSONB DEFAULT '[]'::jsonb`);
       await db.execute(sql3`ALTER TABLE shift_trades ADD COLUMN IF NOT EXISTS counter_shift_id TEXT REFERENCES shifts(id)`);
       await db.execute(sql3`ALTER TABLE shift_trades ADD COLUMN IF NOT EXISTS expires_at TIMESTAMP`);
-      console.log("\u2705 Shift trade counter_shift_id and expires_at migrations checked/applied");
+      console.log("\u2705 Shift trade feature columns migration checked/applied");
     } catch (err) {
-      console.log("\u26A0\uFE0F Could not apply shift trade migrations:", err);
+      console.log("\u26A0\uFE0F Could not apply shift trade feature columns migration:", err);
     }
     await db.execute(sql3`
       CREATE TABLE IF NOT EXISTS shifts (
@@ -8165,6 +8166,7 @@ async function initializeDatabase() {
         requested_at TIMESTAMP DEFAULT NOW(),
         approved_at TIMESTAMP,
         approved_by TEXT REFERENCES users(id),
+        passed_by_user_ids JSONB DEFAULT '[]'::jsonb,
         counter_shift_id TEXT REFERENCES shifts(id),
         expires_at TIMESTAMP
       )
