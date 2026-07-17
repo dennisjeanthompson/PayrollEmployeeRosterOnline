@@ -483,11 +483,11 @@ export default function MuiPayroll() {
                                   {entry.periodStartDate && entry.periodEndDate ? (
                                     <>
                                       <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                                        {format(new Date(entry.periodStartDate), "MMM d")} – {format(new Date(entry.periodEndDate), "MMM d, yyyy")}
+                                        {format(parseISO(entry.periodStartDate), "MMM d")} – {format(parseISO(entry.periodEndDate), "MMM d, yyyy")}
                                       </Typography>
                                       <Typography variant="caption" color="text.secondary">
                                         Generated {entry.paidAt
-                                          ? format(new Date(entry.paidAt), "MMM d, yyyy, h:mm a")
+                                          ? format(parseISO(entry.paidAt), "MMM d, yyyy, h:mm a")
                                           : format(getPaymentDate(entry.periodEndDate!), "MMM d, yyyy")}
                                       </Typography>
                                     </>
@@ -550,11 +550,11 @@ export default function MuiPayroll() {
                             {entry.periodStartDate && entry.periodEndDate ? (
                               <>
                                 <Typography variant="subtitle2" sx={{ fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
-                                  {format(new Date(entry.periodStartDate), "MMM d")} – {format(new Date(entry.periodEndDate), "MMM d, yyyy")}
+                                  {format(parseISO(entry.periodStartDate), "MMM d")} – {format(parseISO(entry.periodEndDate), "MMM d, yyyy")}
                                 </Typography>
                                 <Typography variant="caption" color="text.secondary" sx={{ display: 'block', whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden' }}>
                                   Generated {entry.paidAt
-                                    ? format(new Date(entry.paidAt), "MMM d, yyyy, h:mm a")
+                                    ? format(parseISO(entry.paidAt), "MMM d, yyyy, h:mm a")
                                     : format(getPaymentDate(entry.periodEndDate!), "MMM d, yyyy")}
                                 </Typography>
                               </>
@@ -661,7 +661,7 @@ export default function MuiPayroll() {
                         </Typography>
                         <Typography variant="body1" sx={{ fontWeight: 700, mb: 1.5, color: 'text.primary', position: 'relative', zIndex: 1 }}>
                           {entry.periodStartDate && entry.periodEndDate
-                            ? `${format(new Date(entry.periodStartDate), "MMM d")} – ${format(new Date(entry.periodEndDate), "MMM d, yyyy")}`
+                            ? `${format(parseISO(entry.periodStartDate), "MMM d")} – ${format(parseISO(entry.periodEndDate), "MMM d, yyyy")}`
                             : format(parseISO(entry.createdAt), "MMMM d, yyyy")}
                         </Typography>
                         <Divider sx={{ my: 2, opacity: 0.6 }} />

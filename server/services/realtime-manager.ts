@@ -1,5 +1,6 @@
 import { Server as HTTPServer } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
+import { RequestHandler } from "express";
 import { dbStorage } from "../db-storage";
 
 export interface RealTimeEvents {
@@ -23,6 +24,11 @@ export interface RealTimeEvents {
 class RealTimeManager {
   private io: SocketIOServer;
   private userConnections: Map<string, Set<string>> = new Map(); // userId -> Set of socketIds
+  private sessionMiddleware: RequestHandler | null = null;
+
+  setSessionMiddleware(middleware: RequestHandler) {
+    this.sessionMiddleware = middleware;
+  }
 
   constructor(httpServer: HTTPServer) {
     this.io = new SocketIOServer(httpServer, {
@@ -47,17 +53,18 @@ class RealTimeManager {
 
   private setupMiddleware() {
     this.io.use((socket, next) => {
-      // Extract userId from query or auth token
-      const userId = socket.handshake.query.userId as string;
-      const authToken = socket.handshake.auth.token as string;
-
-      if (!userId && !authToken) {
-        return next(new Error("Authentication required"));
+      // If session middleware is wired in, use it to verify identity from the signed cookie
+      if (this.sessionMiddleware) {
+        this.sessionMiddleware(socket.request as any, {} as any, (err?: any) => {
+          if (err) return next(new Error("Session error"));
+          const sessionUser = (socket.request as any).session?.user;
+          if (!sessionUser?.id) return next(new Error("Not authenticated"));
+          socket.data.userId = sessionUser.id;
+          next();
+        });
+      } else {
+        return next(new Error("Not authenticated"));
       }
-
-      // Store userId on socket
-      socket.data.userId = userId;
-      next();
     });
   }
 
@@ -66,37 +73,38 @@ class RealTimeManager {
       const userId = socket.data.userId;
 
       if (!userId) {
-        console.warn("Socket connected without userId");
+        socket.disconnect(true);
         return;
       }
 
-      // Track user connections
-      if (!this.userConnections.has(userId)) {
-        this.userConnections.set(userId, new Set());
-      }
-      this.userConnections.get(userId)!.add(socket.id);
-
-      console.log(`User ${userId} connected (socket: ${socket.id})`);
-
-      // Join user's personal room
-      socket.join(`user:${userId}`);
-
-      // Fetch user details to join role/branch rooms
+      // Verify the user actually exists and is active before joining any rooms
       try {
         const user = await dbStorage.getUser(userId);
-        if (user) {
-          console.log(`Joining user ${userId} to branch room: branch:${user.branchId}`);
-          socket.join(`branch:${user.branchId}`);
-          socket.join(`branch:${user.branchId}:shifts`);
-          
-          if (user.role === 'manager' || user.role === 'admin') {
-            socket.join(`branch:${user.branchId}:managers`);
-          } else {
-            socket.join(`branch:${user.branchId}:employees`);
-          }
+        if (!user || !user.isActive) {
+          socket.disconnect(true);
+          return;
+        }
+
+        // Track user connections
+        if (!this.userConnections.has(userId)) {
+          this.userConnections.set(userId, new Set());
+        }
+        this.userConnections.get(userId)!.add(socket.id);
+
+        // Join rooms only after identity is confirmed
+        socket.join(`user:${userId}`);
+        socket.join(`branch:${user.branchId}`);
+        socket.join(`branch:${user.branchId}:shifts`);
+
+        if (user.role === 'manager' || user.role === 'admin') {
+          socket.join(`branch:${user.branchId}:managers`);
+        } else {
+          socket.join(`branch:${user.branchId}:employees`);
         }
       } catch (err) {
-        console.error(`Error joining rooms for user ${userId}:`, err);
+        console.error(`Error verifying user ${userId} for socket:`, err);
+        socket.disconnect(true);
+        return;
       }
 
       // Handle custom events

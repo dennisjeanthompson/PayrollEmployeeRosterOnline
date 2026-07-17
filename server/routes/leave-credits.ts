@@ -224,6 +224,14 @@ router.put('/api/leave-credits/:id', requireAuth, requireRole(['manager', 'admin
 
     const total = totalCredits !== undefined ? parseFloat(totalCredits) : parseFloat(existing[0].totalCredits);
     const used = usedCredits !== undefined ? parseFloat(usedCredits) : parseFloat(existing[0].usedCredits || '0');
+
+    if (isNaN(total) || total < 0 || total > 365) {
+      return res.status(400).json({ message: 'totalCredits must be a number between 0 and 365' });
+    }
+    if (isNaN(used) || used < 0 || used > total) {
+      return res.status(400).json({ message: 'usedCredits must be a number between 0 and totalCredits' });
+    }
+
     const remaining = Math.max(0, total - used);
 
     await db.update(leaveCredits).set({
@@ -284,7 +292,11 @@ export async function deductLeaveCredit(
 
     const current = existing[0];
     const used = parseFloat(current.usedCredits || '0');
-    const remaining = parseFloat(current.remainingCredits);
+    const remaining = parseFloat(current.remainingCredits || '0');
+
+    if (isNaN(remaining)) {
+      throw new Error(`Corrupted leave balance for user ${userId}: remainingCredits is not a number.`);
+    }
 
     const newUsed = used + daysToDeduct;
     const newRemaining = Math.max(0, remaining - daysToDeduct);
@@ -301,9 +313,8 @@ export async function deductLeaveCredit(
 
     return { success: true, warning };
   } catch (error) {
-    // Do not block approval if deduction fails — just warn
-    console.error('Leave credit deduction failed (non-blocking):', error);
-    return { success: true, warning: 'Leave credit deduction could not be recorded.' };
+    console.error('Leave credit deduction failed:', error);
+    throw error;
   }
 }
 
@@ -341,7 +352,7 @@ export async function restoreLeaveCredit(
     const current = existing[0];
     const total = parseFloat(current.totalCredits || '0');
     const used = parseFloat(current.usedCredits || '0');
-    let remaining = parseFloat(current.remainingCredits);
+    let remaining = parseFloat(current.remainingCredits || '0');
 
     const newUsed = Math.max(0, used - daysToRestore);
     let newRemaining = remaining + daysToRestore;

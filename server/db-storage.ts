@@ -541,7 +541,8 @@ export class DatabaseStorage implements IStorage {
     .where(
       and(
         eq(shiftTrades.status, 'pending'),
-        eq(shifts.branchId, branchId)
+        eq(shifts.branchId, branchId),
+        eq(shifts.isDeleted, false)
       )
     );
 
@@ -578,7 +579,8 @@ export class DatabaseStorage implements IStorage {
     .where(
       and(
         inArray(shiftTrades.status, ['pending', 'accepted']),
-        eq(shifts.branchId, branchId)
+        eq(shifts.branchId, branchId),
+        eq(shifts.isDeleted, false)
       )
     );
 
@@ -953,14 +955,14 @@ export class DatabaseStorage implements IStorage {
     const id = randomUUID();
     const now = new Date();
     
-    // Prepare values, converting undefined to null for nullable fields
+    // Default booleans to true — a null deduction flag silently disables the deduction
     const values = {
       id,
       branchId: insertSettings.branchId,
-      deductSSS: insertSettings.deductSSS ?? null,
-      deductPhilHealth: insertSettings.deductPhilHealth ?? null,
-      deductPagibig: insertSettings.deductPagibig ?? null,
-      deductWithholdingTax: insertSettings.deductWithholdingTax ?? null,
+      deductSSS: insertSettings.deductSSS ?? true,
+      deductPhilHealth: insertSettings.deductPhilHealth ?? true,
+      deductPagibig: insertSettings.deductPagibig ?? true,
+      deductWithholdingTax: insertSettings.deductWithholdingTax ?? true,
       createdAt: now,
       updatedAt: now,
     };

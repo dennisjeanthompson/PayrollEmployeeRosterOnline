@@ -8,7 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 
-type TimeOffType = 'vacation' | 'sick' | 'personal' | 'other';
+type TimeOffType = 'vacation' | 'sick' | 'emergency' | 'personal' | 'other';
 type TimeOffStatus = 'pending' | 'approved' | 'rejected';
 
 interface TimeOffRequestProps {
@@ -127,6 +127,7 @@ export function TimeOffRequest({ onRequestSubmit, timeOffBalance }: TimeOffReque
               <SelectContent>
                 <SelectItem value="vacation">Vacation</SelectItem>
                 <SelectItem value="sick">Sick Leave</SelectItem>
+                <SelectItem value="emergency">Emergency</SelectItem>
                 <SelectItem value="personal">Personal Day</SelectItem>
                 <SelectItem value="other">Other</SelectItem>
               </SelectContent>
@@ -157,6 +158,11 @@ export function TimeOffRequest({ onRequestSubmit, timeOffBalance }: TimeOffReque
                     if (!endDate || (date && date > endDate)) {
                       setEndDate(date);
                     }
+                  }}
+                  disabled={(date) => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    return date < today;
                   }}
                   initialFocus
                 />

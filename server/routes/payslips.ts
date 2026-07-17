@@ -12,9 +12,10 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { generatePayslipPDF, generatePayslipHash } from '../services/payslip-pdf-generator';
 import { PayslipData, validatePayslipData, SAMPLE_PAYSLIP_DATA } from '../../shared/payslip-types';
 import { dbStorage } from '../db-storage';
-import { toLocalDateString } from '../payroll-utils';
+import { toLocalDateString, MONTHLY_WORKING_HOURS } from '../payroll-utils';
 import { getPaymentDateString } from '../../shared/payroll-dates';
 import { createAuditLog } from './audit';
+import { calculateSSSEmployerShare } from '../utils/deductions';
 import crypto from 'crypto';
 
 const router = Router();
@@ -46,6 +47,112 @@ async function getCompanyInfo() {
     logo_url: settings.logoUrl || '',
     phone: settings.phone || '',
     email: settings.email || '',
+  };
+}
+
+interface PayslipBuildParams {
+  entry: Awaited<ReturnType<typeof storage.getPayrollEntry>>;
+  employee: NonNullable<Awaited<ReturnType<typeof storage.getUser>>>;
+  period: NonNullable<Awaited<ReturnType<typeof storage.getPayrollPeriod>>>;
+  ratesEffectiveFrom: string;
+  payslipId: string;
+  verificationHash: string;
+}
+
+async function buildPayslipData(p: PayslipBuildParams): Promise<PayslipData> {
+  let payBreakdown: any = {};
+  if (p.entry!.payBreakdown) {
+    try { payBreakdown = JSON.parse(p.entry!.payBreakdown); } catch {}
+  }
+
+  const basicPay = parseFloat(String(p.entry!.basicPay || p.entry!.grossPay || 0));
+  const overtimePay = parseFloat(String(p.entry!.overtimePay || 0));
+  const nightDiffPay = parseFloat(String(p.entry!.nightDiffPay || 0));
+  const holidayPay = parseFloat(String(p.entry!.holidayPay || 0));
+  const restDayPay = parseFloat(String(p.entry!.restDayPay || 0));
+  const serviceChargePay = parseFloat(String(p.entry!.serviceCharge || 0));
+  const sssContrib = parseFloat(String(p.entry!.sssContribution || 0));
+  const sssLoan = parseFloat(String(p.entry!.sssLoan || 0));
+  const philHealth = parseFloat(String(p.entry!.philHealthContribution || 0));
+  const pagibig = parseFloat(String(p.entry!.pagibigContribution || 0));
+  const pagibigLoan = parseFloat(String(p.entry!.pagibigLoan || 0));
+  const tax = parseFloat(String(p.entry!.withholdingTax || 0));
+  const otherDed = parseFloat(String(p.entry!.otherDeductions || 0));
+
+  const otMultiplierUsed = payBreakdown?.overtimeMultiplier
+    ? Math.round(payBreakdown.overtimeMultiplier * 100)
+    : 125;
+
+  const earnings: any[] = [];
+  if (basicPay > 0) earnings.push({ code: 'BASIC', label: 'Basic Salary', hours: parseFloat(String(p.entry!.regularHours || 0)), rate: parseFloat(String(p.employee.hourlyRate || 0)), amount: basicPay });
+  earnings.push({ code: 'OT', label: `Overtime Pay (${otMultiplierUsed}%)`, hours: parseFloat(String(p.entry!.overtimeHours || 0)), amount: overtimePay, is_overtime: true, multiplier: otMultiplierUsed });
+  if (nightDiffPay > 0) earnings.push({ code: 'ND', label: 'Night Differential (10%)', hours: parseFloat(String(p.entry!.nightDiffHours || 0)), amount: nightDiffPay });
+  earnings.push({ code: 'HOL', label: 'Holiday Pay', amount: holidayPay });
+  if (restDayPay > 0) earnings.push({ code: 'RD', label: 'Rest Day Premium', amount: restDayPay });
+  if (serviceChargePay > 0) earnings.push({ code: 'SC', label: 'Service Charge (RA 11360)', amount: serviceChargePay });
+
+  const deductions: any[] = [];
+  if (sssContrib > 0) deductions.push({ code: 'SSS_EE', label: 'SSS (Employee)', amount: sssContrib });
+  if (sssLoan > 0) deductions.push({ code: 'SSS_LOAN', label: 'SSS Loan', amount: sssLoan, is_loan: true });
+  if (philHealth > 0) deductions.push({ code: 'PH_EE', label: 'PhilHealth (Employee)', amount: philHealth });
+  if (pagibig > 0) deductions.push({ code: 'PB_EE', label: 'Pag-IBIG (Employee)', amount: pagibig });
+  if (pagibigLoan > 0) deductions.push({ code: 'PB_LOAN', label: 'Pag-IBIG Loan', amount: pagibigLoan, is_loan: true });
+  if (tax > 0) deductions.push({ code: 'WHT', label: 'Withholding Tax', amount: tax });
+  if (otherDed > 0) deductions.push({ code: 'OTHER', label: 'Other Deductions', amount: otherDed });
+
+  // Employer contributions (display only — not deducted from employee net pay)
+  // SSS: look up actual employer share from bracket table (10% ER vs 5% EE, ratio varies by MSC)
+  const monthlyBasicSalary = parseFloat(String(p.employee.hourlyRate || 0)) * MONTHLY_WORKING_HOURS;
+  const sssEmployerShare = await calculateSSSEmployerShare(monthlyBasicSalary);
+  const employerContributions = [
+    { code: 'SSS_ER', label: 'SSS (Employer Share)', amount: sssEmployerShare },
+    { code: 'PH_ER', label: 'PhilHealth (Employer Share)', amount: philHealth },
+    { code: 'PB_ER', label: 'Pag-IBIG (Employer Share)', amount: pagibig },
+  ].filter(c => c.amount > 0);
+
+  const companyInfo = await getCompanyInfo();
+  const companyDbSettings = await storage.getCompanySettings();
+
+  return {
+    payslip_id: p.payslipId,
+    company: companyInfo,
+    employee: {
+      id: `DM-EMP-${p.employee.id.substring(0, 6).toUpperCase()}`,
+      name: `${p.employee.firstName} ${p.employee.lastName}`,
+      position: p.employee.position,
+      department: 'Operations',
+      tin: p.employee.tin ? `XXX-XXX-${p.employee.tin.slice(-4)}` : '—',
+      sss: p.employee.sssNumber ? `XX-XXXX${p.employee.sssNumber.slice(-4)}` : '—',
+      philhealth: p.employee.philhealthNumber ? `XX-XXXXXX${p.employee.philhealthNumber.slice(-4)}` : '—',
+      pagibig: p.employee.pagibigNumber ? `XXXX-XXXX-${p.employee.pagibigNumber.slice(-4)}` : '—',
+      is_mwe: (p.employee as any).isMwe || false,
+    },
+    pay_period: {
+      start: toLocalDateString(p.period.startDate),
+      end: toLocalDateString(p.period.endDate),
+      payment_date: p.entry!.paidAt
+        ? toLocalDateString(new Date(p.entry!.paidAt))
+        : getPaymentDateString(p.period.endDate),
+      frequency: 'semi-monthly',
+    },
+    earnings,
+    deductions,
+    gross: parseFloat(String(p.entry!.grossPay || 0)),
+    total_deductions: parseFloat(String(p.entry!.totalDeductions || (p.entry! as any).deductions || 0)),
+    net_pay: parseFloat(String(p.entry!.netPay || 0)),
+    ytd: { gross: 0, deductions: 0, net: 0 },
+    employer_contributions: employerContributions,
+    payment_method: {
+      type: (companyDbSettings?.paymentMethod as any) || 'Bank Transfer',
+      bank: companyDbSettings?.bankName || '',
+      account_last4: companyDbSettings?.bankAccountNo
+        ? '****' + companyDbSettings.bankAccountNo.slice(-4)
+        : '****',
+    },
+    verification_code: p.verificationHash,
+    generated_at: new Date().toISOString(),
+    rates_effective_from: p.ratesEffectiveFrom,
+    tamper_hash: `sha256:${p.verificationHash}`,
   };
 }
 
@@ -110,7 +217,12 @@ router.get('/entry/:entryId', requireAuth, async (req: Request, res: Response) =
     if (currentUser.role === 'employee' && entry.userId !== currentUser.id) {
       return res.status(403).json({ success: false, error: 'Access denied. You can only view your own payslips.' });
     }
-    
+
+    // Managers can only view payslips of employees in their own branch
+    if (currentUser.role === 'manager' && employee.branchId !== currentUser.branchId) {
+      return res.status(403).json({ success: false, error: 'Access denied. Employee is not in your branch.' });
+    }
+
     // Get the payroll period
     const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
     if (!period) {
@@ -140,163 +252,7 @@ const ratesEffectiveFrom = (deductionRates.length > 0 && deductionRates[0].creat
     const timestamp = Date.now();
     const tamperHash = generatePayslipHash(payslipId, employee.id, timestamp);
     
-    // Build earnings from entry data
-    const earnings: any[] = [];
-    const basicPay = parseFloat(String(entry.basicPay || entry.grossPay || 0));
-    const overtimePay = parseFloat(String(entry.overtimePay || 0));
-    const nightDiffPay = parseFloat(String(entry.nightDiffPay || 0));
-    const holidayPay = parseFloat(String(entry.holidayPay || 0));
-    const restDayPay = parseFloat(String(entry.restDayPay || 0));
-    
-    if (basicPay > 0) {
-      earnings.push({
-        code: 'BASIC',
-        label: 'Basic Salary',
-        hours: parseFloat(String(entry.regularHours || 0)),
-        rate: parseFloat(String(employee.hourlyRate || 0)),
-        amount: basicPay,
-      });
-    }
-    
-    // Overtime: Art.87 LC — regular weekday OT = 125%, rest day/holiday OT = 130%+
-    // Determine actual OT rate from payBreakdown if available, else default 125%
-    const otMultiplierUsed = payBreakdown?.overtimeMultiplier
-      ? Math.round(payBreakdown.overtimeMultiplier * 100)
-      : 125;
-    // Always show OT line (shows 0 when no OT was logged)
-    earnings.push({
-      code: 'OT',
-      label: `Overtime Pay (${otMultiplierUsed}%)`,
-      hours: parseFloat(String(entry.overtimeHours || 0)),
-      amount: overtimePay,
-      is_overtime: true,
-      multiplier: otMultiplierUsed,
-    });
-    
-    if (nightDiffPay > 0) {
-      earnings.push({
-        code: 'ND',
-        label: 'Night Differential (10%)',
-        hours: parseFloat(String(entry.nightDiffHours || 0)),
-        amount: nightDiffPay,
-      });
-    }
-    
-    // Always show holiday pay (Art. 94 LC) — shows 0 if no holiday in period
-    earnings.push({
-      code: 'HOL',
-      label: 'Holiday Pay',
-      amount: holidayPay,
-    });
-    
-    if (restDayPay > 0) {
-      earnings.push({
-        code: 'RD',
-        label: 'Rest Day Premium',
-        amount: restDayPay,
-      });
-    }
-
-    const serviceChargePay = parseFloat(String(entry.serviceCharge || 0));
-    if (serviceChargePay > 0) {
-      earnings.push({
-        code: 'SC',
-        label: 'Service Charge (RA 11360)',
-        amount: serviceChargePay,
-      });
-    }
-    
-    // Build deductions
-    const deductions: any[] = [];
-    const sssContrib = parseFloat(String(entry.sssContribution || 0));
-    const sssLoan = parseFloat(String(entry.sssLoan || 0));
-    const philHealth = parseFloat(String(entry.philHealthContribution || 0));
-    const pagibig = parseFloat(String(entry.pagibigContribution || 0));
-    const pagibigLoan = parseFloat(String(entry.pagibigLoan || 0));
-    const tax = parseFloat(String(entry.withholdingTax || 0));
-    const otherDed = parseFloat(String(entry.otherDeductions || 0));
-    
-    if (sssContrib > 0) {
-      deductions.push({ code: 'SSS_EE', label: 'SSS (Employee)', amount: sssContrib });
-    }
-    if (sssLoan > 0) {
-      deductions.push({ code: 'SSS_LOAN', label: 'SSS Loan', amount: sssLoan, is_loan: true });
-    }
-    if (philHealth > 0) {
-      deductions.push({ code: 'PH_EE', label: 'PhilHealth (Employee)', amount: philHealth });
-    }
-    if (pagibig > 0) {
-      deductions.push({ code: 'PB_EE', label: 'Pag-IBIG (Employee)', amount: pagibig });
-    }
-    if (pagibigLoan > 0) {
-      deductions.push({ code: 'PB_LOAN', label: 'Pag-IBIG Loan', amount: pagibigLoan, is_loan: true });
-    }
-    if (tax > 0) {
-      deductions.push({ code: 'WHT', label: 'Withholding Tax', amount: tax });
-    }
-    if (otherDed > 0) {
-      deductions.push({ code: 'OTHER', label: 'Other Deductions', amount: otherDed });
-    }
-    
-    // Employer contributions (for information only)
-    // SSS 2026: 15% total = 5% Employee + 10% Employer (ER = 2× EE share)
-    // PhilHealth 2026: 5% total = 2.5% Employee + 2.5% Employer (equal split)
-    // Pag-IBIG 2026: Employee max ₱200, Employer matches employee share
-    const employerContributions: any[] = [
-      { code: 'SSS_ER', label: 'SSS (Employer Share)', amount: Math.round(sssContrib * 2 * 100) / 100 },
-      { code: 'PH_ER', label: 'PhilHealth (Employer Share)', amount: philHealth },
-      { code: 'PB_ER', label: 'Pag-IBIG (Employer Share)', amount: pagibig },
-    ].filter(c => c.amount > 0);
-    
-    // Build payslip data
-    const companyInfo = await getCompanyInfo();
-    const companyDbSettings = await storage.getCompanySettings();
-
-    const payslipData: PayslipData = {
-      payslip_id: payslipId,
-      company: companyInfo,
-      employee: {
-        id: `DM-EMP-${employee.id.substring(0, 6).toUpperCase()}`,
-        name: `${employee.firstName} ${employee.lastName}`,
-        position: employee.position,
-        department: 'Operations',
-        tin: employee.tin ? `XXX-XXX-${employee.tin.slice(-4)}` : '—',
-        sss: employee.sssNumber ? `XX-XXXX${employee.sssNumber.slice(-4)}` : '—',
-        philhealth: employee.philhealthNumber ? `XX-XXXXXX${employee.philhealthNumber.slice(-4)}` : '—',
-        pagibig: employee.pagibigNumber ? `XXXX-XXXX-${employee.pagibigNumber.slice(-4)}` : '—',
-        is_mwe: (employee as any).isMwe || false,
-      },
-      pay_period: {
-        start: toLocalDateString(period.startDate),
-        end: toLocalDateString(period.endDate),
-        payment_date: entry.paidAt
-            ? toLocalDateString(new Date(entry.paidAt))
-          : getPaymentDateString(period.endDate),
-        frequency: 'semi-monthly',
-      },
-      earnings,
-      deductions,
-      gross: parseFloat(String(entry.grossPay || 0)),
-      total_deductions: parseFloat(String(entry.totalDeductions || entry.deductions || 0)),
-      net_pay: parseFloat(String(entry.netPay || 0)),
-      ytd: {
-        gross: 0,
-        deductions: 0,
-        net: 0,
-      },
-      employer_contributions: employerContributions,
-      payment_method: {
-        type: (companyDbSettings?.paymentMethod as any) || 'Bank Transfer',
-        bank: companyDbSettings?.bankName || '',
-        account_last4: companyDbSettings?.bankAccountNo
-          ? '****' + companyDbSettings.bankAccountNo.slice(-4)
-          : '****',
-      },
-      verification_code: tamperHash,
-      generated_at: new Date().toISOString(),
-      rates_effective_from: ratesEffectiveFrom,
-      tamper_hash: `sha256:${tamperHash}`,
-    };
+    const payslipData = await buildPayslipData({ entry, employee, period, ratesEffectiveFrom, payslipId, verificationHash: tamperHash });
     
     // Store verification record
     verificationRecords.set(payslipId, {
@@ -404,76 +360,84 @@ router.get('/audit-log', requireManagerOrAdmin, async (req: Request, res: Respon
 
 /**
  * POST /api/payslips/generate-pdf
- * Generate a PDF payslip from payslip data
+ * Generate a PDF payslip from a payroll entry ID.
+ * All payslip data is sourced from the database — client-supplied financial figures are never trusted.
  */
 router.post('/generate-pdf', requireAuth, async (req: Request, res: Response) => {
   try {
-    const { payslip_data, format = 'pdf', include_qr = true } = req.body;
-    
-    // Validate required data
-    if (!payslip_data) {
-      return res.status(400).json({
-        success: false,
-        error: 'payslip_data is required',
-      });
+    const { entryId, format = 'pdf', include_qr = true } = req.body;
+
+    if (!entryId) {
+      return res.status(400).json({ success: false, error: 'entryId is required' });
     }
-    
-    const data = payslip_data as PayslipData;
-    
-    // Validate payslip data structure
-    const validation = validatePayslipData(data);
-    if (!validation.valid) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid payslip data',
-        validation_errors: validation.errors,
-      });
+
+    const currentUser = req.session.user!;
+
+    const entry = await storage.getPayrollEntry(entryId);
+    if (!entry) {
+      return res.status(404).json({ success: false, error: 'Payroll entry not found' });
     }
-    
-    // Generate verification hash
+
+    const employee = await storage.getUser(entry.userId);
+    if (!employee) {
+      return res.status(404).json({ success: false, error: 'Employee not found' });
+    }
+
+    if (currentUser.role === 'employee' && entry.userId !== currentUser.id) {
+      return res.status(403).json({ success: false, error: 'Access denied. You can only generate your own payslip.' });
+    }
+    if (currentUser.role === 'manager' && employee.branchId !== currentUser.branchId) {
+      return res.status(403).json({ success: false, error: 'Access denied. Employee is not in your branch.' });
+    }
+
+    const period = await storage.getPayrollPeriod(entry.payrollPeriodId);
+    if (!period) {
+      return res.status(404).json({ success: false, error: 'Payroll period not found' });
+    }
+
+    const deductionRates = await storage.getAllDeductionRates();
+    const ratesEffectiveFrom = (deductionRates.length > 0 && deductionRates[0].createdAt)
+      ? toLocalDateString(deductionRates[0].createdAt)
+      : '2025-01-01';
+
+    const payslipId = `DM-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${entryId.substring(0, 6).toUpperCase()}`;
     const timestamp = Date.now();
-    const hash = generatePayslipHash(data.payslip_id, data.employee.id, timestamp);
-    
-    // Update verification code in data
-    data.verification_code = hash;
-    data.generated_at = new Date().toISOString();
-    
-    // Store verification record
-    verificationRecords.set(data.payslip_id, {
-      payslip_id: data.payslip_id,
-      employee_id: data.employee.id,
+    const hash = generatePayslipHash(payslipId, employee.id, timestamp);
+
+    const data = await buildPayslipData({ entry, employee, period, ratesEffectiveFrom, payslipId, verificationHash: hash });
+
+    verificationRecords.set(payslipId, {
+      payslip_id: payslipId,
+      employee_id: employee.id,
       timestamp,
       hash,
-      employee_name: data.employee.name,
-      pay_period: `${data.pay_period.start} - ${data.pay_period.end}`,
-      net_pay: data.net_pay,
-      payment_date: data.pay_period.payment_date,
+      employee_name: `${employee.firstName} ${employee.lastName}`,
+      pay_period: `${toLocalDateString(period.startDate)} - ${toLocalDateString(period.endDate)}`,
+      net_pay: parseFloat(String(entry.netPay || 0)),
+      payment_date: toLocalDateString(new Date()),
     });
-    
-    // Generate PDF
+
     const pdfBytes = await generatePayslipPDF(data, {
       includeQR: include_qr,
       includeVerification: true,
       verificationBaseUrl: `${req.protocol}://${req.get('host')}/api/payslips/verify`,
     });
-    
+
     if (format === 'json') {
-      // Return payslip data with verification info
       return res.json({
         success: true,
-        payslip_id: data.payslip_id,
+        payslip_id: payslipId,
         verification_code: hash,
-        verification_url: `${req.protocol}://${req.get('host')}/api/payslips/verify?payslip_id=${data.payslip_id}&hash=${hash}`,
+        verification_url: `${req.protocol}://${req.get('host')}/api/payslips/verify?payslip_id=${payslipId}&hash=${hash}`,
         data,
       });
     }
-    
-    // Return PDF
+
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${data.payslip_id}.pdf"`);
+    res.setHeader('Content-Disposition', `attachment; filename="${payslipId}.pdf"`);
     res.setHeader('Content-Length', pdfBytes.length);
     res.send(Buffer.from(pdfBytes));
-    
+
   } catch (error) {
     console.error('Error generating payslip PDF:', error);
     res.status(500).json({

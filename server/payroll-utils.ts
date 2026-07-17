@@ -373,7 +373,9 @@ export function isRestDay(date: Date, restDay: number = -1): boolean {
 export function calculateDailyHoursBreakdown(
   shifts: { startTime: Date | string; endTime: Date | string; actualStartTime?: Date | string | null; actualEndTime?: Date | string | null }[],
   holidays: Holiday[],
-  restDay: number = -1
+  restDay: number = -1,
+  periodStart?: Date,
+  periodEnd?: Date
 ): Map<string, ShiftHourBreakdown> {
   const dailyBreakdown = new Map<string, ShiftHourBreakdown>();
 
@@ -385,10 +387,16 @@ export function calculateDailyHoursBreakdown(
     const segments = splitCrossMidnightShift(startTime, endTime);
 
     for (const segment of segments) {
-      const dateKey = toLocalDateString(segment.date);
-      const segmentHours = calculateSegmentHours(segment.start, segment.end);
-      const holidayType = getHolidayType(segment.date, holidays);
-      const isRest = isRestDay(segment.date, restDay);
+      // Clip segment to period boundaries so cross-midnight shifts don't bleed into adjacent periods
+      const clippedStart = periodStart && segment.start < periodStart ? periodStart : segment.start;
+      const clippedEnd = periodEnd && segment.end > periodEnd ? periodEnd : segment.end;
+      if (clippedStart >= clippedEnd) continue;
+
+      const clippedSegment = { ...segment, start: clippedStart, end: clippedEnd };
+      const dateKey = toLocalDateString(clippedSegment.date);
+      const segmentHours = calculateSegmentHours(clippedSegment.start, clippedSegment.end);
+      const holidayType = getHolidayType(clippedSegment.date, holidays);
+      const isRest = isRestDay(clippedSegment.date, restDay);
 
       if (!dailyBreakdown.has(dateKey)) {
         dailyBreakdown.set(dateKey, {
@@ -398,7 +406,7 @@ export function calculateDailyHoursBreakdown(
           overtimeNightDiffHours: 0,
           holidayType,
           isRestDay: isRest,
-          date: segment.date
+          date: clippedSegment.date
         });
       }
 
@@ -407,24 +415,21 @@ export function calculateDailyHoursBreakdown(
 
       // Apply daily 8-hour overtime rule and accurately split Night Differential
       if (currentTotalHours >= DAILY_REGULAR_HOURS) {
-        // Already exceeded 8 hours, all additional hours are OT
         existing.overtimeHours += segmentHours;
-        existing.overtimeNightDiffHours += calculateNightDiffHours(segment.start, segment.end);
+        existing.overtimeNightDiffHours += calculateNightDiffHours(clippedSegment.start, clippedSegment.end);
       } else if (currentTotalHours + segmentHours > DAILY_REGULAR_HOURS) {
-        // This segment crosses the 8-hour threshold, need to split the exact minute
         const remainingRegular = DAILY_REGULAR_HOURS - currentTotalHours;
-        const boundaryMs = segment.start.getTime() + (remainingRegular * 60 * 60 * 1000);
+        const boundaryMs = clippedSegment.start.getTime() + (remainingRegular * 60 * 60 * 1000);
         const boundaryDate = new Date(boundaryMs);
 
         existing.regularHours += remainingRegular;
         existing.overtimeHours += (segmentHours - remainingRegular);
-        
-        existing.regularNightDiffHours += calculateNightDiffHours(segment.start, boundaryDate);
-        existing.overtimeNightDiffHours += calculateNightDiffHours(boundaryDate, segment.end);
+
+        existing.regularNightDiffHours += calculateNightDiffHours(clippedSegment.start, boundaryDate);
+        existing.overtimeNightDiffHours += calculateNightDiffHours(boundaryDate, clippedSegment.end);
       } else {
-        // All hours are regular
         existing.regularHours += segmentHours;
-        existing.regularNightDiffHours += calculateNightDiffHours(segment.start, segment.end);
+        existing.regularNightDiffHours += calculateNightDiffHours(clippedSegment.start, clippedSegment.end);
       }
     }
   }
@@ -440,9 +445,11 @@ export function calculatePeriodPay(
   hourlyRate: number,
   holidays: Holiday[],
   restDay: number = -1,
-  isHolidayExempt: boolean = false
+  isHolidayExempt: boolean = false,
+  periodStart?: Date,
+  periodEnd?: Date
 ): PayCalculation {
-  const dailyBreakdown = calculateDailyHoursBreakdown(shifts, holidays, restDay);
+  const dailyBreakdown = calculateDailyHoursBreakdown(shifts, holidays, restDay, periodStart, periodEnd);
 
   let basicPay = 0;
   let overtimePay = 0;

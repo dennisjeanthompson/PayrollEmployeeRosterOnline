@@ -30,7 +30,7 @@ import { leaveCreditsRouter } from "./routes/leave-credits";
 
 import { db } from "./db";
 import { deductionSettings as deductionSettingsTable, shifts as shiftsTable, shiftTrades as shiftTradesTable } from "@shared/schema";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { randomUUID as _randomUUID } from "crypto";
 import { resetDatabase, initializeDatabase, createAdminAccount, seedDeductionRates, seedPhilippineHolidays, seedSampleUsers, seedSampleSchedulesAndPayroll, seedSampleShiftTrades, markSetupComplete } from "./init-db";
 import bcrypt from "bcrypt";
@@ -248,7 +248,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   };
 
   // Use PostgreSQL session store
-  app.use(session(sessionConfig));
+  const sessionMiddleware = session(sessionConfig);
+  app.use(sessionMiddleware);
+
+  // Wire session middleware into the WebSocket server so socket identity is verified
+  // against the signed session cookie rather than trusted query params
+  realTimeManager.setSessionMiddleware(sessionMiddleware);
 
   // Middleware: Ensure session is always touched and saved
   app.use((req: Request, res: Response, next: NextFunction) => {
@@ -521,33 +526,30 @@ export async function registerRoutes(app: Express): Promise<Server> {
         branchId: user.branchId
       };
 
-      // Assign to session
-      req.session.user = authUser;
-
-      // Wait for session to be saved before responding
-      // This ensures the Set-Cookie header is included in the response
+      // Rotate session ID on login to prevent session fixation attacks
       return new Promise<void>((resolve) => {
-        req.session.save((err) => {
-          if (err) {
-            console.error('❌ Session save error:', err);
+        req.session.regenerate((regenErr) => {
+          if (regenErr) {
+            console.error('Session regeneration error:', regenErr);
             res.status(500).json({ message: 'Failed to create session' });
-          } else {
-
-
-            // Remove password from response
-            const { password: _, ...userWithoutPassword } = user;
-            
-            // Set cache control headers
-            res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
-            res.setHeader('Pragma', 'no-cache');
-            res.setHeader('Expires', '0');
-            
-            res.json({
-              user: userWithoutPassword,
-              authenticated: true
-            });
+            return resolve();
           }
-          resolve();
+
+          req.session.user = authUser;
+
+          req.session.save((err) => {
+            if (err) {
+              console.error('Session save error:', err);
+              res.status(500).json({ message: 'Failed to create session' });
+            } else {
+              const { password: _, ...userWithoutPassword } = user;
+              res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+              res.setHeader('Pragma', 'no-cache');
+              res.setHeader('Expires', '0');
+              res.json({ user: userWithoutPassword, authenticated: true });
+            }
+            resolve();
+          });
         });
       });
     } catch (error) {
@@ -698,6 +700,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(403).json({ message: "Insufficient permissions" });
     }
 
+    // Managers can only query employees in their own branch
+    if (targetUserId !== currentUser.id && currentUser.role === "manager") {
+      const targetUser = await storage.getUser(targetUserId);
+      if (!targetUser || targetUser.branchId !== currentUser.branchId) {
+        return res.status(403).json({ message: "Access denied: employee is not in your branch" });
+      }
+    }
 
     const shifts = await storage.getShiftsByUser(
       targetUserId,
@@ -1782,6 +1791,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ message: "Missing required fields: startDate, endDate, type, value" });
       }
 
+      const validAdjTypes = ['overtime', 'late', 'undertime', 'absent', 'rest_day_ot', 'special_holiday_ot', 'regular_holiday_ot', 'night_diff'];
+      if (!validAdjTypes.includes(type)) {
+        return res.status(400).json({ message: `Invalid type. Valid types: ${validAdjTypes.join(', ')}` });
+      }
+
       // Validate value is a positive number
       const numValue = parseFloat(value);
       if (isNaN(numValue) || numValue <= 0) {
@@ -1939,6 +1953,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       const { type, value, remarks } = req.body;
+      const validAdjTypes = ['overtime', 'late', 'undertime', 'absent', 'rest_day_ot', 'special_holiday_ot', 'regular_holiday_ot', 'night_diff'];
+      if (type !== undefined && !validAdjTypes.includes(type)) {
+        return res.status(400).json({ message: `Invalid type. Valid types: ${validAdjTypes.join(', ')}` });
+      }
+      if (value !== undefined) {
+        const numVal = parseFloat(value);
+        if (isNaN(numVal) || numVal <= 0) {
+          return res.status(400).json({ message: "Value must be a positive number." });
+        }
+      }
       const updated = await storage.updateAdjustmentLog(id, { type, value, remarks });
       res.json(updated);
     } catch (error: any) {
@@ -2472,7 +2496,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         const parsedStart = new Date(startDate);
+        // Normalize to end-of-day so shifts on the last day are included in all queries
         const parsedEnd = new Date(endDate);
+        parsedEnd.setUTCHours(23, 59, 59, 999);
 
         if (parsedEnd <= parsedStart) {
           return res.status(400).json({ message: "End date must be after start date" });
@@ -2679,7 +2705,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (isNaN(hourlyRate) || hourlyRate <= 0) {
           continue;
         }
-        const payCalculation = calculatePeriodPay(shifts, hourlyRate, periodHolidays, -1, isHolidayExempt); // -1 = no default rest day
+        const payCalculation = calculatePeriodPay(shifts, hourlyRate, periodHolidays, -1, isHolidayExempt, new Date(period.startDate), new Date(period.endDate));
         
         if (runConfig.includeNightDiff === false) {
           payCalculation.totalGrossPay -= payCalculation.nightDiffPay;
@@ -2741,6 +2767,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
           new Date(period.endDate)
         );
 
+        // Dates where the payroll engine already computed OT from actual shift times.
+        // Adjustment-log OT for these dates is skipped to prevent double-counting.
+        const datesWithEngineOT = new Set(
+          payCalculation.breakdown
+            .filter(d => d.overtimeHours > 0)
+            .map(d => new Date(d.date).toDateString())
+        );
+
         let lateDeduction = 0;
         let totalLateMinutes = 0;
         let undertimeDeduction = 0;
@@ -2757,6 +2791,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           const adjValue = parseFloat(adj.value);
           if (isNaN(adjValue) || adjValue <= 0) continue;
+
+          // For OT-type logs, skip dates where the engine already computed OT from shift data
+          const adjDate = adj.startDate ? new Date(adj.startDate).toDateString() : null;
+          const isOTType = ['overtime', 'rest_day_ot', 'special_holiday_ot', 'regular_holiday_ot'].includes(adj.type);
+          if (isOTType && adjDate && datesWithEngineOT.has(adjDate)) continue;
 
           let calcAmount = 0;
 
@@ -3146,6 +3185,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!employee || employee.branchId !== req.user!.branchId) {
         return res.status(403).json({ message: "Not authorized for this branch" });
       }
+      if (existing.userId === req.user!.id && req.user!.role !== 'admin') {
+        return res.status(403).json({ message: "Conflict of interest: You cannot approve your own payroll entry." });
+      }
 
       const entry = await storage.updatePayrollEntry(id, { status: 'approved' });
 
@@ -3184,6 +3226,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const employee = await storage.getUser(existing.userId);
       if (!employee || employee.branchId !== req.user!.branchId) {
         return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+      if (existing.userId === req.user!.id && req.user!.role !== 'admin') {
+        return res.status(403).json({ message: "Conflict of interest: You cannot mark your own payroll as paid." });
       }
 
       const entry = await storage.updatePayrollEntry(id, { status: 'paid', paidAt: new Date() });
@@ -3763,6 +3808,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
       
+      // Prevent duplicate open trades for the same shift
+      const openTrades = await db.select().from(shiftTradesTable).where(
+        and(
+          eq(shiftTradesTable.shiftId, tradeData.shiftId),
+          inArray(shiftTradesTable.status, ['pending', 'open', 'accepted'])
+        )
+      ).limit(1);
+      if (openTrades.length > 0) {
+        return res.status(409).json({ message: "An active trade request already exists for this shift." });
+      }
+
       // If direct trade, prevent requesting if target already has an overlapping shift
       if (tradeData.toUserId) {
         const overlappingShift = await storage.checkShiftOverlap(
@@ -3964,7 +4020,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         updateData.counterShiftId = counterShiftId;
       }
 
-      const updatedTrade = await storage.updateShiftTrade(id, updateData);
+      // Conditional update: only transition if still pending — prevents double-accept race
+      const updated = await db.update(shiftTradesTable)
+        .set(updateData)
+        .where(and(eq(shiftTradesTable.id, id), eq(shiftTradesTable.status, 'pending')))
+        .returning();
+      if (updated.length === 0) {
+        return res.status(409).json({ message: "This trade is no longer pending — it may have already been accepted or cancelled." });
+      }
+      const updatedTrade = updated[0];
 
       // Enrich with shift data
       const shift = await storage.getShift(trade.shiftId);
@@ -4403,6 +4467,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const tradeShift = await storage.getShift(trade.shiftId);
       if (!tradeShift || tradeShift.branchId !== req.user!.branchId) {
         return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+
+      if (trade.status === 'approved' || trade.status === 'rejected') {
+        return res.status(409).json({ message: `This trade has already been ${trade.status} and cannot be changed.` });
       }
 
       const updatedTrade = await storage.updateShiftTrade(id, {
@@ -5185,6 +5253,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       today.setHours(0, 0, 0, 0);
       const startDateOnly = new Date(startDate);
       startDateOnly.setHours(0, 0, 0, 0);
+
+      // Reject past-date requests (before today)
+      if (startDateOnly.getTime() < today.getTime()) {
+        return res.status(400).json({ message: "Leave requests cannot be filed for dates in the past." });
+      }
       const advanceDays = Math.ceil((startDateOnly.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
       // Get policy for this leave type
@@ -5312,6 +5385,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       return res.status(409).json({ message: `Request has already been ${existing.status}` });
     }
 
+    if (existing.userId === req.user!.id) {
+      return res.status(403).json({ message: "Conflict of interest: You cannot approve your own time off request." });
+    }
+
     // Verify the employee belongs to the manager's branch
     const employee = await storage.getUser(existing.userId);
     if (!employee || employee.branchId !== req.user!.branchId) {
@@ -5358,6 +5435,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     const endD = new Date(request.endDate);
     const daysToDeduct = Math.max(1, Math.ceil((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24)) + 1);
     let isPaid = false;
+    let deductionFailed = false;
 
     try {
       const { db } = await import('./db');
@@ -5374,11 +5452,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       if (deductedFrom) {
-        await deductLeaveCredit(request.userId, employee.branchId, deductedFrom, daysToDeduct, startD.getFullYear());
+        const result = await deductLeaveCredit(request.userId, employee.branchId, deductedFrom, daysToDeduct, startD.getFullYear());
         isPaid = true;
+        if (result.warning) {
+          console.warn(`[Leave Deduction] ${result.warning}`);
+        }
       }
     } catch (deductionErr) {
-      console.error('Leave deduction error:', deductionErr);
+      console.error('[Leave Deduction] Failed to deduct leave credits after approval:', deductionErr);
+      deductionFailed = true;
     }
 
     // Mark the request as paid or unpaid based on leavePaymentStatus override
@@ -5386,7 +5468,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     await storage.updateTimeOffRequest(id, { isPaid: finalIsPaid, leavePaymentStatus: paymentStatus } as any);
     // Audit note if marked as AWOL/unpaid
     if (paymentStatus === 'awol') {
-      console.error(`[Time-Off] ${request.userId} marked AWOL for ${request.startDate}–${request.endDate}`);
+      console.warn(`[Time-Off] Leave request marked AWOL for period ${request.startDate}–${request.endDate}`);
     }
 
     // Sync with approvals table
@@ -5433,7 +5515,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       userAgent: req.headers["user-agent"],
     });
 
-    res.json({ request });
+    res.json({
+      request,
+      ...(deductionFailed && { warning: 'Leave approved but leave credit deduction failed — please adjust the balance manually.' }),
+    });
   }));
 
   app.put("/api/time-off-requests/:id/reject", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
@@ -5448,6 +5533,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
     if (existing.status !== 'pending') {
       return res.status(409).json({ message: `Request has already been ${existing.status}` });
+    }
+
+    if (existing.userId === req.user!.id) {
+      return res.status(403).json({ message: "Conflict of interest: You cannot reject your own time off request." });
     }
 
     // Verify the employee belongs to the manager's branch
@@ -5577,6 +5666,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
     if (existing.status !== 'approved') {
       return res.status(400).json({ message: "Can only toggle paid status on approved requests" });
+    }
+
+    if (existing.userId === req.user!.id) {
+      return res.status(403).json({ message: "Conflict of interest: You cannot modify paid status on your own time off request." });
     }
 
     const employee = await storage.getUser(existing.userId);

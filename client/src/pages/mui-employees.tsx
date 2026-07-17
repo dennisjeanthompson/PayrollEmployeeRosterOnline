@@ -512,6 +512,10 @@ export default function MuiEmployees() {
       const action = isActive ? "activated" : "deactivated";
       toast({ title: "Success", description: `${ids.length} employees ${action} successfully` });
     },
+    onError: (error: any) => {
+      invalidateEmployeeQueries();
+      toast({ title: "Bulk update failed", description: error.message || "Some employees may not have been updated. Please refresh and try again.", variant: "destructive" });
+    },
   });
 
   // Handlers

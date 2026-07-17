@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, boolean, timestamp, integer, numeric, serial, json, index } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, integer, numeric, serial, json, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -137,6 +137,7 @@ export const payrollEntries = pgTable("payroll_entries", {
   has13thMonth: boolean("has_13th_month").default(false),
 }, (table) => [
   index("payroll_entries_period_idx").on(table.payrollPeriodId),
+  uniqueIndex("payroll_entries_user_period_unique").on(table.userId, table.payrollPeriodId),
 ]);
 
 export const approvals = pgTable("approvals", {

@@ -6,12 +6,14 @@ import { createAuditLog } from './routes/audit';
 
 const TRADE_EXPIRY_DAYS = 3;
 
+let purgeRunning = false;
+
 export function setupCronJobs() {
 
   // Run the purge job every day at 3:00 AM
   // Since node-cron is not guaranteed to be installed, we use a simple interval
   // that calculates time until 3 AM and then runs daily.
-  
+
   const scheduleNextPurge = () => {
     const now = new Date();
     const next3AM = new Date(now);
@@ -25,18 +27,29 @@ export function setupCronJobs() {
     const timeUntilNext = next3AM.getTime() - now.getTime();
     
     setTimeout(async () => {
-      await runDataPurge();
-      // Schedule the next run after this one completes
-      scheduleNextPurge();
+      try {
+        await runDataPurge();
+      } catch (err) {
+        console.error('[Cron] Data purge failed:', err);
+      } finally {
+        // Always reschedule — an error must never permanently kill the job
+        scheduleNextPurge();
+      }
     }, timeUntilNext);
   };
 
   // Start the scheduling cycle
   scheduleNextPurge();
   
-  // Also run it once on startup if in production just to be safe
+  // Also run once on startup in production — guarded by the same lock
   if (process.env.NODE_ENV === 'production') {
-    setTimeout(runDataPurge, 1000 * 60 * 5); // 5 minutes after startup
+    setTimeout(async () => {
+      try {
+        await runDataPurge();
+      } catch (err) {
+        console.error('[Cron] Startup purge failed:', err);
+      }
+    }, 1000 * 60 * 5);
   }
 }
 
@@ -81,6 +94,11 @@ async function expireOldTrades() {
 }
 
 async function runDataPurge() {
+  if (purgeRunning) {
+    console.warn('[Cron] Purge already running — skipping concurrent execution');
+    return;
+  }
+  purgeRunning = true;
   try {
     const cutoffDate = subDays(new Date(), 90);
 
@@ -101,5 +119,7 @@ async function runDataPurge() {
     await expireOldTrades();
   } catch (err) {
     throw new Error(`Data purge failed: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    purgeRunning = false;
   }
 }

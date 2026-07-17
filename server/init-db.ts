@@ -692,8 +692,11 @@ export async function createAdminAccount() {
     }
 
     // Create admin user
-    const adminPassword = process.env.ADMIN_PASSWORD ?? 'admin123';
-    const hashedPassword = await bcrypt.hash(adminPassword, 10);
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword && process.env.NODE_ENV === 'production') {
+      throw new Error('ADMIN_PASSWORD environment variable must be set in production before the admin account can be created.');
+    }
+    const hashedPassword = await bcrypt.hash(adminPassword ?? 'admin123', 10);
     const adminId = randomUUID();
     
     await db.insert(users).values({

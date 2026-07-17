@@ -5,6 +5,7 @@
 
 import PesoIcon from "@/components/PesoIcon";
 import { useState } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { useQuery } from "@tanstack/react-query";
 import { useRealtime } from "@/hooks/use-realtime";
 import { apiRequest } from "@/lib/queryClient";
@@ -40,6 +41,7 @@ import { format, subMonths } from "date-fns";
 
 export default function MuiReports() {
   const theme = useTheme();
+  const { toast } = useToast();
   const [selectedMonth, setSelectedMonth] = useState(format(new Date(), "yyyy-MM"));
   const [exporting, setExporting] = useState<string | null>(null);
 
@@ -65,20 +67,26 @@ export default function MuiReports() {
   const periods = periodsData?.periods || [];
   const summary = summaryData?.summary;
 
+  // Find the payroll period matching the selected month for the deductions export
+  const selectedPeriodId = periods.find(p => {
+    const d = new Date(p.startDate);
+    return format(d, "yyyy-MM") === selectedMonth;
+  })?.id ?? periods[0]?.id;
+
   const handleExport = async (type: "payroll" | "employees" | "deductions") => {
     setExporting(type);
     try {
       const url = type === "employees"
         ? "/api/reports/employees/export"
-        : type === "deductions" && periods[0]
-          ? `/api/reports/deductions/export?periodId=${periods[0].id}`
+        : type === "deductions" && selectedPeriodId
+          ? `/api/reports/deductions/export?periodId=${selectedPeriodId}`
           : "/api/reports/payroll/export";
 
       const res = await fetch(apiUrl(url), { credentials: "include" });
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ message: "Download failed" }));
-        alert(err.message || "Failed to download CSV");
+        toast({ title: "Export failed", description: err.message || "Failed to download CSV", variant: "destructive" });
         return;
       }
 
@@ -100,7 +108,7 @@ export default function MuiReports() {
       URL.revokeObjectURL(blobUrl);
     } catch (error) {
       console.error("Export error:", error);
-      alert("Failed to download CSV. Please try again.");
+      toast({ title: "Export failed", description: "Failed to download CSV. Please try again.", variant: "destructive" });
     } finally {
       setExporting(null);
     }

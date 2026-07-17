@@ -555,8 +555,8 @@ export default function RequestsPanel({
                           </>
                         )}
 
-                        {/* Requester: cancel own trade */}
-                        {isRequester && (isPending || isAccepted) && (
+                        {/* Requester: cancel own trade — only while still pending (not yet accepted) */}
+                        {isRequester && isPending && (
                           <Button size="small" variant="outlined" color="error" startIcon={<DeleteIcon />}
                             onClick={() => onCancelTrade(trade.id)} sx={{ textTransform: 'none', fontWeight: 600, borderRadius: 2 }}>
                             Cancel

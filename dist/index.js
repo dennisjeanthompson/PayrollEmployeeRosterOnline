@@ -58,6 +58,7 @@ __export(schema_exports, {
   auditLogs: () => auditLogs,
   branches: () => branches,
   companySettings: () => companySettings,
+  createShiftTradeSchema: () => createShiftTradeSchema,
   deMinimisYtd: () => deMinimisYtd,
   deductionRates: () => deductionRates,
   deductionSettings: () => deductionSettings,
@@ -108,10 +109,10 @@ __export(schema_exports, {
   wageOrders: () => wageOrders,
   workerAllowances: () => workerAllowances
 });
-import { pgTable, text, boolean, timestamp, integer, numeric, serial, json, index } from "drizzle-orm/pg-core";
+import { pgTable, text, boolean, timestamp, integer, numeric, serial, json, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
-var session, branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, companySettings, auditLogs, timeOffPolicy, employeeDocuments, adjustmentLogs, adjustmentLogComments, leaveCredits, sssContributionTable, wageOrders, allowanceTypes, workerAllowances, deMinimisYtd, employeeTaxYtd, thirteenthMonthPay, insertBranchSchema, insertUserSchema, insertShiftSchema, insertShiftTradeSchema, insertPayrollPeriodSchema, insertPayrollEntrySchema, insertApprovalSchema, insertTimeOffRequestSchema, insertNotificationSchema, insertDeductionSettingsSchema, insertDeductionRatesSchema, insertHolidaySchema, insertArchivedPayrollPeriodSchema, insertAuditLogSchema, insertTimeOffPolicySchema, insertAdjustmentLogSchema, insertAdjustmentLogCommentSchema, insertLeaveCreditsSchema, insertCompanySettingsSchema, serviceChargePools, insertServiceChargePoolSchema, insertSssContributionTableSchema, insertWageOrderSchema, insertAllowanceTypeSchema, insertWorkerAllowanceSchema, insertDeMinimisYtdSchema, insertEmployeeTaxYtdSchema, insertThirteenthMonthPaySchema;
+var session, branches, users, shifts, shiftTrades, payrollPeriods, payrollEntries, approvals, timeOffRequests, notifications, setupStatus, deductionSettings, deductionRates, holidays, archivedPayrollPeriods, companySettings, auditLogs, timeOffPolicy, employeeDocuments, adjustmentLogs, adjustmentLogComments, leaveCredits, sssContributionTable, wageOrders, allowanceTypes, workerAllowances, deMinimisYtd, employeeTaxYtd, thirteenthMonthPay, insertBranchSchema, insertUserSchema, insertShiftSchema, insertShiftTradeSchema, createShiftTradeSchema, insertPayrollPeriodSchema, insertPayrollEntrySchema, insertApprovalSchema, insertTimeOffRequestSchema, insertNotificationSchema, insertDeductionSettingsSchema, insertDeductionRatesSchema, insertHolidaySchema, insertArchivedPayrollPeriodSchema, insertAuditLogSchema, insertTimeOffPolicySchema, insertAdjustmentLogSchema, insertAdjustmentLogCommentSchema, insertLeaveCreditsSchema, insertCompanySettingsSchema, serviceChargePools, insertServiceChargePoolSchema, insertSssContributionTableSchema, insertWageOrderSchema, insertAllowanceTypeSchema, insertWorkerAllowanceSchema, insertDeMinimisYtdSchema, insertEmployeeTaxYtdSchema, insertThirteenthMonthPaySchema;
 var init_schema = __esm({
   "shared/schema.ts"() {
     "use strict";
@@ -249,7 +250,8 @@ var init_schema = __esm({
       paidAt: timestamp("paid_at"),
       has13thMonth: boolean("has_13th_month").default(false)
     }, (table) => [
-      index("payroll_entries_period_idx").on(table.payrollPeriodId)
+      index("payroll_entries_period_idx").on(table.payrollPeriodId),
+      uniqueIndex("payroll_entries_user_period_unique").on(table.userId, table.payrollPeriodId)
     ]);
     approvals = pgTable("approvals", {
       id: text("id").primaryKey(),
@@ -599,19 +601,27 @@ var init_schema = __esm({
     insertShiftTradeSchema = z.object({
       id: z.string().uuid().optional(),
       shiftId: z.string().uuid(),
-      fromUserId: z.string().min(1).optional(),
-      toUserId: z.string().min(1).optional(),
+      fromUserId: z.string().uuid().optional(),
+      toUserId: z.string().uuid().optional(),
       reason: z.string().min(1, "Reason is required"),
       status: z.enum(["open", "pending", "accepted", "approved", "rejected", "cancelled"]).default("pending"),
       urgency: z.enum(["urgent", "normal", "low"]).default("normal"),
       notes: z.string().optional(),
       requestedAt: z.date().optional(),
       approvedAt: z.date().optional(),
-      approvedBy: z.string().min(1).optional(),
+      approvedBy: z.string().uuid().optional(),
       counterShiftId: z.string().uuid().optional().nullable(),
       expiresAt: z.date().optional().nullable(),
       createdAt: z.date().optional(),
       updatedAt: z.date().optional()
+    });
+    createShiftTradeSchema = z.object({
+      shiftId: z.string().uuid(),
+      toUserId: z.string().uuid().optional(),
+      reason: z.string().min(1, "Reason is required"),
+      urgency: z.enum(["urgent", "normal", "low"]).default("normal"),
+      notes: z.string().optional(),
+      counterShiftId: z.string().uuid().optional().nullable()
     });
     insertPayrollPeriodSchema = createInsertSchema(payrollPeriods).omit({
       id: true,
@@ -724,6 +734,7 @@ var init_schema = __esm({
 import { eq, and, gte, lte, gt, lt, ne, desc, or, sql as sql2, inArray } from "drizzle-orm";
 import { randomUUID } from "crypto";
 import bcrypt from "bcrypt";
+import { addDays } from "date-fns";
 var DatabaseStorage, dbStorage;
 var init_db_storage = __esm({
   "server/db-storage.ts"() {
@@ -1112,11 +1123,13 @@ var init_db_storage = __esm({
           fromUserId: trade.fromUserId,
           toUserId: trade.toUserId || null,
           reason: trade.reason,
-          status: trade.status || "pending",
+          status: "pending",
           urgency: trade.urgency || "normal",
           notes: trade.notes || null,
-          approvedAt: trade.approvedAt || null,
-          approvedBy: trade.approvedBy || null
+          approvedAt: null,
+          approvedBy: null,
+          counterShiftId: trade.counterShiftId ?? null,
+          expiresAt: addDays(/* @__PURE__ */ new Date(), 3)
         });
         const created = await this.getShiftTrade(id);
         if (!created) throw new Error("Failed to create shift trade");
@@ -1137,7 +1150,8 @@ var init_db_storage = __esm({
         }).from(shiftTrades).leftJoin(shifts, eq(shiftTrades.shiftId, shifts.id)).where(
           and(
             eq(shiftTrades.status, "pending"),
-            eq(shifts.branchId, branchId)
+            eq(shifts.branchId, branchId),
+            eq(shifts.isDeleted, false)
           )
         );
         return result.map((r) => r.trade).filter((t) => {
@@ -1164,7 +1178,8 @@ var init_db_storage = __esm({
         }).from(shiftTrades).leftJoin(shifts, eq(shiftTrades.shiftId, shifts.id)).where(
           and(
             inArray(shiftTrades.status, ["pending", "accepted"]),
-            eq(shifts.branchId, branchId)
+            eq(shifts.branchId, branchId),
+            eq(shifts.isDeleted, false)
           )
         );
         return result.map((r) => r.trade).filter((t) => t.toUserId !== null && t.toUserId !== void 0);
@@ -1453,10 +1468,10 @@ var init_db_storage = __esm({
         const values = {
           id,
           branchId: insertSettings.branchId,
-          deductSSS: insertSettings.deductSSS ?? null,
-          deductPhilHealth: insertSettings.deductPhilHealth ?? null,
-          deductPagibig: insertSettings.deductPagibig ?? null,
-          deductWithholdingTax: insertSettings.deductWithholdingTax ?? null,
+          deductSSS: insertSettings.deductSSS ?? true,
+          deductPhilHealth: insertSettings.deductPhilHealth ?? true,
+          deductPagibig: insertSettings.deductPagibig ?? true,
+          deductWithholdingTax: insertSettings.deductWithholdingTax ?? true,
           createdAt: now,
           updatedAt: now
         };
@@ -2126,17 +2141,19 @@ var init_storage = __esm({
       async createShiftTrade(insertTrade) {
         const id = randomUUID2();
         const trade = {
-          ...insertTrade,
           id,
+          shiftId: insertTrade.shiftId,
           fromUserId: insertTrade.fromUserId,
           toUserId: insertTrade.toUserId || null,
           reason: insertTrade.reason || "",
           requestedAt: /* @__PURE__ */ new Date(),
           approvedAt: null,
-          status: insertTrade.status || "pending",
+          status: "pending",
           urgency: insertTrade.urgency || "normal",
           notes: insertTrade.notes || null,
-          approvedBy: insertTrade.approvedBy || null,
+          approvedBy: null,
+          counterShiftId: insertTrade.counterShiftId ?? null,
+          expiresAt: insertTrade.expiresAt ?? null,
           passedByUserIds: []
         };
         this.shiftTrades.set(id, trade);
@@ -2942,7 +2959,10 @@ async function deductLeaveCredit(userId, branchId, leaveType, daysToDeduct, year
     }
     const current = existing[0];
     const used = parseFloat(current.usedCredits || "0");
-    const remaining = parseFloat(current.remainingCredits);
+    const remaining = parseFloat(current.remainingCredits || "0");
+    if (isNaN(remaining)) {
+      throw new Error(`Corrupted leave balance for user ${userId}: remainingCredits is not a number.`);
+    }
     const newUsed = used + daysToDeduct;
     const newRemaining = Math.max(0, remaining - daysToDeduct);
     await db.update(leaveCredits).set({
@@ -2953,8 +2973,8 @@ async function deductLeaveCredit(userId, branchId, leaveType, daysToDeduct, year
     const warning = daysToDeduct > remaining ? `Leave exceeded balance by ${(daysToDeduct - remaining).toFixed(1)} days. Balance is now negative.` : void 0;
     return { success: true, warning };
   } catch (error) {
-    console.error("Leave credit deduction failed (non-blocking):", error);
-    return { success: true, warning: "Leave credit deduction could not be recorded." };
+    console.error("Leave credit deduction failed:", error);
+    throw error;
   }
 }
 async function restoreLeaveCredit(userId, leaveType, daysToRestore, year) {
@@ -2982,7 +3002,7 @@ async function restoreLeaveCredit(userId, leaveType, daysToRestore, year) {
     const current = existing[0];
     const total = parseFloat(current.totalCredits || "0");
     const used = parseFloat(current.usedCredits || "0");
-    let remaining = parseFloat(current.remainingCredits);
+    let remaining = parseFloat(current.remainingCredits || "0");
     const newUsed = Math.max(0, used - daysToRestore);
     let newRemaining = remaining + daysToRestore;
     let overflow = 0;
@@ -3168,6 +3188,12 @@ var init_leave_credits = __esm({
         const { totalCredits, usedCredits, notes } = req.body;
         const total = totalCredits !== void 0 ? parseFloat(totalCredits) : parseFloat(existing[0].totalCredits);
         const used = usedCredits !== void 0 ? parseFloat(usedCredits) : parseFloat(existing[0].usedCredits || "0");
+        if (isNaN(total) || total < 0 || total > 365) {
+          return res.status(400).json({ message: "totalCredits must be a number between 0 and 365" });
+        }
+        if (isNaN(used) || used < 0 || used > total) {
+          return res.status(400).json({ message: "usedCredits must be a number between 0 and totalCredits" });
+        }
         const remaining = Math.max(0, total - used);
         await db.update(leaveCredits).set({
           totalCredits: total.toFixed(2),
@@ -3243,17 +3269,21 @@ function isRestDay(date, restDay = -1) {
   if (restDay < 0 || restDay > 6) return false;
   return date.getDay() === restDay;
 }
-function calculateDailyHoursBreakdown(shifts2, holidays2, restDay = -1) {
+function calculateDailyHoursBreakdown(shifts2, holidays2, restDay = -1, periodStart, periodEnd) {
   const dailyBreakdown = /* @__PURE__ */ new Map();
   for (const shift of shifts2) {
     const startTime = new Date(shift.actualStartTime || shift.startTime);
     const endTime = new Date(shift.actualEndTime || shift.endTime);
     const segments = splitCrossMidnightShift(startTime, endTime);
     for (const segment of segments) {
-      const dateKey = toLocalDateString(segment.date);
-      const segmentHours = calculateSegmentHours(segment.start, segment.end);
-      const holidayType = getHolidayType(segment.date, holidays2);
-      const isRest = isRestDay(segment.date, restDay);
+      const clippedStart = periodStart && segment.start < periodStart ? periodStart : segment.start;
+      const clippedEnd = periodEnd && segment.end > periodEnd ? periodEnd : segment.end;
+      if (clippedStart >= clippedEnd) continue;
+      const clippedSegment = { ...segment, start: clippedStart, end: clippedEnd };
+      const dateKey = toLocalDateString(clippedSegment.date);
+      const segmentHours = calculateSegmentHours(clippedSegment.start, clippedSegment.end);
+      const holidayType = getHolidayType(clippedSegment.date, holidays2);
+      const isRest = isRestDay(clippedSegment.date, restDay);
       if (!dailyBreakdown.has(dateKey)) {
         dailyBreakdown.set(dateKey, {
           regularHours: 0,
@@ -3262,32 +3292,32 @@ function calculateDailyHoursBreakdown(shifts2, holidays2, restDay = -1) {
           overtimeNightDiffHours: 0,
           holidayType,
           isRestDay: isRest,
-          date: segment.date
+          date: clippedSegment.date
         });
       }
       const existing = dailyBreakdown.get(dateKey);
       const currentTotalHours = existing.regularHours + existing.overtimeHours;
       if (currentTotalHours >= DAILY_REGULAR_HOURS) {
         existing.overtimeHours += segmentHours;
-        existing.overtimeNightDiffHours += calculateNightDiffHours(segment.start, segment.end);
+        existing.overtimeNightDiffHours += calculateNightDiffHours(clippedSegment.start, clippedSegment.end);
       } else if (currentTotalHours + segmentHours > DAILY_REGULAR_HOURS) {
         const remainingRegular = DAILY_REGULAR_HOURS - currentTotalHours;
-        const boundaryMs = segment.start.getTime() + remainingRegular * 60 * 60 * 1e3;
+        const boundaryMs = clippedSegment.start.getTime() + remainingRegular * 60 * 60 * 1e3;
         const boundaryDate = new Date(boundaryMs);
         existing.regularHours += remainingRegular;
         existing.overtimeHours += segmentHours - remainingRegular;
-        existing.regularNightDiffHours += calculateNightDiffHours(segment.start, boundaryDate);
-        existing.overtimeNightDiffHours += calculateNightDiffHours(boundaryDate, segment.end);
+        existing.regularNightDiffHours += calculateNightDiffHours(clippedSegment.start, boundaryDate);
+        existing.overtimeNightDiffHours += calculateNightDiffHours(boundaryDate, clippedSegment.end);
       } else {
         existing.regularHours += segmentHours;
-        existing.regularNightDiffHours += calculateNightDiffHours(segment.start, segment.end);
+        existing.regularNightDiffHours += calculateNightDiffHours(clippedSegment.start, clippedSegment.end);
       }
     }
   }
   return dailyBreakdown;
 }
-function calculatePeriodPay(shifts2, hourlyRate, holidays2, restDay = -1, isHolidayExempt = false) {
-  const dailyBreakdown = calculateDailyHoursBreakdown(shifts2, holidays2, restDay);
+function calculatePeriodPay(shifts2, hourlyRate, holidays2, restDay = -1, isHolidayExempt = false, periodStart, periodEnd) {
+  const dailyBreakdown = calculateDailyHoursBreakdown(shifts2, holidays2, restDay, periodStart, periodEnd);
   let basicPay = 0;
   let overtimePay = 0;
   let holidayPay = 0;
@@ -3753,34 +3783,40 @@ __export(deductions_exports, {
   calculatePagibig: () => calculatePagibig,
   calculatePhilHealth: () => calculatePhilHealth,
   calculateSSS: () => calculateSSS,
+  calculateSSSEmployerShare: () => calculateSSSEmployerShare,
   calculateWithholdingTax: () => calculateWithholdingTax
 });
 import { eq as eq3, desc as desc3 } from "drizzle-orm";
+async function fetchSSSBrackets() {
+  const latestBrackets = await db.select().from(sssContributionTable).orderBy(desc3(sssContributionTable.year)).limit(1);
+  const activeYear = latestBrackets.length > 0 ? latestBrackets[0].year : (/* @__PURE__ */ new Date()).getFullYear();
+  const brackets = await db.select().from(sssContributionTable).where(eq3(sssContributionTable.year, activeYear));
+  return [...brackets].sort((a, b) => parseFloat(a.minCompensation) - parseFloat(b.minCompensation));
+}
+function lookupSSS(sorted, salary, field) {
+  for (const b of sorted) {
+    const min = parseFloat(b.minCompensation);
+    const max = b.maxCompensation != null ? parseFloat(b.maxCompensation) : Infinity;
+    if (salary >= min && salary <= max) return parseFloat(b[field]);
+  }
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (salary >= parseFloat(sorted[i].minCompensation)) return parseFloat(sorted[i][field]);
+  }
+  return 0;
+}
 async function calculateSSS(monthlyBasicSalary) {
   try {
-    const latestBrackets = await db.select().from(sssContributionTable).orderBy(desc3(sssContributionTable.year)).limit(1);
-    const activeYear = latestBrackets.length > 0 ? latestBrackets[0].year : (/* @__PURE__ */ new Date()).getFullYear();
-    const brackets = await db.select().from(sssContributionTable).where(eq3(sssContributionTable.year, activeYear));
-    const sorted = [...brackets].sort((a, b) => parseFloat(a.minCompensation) - parseFloat(b.minCompensation));
-    for (const b of sorted) {
-      if (monthlyBasicSalary >= parseFloat(b.minCompensation) && monthlyBasicSalary <= parseFloat(b.maxCompensation)) {
-        return parseFloat(b.employeeShare);
-      }
-    }
-    if (sorted.length > 0) {
-      const highest = sorted[sorted.length - 1];
-      if (monthlyBasicSalary > parseFloat(highest.maxCompensation)) {
-        return parseFloat(highest.employeeShare);
-      }
-      for (let i = sorted.length - 1; i >= 0; i--) {
-        if (monthlyBasicSalary >= parseFloat(sorted[i].minCompensation)) {
-          return parseFloat(sorted[i].employeeShare);
-        }
-      }
-    }
-    return 0;
+    return lookupSSS(await fetchSSSBrackets(), monthlyBasicSalary, "employeeShare");
   } catch (error) {
     console.error("Error calculating SSS:", error);
+    return 0;
+  }
+}
+async function calculateSSSEmployerShare(monthlyBasicSalary) {
+  try {
+    return lookupSSS(await fetchSSSBrackets(), monthlyBasicSalary, "employerShare");
+  } catch (error) {
+    console.error("Error calculating SSS employer share:", error);
     return 0;
   }
 }
@@ -4681,6 +4717,9 @@ function createEmployeeRouter(realTimeManager) {
           return res.status(400).json({ message: `Invalid role. Allowed: ${allowedRoles.join(", ")}` });
         }
       }
+      if (updates.branchId !== void 0 && updates.branchId !== existingEmployee.branchId && req.session.user?.role !== "admin") {
+        return res.status(403).json({ message: "Only admins can move employees between branches" });
+      }
       if (updates.hourlyRate !== void 0) {
         const rate = parseFloat(String(updates.hourlyRate));
         if (isNaN(rate) || rate <= 0) {
@@ -4728,6 +4767,14 @@ function createEmployeeRouter(realTimeManager) {
       }
       if (existingEmployee.role === "admin" && req.session.user?.role !== "admin") {
         return res.status(403).json({ message: "Only admins can modify admin deductions" });
+      }
+      for (const [field, val] of [["sssLoanDeduction", sssLoanDeduction], ["pagibigLoanDeduction", pagibigLoanDeduction], ["otherDeductions", otherDeductions]]) {
+        if (val !== void 0) {
+          const num = parseFloat(val);
+          if (isNaN(num) || num < 0) {
+            return res.status(400).json({ message: `${field} must be a non-negative number` });
+          }
+        }
       }
       const updatedEmployee = await storage.updateUser(id, {
         sssLoanDeduction: sssLoanDeduction !== void 0 ? String(sssLoanDeduction) : existingEmployee.sssLoanDeduction,
@@ -5035,28 +5082,6 @@ function formatPayPeriod(start, end) {
   const startStr = startDate.toLocaleDateString("en-PH", { month: "short", day: "numeric" });
   const endStr = endDate.toLocaleDateString("en-PH", { month: "short", day: "numeric", year: "numeric" });
   return `${startStr} - ${endStr}`;
-}
-function validatePayslipData(data) {
-  const errors = [];
-  if (!data.payslip_id) errors.push("Payslip ID is required");
-  if (!data.company?.name) errors.push("Company name is required");
-  if (!data.employee?.name) errors.push("Employee name is required");
-  if (!data.pay_period?.start || !data.pay_period?.end) errors.push("Pay period is required");
-  if (data.gross < 0) errors.push("Gross pay cannot be negative");
-  if (data.total_deductions < 0) errors.push("Total deductions cannot be negative");
-  const calculatedNet = data.gross - data.total_deductions;
-  if (Math.abs(calculatedNet - data.net_pay) > 1) {
-    errors.push(`Net pay mismatch: expected ${calculatedNet.toFixed(2)}, got ${data.net_pay.toFixed(2)}`);
-  }
-  const earningsTotal = data.earnings.reduce((sum, e) => sum + e.amount, 0);
-  if (data.earnings.length > 0 && Math.abs(earningsTotal - data.gross) > 1) {
-    errors.push(`Earnings total mismatch: expected ${data.gross.toFixed(2)}, got ${earningsTotal.toFixed(2)}`);
-  }
-  const deductionsTotal = data.deductions.reduce((sum, d) => sum + d.amount, 0);
-  if (data.deductions.length > 0 && Math.abs(deductionsTotal - data.total_deductions) > 1) {
-    errors.push(`Deductions total mismatch: expected ${data.total_deductions.toFixed(2)}, got ${deductionsTotal.toFixed(2)}`);
-  }
-  return { valid: errors.length === 0, errors };
 }
 var SAMPLE_PAYSLIP_DATA = {
   payslip_id: "PS-2026-000123",
@@ -5694,6 +5719,9 @@ router4.get("/entry/:entryId", requireAuth5, async (req, res) => {
     if (currentUser.role === "employee" && entry.userId !== currentUser.id) {
       return res.status(403).json({ success: false, error: "Access denied. You can only view your own payslips." });
     }
+    if (currentUser.role === "manager" && employee.branchId !== currentUser.branchId) {
+      return res.status(403).json({ success: false, error: "Access denied. Employee is not in your branch." });
+    }
     const period = await storage4.getPayrollPeriod(entry.payrollPeriodId);
     if (!period) {
       return res.status(404).json({ success: false, error: "Payroll period not found" });
@@ -5923,35 +5951,123 @@ router4.get("/audit-log", requireManagerOrAdmin2, async (req, res) => {
 });
 router4.post("/generate-pdf", requireAuth5, async (req, res) => {
   try {
-    const { payslip_data, format: format4 = "pdf", include_qr = true } = req.body;
-    if (!payslip_data) {
-      return res.status(400).json({
-        success: false,
-        error: "payslip_data is required"
-      });
+    const { entryId, format: format4 = "pdf", include_qr = true } = req.body;
+    if (!entryId) {
+      return res.status(400).json({ success: false, error: "entryId is required" });
     }
-    const data = payslip_data;
-    const validation = validatePayslipData(data);
-    if (!validation.valid) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid payslip data",
-        validation_errors: validation.errors
-      });
+    const currentUser = req.session.user;
+    const entry = await storage4.getPayrollEntry(entryId);
+    if (!entry) {
+      return res.status(404).json({ success: false, error: "Payroll entry not found" });
     }
+    const employee = await storage4.getUser(entry.userId);
+    if (!employee) {
+      return res.status(404).json({ success: false, error: "Employee not found" });
+    }
+    if (currentUser.role === "employee" && entry.userId !== currentUser.id) {
+      return res.status(403).json({ success: false, error: "Access denied. You can only generate your own payslip." });
+    }
+    if (currentUser.role === "manager" && employee.branchId !== currentUser.branchId) {
+      return res.status(403).json({ success: false, error: "Access denied. Employee is not in your branch." });
+    }
+    const period = await storage4.getPayrollPeriod(entry.payrollPeriodId);
+    if (!period) {
+      return res.status(404).json({ success: false, error: "Payroll period not found" });
+    }
+    const deductionRates2 = await storage4.getAllDeductionRates();
+    const ratesEffectiveFrom = deductionRates2.length > 0 && deductionRates2[0].createdAt ? toLocalDateString(deductionRates2[0].createdAt) : "2025-01-01";
+    let payBreakdown = {};
+    if (entry.payBreakdown) {
+      try {
+        payBreakdown = JSON.parse(entry.payBreakdown);
+      } catch {
+      }
+    }
+    const payslipId = `DM-${(/* @__PURE__ */ new Date()).getFullYear()}${String((/* @__PURE__ */ new Date()).getMonth() + 1).padStart(2, "0")}${String((/* @__PURE__ */ new Date()).getDate()).padStart(2, "0")}-${entryId.substring(0, 6).toUpperCase()}`;
     const timestamp2 = Date.now();
-    const hash = generatePayslipHash(data.payslip_id, data.employee.id, timestamp2);
-    data.verification_code = hash;
-    data.generated_at = (/* @__PURE__ */ new Date()).toISOString();
-    verificationRecords.set(data.payslip_id, {
-      payslip_id: data.payslip_id,
-      employee_id: data.employee.id,
+    const hash = generatePayslipHash(payslipId, employee.id, timestamp2);
+    const basicPay = parseFloat(String(entry.basicPay || entry.grossPay || 0));
+    const overtimePay = parseFloat(String(entry.overtimePay || 0));
+    const nightDiffPay = parseFloat(String(entry.nightDiffPay || 0));
+    const holidayPay = parseFloat(String(entry.holidayPay || 0));
+    const restDayPay = parseFloat(String(entry.restDayPay || 0));
+    const serviceChargePay = parseFloat(String(entry.serviceCharge || 0));
+    const sssContrib = parseFloat(String(entry.sssContribution || 0));
+    const sssLoan = parseFloat(String(entry.sssLoan || 0));
+    const philHealth = parseFloat(String(entry.philHealthContribution || 0));
+    const pagibig = parseFloat(String(entry.pagibigContribution || 0));
+    const pagibigLoan = parseFloat(String(entry.pagibigLoan || 0));
+    const tax = parseFloat(String(entry.withholdingTax || 0));
+    const otherDed = parseFloat(String(entry.otherDeductions || 0));
+    const otMultiplierUsed = payBreakdown?.overtimeMultiplier ? Math.round(payBreakdown.overtimeMultiplier * 100) : 125;
+    const earnings = [];
+    if (basicPay > 0) earnings.push({ code: "BASIC", label: "Basic Salary", hours: parseFloat(String(entry.regularHours || 0)), rate: parseFloat(String(employee.hourlyRate || 0)), amount: basicPay });
+    earnings.push({ code: "OT", label: `Overtime Pay (${otMultiplierUsed}%)`, hours: parseFloat(String(entry.overtimeHours || 0)), amount: overtimePay, is_overtime: true, multiplier: otMultiplierUsed });
+    if (nightDiffPay > 0) earnings.push({ code: "ND", label: "Night Differential (10%)", hours: parseFloat(String(entry.nightDiffHours || 0)), amount: nightDiffPay });
+    earnings.push({ code: "HOL", label: "Holiday Pay", amount: holidayPay });
+    if (restDayPay > 0) earnings.push({ code: "RD", label: "Rest Day Premium", amount: restDayPay });
+    if (serviceChargePay > 0) earnings.push({ code: "SC", label: "Service Charge (RA 11360)", amount: serviceChargePay });
+    const deductions = [];
+    if (sssContrib > 0) deductions.push({ code: "SSS_EE", label: "SSS (Employee)", amount: sssContrib });
+    if (sssLoan > 0) deductions.push({ code: "SSS_LOAN", label: "SSS Loan", amount: sssLoan, is_loan: true });
+    if (philHealth > 0) deductions.push({ code: "PH_EE", label: "PhilHealth (Employee)", amount: philHealth });
+    if (pagibig > 0) deductions.push({ code: "PB_EE", label: "Pag-IBIG (Employee)", amount: pagibig });
+    if (pagibigLoan > 0) deductions.push({ code: "PB_LOAN", label: "Pag-IBIG Loan", amount: pagibigLoan, is_loan: true });
+    if (tax > 0) deductions.push({ code: "WHT", label: "Withholding Tax", amount: tax });
+    if (otherDed > 0) deductions.push({ code: "OTHER", label: "Other Deductions", amount: otherDed });
+    const employerContributions = [
+      { code: "SSS_ER", label: "SSS (Employer Share)", amount: Math.round(sssContrib * 2 * 100) / 100 },
+      { code: "PH_ER", label: "PhilHealth (Employer Share)", amount: philHealth },
+      { code: "PB_ER", label: "Pag-IBIG (Employer Share)", amount: pagibig }
+    ].filter((c) => c.amount > 0);
+    const companyInfo = await getCompanyInfo();
+    const companyDbSettings = await storage4.getCompanySettings();
+    const data = {
+      payslip_id: payslipId,
+      company: companyInfo,
+      employee: {
+        id: `DM-EMP-${employee.id.substring(0, 6).toUpperCase()}`,
+        name: `${employee.firstName} ${employee.lastName}`,
+        position: employee.position,
+        department: "Operations",
+        tin: employee.tin ? `XXX-XXX-${employee.tin.slice(-4)}` : "\u2014",
+        sss: employee.sssNumber ? `XX-XXXX${employee.sssNumber.slice(-4)}` : "\u2014",
+        philhealth: employee.philhealthNumber ? `XX-XXXXXX${employee.philhealthNumber.slice(-4)}` : "\u2014",
+        pagibig: employee.pagibigNumber ? `XXXX-XXXX-${employee.pagibigNumber.slice(-4)}` : "\u2014",
+        is_mwe: employee.isMwe || false
+      },
+      pay_period: {
+        start: toLocalDateString(period.startDate),
+        end: toLocalDateString(period.endDate),
+        payment_date: entry.paidAt ? toLocalDateString(new Date(entry.paidAt)) : getPaymentDateString(period.endDate),
+        frequency: "semi-monthly"
+      },
+      earnings,
+      deductions,
+      gross: parseFloat(String(entry.grossPay || 0)),
+      total_deductions: parseFloat(String(entry.totalDeductions || entry.deductions || 0)),
+      net_pay: parseFloat(String(entry.netPay || 0)),
+      ytd: { gross: 0, deductions: 0, net: 0 },
+      employer_contributions: employerContributions,
+      payment_method: {
+        type: companyDbSettings?.paymentMethod || "Bank Transfer",
+        bank: companyDbSettings?.bankName || "",
+        account_last4: companyDbSettings?.bankAccountNo ? "****" + companyDbSettings.bankAccountNo.slice(-4) : "****"
+      },
+      verification_code: hash,
+      generated_at: (/* @__PURE__ */ new Date()).toISOString(),
+      rates_effective_from: ratesEffectiveFrom,
+      tamper_hash: `sha256:${hash}`
+    };
+    verificationRecords.set(payslipId, {
+      payslip_id: payslipId,
+      employee_id: employee.id,
       timestamp: timestamp2,
       hash,
-      employee_name: data.employee.name,
-      pay_period: `${data.pay_period.start} - ${data.pay_period.end}`,
-      net_pay: data.net_pay,
-      payment_date: data.pay_period.payment_date
+      employee_name: `${employee.firstName} ${employee.lastName}`,
+      pay_period: `${toLocalDateString(period.startDate)} - ${toLocalDateString(period.endDate)}`,
+      net_pay: parseFloat(String(entry.netPay || 0)),
+      payment_date: toLocalDateString(/* @__PURE__ */ new Date())
     });
     const pdfBytes = await generatePayslipPDF(data, {
       includeQR: include_qr,
@@ -5961,14 +6077,14 @@ router4.post("/generate-pdf", requireAuth5, async (req, res) => {
     if (format4 === "json") {
       return res.json({
         success: true,
-        payslip_id: data.payslip_id,
+        payslip_id: payslipId,
         verification_code: hash,
-        verification_url: `${req.protocol}://${req.get("host")}/api/payslips/verify?payslip_id=${data.payslip_id}&hash=${hash}`,
+        verification_url: `${req.protocol}://${req.get("host")}/api/payslips/verify?payslip_id=${payslipId}&hash=${hash}`,
         data
       });
     }
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${data.payslip_id}.pdf"`);
+    res.setHeader("Content-Disposition", `attachment; filename="${payslipId}.pdf"`);
     res.setHeader("Content-Length", pdfBytes.length);
     res.send(Buffer.from(pdfBytes));
   } catch (error) {
@@ -6778,7 +6894,7 @@ import {
   endOfWeek as endOfWeek2,
   startOfDay as startOfDay2,
   endOfDay as endOfDay2,
-  addDays,
+  addDays as addDays2,
   getDay,
   differenceInMinutes,
   parseISO,
@@ -6856,7 +6972,7 @@ function getHoliday(date) {
 }
 async function getUpcomingHolidaysFromDB(days) {
   const today = startOfDay2(/* @__PURE__ */ new Date());
-  const endDate = addDays(today, days);
+  const endDate = addDays2(today, days);
   try {
     const holidays2 = await dbStorage.getHolidays(today, endDate);
     return holidays2.map((h) => ({
@@ -6894,7 +7010,7 @@ router7.get("/api/analytics/trends", requireAuth8, requireManagerRole3, async (r
     const userMap = new Map(branchUsers.map((u) => [u.id, u]));
     const dbHolidays = await dbStorage.getHolidays(startDate, endDate);
     const dailyData = {};
-    for (let d = startDate; d <= endDate; d = addDays(d, 1)) {
+    for (let d = startDate; d <= endDate; d = addDays2(d, 1)) {
       const dateKey = format2(d, "yyyy-MM-dd");
       dailyData[dateKey] = { hours: 0, cost: 0, shifts: 0, date: dateKey };
     }
@@ -6996,7 +7112,7 @@ router7.get("/api/forecast/labor", requireAuth8, requireManagerRole3, async (req
     const forecastDays = Math.min(parseInt(days) || 14, 30);
     const today = startOfDay2(/* @__PURE__ */ new Date());
     const historyStart = subWeeks(today, 8);
-    const futureEnd = addDays(today, forecastDays);
+    const futureEnd = addDays2(today, forecastDays);
     const allShifts = await dbStorage.getShiftsByBranch(branchId, historyStart, futureEnd);
     const historicalShifts = allShifts.filter((s) => {
       const d = new Date(s.startTime);
@@ -7039,7 +7155,7 @@ router7.get("/api/forecast/labor", requireAuth8, requireManagerRole3, async (req
     }
     const forecasts = [];
     for (let i = 0; i < forecastDays; i++) {
-      const forecastDate = addDays(today, i);
+      const forecastDate = addDays2(today, i);
       const dow = getDay(forecastDate);
       const holiday = await getHolidayFromDB(forecastDate, dbHolidays);
       let predicted = dowAverages[dow].avg;
@@ -7081,7 +7197,7 @@ router7.get("/api/forecast/payroll", requireAuth8, requireManagerRole3, async (r
     const forecastDays = Math.min(parseInt(days) || 14, 30);
     const today = startOfDay2(/* @__PURE__ */ new Date());
     const historyStart = subWeeks(today, 8);
-    const futureEnd = addDays(today, forecastDays);
+    const futureEnd = addDays2(today, forecastDays);
     const allShifts = await dbStorage.getShiftsByBranch(branchId, historyStart, futureEnd);
     const employees = await dbStorage.getUsersByBranch(branchId);
     const rateMap = {};
@@ -7130,7 +7246,7 @@ router7.get("/api/forecast/payroll", requireAuth8, requireManagerRole3, async (r
     const forecasts = [];
     let totalPredicted = 0;
     for (let i = 0; i < forecastDays; i++) {
-      const forecastDate = addDays(today, i);
+      const forecastDate = addDays2(today, i);
       const dow = getDay(forecastDate);
       const holiday = await getHolidayFromDB(forecastDate, dbHolidays);
       let predicted = dowAverages[dow];
@@ -7216,7 +7332,7 @@ router7.get("/api/forecast/peaks", requireAuth8, requireManagerRole3, async (req
     const upcomingPeaks = [];
     const upcomingHolidays = await getUpcomingHolidaysFromDB(forecastDays);
     for (let i = 0; i < forecastDays; i++) {
-      const forecastDate = addDays(today, i);
+      const forecastDate = addDays2(today, i);
       const dow = getDay(forecastDate);
       const dayData = dowAverages.find((d) => d.dayOfWeekNum === dow);
       const forecastDateStr = format2(forecastDate, "yyyy-MM-dd");
@@ -7249,7 +7365,7 @@ router7.get("/api/forecast/staffing", requireAuth8, requireManagerRole3, async (
     const forecastDays = Math.min(parseInt(days) || 14, 30);
     const today = startOfDay2(/* @__PURE__ */ new Date());
     const historyStart = subWeeks(today, 8);
-    const futureEnd = addDays(today, forecastDays);
+    const futureEnd = addDays2(today, forecastDays);
     const allShifts = await dbStorage.getShiftsByBranch(branchId, historyStart, futureEnd);
     const futureShifts = allShifts.filter((s) => {
       const d = new Date(s.startTime);
@@ -7275,7 +7391,7 @@ router7.get("/api/forecast/staffing", requireAuth8, requireManagerRole3, async (
     const avgShiftsPerDay = Object.values(dailyShiftCounts).length > 0 ? Object.values(dailyShiftCounts).reduce((a, b) => a + b, 0) / Object.values(dailyShiftCounts).length : 3;
     const alerts = [];
     for (let i = 0; i < forecastDays; i++) {
-      const checkDate = addDays(today, i);
+      const checkDate = addDays2(today, i);
       const dateStr = format2(checkDate, "yyyy-MM-dd");
       const scheduledShifts = futureShifts.filter(
         (s) => isSameDay(new Date(s.startTime), checkDate)
@@ -7826,7 +7942,7 @@ var holidays_default = router9;
 init_db();
 init_schema();
 import { Router as Router11 } from "express";
-import { eq as eq4 } from "drizzle-orm";
+import { eq as eq4, and as and3 } from "drizzle-orm";
 import crypto2 from "crypto";
 var router10 = Router11();
 var canManageEmployeeData = async (sessionUser, targetUserId) => {
@@ -7913,32 +8029,37 @@ router10.delete("/:id/documents/:docId", async (req, res) => {
     return res.status(403).json({ error: "Not authorized to delete documents for this user" });
   }
   try {
-    await db.delete(employeeDocuments).where(eq4(employeeDocuments.id, docId));
+    const deleted = await db.delete(employeeDocuments).where(and3(eq4(employeeDocuments.id, docId), eq4(employeeDocuments.userId, id))).returning({ id: employeeDocuments.id });
+    if (deleted.length === 0) {
+      return res.status(404).json({ error: "Document not found for this employee" });
+    }
     res.json({ success: true, id: docId });
   } catch (error) {
     console.error("Error deleting employee document:", error);
     res.status(500).json({ error: "Failed to delete employee document" });
   }
 });
-router10.get("/upload-signature", (req, res) => {
+router10.get("/upload-signature", async (req, res) => {
   try {
     const { public_id, folder } = req.query;
-    console.log("\u{1F4DD} [GET /upload-signature] Request received", { public_id, folder });
     if (!public_id || !folder) {
-      console.warn("\u274C [GET /upload-signature] Missing params");
       return res.status(400).json({ error: "Missing required parameters" });
+    }
+    const sessionUser = req.session.user;
+    if (!sessionUser) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+    if (sessionUser.role === "employee") {
+      const expectedPublicId = `emp-${sessionUser.id}`;
+      if (public_id !== expectedPublicId) {
+        return res.status(403).json({ error: "You may only upload to your own profile." });
+      }
     }
     const timestamp2 = Math.round((/* @__PURE__ */ new Date()).getTime() / 1e3);
     const apiSecret = process.env.CLOUDINARY_API_SECRET;
     const apiKey = process.env.CLOUDINARY_API_KEY;
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
-    console.log("   Env Check:", {
-      hasSecret: !!apiSecret,
-      hasKey: !!apiKey,
-      hasCloud: !!cloudName
-    });
     if (!apiSecret || !apiKey || !cloudName) {
-      console.error("\u274C [GET /upload-signature] Missing Cloudinary config");
       return res.status(500).json({ error: "Cloudinary configuration missing on server" });
     }
     const params = {
@@ -7948,7 +8069,6 @@ router10.get("/upload-signature", (req, res) => {
     };
     const signatureString = Object.keys(params).sort().map((key) => `${key}=${params[key]}`).join("&") + apiSecret;
     const signature = crypto2.createHash("sha1").update(signatureString).digest("hex");
-    console.log("\u2705 [GET /upload-signature] Signature generated successfully");
     res.json({
       signature,
       timestamp: timestamp2,
@@ -7956,14 +8076,13 @@ router10.get("/upload-signature", (req, res) => {
       cloudName
     });
   } catch (error) {
-    console.error("\u274C [GET /upload-signature] Error:", error);
     res.status(500).json({ error: error.message || "Failed to generate upload signature" });
   }
 });
 router10.patch("/:id/photo", async (req, res) => {
   const { id } = req.params;
   const sessionUser = req.session.user;
-  if (sessionUser.id !== id && sessionUser.role !== "manager" && sessionUser.role !== "admin") {
+  if (!await canManageEmployeeData(sessionUser, id)) {
     return res.status(403).json({ error: "Not authorized to update this photo" });
   }
   const { photoUrl, photoPublicId } = req.body;
@@ -7984,7 +8103,7 @@ router10.patch("/:id/photo", async (req, res) => {
 router10.delete("/:id/photo", async (req, res) => {
   const { id } = req.params;
   const sessionUser = req.session.user;
-  if (sessionUser.id !== id && sessionUser.role !== "manager" && sessionUser.role !== "admin") {
+  if (!await canManageEmployeeData(sessionUser, id)) {
     return res.status(403).json({ error: "Not authorized to delete this photo" });
   }
   try {
@@ -8004,7 +8123,7 @@ var employee_uploads_default = router10;
 init_leave_credits();
 init_db();
 init_schema();
-import { eq as eq6 } from "drizzle-orm";
+import { eq as eq6, and as and4, inArray as inArray2 } from "drizzle-orm";
 
 // server/init-db.ts
 init_db();
@@ -8626,7 +8745,11 @@ async function createAdminAccount() {
     } else {
       mainBranchId = existingBranches[0].id;
     }
-    const hashedPassword = await bcrypt2.hash("admin123", 10);
+    const adminPassword = process.env.ADMIN_PASSWORD;
+    if (!adminPassword && process.env.NODE_ENV === "production") {
+      throw new Error("ADMIN_PASSWORD environment variable must be set in production before the admin account can be created.");
+    }
+    const hashedPassword = await bcrypt2.hash(adminPassword ?? "admin123", 10);
     const adminId = randomUUID5();
     await db.insert(users).values({
       id: adminId,
@@ -8849,6 +8972,10 @@ async function seedPhilippineHolidays() {
   }
 }
 async function seedSampleUsers() {
+  if (process.env.NODE_ENV === "production") {
+    console.log("\u23ED\uFE0F  Skipping sample user seeding in production");
+    return;
+  }
   console.log("\u{1F465} Checking sample users...");
   try {
     const existingEmployees = await db.select().from(users).where(eq5(users.role, "employee")).limit(1);
@@ -9513,6 +9640,10 @@ var RealTimeManager = class {
   io;
   userConnections = /* @__PURE__ */ new Map();
   // userId -> Set of socketIds
+  sessionMiddleware = null;
+  setSessionMiddleware(middleware) {
+    this.sessionMiddleware = middleware;
+  }
   constructor(httpServer) {
     this.io = new SocketIOServer(httpServer, {
       cors: {
@@ -9534,42 +9665,48 @@ var RealTimeManager = class {
   }
   setupMiddleware() {
     this.io.use((socket, next) => {
-      const userId = socket.handshake.query.userId;
-      const authToken = socket.handshake.auth.token;
-      if (!userId && !authToken) {
-        return next(new Error("Authentication required"));
+      if (this.sessionMiddleware) {
+        this.sessionMiddleware(socket.request, {}, (err) => {
+          if (err) return next(new Error("Session error"));
+          const sessionUser = socket.request.session?.user;
+          if (!sessionUser?.id) return next(new Error("Not authenticated"));
+          socket.data.userId = sessionUser.id;
+          next();
+        });
+      } else {
+        return next(new Error("Not authenticated"));
       }
-      socket.data.userId = userId;
-      next();
     });
   }
   setupConnections() {
     this.io.on("connection", async (socket) => {
       const userId = socket.data.userId;
       if (!userId) {
-        console.warn("Socket connected without userId");
+        socket.disconnect(true);
         return;
       }
-      if (!this.userConnections.has(userId)) {
-        this.userConnections.set(userId, /* @__PURE__ */ new Set());
-      }
-      this.userConnections.get(userId).add(socket.id);
-      console.log(`User ${userId} connected (socket: ${socket.id})`);
-      socket.join(`user:${userId}`);
       try {
         const user = await dbStorage.getUser(userId);
-        if (user) {
-          console.log(`Joining user ${userId} to branch room: branch:${user.branchId}`);
-          socket.join(`branch:${user.branchId}`);
-          socket.join(`branch:${user.branchId}:shifts`);
-          if (user.role === "manager" || user.role === "admin") {
-            socket.join(`branch:${user.branchId}:managers`);
-          } else {
-            socket.join(`branch:${user.branchId}:employees`);
-          }
+        if (!user || !user.isActive) {
+          socket.disconnect(true);
+          return;
+        }
+        if (!this.userConnections.has(userId)) {
+          this.userConnections.set(userId, /* @__PURE__ */ new Set());
+        }
+        this.userConnections.get(userId).add(socket.id);
+        socket.join(`user:${userId}`);
+        socket.join(`branch:${user.branchId}`);
+        socket.join(`branch:${user.branchId}:shifts`);
+        if (user.role === "manager" || user.role === "admin") {
+          socket.join(`branch:${user.branchId}:managers`);
+        } else {
+          socket.join(`branch:${user.branchId}:employees`);
         }
       } catch (err) {
-        console.error(`Error joining rooms for user ${userId}:`, err);
+        console.error(`Error verifying user ${userId} for socket:`, err);
+        socket.disconnect(true);
+        return;
       }
       socket.on("subscribe:employee-shifts", () => {
         socket.join(`employee:${userId}:shifts`);
@@ -9834,6 +9971,14 @@ var pgPool = new Pool2({
 pgPool.on("error", (err) => {
   console.error("[SESSION POOL] Unexpected error on idle client:", err.message);
 });
+async function getBranchManagersAndAdmins(branchId) {
+  const branchUsers = await storage5.getUsersByBranch(branchId);
+  const branchManagers = branchUsers.filter((u) => u.role === "manager" || u.role === "admin");
+  const allAdmins = await storage5.getAdminUsers();
+  return [...branchManagers, ...allAdmins].filter(
+    (u, idx, arr) => idx === arr.findIndex((x) => x.id === u.id)
+  );
+}
 async function registerRoutes(app2) {
   const httpServer = createServer(app2);
   const realTimeManager = new realtime_manager_default(httpServer);
@@ -9957,7 +10102,9 @@ async function registerRoutes(app2) {
     rolling: true
     // Roll session on each response to extend expiration
   };
-  app2.use(session2(sessionConfig));
+  const sessionMiddleware = session2(sessionConfig);
+  app2.use(sessionMiddleware);
+  realTimeManager.setSessionMiddleware(sessionMiddleware);
   app2.use((req, res, next) => {
     if (req.session?.user) {
       req.session.touch();
@@ -9976,11 +10123,26 @@ async function registerRoutes(app2) {
     }
   }));
   app2.use(router2);
-  app2.post("/api/setup", asyncHandler(async (req, res) => {
+  const setupLimiter = rateLimit({
+    windowMs: 60 * 60 * 1e3,
+    // 1 hour
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many setup attempts. Please try again later." }
+  });
+  app2.post("/api/setup", setupLimiter, asyncHandler(async (req, res) => {
     try {
       const isComplete = await storage5.isSetupComplete();
       if (isComplete) {
         return res.status(400).json({ message: "Setup already completed" });
+      }
+      const requiredToken = process.env.SETUP_TOKEN;
+      if (requiredToken) {
+        const providedToken = req.body?.setupToken;
+        if (!providedToken || providedToken !== requiredToken) {
+          return res.status(403).json({ message: "Invalid or missing setup token" });
+        }
       }
       const { branch, manager } = z4.object({
         branch: z4.object({
@@ -10045,38 +10207,6 @@ async function registerRoutes(app2) {
   app2.get("/healthz", (req, res) => {
     res.status(200).send("OK");
   });
-  app2.post("/api/admin/fix-passwords", requireAuth9, requireRole3(["admin"]), asyncHandler(async (req, res) => {
-    try {
-      const { defaultPassword } = req.body;
-      const passwordToHash = defaultPassword || "password123";
-      const allBranches = await storage5.getAllBranches();
-      let fixed = 0;
-      let skipped = 0;
-      const fixedUsers = [];
-      for (const branch of allBranches) {
-        const users2 = await storage5.getUsersByBranch(branch.id);
-        for (const user of users2) {
-          const isBcryptHash = user.password.startsWith("$2b$") || user.password.startsWith("$2a$");
-          if (!isBcryptHash) {
-            await storage5.updateUser(user.id, { password: passwordToHash });
-            fixedUsers.push(user.username);
-            fixed++;
-          } else {
-            skipped++;
-          }
-        }
-      }
-      res.json({
-        message: `Fixed ${fixed} unhashed passwords, ${skipped} were already hashed`,
-        fixed,
-        skipped,
-        fixedUsers
-      });
-    } catch (error) {
-      console.error("Fix passwords error:", error);
-      res.status(500).json({ message: "Failed to fix passwords" });
-    }
-  }));
   app2.post("/api/admin/reset-password", requireAuth9, requireRole3(["admin", "manager"]), asyncHandler(async (req, res) => {
     try {
       const { userId, newPassword } = req.body;
@@ -10100,6 +10230,15 @@ async function registerRoutes(app2) {
         }
       }
       await storage5.updateUser(userId, { password: newPassword });
+      await createAuditLog({
+        action: "password_reset",
+        entityType: "employee",
+        entityId: userId,
+        userId: currentUser.id,
+        newValues: { targetUsername: user.username, resetBy: currentUser.id },
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"]
+      });
       res.json({ message: `Password reset successfully for ${user.username}` });
     } catch (error) {
       console.error("Reset password error:", error);
@@ -10143,11 +10282,21 @@ async function registerRoutes(app2) {
   const loginLimiter = rateLimit({
     windowMs: 15 * 60 * 1e3,
     // 15 minutes
-    max: 20,
-    // 20 attempts per window per IP
+    max: 10,
+    // 10 attempts per window per IP+username
     standardHeaders: true,
     legacyHeaders: false,
+    // Key on both IP and username to prevent per-username credential stuffing
+    keyGenerator: (req) => `${req.ip ?? "unknown"}:${String(req.body?.username ?? "").toLowerCase()}`,
     message: { message: "Too many login attempts. Please try again in 15 minutes." }
+  });
+  const tradeMutationLimiter = rateLimit({
+    windowMs: 15 * 60 * 1e3,
+    // 15 minutes
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { message: "Too many trade requests. Please try again later." }
   });
   app2.post("/api/auth/login", loginLimiter, asyncHandler(async (req, res) => {
     try {
@@ -10156,15 +10305,10 @@ async function registerRoutes(app2) {
         password: z4.string().min(1)
       }).parse(req.body);
       const user = await storage5.getUserByUsername(username);
-      if (!user) {
-        return res.status(401).json({ message: "Invalid credentials" });
-      }
-      const isBcryptHash = user.password && (user.password.startsWith("$2b$") || user.password.startsWith("$2a$"));
-      if (!isBcryptHash) {
-        return res.status(401).json({ message: "Your account password needs to be reset. Please contact your administrator." });
-      }
-      const isPasswordValid = await bcrypt3.compare(password, user.password);
-      if (!isPasswordValid) {
+      const DUMMY_HASH = "$2b$10$aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa.";
+      const hashToCompare = user?.password && (user.password.startsWith("$2b$") || user.password.startsWith("$2a$")) ? user.password : DUMMY_HASH;
+      const isPasswordValid = await bcrypt3.compare(password, hashToCompare);
+      if (!user || !isPasswordValid) {
         return res.status(401).json({ message: "Invalid credentials" });
       }
       const authUser = {
@@ -10173,23 +10317,27 @@ async function registerRoutes(app2) {
         role: user.role,
         branchId: user.branchId
       };
-      req.session.user = authUser;
       return new Promise((resolve) => {
-        req.session.save((err) => {
-          if (err) {
-            console.error("\u274C Session save error:", err);
+        req.session.regenerate((regenErr) => {
+          if (regenErr) {
+            console.error("Session regeneration error:", regenErr);
             res.status(500).json({ message: "Failed to create session" });
-          } else {
-            const { password: _, ...userWithoutPassword } = user;
-            res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
-            res.setHeader("Pragma", "no-cache");
-            res.setHeader("Expires", "0");
-            res.json({
-              user: userWithoutPassword,
-              authenticated: true
-            });
+            return resolve();
           }
-          resolve();
+          req.session.user = authUser;
+          req.session.save((err) => {
+            if (err) {
+              console.error("Session save error:", err);
+              res.status(500).json({ message: "Failed to create session" });
+            } else {
+              const { password: _, ...userWithoutPassword } = user;
+              res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, private");
+              res.setHeader("Pragma", "no-cache");
+              res.setHeader("Expires", "0");
+              res.json({ user: userWithoutPassword, authenticated: true });
+            }
+            resolve();
+          });
         });
       });
     } catch (error) {
@@ -10219,7 +10367,7 @@ async function registerRoutes(app2) {
       if (req.session?.user?.id) {
         try {
           const freshUser = await storage5.getUser(req.session.user.id);
-          if (freshUser) {
+          if (freshUser && freshUser.isActive) {
             const { password: _, ...userWithoutPassword } = freshUser;
             res.json({
               authenticated: true,
@@ -10227,11 +10375,13 @@ async function registerRoutes(app2) {
               user: { ...userWithoutPassword, branchId: req.session.user.branchId || userWithoutPassword.branchId }
             });
           } else {
+            req.session.destroy(() => {
+            });
             res.json({ authenticated: false, isSetupComplete, user: null });
           }
         } catch (dbErr) {
-          console.warn("[AUTH STATUS] DB fetch failed, falling back to session:", dbErr);
-          res.json({ authenticated: true, isSetupComplete, user: req.session.user });
+          console.error("[AUTH STATUS] DB fetch failed, failing closed:", dbErr);
+          res.json({ authenticated: false, isSetupComplete, user: null });
         }
       } else {
         res.json({
@@ -10307,6 +10457,12 @@ async function registerRoutes(app2) {
     const targetUserId = queryUserId || currentUser.id;
     if (targetUserId !== currentUser.id && currentUser.role !== "manager" && currentUser.role !== "admin") {
       return res.status(403).json({ message: "Insufficient permissions" });
+    }
+    if (targetUserId !== currentUser.id && currentUser.role === "manager") {
+      const targetUser = await storage5.getUser(targetUserId);
+      if (!targetUser || targetUser.branchId !== currentUser.branchId) {
+        return res.status(403).json({ message: "Access denied: employee is not in your branch" });
+      }
     }
     const shifts2 = await storage5.getShiftsByUser(
       targetUserId,
@@ -11142,6 +11298,10 @@ async function registerRoutes(app2) {
       if (!startDate || !endDate || !type || !value) {
         return res.status(400).json({ message: "Missing required fields: startDate, endDate, type, value" });
       }
+      const validAdjTypes = ["overtime", "late", "undertime", "absent", "rest_day_ot", "special_holiday_ot", "regular_holiday_ot", "night_diff"];
+      if (!validAdjTypes.includes(type)) {
+        return res.status(400).json({ message: `Invalid type. Valid types: ${validAdjTypes.join(", ")}` });
+      }
       const numValue = parseFloat(value);
       if (isNaN(numValue) || numValue <= 0) {
         return res.status(400).json({ message: "Value must be a positive number." });
@@ -11267,6 +11427,16 @@ async function registerRoutes(app2) {
         return res.status(403).json({ message: "Not authorized for this branch" });
       }
       const { type, value, remarks } = req.body;
+      const validAdjTypes = ["overtime", "late", "undertime", "absent", "rest_day_ot", "special_holiday_ot", "regular_holiday_ot", "night_diff"];
+      if (type !== void 0 && !validAdjTypes.includes(type)) {
+        return res.status(400).json({ message: `Invalid type. Valid types: ${validAdjTypes.join(", ")}` });
+      }
+      if (value !== void 0) {
+        const numVal = parseFloat(value);
+        if (isNaN(numVal) || numVal <= 0) {
+          return res.status(400).json({ message: "Value must be a positive number." });
+        }
+      }
       const updated = await storage5.updateAdjustmentLog(id, { type, value, remarks });
       res.json(updated);
     } catch (error) {
@@ -11687,6 +11857,7 @@ async function registerRoutes(app2) {
       }
       const parsedStart = new Date(startDate);
       const parsedEnd = new Date(endDate);
+      parsedEnd.setUTCHours(23, 59, 59, 999);
       if (parsedEnd <= parsedStart) {
         return res.status(400).json({ message: "End date must be after start date" });
       }
@@ -11836,7 +12007,7 @@ async function registerRoutes(app2) {
         if (isNaN(hourlyRate) || hourlyRate <= 0) {
           continue;
         }
-        const payCalculation = calculatePeriodPay(shifts2, hourlyRate, periodHolidays, -1, isHolidayExempt);
+        const payCalculation = calculatePeriodPay(shifts2, hourlyRate, periodHolidays, -1, isHolidayExempt, new Date(period.startDate), new Date(period.endDate));
         if (runConfig.includeNightDiff === false) {
           payCalculation.totalGrossPay -= payCalculation.nightDiffPay;
           payCalculation.nightDiffPay = 0;
@@ -11881,6 +12052,9 @@ async function registerRoutes(app2) {
           new Date(period.startDate),
           new Date(period.endDate)
         );
+        const datesWithEngineOT = new Set(
+          payCalculation.breakdown.filter((d) => d.overtimeHours > 0).map((d) => new Date(d.date).toDateString())
+        );
         let lateDeduction = 0;
         let totalLateMinutes = 0;
         let undertimeDeduction = 0;
@@ -11890,6 +12064,9 @@ async function registerRoutes(app2) {
           if (adj.isIncluded === false) continue;
           const adjValue = parseFloat(adj.value);
           if (isNaN(adjValue) || adjValue <= 0) continue;
+          const adjDate = adj.startDate ? new Date(adj.startDate).toDateString() : null;
+          const isOTType = ["overtime", "rest_day_ot", "special_holiday_ot", "regular_holiday_ot"].includes(adj.type);
+          if (isOTType && adjDate && datesWithEngineOT.has(adjDate)) continue;
           let calcAmount = 0;
           switch (adj.type) {
             case "overtime":
@@ -11957,7 +12134,7 @@ async function registerRoutes(app2) {
         const philHealthContribution = Math.round(mandatoryBreakdown.philHealthContribution * periodFraction * 100) / 100;
         const pagibigContribution = Math.round(mandatoryBreakdown.pagibigContribution * periodFraction * 100) / 100;
         const { workerAllowances: workerAllowances2, allowanceTypes: allowanceTypes2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq8, and: and4 } = await import("drizzle-orm");
+        const { eq: eq8, and: and6 } = await import("drizzle-orm");
         const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         let totalAllowanceAmount = 0;
         let taxableAllowanceExcess = 0;
@@ -11965,7 +12142,7 @@ async function registerRoutes(app2) {
           amount: workerAllowances2.amount,
           ceiling: allowanceTypes2.ceilingValue,
           isDeMinimis: allowanceTypes2.isDeMinimis
-        }).from(workerAllowances2).innerJoin(allowanceTypes2, eq8(workerAllowances2.allowanceTypeId, allowanceTypes2.id)).where(and4(eq8(workerAllowances2.userId, employee.id), eq8(workerAllowances2.isActive, true)));
+        }).from(workerAllowances2).innerJoin(allowanceTypes2, eq8(workerAllowances2.allowanceTypeId, allowanceTypes2.id)).where(and6(eq8(workerAllowances2.userId, employee.id), eq8(workerAllowances2.isActive, true)));
         for (const al of empAllowances) {
           const periodAllowance = Math.round(parseFloat(al.amount) * periodFraction * 100) / 100;
           const periodCeiling = al.ceiling ? Math.round(parseFloat(al.ceiling) * periodFraction * 100) / 100 : null;
@@ -12170,6 +12347,9 @@ async function registerRoutes(app2) {
       if (!employee || employee.branchId !== req.user.branchId) {
         return res.status(403).json({ message: "Not authorized for this branch" });
       }
+      if (existing.userId === req.user.id && req.user.role !== "admin") {
+        return res.status(403).json({ message: "Conflict of interest: You cannot approve your own payroll entry." });
+      }
       const entry = await storage5.updatePayrollEntry(id, { status: "approved" });
       res.json({ entry });
       await createAuditLog({
@@ -12199,6 +12379,9 @@ async function registerRoutes(app2) {
       const employee = await storage5.getUser(existing.userId);
       if (!employee || employee.branchId !== req.user.branchId) {
         return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+      if (existing.userId === req.user.id && req.user.role !== "admin") {
+        return res.status(403).json({ message: "Conflict of interest: You cannot mark your own payroll as paid." });
       }
       const entry = await storage5.updatePayrollEntry(id, { status: "paid", paidAt: /* @__PURE__ */ new Date() });
       if (!entry) {
@@ -12257,7 +12440,7 @@ async function registerRoutes(app2) {
     let includedExceptions = [];
     try {
       const { payrollPeriods: payrollPeriods2, adjustmentLogs: adjustmentLogs2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq8, and: and4, gte: gte2, lte: lte3, inArray: inArray3 } = await import("drizzle-orm");
+      const { eq: eq8, and: and6, gte: gte2, lte: lte3, inArray: inArray4 } = await import("drizzle-orm");
       const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const periods = await db2.select().from(payrollPeriods2).where(eq8(payrollPeriods2.id, entry.payrollPeriodId)).limit(1);
       if (periods.length > 0) {
@@ -12266,11 +12449,11 @@ async function registerRoutes(app2) {
         periodEnd = period.endDate instanceof Date ? period.endDate.toISOString() : String(period.endDate);
         runType = period.runType ? String(period.runType) : null;
         const logs = await db2.select().from(adjustmentLogs2).where(
-          and4(
+          and6(
             eq8(adjustmentLogs2.employeeId, entry.userId),
             gte2(adjustmentLogs2.startDate, new Date(periodStart)),
             lte3(adjustmentLogs2.startDate, new Date(periodEnd)),
-            inArray3(adjustmentLogs2.status, ["employee_verified", "approved"])
+            inArray4(adjustmentLogs2.status, ["employee_verified", "approved"])
           )
         );
         includedExceptions = logs;
@@ -12513,7 +12696,7 @@ async function registerRoutes(app2) {
       res.json({ trades: enrichedTrades });
     } catch (error) {
       console.error("Get shift trades error:", error);
-      res.status(500).json({ message: error.message || "Failed to fetch shift trades" });
+      res.status(500).json({ message: "Failed to fetch shift trades" });
     }
   }));
   app2.get("/api/shift-trades/available", requireAuth9, asyncHandler(async (req, res) => {
@@ -12523,93 +12706,101 @@ async function registerRoutes(app2) {
     const filteredTrades = trades.filter(
       (t) => (t.toUserId === null || t.toUserId === userId) && t.fromUserId !== userId
     );
-    const tradesWithDetails = await Promise.all(
-      filteredTrades.map(async (trade) => {
-        const [shift, requesterUser, cShift] = await Promise.all([
-          storage5.getShift(trade.shiftId),
-          storage5.getUser(trade.fromUserId),
-          trade.counterShiftId ? storage5.getShift(trade.counterShiftId) : Promise.resolve(null)
-        ]);
-        return {
-          ...trade,
-          // Add aliased properties for frontend compatibility
-          requesterId: trade.fromUserId,
-          targetUserId: trade.toUserId || "",
-          requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
-          shift: shift ? {
-            ...shift,
-            date: shift.startTime ? new Date(shift.startTime).toISOString().split("T")[0] : null,
-            startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
-            endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null
-          } : null,
-          counterShift: cShift ? {
-            date: cShift.startTime ? new Date(cShift.startTime).toISOString().split("T")[0] : null,
-            startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
-            endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
-            position: cShift.position ?? null
-          } : null,
-          // Use consistent property names
-          requester: requesterUser ? {
-            firstName: requesterUser.firstName || "",
-            lastName: requesterUser.lastName || ""
-          } : null,
-          targetUser: null,
-          // Available trades have no target yet
-          fromUser: requesterUser ? { id: requesterUser.id, firstName: requesterUser.firstName, lastName: requesterUser.lastName, role: requesterUser.role } : null
-        };
-      })
-    );
+    const shiftIds = [...new Set(filteredTrades.map((t) => t.shiftId))];
+    const counterShiftIds = [...new Set(filteredTrades.map((t) => t.counterShiftId).filter(Boolean))];
+    const userIds = [...new Set(filteredTrades.map((t) => t.fromUserId))];
+    const [batchShifts, batchCounterShifts, batchUsers] = await Promise.all([
+      Promise.all(shiftIds.map((id) => storage5.getShift(id))),
+      Promise.all(counterShiftIds.map((id) => storage5.getShift(id))),
+      Promise.all(userIds.map((id) => storage5.getUser(id)))
+    ]);
+    const shiftMap = new Map(batchShifts.filter(Boolean).map((s) => [s.id, s]));
+    const counterShiftMap = new Map(batchCounterShifts.filter(Boolean).map((s) => [s.id, s]));
+    const userMap = new Map(batchUsers.filter(Boolean).map((u) => [u.id, u]));
+    const tradesWithDetails = filteredTrades.map((trade) => {
+      const shift = shiftMap.get(trade.shiftId);
+      const requesterUser = userMap.get(trade.fromUserId);
+      const cShift = trade.counterShiftId ? counterShiftMap.get(trade.counterShiftId) : null;
+      return {
+        ...trade,
+        requesterId: trade.fromUserId,
+        targetUserId: trade.toUserId || "",
+        requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
+        shift: shift ? {
+          ...shift,
+          date: shift.startTime ? new Date(shift.startTime).toISOString().split("T")[0] : null,
+          startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
+          endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null
+        } : null,
+        counterShift: cShift ? {
+          date: cShift.startTime ? new Date(cShift.startTime).toISOString().split("T")[0] : null,
+          startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
+          endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
+          position: cShift.position ?? null
+        } : null,
+        requester: requesterUser ? {
+          firstName: requesterUser.firstName || "",
+          lastName: requesterUser.lastName || ""
+        } : null,
+        targetUser: null,
+        fromUser: requesterUser ? { id: requesterUser.id, firstName: requesterUser.firstName, lastName: requesterUser.lastName, role: requesterUser.role } : null
+      };
+    });
     res.json({ trades: tradesWithDetails });
   }));
   app2.get("/api/shift-trades/pending", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
     const branchId = req.user.branchId;
     const trades = await storage5.getPendingShiftTrades(branchId);
-    const tradesWithDetails = await Promise.all(
-      trades.map(async (trade) => {
-        const [shift, requesterUser, targetUserData, cShift] = await Promise.all([
-          storage5.getShift(trade.shiftId),
-          storage5.getUser(trade.fromUserId),
-          trade.toUserId ? storage5.getUser(trade.toUserId) : Promise.resolve(null),
-          trade.counterShiftId ? storage5.getShift(trade.counterShiftId) : Promise.resolve(null)
-        ]);
-        return {
-          ...trade,
-          // Add aliased properties for frontend compatibility
-          requesterId: trade.fromUserId,
-          targetUserId: trade.toUserId || "",
-          requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
-          shift: shift ? {
-            ...shift,
-            date: shift.startTime ? new Date(shift.startTime).toISOString().split("T")[0] : null,
-            startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
-            endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null
-          } : null,
-          counterShift: cShift ? {
-            date: cShift.startTime ? new Date(cShift.startTime).toISOString().split("T")[0] : null,
-            startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
-            endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
-            position: cShift.position ?? null
-          } : null,
-          // Use consistent property names
-          requester: requesterUser ? {
-            firstName: requesterUser.firstName || "",
-            lastName: requesterUser.lastName || ""
-          } : null,
-          targetUser: targetUserData ? {
-            firstName: targetUserData.firstName || "",
-            lastName: targetUserData.lastName || ""
-          } : null,
-          // Legacy compatibility
-          fromUser: requesterUser ? { id: requesterUser.id, firstName: requesterUser.firstName, lastName: requesterUser.lastName, role: requesterUser.role } : null,
-          toUser: targetUserData ? { id: targetUserData.id, firstName: targetUserData.firstName, lastName: targetUserData.lastName, role: targetUserData.role } : null
-        };
-      })
-    );
+    const pShiftIds = [...new Set(trades.map((t) => t.shiftId))];
+    const pCounterShiftIds = [...new Set(trades.map((t) => t.counterShiftId).filter(Boolean))];
+    const pUserIds = [...new Set(trades.flatMap((t) => [t.fromUserId, t.toUserId].filter(Boolean)))];
+    const [pBatchShifts, pBatchCounterShifts, pBatchUsers] = await Promise.all([
+      Promise.all(pShiftIds.map((id) => storage5.getShift(id))),
+      Promise.all(pCounterShiftIds.map((id) => storage5.getShift(id))),
+      Promise.all(pUserIds.map((id) => storage5.getUser(id)))
+    ]);
+    const pShiftMap = new Map(pBatchShifts.filter(Boolean).map((s) => [s.id, s]));
+    const pCounterShiftMap = new Map(pBatchCounterShifts.filter(Boolean).map((s) => [s.id, s]));
+    const pUserMap = new Map(pBatchUsers.filter(Boolean).map((u) => [u.id, u]));
+    const tradesWithDetails = trades.map((trade) => {
+      const shift = pShiftMap.get(trade.shiftId);
+      const requesterUser = pUserMap.get(trade.fromUserId);
+      const targetUserData = trade.toUserId ? pUserMap.get(trade.toUserId) : null;
+      const cShift = trade.counterShiftId ? pCounterShiftMap.get(trade.counterShiftId) : null;
+      return {
+        ...trade,
+        requesterId: trade.fromUserId,
+        targetUserId: trade.toUserId || "",
+        requestedAt: trade.requestedAt ? new Date(trade.requestedAt).toISOString() : null,
+        shift: shift ? {
+          ...shift,
+          date: shift.startTime ? new Date(shift.startTime).toISOString().split("T")[0] : null,
+          startTime: shift.startTime ? new Date(shift.startTime).toISOString() : null,
+          endTime: shift.endTime ? new Date(shift.endTime).toISOString() : null
+        } : null,
+        counterShift: cShift ? {
+          date: cShift.startTime ? new Date(cShift.startTime).toISOString().split("T")[0] : null,
+          startTime: cShift.startTime ? new Date(cShift.startTime).toISOString() : null,
+          endTime: cShift.endTime ? new Date(cShift.endTime).toISOString() : null,
+          position: cShift.position ?? null
+        } : null,
+        requester: requesterUser ? {
+          firstName: requesterUser.firstName || "",
+          lastName: requesterUser.lastName || ""
+        } : null,
+        targetUser: targetUserData ? {
+          firstName: targetUserData.firstName || "",
+          lastName: targetUserData.lastName || ""
+        } : null,
+        fromUser: requesterUser ? { id: requesterUser.id, firstName: requesterUser.firstName, lastName: requesterUser.lastName, role: requesterUser.role } : null,
+        toUser: targetUserData ? { id: targetUserData.id, firstName: targetUserData.firstName, lastName: targetUserData.lastName, role: targetUserData.role } : null
+      };
+    });
     res.json({ trades: tradesWithDetails });
   }));
-  app2.post("/api/shift-trades", requireAuth9, asyncHandler(async (req, res) => {
+  app2.post("/api/shift-trades", requireAuth9, tradeMutationLimiter, asyncHandler(async (req, res) => {
     try {
-      const tradeData = insertShiftTradeSchema.parse(req.body);
+      const tradeData = createShiftTradeSchema.parse(req.body);
       const shift = await storage5.getShift(tradeData.shiftId);
       if (!shift) {
         return res.status(404).json({ message: "Shift not found" });
@@ -12625,6 +12816,15 @@ async function registerRoutes(app2) {
           return res.status(403).json({ message: "You can only trade your own shifts" });
         }
       }
+      const openTrades = await db.select().from(shiftTrades).where(
+        and4(
+          eq6(shiftTrades.shiftId, tradeData.shiftId),
+          inArray2(shiftTrades.status, ["pending", "open", "accepted"])
+        )
+      ).limit(1);
+      if (openTrades.length > 0) {
+        return res.status(409).json({ message: "An active trade request already exists for this shift." });
+      }
       if (tradeData.toUserId) {
         const overlappingShift = await storage5.checkShiftOverlap(
           tradeData.toUserId,
@@ -12637,7 +12837,8 @@ async function registerRoutes(app2) {
       }
       const trade = await storage5.createShiftTrade({
         ...tradeData,
-        fromUserId
+        fromUserId,
+        status: "pending"
       });
       const enrichedTrade = {
         ...trade,
@@ -12685,11 +12886,7 @@ async function registerRoutes(app2) {
           notifiedUserIds.add(user.id);
         }
       }
-      const branchManagers = branchUsers.filter((u) => u.role === "manager" || u.role === "admin");
-      const allAdmins = await storage5.getAdminUsers();
-      const managersAndAdmins = [...branchManagers, ...allAdmins].filter(
-        (u, idx, arr) => idx === arr.findIndex((x) => x.id === u.id)
-      );
+      const managersAndAdmins = await getBranchManagersAndAdmins(req.user.branchId);
       for (const manager of managersAndAdmins) {
         if (manager.id === req.user.id || notifiedUserIds.has(manager.id)) continue;
         const notificationManager = await storage5.createNotification({
@@ -12727,7 +12924,7 @@ async function registerRoutes(app2) {
       res.status(400).json({ message: error.message || "Invalid trade data" });
     }
   }));
-  app2.patch("/api/shift-trades/:id", requireAuth9, asyncHandler(async (req, res) => {
+  app2.patch("/api/shift-trades/:id", requireAuth9, tradeMutationLimiter, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const { status, notes, counterShiftId } = req.body;
@@ -12786,7 +12983,11 @@ async function registerRoutes(app2) {
         }
         updateData.counterShiftId = counterShiftId;
       }
-      const updatedTrade = await storage5.updateShiftTrade(id, updateData);
+      const updated = await db.update(shiftTrades).set(updateData).where(and4(eq6(shiftTrades.id, id), eq6(shiftTrades.status, "pending"))).returning();
+      if (updated.length === 0) {
+        return res.status(409).json({ message: "This trade is no longer pending \u2014 it may have already been accepted or cancelled." });
+      }
+      const updatedTrade = updated[0];
       const shift = await storage5.getShift(trade.shiftId);
       const shiftDate = shift?.startTime ? format3(new Date(shift.startTime), "MMM d") : "a shift";
       const enrichedTrade = {
@@ -12809,12 +13010,7 @@ async function registerRoutes(app2) {
           data: JSON.stringify({ shiftDate, status: "accepted" })
         });
         realTimeManager.broadcastNotification(nReq);
-        const branchUsers = await storage5.getUsersByBranch(req.user.branchId);
-        const branchManagers = branchUsers.filter((u) => u.role === "manager" || u.role === "admin");
-        const allAdmins = await storage5.getAdminUsers();
-        const managersAndAdmins = [...branchManagers, ...allAdmins].filter(
-          (u, idx, arr) => idx === arr.findIndex((x) => x.id === u.id)
-        );
+        const managersAndAdmins = await getBranchManagersAndAdmins(req.user.branchId);
         for (const manager of managersAndAdmins) {
           const nMgr = await storage5.createNotification({
             userId: manager.id,
@@ -12867,10 +13063,10 @@ async function registerRoutes(app2) {
       res.json({ trade: enrichedTrade });
     } catch (error) {
       console.error("Respond to trade error:", error);
-      res.status(500).json({ message: error.message || "Failed to respond to trade" });
+      res.status(500).json({ message: "Failed to respond to trade" });
     }
   }));
-  app2.patch("/api/shift-trades/:id/approve", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
+  app2.patch("/api/shift-trades/:id/approve", requireAuth9, requireRole3(["manager", "admin"]), tradeMutationLimiter, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const { status, notes } = req.body;
@@ -12892,7 +13088,11 @@ async function registerRoutes(app2) {
       if (status === "approved" && !trade.toUserId) {
         return res.status(400).json({ message: "Cannot approve trade without a target user" });
       }
-      let didSwap = false;
+      const managerIsTarget = trade.toUserId === managerId;
+      if (status === "approved" && trade.status !== "accepted" && !managerIsTarget) {
+        return res.status(409).json({ message: "Trade must be accepted by the target employee before a manager can approve it" });
+      }
+      let willSwapCounter = false;
       if (status === "approved") {
         const targetOverlap = await storage5.checkShiftOverlap(
           trade.toUserId,
@@ -12903,7 +13103,6 @@ async function registerRoutes(app2) {
         if (targetOverlap) {
           return res.status(409).json({ message: "Approval failed: the target employee has an overlapping shift" });
         }
-        await storage5.updateShift(trade.shiftId, { userId: trade.toUserId });
         if (trade.counterShiftId) {
           const counterShift = await storage5.getShift(trade.counterShiftId);
           if (counterShift) {
@@ -12913,19 +13112,26 @@ async function registerRoutes(app2) {
               new Date(counterShift.endTime),
               trade.shiftId
             );
-            if (!requesterOverlap) {
-              await storage5.updateShift(trade.counterShiftId, { userId: trade.fromUserId });
-              didSwap = true;
-            }
+            if (!requesterOverlap) willSwapCounter = true;
           }
         }
       }
-      const updatedTrade = await storage5.updateShiftTrade(id, {
-        status,
-        approvedBy: managerId,
-        approvedAt: /* @__PURE__ */ new Date(),
-        ...status === "rejected" && notes ? { notes } : {}
+      await db.transaction(async (tx) => {
+        if (status === "approved") {
+          await tx.update(shifts).set({ userId: trade.toUserId }).where(eq6(shifts.id, trade.shiftId));
+          if (willSwapCounter && trade.counterShiftId) {
+            await tx.update(shifts).set({ userId: trade.fromUserId }).where(eq6(shifts.id, trade.counterShiftId));
+          }
+        }
+        await tx.update(shiftTrades).set({
+          status,
+          approvedBy: managerId,
+          approvedAt: /* @__PURE__ */ new Date(),
+          ...status === "rejected" && notes ? { notes } : {}
+        }).where(eq6(shiftTrades.id, id));
       });
+      const didSwap = willSwapCounter;
+      const updatedTrade = await storage5.getShiftTrade(id);
       const shift = await storage5.getShift(trade.shiftId);
       const shiftDate = shift?.startTime ? format3(new Date(shift.startTime), "MMM d") : "a shift";
       const enrichedTrade = {
@@ -13004,14 +13210,13 @@ async function registerRoutes(app2) {
           userAgent: req.headers["user-agent"]
         });
       }
-      const action = status === "approved" ? "\u2705 approved" : "\u274C rejected";
       res.json({ trade: enrichedTrade });
     } catch (error) {
       console.error("Manager approve trade error:", error);
-      res.status(500).json({ message: error.message || "Failed to process trade" });
+      res.status(500).json({ message: "Failed to process trade" });
     }
   }));
-  app2.put("/api/shift-trades/:id/take", requireAuth9, asyncHandler(async (req, res) => {
+  app2.put("/api/shift-trades/:id/take", requireAuth9, tradeMutationLimiter, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
@@ -13070,12 +13275,7 @@ async function registerRoutes(app2) {
         })
       });
       realTimeManager.broadcastNotification(notificationRequester);
-      const branchUsers = await storage5.getUsersByBranch(req.user.branchId);
-      const branchManagers = branchUsers.filter((u) => u.role === "manager" || u.role === "admin");
-      const allAdmins = await storage5.getAdminUsers();
-      const managersAndAdmins = [...branchManagers, ...allAdmins].filter(
-        (u, idx, arr) => idx === arr.findIndex((x) => x.id === u.id)
-      );
+      const managersAndAdmins = await getBranchManagersAndAdmins(req.user.branchId);
       for (const manager of managersAndAdmins) {
         const notificationManager = await storage5.createNotification({
           userId: manager.id,
@@ -13108,20 +13308,24 @@ async function registerRoutes(app2) {
       res.json({ trade: enrichedTrade });
     } catch (error) {
       console.error("Take shift trade error:", error);
-      res.status(500).json({ message: error.message || "Failed to take shift" });
+      res.status(500).json({ message: "Failed to take shift" });
     }
   }));
-  app2.put("/api/shift-trades/:id/pass", requireAuth9, asyncHandler(async (req, res) => {
+  app2.put("/api/shift-trades/:id/pass", requireAuth9, tradeMutationLimiter, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
       const trade = await storage5.getShiftTrade(id);
       if (!trade) return res.status(404).json({ message: "Trade not found" });
       if (trade.fromUserId === userId) return res.status(400).json({ message: "Cannot pass on your own trade" });
+      const tradeShift = await storage5.getShift(trade.shiftId);
+      if (!tradeShift || tradeShift.branchId !== req.user.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
+      }
       await storage5.passTradeForUser(id, userId);
       res.json({ success: true });
     } catch (error) {
-      res.status(500).json({ message: error.message || "Failed to pass on trade" });
+      res.status(500).json({ message: "Failed to pass on trade" });
     }
   }));
   app2.put("/api/shift-trades/:id/reject", requireAuth9, requireRole3(["manager", "admin"]), asyncHandler(async (req, res) => {
@@ -13135,6 +13339,9 @@ async function registerRoutes(app2) {
       const tradeShift = await storage5.getShift(trade.shiftId);
       if (!tradeShift || tradeShift.branchId !== req.user.branchId) {
         return res.status(403).json({ message: "Not authorized for this branch" });
+      }
+      if (trade.status === "approved" || trade.status === "rejected") {
+        return res.status(409).json({ message: `This trade has already been ${trade.status} and cannot be changed.` });
       }
       const updatedTrade = await storage5.updateShiftTrade(id, {
         status: "rejected",
@@ -13175,10 +13382,10 @@ async function registerRoutes(app2) {
       res.json({ trade: enrichedTrade });
     } catch (error) {
       console.error("Reject trade error:", error);
-      res.status(500).json({ message: error.message || "Failed to reject trade" });
+      res.status(500).json({ message: "Failed to reject trade" });
     }
   }));
-  app2.delete("/api/shift-trades/:id", requireAuth9, asyncHandler(async (req, res) => {
+  app2.delete("/api/shift-trades/:id", requireAuth9, tradeMutationLimiter, asyncHandler(async (req, res) => {
     try {
       const { id } = req.params;
       const userId = req.user.id;
@@ -13186,8 +13393,17 @@ async function registerRoutes(app2) {
       if (!trade) {
         return res.status(404).json({ message: "Trade not found" });
       }
-      if (trade.fromUserId !== userId && !["admin", "manager"].includes(req.user.role)) {
+      const tradeShift = await storage5.getShift(trade.shiftId);
+      if (!tradeShift) {
+        return res.status(404).json({ message: "Trade shift not found" });
+      }
+      const isManager = ["admin", "manager"].includes(req.user.role);
+      const isOwner = trade.fromUserId === userId;
+      if (!isOwner && !isManager) {
         return res.status(403).json({ message: "You cannot delete this trade" });
+      }
+      if (isManager && !isOwner && tradeShift.branchId !== req.user.branchId) {
+        return res.status(403).json({ message: "Not authorized for this branch" });
       }
       if (trade.status !== "pending") {
         return res.status(400).json({ message: "Can only cancel pending trades" });
@@ -13221,7 +13437,7 @@ async function registerRoutes(app2) {
       });
     } catch (error) {
       console.error("Delete shift trade error:", error);
-      res.status(500).json({ message: error.message || "Failed to cancel trade" });
+      res.status(500).json({ message: "Failed to cancel trade" });
     }
   }));
   app2.get("/api/admin/deduction-rates", requireAuth9, requireRole3(["admin"]), asyncHandler(async (req, res) => {
@@ -13722,6 +13938,9 @@ async function registerRoutes(app2) {
       today.setHours(0, 0, 0, 0);
       const startDateOnly = new Date(startDate);
       startDateOnly.setHours(0, 0, 0, 0);
+      if (startDateOnly.getTime() < today.getTime()) {
+        return res.status(400).json({ message: "Leave requests cannot be filed for dates in the past." });
+      }
       const advanceDays = Math.ceil((startDateOnly.getTime() - today.getTime()) / (1e3 * 60 * 60 * 24));
       const branchId = req.user.branchId;
       const leaveType = req.body.type;
@@ -13820,6 +14039,9 @@ async function registerRoutes(app2) {
     if (existing.status !== "pending") {
       return res.status(409).json({ message: `Request has already been ${existing.status}` });
     }
+    if (existing.userId === req.user.id) {
+      return res.status(403).json({ message: "Conflict of interest: You cannot approve your own time off request." });
+    }
     const employee = await storage5.getUser(existing.userId);
     if (!employee || employee.branchId !== req.user.branchId) {
       return res.status(403).json({ message: "Not authorized for this branch" });
@@ -13836,10 +14058,12 @@ async function registerRoutes(app2) {
       return res.status(404).json({ message: "Time off request not found" });
     }
     try {
+      const endOfLeaveDay = new Date(request.endDate);
+      endOfLeaveDay.setUTCHours(23, 59, 59, 999);
       const overlappingShifts = await storage5.getShiftsByUser(
         request.userId,
         new Date(request.startDate),
-        new Date(request.endDate)
+        endOfLeaveDay
       );
       for (const shift of overlappingShifts) {
         if (shift.status === "scheduled") {
@@ -13853,28 +14077,33 @@ async function registerRoutes(app2) {
     const endD = new Date(request.endDate);
     const daysToDeduct = Math.max(1, Math.ceil((endD.getTime() - startD.getTime()) / (1e3 * 60 * 60 * 24)) + 1);
     let isPaid = false;
+    let deductionFailed = false;
     try {
       const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
       const { leaveCredits: leaveCredits2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-      const { eq: eq8, and: and4 } = await import("drizzle-orm");
+      const { eq: eq8, and: and6 } = await import("drizzle-orm");
       const specificBalance = await db2.select().from(leaveCredits2).where(
-        and4(eq8(leaveCredits2.userId, request.userId), eq8(leaveCredits2.year, startD.getFullYear()), eq8(leaveCredits2.leaveType, request.type))
+        and6(eq8(leaveCredits2.userId, request.userId), eq8(leaveCredits2.year, startD.getFullYear()), eq8(leaveCredits2.leaveType, request.type))
       ).limit(1);
       let deductedFrom = null;
       if (specificBalance[0] && parseFloat(specificBalance[0].remainingCredits) > 0) {
         deductedFrom = request.type;
       }
       if (deductedFrom) {
-        await deductLeaveCredit(request.userId, employee.branchId, deductedFrom, daysToDeduct, startD.getFullYear());
+        const result = await deductLeaveCredit(request.userId, employee.branchId, deductedFrom, daysToDeduct, startD.getFullYear());
         isPaid = true;
+        if (result.warning) {
+          console.warn(`[Leave Deduction] ${result.warning}`);
+        }
       }
     } catch (deductionErr) {
-      console.error("Leave deduction error:", deductionErr);
+      console.error("[Leave Deduction] Failed to deduct leave credits after approval:", deductionErr);
+      deductionFailed = true;
     }
     const finalIsPaid = paymentStatus === "paid" && isPaid;
     await storage5.updateTimeOffRequest(id, { isPaid: finalIsPaid, leavePaymentStatus: paymentStatus });
     if (paymentStatus === "awol") {
-      console.error(`[Time-Off] ${request.userId} marked AWOL for ${request.startDate}\u2013${request.endDate}`);
+      console.warn(`[Time-Off] Leave request marked AWOL for period ${request.startDate}\u2013${request.endDate}`);
     }
     try {
       const pendingApprovals = await storage5.getPendingApprovals(req.user.branchId);
@@ -13913,7 +14142,10 @@ async function registerRoutes(app2) {
       ipAddress: req.ip || req.socket?.remoteAddress,
       userAgent: req.headers["user-agent"]
     });
-    res.json({ request });
+    res.json({
+      request,
+      ...deductionFailed && { warning: "Leave approved but leave credit deduction failed \u2014 please adjust the balance manually." }
+    });
   }));
   app2.put("/api/time-off-requests/:id/reject", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
     const { id } = req.params;
@@ -13926,6 +14158,9 @@ async function registerRoutes(app2) {
     }
     if (existing.status !== "pending") {
       return res.status(409).json({ message: `Request has already been ${existing.status}` });
+    }
+    if (existing.userId === req.user.id) {
+      return res.status(403).json({ message: "Conflict of interest: You cannot reject your own time off request." });
     }
     const employee = await storage5.getUser(existing.userId);
     if (!employee || employee.branchId !== req.user.branchId) {
@@ -14028,6 +14263,9 @@ async function registerRoutes(app2) {
     if (existing.status !== "approved") {
       return res.status(400).json({ message: "Can only toggle paid status on approved requests" });
     }
+    if (existing.userId === req.user.id) {
+      return res.status(403).json({ message: "Conflict of interest: You cannot modify paid status on your own time off request." });
+    }
     const employee = await storage5.getUser(existing.userId);
     if (!employee || employee.branchId !== req.user.branchId) {
       return res.status(403).json({ message: "Not authorized for this branch" });
@@ -14039,9 +14277,9 @@ async function registerRoutes(app2) {
       try {
         const { db: db2 } = await Promise.resolve().then(() => (init_db(), db_exports));
         const { leaveCredits: leaveCredits2 } = await Promise.resolve().then(() => (init_schema(), schema_exports));
-        const { eq: eq8, and: and4 } = await import("drizzle-orm");
+        const { eq: eq8, and: and6 } = await import("drizzle-orm");
         const specificBalance = await db2.select().from(leaveCredits2).where(
-          and4(eq8(leaveCredits2.userId, existing.userId), eq8(leaveCredits2.year, startD.getFullYear()), eq8(leaveCredits2.leaveType, existing.type))
+          and6(eq8(leaveCredits2.userId, existing.userId), eq8(leaveCredits2.year, startD.getFullYear()), eq8(leaveCredits2.leaveType, existing.type))
         ).limit(1);
         let deductedFrom = null;
         if (specificBalance[0] && parseFloat(specificBalance[0].remainingCredits) > 0) {
@@ -14451,6 +14689,9 @@ async function registerRoutes(app2) {
         return res.json({ message: "No changes needed", user: userWithoutPassword2 });
       }
       const updatedUser = await storage5.updateUser(userId, updateData);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
       const { password: _, ...userWithoutPassword } = updatedUser;
       res.json({
         message: "Profile updated successfully",
@@ -14814,11 +15055,11 @@ init_db();
 // server/cron.ts
 init_db();
 init_schema();
-import { lte as lte2, and as and3, eq as eq7, isNull as isNull2, inArray as inArray2 } from "drizzle-orm";
+import { lte as lte2, and as and5, eq as eq7, isNotNull, inArray as inArray3 } from "drizzle-orm";
 import { subDays as subDays2 } from "date-fns";
-var TRADE_EXPIRY_DAYS = 7;
+var TRADE_EXPIRY_DAYS = 3;
+var purgeRunning = false;
 function setupCronJobs() {
-  console.log("\u{1F552} Setting up background cron jobs...");
   const scheduleNextPurge = () => {
     const now = /* @__PURE__ */ new Date();
     const next3AM = new Date(now);
@@ -14828,68 +15069,80 @@ function setupCronJobs() {
     }
     const timeUntilNext = next3AM.getTime() - now.getTime();
     setTimeout(async () => {
-      await runDataPurge();
-      scheduleNextPurge();
+      try {
+        await runDataPurge();
+      } catch (err) {
+        console.error("[Cron] Data purge failed:", err);
+      } finally {
+        scheduleNextPurge();
+      }
     }, timeUntilNext);
   };
   scheduleNextPurge();
   if (process.env.NODE_ENV === "production") {
-    setTimeout(runDataPurge, 1e3 * 60 * 5);
+    setTimeout(async () => {
+      try {
+        await runDataPurge();
+      } catch (err) {
+        console.error("[Cron] Startup purge failed:", err);
+      }
+    }, 1e3 * 60 * 5);
   }
 }
 async function expireOldTrades() {
-  console.log("\u{1F550} Checking for expired open shift trades...");
   try {
-    const cutoff = subDays2(/* @__PURE__ */ new Date(), TRADE_EXPIRY_DAYS);
+    const now = /* @__PURE__ */ new Date();
     const expiredTrades = await db.select().from(shiftTrades).where(
-      and3(
-        eq7(shiftTrades.status, "pending"),
-        isNull2(shiftTrades.toUserId),
-        lte2(shiftTrades.requestedAt, cutoff)
+      and5(
+        inArray3(shiftTrades.status, ["pending", "accepted"]),
+        isNotNull(shiftTrades.expiresAt),
+        lte2(shiftTrades.expiresAt, now)
       )
     );
     if (expiredTrades.length === 0) {
-      console.log("\u2705 No expired trades found.");
       return;
     }
     const expiredIds = expiredTrades.map((t) => t.id);
-    await db.update(shiftTrades).set({ status: "cancelled", notes: "Expired \u2014 no taker within 7 days" }).where(inArray2(shiftTrades.id, expiredIds));
+    await db.update(shiftTrades).set({ status: "cancelled", notes: `Expired \u2014 no action within ${TRADE_EXPIRY_DAYS} days` }).where(inArray3(shiftTrades.id, expiredIds));
     for (const trade of expiredTrades) {
       await createAuditLog({
         action: "trade_cancel",
         entityType: "shift_trade",
         entityId: trade.id,
         userId: trade.fromUserId,
-        reason: "Auto-expired after 7 days",
+        reason: `Auto-expired after ${TRADE_EXPIRY_DAYS} days`,
         newValues: { status: "cancelled", reason: "expired", shiftId: trade.shiftId }
       });
     }
-    console.log(`\u2705 Expired ${expiredTrades.length} open trade(s).`);
   } catch (err) {
-    console.error("\u274C Error expiring old trades:", err);
+    throw new Error(`Failed to expire old trades: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 async function runDataPurge() {
-  console.log("\u{1F9F9} Running soft-deleted data purge job...");
+  if (purgeRunning) {
+    console.warn("[Cron] Purge already running \u2014 skipping concurrent execution");
+    return;
+  }
+  purgeRunning = true;
   try {
     const cutoffDate = subDays2(/* @__PURE__ */ new Date(), 90);
-    const shiftResult = await db.delete(shifts).where(
-      and3(
+    await db.delete(shifts).where(
+      and5(
         eq7(shifts.isDeleted, true),
         lte2(shifts.deletedAt, cutoffDate)
       )
     );
-    console.log(`\u2705 Purged soft-deleted shifts older than 90 days.`);
-    const logResult = await db.delete(adjustmentLogs).where(
-      and3(
+    await db.delete(adjustmentLogs).where(
+      and5(
         eq7(adjustmentLogs.isDeleted, true),
         lte2(adjustmentLogs.deletedAt, cutoffDate)
       )
     );
-    console.log(`\u2705 Purged soft-deleted adjustment logs older than 90 days.`);
     await expireOldTrades();
   } catch (err) {
-    console.error("\u274C Error running data purge job:", err);
+    throw new Error(`Data purge failed: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    purgeRunning = false;
   }
 }
 

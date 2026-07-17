@@ -744,7 +744,7 @@ export default function ScheduleV2() {
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['adjustment-logs', 'branch'] });
+      queryClient.invalidateQueries({ queryKey: [isManager ? "adjustment-logs-branch" : "adjustment-logs-mine"] });
       toast.success('Holiday Pay added');
     },
     onError: (err: Error) => toast.error(err.message),

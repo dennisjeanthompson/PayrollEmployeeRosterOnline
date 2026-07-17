@@ -32,6 +32,25 @@ export interface DeductionBreakdown {
   withholdingTax: number;
 }
 
+async function fetchSSSBrackets() {
+  const latestBrackets = await db.select().from(sssContributionTable).orderBy(desc(sssContributionTable.year)).limit(1);
+  const activeYear = latestBrackets.length > 0 ? latestBrackets[0].year : new Date().getFullYear();
+  const brackets = await db.select().from(sssContributionTable).where(eq(sssContributionTable.year, activeYear));
+  return [...brackets].sort((a, b) => parseFloat(a.minCompensation) - parseFloat(b.minCompensation));
+}
+
+function lookupSSS(sorted: Awaited<ReturnType<typeof fetchSSSBrackets>>, salary: number, field: 'employeeShare' | 'employerShare'): number {
+  for (const b of sorted) {
+    const min = parseFloat(b.minCompensation);
+    const max = b.maxCompensation != null ? parseFloat(b.maxCompensation) : Infinity;
+    if (salary >= min && salary <= max) return parseFloat(b[field]);
+  }
+  for (let i = sorted.length - 1; i >= 0; i--) {
+    if (salary >= parseFloat(sorted[i].minCompensation)) return parseFloat(sorted[i][field]);
+  }
+  return 0;
+}
+
 /**
  * Calculate SSS contribution (employee share)
  * 2026 Rate: 5% employee share of Monthly Salary Credit (MSC)
@@ -40,36 +59,23 @@ export interface DeductionBreakdown {
  */
 export async function calculateSSS(monthlyBasicSalary: number): Promise<number> {
   try {
-    // Dynamically fetch the latest brackets available regardless of hardcoded year
-    const latestBrackets = await db.select().from(sssContributionTable).orderBy(desc(sssContributionTable.year)).limit(1);
-    const activeYear = latestBrackets.length > 0 ? latestBrackets[0].year : new Date().getFullYear();
-    const brackets = await db.select().from(sssContributionTable).where(eq(sssContributionTable.year, activeYear));
-    
-    const sorted = [...brackets].sort((a, b) => parseFloat(a.minCompensation) - parseFloat(b.minCompensation));
-
-    for (const b of sorted) {
-      if (monthlyBasicSalary >= parseFloat(b.minCompensation) && monthlyBasicSalary <= parseFloat(b.maxCompensation)) {
-        return parseFloat(b.employeeShare);
-      }
-    }
-
-    // Salary above the highest bracket → use the last bracket's contribution
-    if (sorted.length > 0) {
-      const highest = sorted[sorted.length - 1];
-      if (monthlyBasicSalary > parseFloat(highest.maxCompensation)) {
-        return parseFloat(highest.employeeShare);
-      }
-      // Salary in a gap between brackets → use the bracket just below
-      for (let i = sorted.length - 1; i >= 0; i--) {
-        if (monthlyBasicSalary >= parseFloat(sorted[i].minCompensation)) {
-          return parseFloat(sorted[i].employeeShare);
-        }
-      }
-    }
-
-    return 0;
+    return lookupSSS(await fetchSSSBrackets(), monthlyBasicSalary, 'employeeShare');
   } catch (error) {
     console.error('Error calculating SSS:', error);
+    return 0;
+  }
+}
+
+/**
+ * Calculate SSS employer share from the bracket table.
+ * 2026 Rate: 10% employer share (2× the employee 5%).
+ * Using the table rather than doubling the employee amount avoids rounding divergence.
+ */
+export async function calculateSSSEmployerShare(monthlyBasicSalary: number): Promise<number> {
+  try {
+    return lookupSSS(await fetchSSSBrackets(), monthlyBasicSalary, 'employerShare');
+  } catch (error) {
+    console.error('Error calculating SSS employer share:', error);
     return 0;
   }
 }

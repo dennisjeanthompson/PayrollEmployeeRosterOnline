@@ -7,7 +7,7 @@
 import { Router } from 'express';
 import { db } from '../db';
 import { users, employeeDocuments } from '../../shared/schema';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 
 const router = Router();
 import crypto from 'crypto';
@@ -126,9 +126,14 @@ router.delete('/:id/documents/:docId', async (req, res) => {
   }
 
   try {
-    await db
+    const deleted = await db
       .delete(employeeDocuments)
-      .where(eq(employeeDocuments.id, docId));
+      .where(and(eq(employeeDocuments.id, docId), eq(employeeDocuments.userId, id)))
+      .returning({ id: employeeDocuments.id });
+
+    if (deleted.length === 0) {
+      return res.status(404).json({ error: 'Document not found for this employee' });
+    }
 
     res.json({ success: true, id: docId });
   } catch (error) {
@@ -141,15 +146,25 @@ router.delete('/:id/documents/:docId', async (req, res) => {
  * GET /api/employees/upload-signature
  * Generate a secure signature for client-side Cloudinary uploads
  */
-router.get('/upload-signature', (req, res) => {
+router.get('/upload-signature', async (req, res) => {
   try {
     const { public_id, folder } = req.query;
 
-    console.log('📝 [GET /upload-signature] Request received', { public_id, folder });
-
     if (!public_id || !folder) {
-      console.warn('❌ [GET /upload-signature] Missing params');
       return res.status(400).json({ error: 'Missing required parameters' });
+    }
+
+    const sessionUser = req.session.user;
+    if (!sessionUser) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+
+    // Employees can only request signatures for their own public_id (emp-<userId>)
+    if (sessionUser.role === 'employee') {
+      const expectedPublicId = `emp-${sessionUser.id}`;
+      if (public_id !== expectedPublicId) {
+        return res.status(403).json({ error: 'You may only upload to your own profile.' });
+      }
     }
 
     const timestamp = Math.round(new Date().getTime() / 1000);
@@ -157,14 +172,7 @@ router.get('/upload-signature', (req, res) => {
     const apiKey = process.env.CLOUDINARY_API_KEY;
     const cloudName = process.env.CLOUDINARY_CLOUD_NAME;
 
-    console.log('   Env Check:', { 
-        hasSecret: !!apiSecret, 
-        hasKey: !!apiKey, 
-        hasCloud: !!cloudName 
-    });
-
     if (!apiSecret || !apiKey || !cloudName) {
-      console.error('❌ [GET /upload-signature] Missing Cloudinary config');
       return res.status(500).json({ error: 'Cloudinary configuration missing on server' });
     }
 
@@ -188,8 +196,6 @@ router.get('/upload-signature', (req, res) => {
       .join('&') + apiSecret;
 
     const signature = crypto.createHash('sha1').update(signatureString).digest('hex');
-    
-    console.log('✅ [GET /upload-signature] Signature generated successfully');
 
     res.json({
       signature,
@@ -198,7 +204,6 @@ router.get('/upload-signature', (req, res) => {
       cloudName
     });
   } catch (error: any) {
-    console.error('❌ [GET /upload-signature] Error:', error);
     res.status(500).json({ error: error.message || 'Failed to generate upload signature' });
   }
 });
@@ -210,7 +215,7 @@ router.get('/upload-signature', (req, res) => {
 router.patch('/:id/photo', async (req, res) => {
   const { id } = req.params;
   const sessionUser = req.session.user;
-  if (sessionUser!.id !== id && sessionUser!.role !== 'manager' && sessionUser!.role !== 'admin') {
+  if (!(await canManageEmployeeData(sessionUser, id))) {
     return res.status(403).json({ error: 'Not authorized to update this photo' });
   }
   const { photoUrl, photoPublicId } = req.body;
@@ -242,7 +247,7 @@ router.patch('/:id/photo', async (req, res) => {
 router.delete('/:id/photo', async (req, res) => {
   const { id } = req.params;
   const sessionUser = req.session.user;
-  if (sessionUser!.id !== id && sessionUser!.role !== 'manager' && sessionUser!.role !== 'admin') {
+  if (!(await canManageEmployeeData(sessionUser, id))) {
     return res.status(403).json({ error: 'Not authorized to delete this photo' });
   }
 

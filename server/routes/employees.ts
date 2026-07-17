@@ -512,6 +512,16 @@ router.put('/api/employees/:id/deductions', requireAuth, requireRole(['manager',
       return res.status(403).json({ message: 'Only admins can modify admin deductions' });
     }
 
+    // Validate deduction values are non-negative numbers
+    for (const [field, val] of [['sssLoanDeduction', sssLoanDeduction], ['pagibigLoanDeduction', pagibigLoanDeduction], ['otherDeductions', otherDeductions]] as [string, any][]) {
+      if (val !== undefined) {
+        const num = parseFloat(val);
+        if (isNaN(num) || num < 0) {
+          return res.status(400).json({ message: `${field} must be a non-negative number` });
+        }
+      }
+    }
+
     // Update the employee deductions
     const updatedEmployee = await storage.updateUser(id, {
       sssLoanDeduction: sssLoanDeduction !== undefined ? String(sssLoanDeduction) : existingEmployee.sssLoanDeduction,
