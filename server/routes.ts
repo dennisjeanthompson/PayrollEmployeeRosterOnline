@@ -3018,7 +3018,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         payrollEntries.push(entry);
         createdEntryIds.push(entry.id);
         totalHours += employeeTotalHours;
-        totalPay += grossPay;
+        totalPay += netPay;
 
         // Create notification for employee
         const notification = await storage.createNotification({

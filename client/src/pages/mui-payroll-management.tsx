@@ -659,14 +659,13 @@ export default function MuiPayrollManagement() {
   // Calculate summary stats
   const totalPeriods = periods.length;
   const openPeriods = periods.filter((p: PayrollPeriod) => p.status === "open").length;
-  const totalPaid = periods.reduce(
-    (sum: number, p: PayrollPeriod) => sum + (parseFloat(String(p.totalPay)) || 0),
-    0
-  );
-  const totalHours = periods.reduce(
-    (sum: number, p: PayrollPeriod) => sum + (parseFloat(String(p.totalHours)) || 0),
-    0
-  );
+  // Sum net pay from entries when loaded; otherwise fall back to period-level aggregates
+  const totalPaid = entries.length > 0
+    ? entries.reduce((sum: number, e: PayrollEntry) => sum + (parseFloat(String(e.netPay)) || 0), 0)
+    : periods.reduce((sum: number, p: PayrollPeriod) => sum + (parseFloat(String(p.totalPay)) || 0), 0);
+  const totalHours = entries.length > 0
+    ? entries.reduce((sum: number, e: PayrollEntry) => sum + (parseFloat(String(e.totalHours)) || 0), 0)
+    : periods.reduce((sum: number, p: PayrollPeriod) => sum + (parseFloat(String(p.totalHours)) || 0), 0);
 
   const StatCard = ({
     title,
@@ -840,8 +839,8 @@ export default function MuiPayrollManagement() {
         <Grid size={{ xs: 12, md: 3 }}>
           <StatCard
             title="Total Disbursed"
-            value={`₱${totalPaid.toLocaleString()}`}
-            subtitle="Paid to employees"
+            value={`₱${totalPaid.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            subtitle={entries.length > 0 && selectedPeriod ? `Net pay for selected period` : "Net pay across all periods"}
             icon={PesoIcon}
             color={theme.palette.success.main}
           />
@@ -849,8 +848,8 @@ export default function MuiPayrollManagement() {
         <Grid size={{ xs: 12, md: 3 }}>
           <StatCard
             title="Hours Logged"
-            value={`${totalHours.toFixed(0)}h`}
-            subtitle="Total work hours"
+            value={`${totalHours.toFixed(1)}h`}
+            subtitle={entries.length > 0 && selectedPeriod ? `Hours for selected period` : "Total work hours"}
             icon={AccessTime}
             color={theme.palette.secondary.main}
           />
