@@ -664,8 +664,11 @@ function WeeklyGridComponent({
       pb: 2, // padding for scrollbar
     }}>
       <Box sx={{
-        minWidth: 800,
-        width: '100%',
+        // Grow to the full table width so the rounded card always encloses every
+        // column. Clamping to the viewport (width:100%) let the wider table overflow,
+        // leaving the card's rounded right corner cutting through the middle of the grid.
+        minWidth: '100%',
+        width: 'max-content',
         bgcolor: isDark ? '#2A2018' : '#FFFFFF',
         borderRadius: 3,
         border: '1px solid',
