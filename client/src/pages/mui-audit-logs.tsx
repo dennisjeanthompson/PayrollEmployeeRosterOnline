@@ -269,7 +269,7 @@ export default function MuiAuditLogs() {
         const action = data?.auditLog?.action || "unknown";
         const entity = data?.auditLog?.entityType || "unknown";
         const user = data?.auditLog?.userName || "Unknown user";
-        setSnackbarMessage(`${user} â€” ${actionLabels[action] || action} (${entityTypeLabels[entity] || entity})`);
+        setSnackbarMessage(`${user} — ${actionLabels[action] || action} (${entityTypeLabels[entity] || entity})`);
         setSnackbarOpen(true);
         refetchLogs();
       }
@@ -377,7 +377,7 @@ export default function MuiAuditLogs() {
             </Tooltip>
           </Stack>
           <Typography variant="body2" color="text.secondary">
-            Track all system changes for compliance â€” updates appear in real time
+            Track all system changes for compliance — updates appear in real time
           </Typography>
         </Box>
       </Box>

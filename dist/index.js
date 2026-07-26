@@ -599,29 +599,29 @@ var init_schema = __esm({
       breakDurationMinutes: z.number().optional().nullable()
     });
     insertShiftTradeSchema = z.object({
-      id: z.string().uuid().optional(),
-      shiftId: z.string().uuid(),
-      fromUserId: z.string().uuid().optional(),
-      toUserId: z.string().uuid().optional(),
+      id: z.string().min(1).optional(),
+      shiftId: z.string().min(1),
+      fromUserId: z.string().min(1).optional(),
+      toUserId: z.string().min(1).optional(),
       reason: z.string().min(1, "Reason is required"),
       status: z.enum(["open", "pending", "accepted", "approved", "rejected", "cancelled"]).default("pending"),
       urgency: z.enum(["urgent", "normal", "low"]).default("normal"),
       notes: z.string().optional(),
       requestedAt: z.date().optional(),
       approvedAt: z.date().optional(),
-      approvedBy: z.string().uuid().optional(),
-      counterShiftId: z.string().uuid().optional().nullable(),
+      approvedBy: z.string().min(1).optional(),
+      counterShiftId: z.string().min(1).optional().nullable(),
       expiresAt: z.date().optional().nullable(),
       createdAt: z.date().optional(),
       updatedAt: z.date().optional()
     });
     createShiftTradeSchema = z.object({
-      shiftId: z.string().uuid(),
-      toUserId: z.string().uuid().optional(),
+      shiftId: z.string().min(1),
+      toUserId: z.string().min(1).optional(),
       reason: z.string().min(1, "Reason is required"),
       urgency: z.enum(["urgent", "normal", "low"]).default("normal"),
       notes: z.string().optional(),
-      counterShiftId: z.string().uuid().optional().nullable()
+      counterShiftId: z.string().min(1).optional().nullable()
     });
     insertPayrollPeriodSchema = createInsertSchema(payrollPeriods).omit({
       id: true,
@@ -1689,27 +1689,39 @@ var init_db_storage = __esm({
         await db.insert(auditLogs).values(log2);
         return log2;
       }
-      async getAuditLogs(params) {
+      // Build the WHERE conditions shared by getAuditLogs / getAuditLogsCount.
+      // When branchId is supplied, scope to logs whose acting user belongs to that branch.
+      buildAuditLogConditions(params) {
         const conditions = [];
+        if (params.branchId) conditions.push(eq(users.branchId, params.branchId));
         if (params.entityType) conditions.push(eq(auditLogs.entityType, params.entityType));
         if (params.action) conditions.push(eq(auditLogs.action, params.action));
         if (params.entityId) conditions.push(eq(auditLogs.entityId, params.entityId));
         if (params.userId) conditions.push(eq(auditLogs.userId, params.userId));
         if (params.startDate) conditions.push(gte(auditLogs.createdAt, params.startDate));
         if (params.endDate) conditions.push(lte(auditLogs.createdAt, params.endDate));
-        const whereClause = conditions.length > 0 ? and(...conditions) : void 0;
-        const logs = await db.select().from(auditLogs).where(whereClause).orderBy(desc(auditLogs.createdAt)).limit(params.limit || 50).offset(params.offset || 0);
-        return logs;
+        return conditions.length > 0 ? and(...conditions) : void 0;
       }
-      async getAuditLogStats() {
+      async getAuditLogs(params) {
+        const whereClause = this.buildAuditLogConditions(params);
+        const rows = await db.select({ log: auditLogs }).from(auditLogs).leftJoin(users, eq(auditLogs.userId, users.id)).where(whereClause).orderBy(desc(auditLogs.createdAt)).limit(params.limit || 50).offset(params.offset || 0);
+        return rows.map((r) => r.log);
+      }
+      async getAuditLogsCount(params) {
+        const whereClause = this.buildAuditLogConditions(params);
+        const [row2] = await db.select({ count: sql2`count(*)` }).from(auditLogs).leftJoin(users, eq(auditLogs.userId, users.id)).where(whereClause);
+        return Number(row2?.count ?? 0);
+      }
+      async getAuditLogStats(branchId) {
+        const whereClause = branchId ? eq(users.branchId, branchId) : void 0;
         const actionCounts = await db.select({
           action: auditLogs.action,
           count: sql2`count(*)`
-        }).from(auditLogs).groupBy(auditLogs.action);
+        }).from(auditLogs).leftJoin(users, eq(auditLogs.userId, users.id)).where(whereClause).groupBy(auditLogs.action);
         const entityTypeCounts = await db.select({
           entityType: auditLogs.entityType,
           count: sql2`count(*)`
-        }).from(auditLogs).groupBy(auditLogs.entityType);
+        }).from(auditLogs).leftJoin(users, eq(auditLogs.userId, users.id)).where(whereClause).groupBy(auditLogs.entityType);
         const byAction = {};
         actionCounts.forEach((row2) => {
           byAction[row2.action] = Number(row2.count);
@@ -2508,13 +2520,25 @@ var init_storage = __esm({
         this.auditLogs.set(logData.id, log2);
         return log2;
       }
-      async getAuditLogs(params) {
+      filterAuditLogs(params) {
         let logs = Array.from(this.auditLogs.values());
+        if (params.branchId) {
+          logs = logs.filter((log2) => {
+            const actor = this.users.get(log2.userId);
+            return actor?.branchId === params.branchId;
+          });
+        }
         if (params.entityType) {
           logs = logs.filter((log2) => log2.entityType === params.entityType);
         }
         if (params.action) {
           logs = logs.filter((log2) => log2.action === params.action);
+        }
+        if (params.entityId) {
+          logs = logs.filter((log2) => log2.entityId === params.entityId);
+        }
+        if (params.userId) {
+          logs = logs.filter((log2) => log2.userId === params.userId);
         }
         if (params.startDate) {
           logs = logs.filter((log2) => log2.createdAt && new Date(log2.createdAt) >= params.startDate);
@@ -2522,6 +2546,10 @@ var init_storage = __esm({
         if (params.endDate) {
           logs = logs.filter((log2) => log2.createdAt && new Date(log2.createdAt) <= params.endDate);
         }
+        return logs;
+      }
+      async getAuditLogs(params) {
+        const logs = this.filterAuditLogs(params);
         logs.sort((a, b) => {
           const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
           const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
@@ -2531,8 +2559,11 @@ var init_storage = __esm({
         const limit = params.limit || 50;
         return logs.slice(offset, offset + limit);
       }
-      async getAuditLogStats() {
-        const logs = Array.from(this.auditLogs.values());
+      async getAuditLogsCount(params) {
+        return this.filterAuditLogs(params).length;
+      }
+      async getAuditLogStats(branchId) {
+        const logs = this.filterAuditLogs({ branchId });
         const byAction = {};
         const byEntityType = {};
         for (const log2 of logs) {
@@ -4090,11 +4121,16 @@ router.get("/api/audit-logs", requireAuth, requireManagerRole, async (req, res) 
     } = req.query;
     const parsedLimit = Math.min(Math.max(parseInt(limit) || 50, 1), 500);
     const parsedOffset = Math.max(parseInt(offset) || 0, 0);
-    const logs = await dbStorage.getAuditLogs({
+    const scopeBranchId = req.user?.role === "admin" ? void 0 : req.user?.branchId;
+    const filters = {
+      branchId: scopeBranchId,
       entityType,
       action,
       startDate: startDate ? new Date(startDate) : void 0,
-      endDate: endDate ? new Date(endDate) : void 0,
+      endDate: endDate ? new Date(endDate) : void 0
+    };
+    const logs = await dbStorage.getAuditLogs({
+      ...filters,
       limit: parsedLimit,
       offset: parsedOffset
     });
@@ -4109,8 +4145,8 @@ router.get("/api/audit-logs", requireAuth, requireManagerRole, async (req, res) 
       }
       return { ...log2, userName };
     }));
-    const stats = await dbStorage.getAuditLogStats();
-    res.json({ logs: enrichedLogs, total: stats.totalLogs });
+    const total = await dbStorage.getAuditLogsCount(filters);
+    res.json({ logs: enrichedLogs, total });
   } catch (error) {
     console.error("Error fetching audit logs:", error);
     res.status(500).json({ message: "Failed to fetch audit logs" });
@@ -4151,7 +4187,8 @@ router.post("/api/audit-logs", requireAuth, requireManagerRole, async (req, res)
 });
 router.get("/api/audit-logs/stats", requireAuth, requireManagerRole, async (req, res) => {
   try {
-    const stats = await dbStorage.getAuditLogStats();
+    const scopeBranchId = req.user?.role === "admin" ? void 0 : req.user?.branchId;
+    const stats = await dbStorage.getAuditLogStats(scopeBranchId);
     res.json({ stats });
   } catch (error) {
     console.error("Error fetching audit log stats:", error);
@@ -4161,7 +4198,9 @@ router.get("/api/audit-logs/stats", requireAuth, requireManagerRole, async (req,
 router.get("/api/audit-logs/export", requireAuth, requireManagerRole, async (req, res) => {
   try {
     const { entityType, action, startDate, endDate } = req.query;
+    const scopeBranchId = req.user?.role === "admin" ? void 0 : req.user?.branchId;
     const logs = await dbStorage.getAuditLogs({
+      branchId: scopeBranchId,
       entityType,
       action,
       startDate: startDate ? new Date(startDate) : void 0,
@@ -5664,6 +5703,7 @@ function getPaymentDateString(periodEndDate) {
 }
 
 // server/routes/payslips.ts
+init_deductions();
 var router4 = Router5();
 var storage4 = dbStorage;
 var DEFAULT_COMPANY_INFO = {
@@ -5685,6 +5725,90 @@ async function getCompanyInfo() {
     logo_url: settings.logoUrl || "",
     phone: settings.phone || "",
     email: settings.email || ""
+  };
+}
+async function buildPayslipData(p) {
+  let payBreakdown = {};
+  if (p.entry.payBreakdown) {
+    try {
+      payBreakdown = JSON.parse(p.entry.payBreakdown);
+    } catch {
+    }
+  }
+  const basicPay = parseFloat(String(p.entry.basicPay || p.entry.grossPay || 0));
+  const overtimePay = parseFloat(String(p.entry.overtimePay || 0));
+  const nightDiffPay = parseFloat(String(p.entry.nightDiffPay || 0));
+  const holidayPay = parseFloat(String(p.entry.holidayPay || 0));
+  const restDayPay = parseFloat(String(p.entry.restDayPay || 0));
+  const serviceChargePay = parseFloat(String(p.entry.serviceCharge || 0));
+  const sssContrib = parseFloat(String(p.entry.sssContribution || 0));
+  const sssLoan = parseFloat(String(p.entry.sssLoan || 0));
+  const philHealth = parseFloat(String(p.entry.philHealthContribution || 0));
+  const pagibig = parseFloat(String(p.entry.pagibigContribution || 0));
+  const pagibigLoan = parseFloat(String(p.entry.pagibigLoan || 0));
+  const tax = parseFloat(String(p.entry.withholdingTax || 0));
+  const otherDed = parseFloat(String(p.entry.otherDeductions || 0));
+  const otMultiplierUsed = payBreakdown?.overtimeMultiplier ? Math.round(payBreakdown.overtimeMultiplier * 100) : 125;
+  const earnings = [];
+  if (basicPay > 0) earnings.push({ code: "BASIC", label: "Basic Salary", hours: parseFloat(String(p.entry.regularHours || 0)), rate: parseFloat(String(p.employee.hourlyRate || 0)), amount: basicPay });
+  earnings.push({ code: "OT", label: `Overtime Pay (${otMultiplierUsed}%)`, hours: parseFloat(String(p.entry.overtimeHours || 0)), amount: overtimePay, is_overtime: true, multiplier: otMultiplierUsed });
+  if (nightDiffPay > 0) earnings.push({ code: "ND", label: "Night Differential (10%)", hours: parseFloat(String(p.entry.nightDiffHours || 0)), amount: nightDiffPay });
+  earnings.push({ code: "HOL", label: "Holiday Pay", amount: holidayPay });
+  if (restDayPay > 0) earnings.push({ code: "RD", label: "Rest Day Premium", amount: restDayPay });
+  if (serviceChargePay > 0) earnings.push({ code: "SC", label: "Service Charge (RA 11360)", amount: serviceChargePay });
+  const deductions = [];
+  if (sssContrib > 0) deductions.push({ code: "SSS_EE", label: "SSS (Employee)", amount: sssContrib });
+  if (sssLoan > 0) deductions.push({ code: "SSS_LOAN", label: "SSS Loan", amount: sssLoan, is_loan: true });
+  if (philHealth > 0) deductions.push({ code: "PH_EE", label: "PhilHealth (Employee)", amount: philHealth });
+  if (pagibig > 0) deductions.push({ code: "PB_EE", label: "Pag-IBIG (Employee)", amount: pagibig });
+  if (pagibigLoan > 0) deductions.push({ code: "PB_LOAN", label: "Pag-IBIG Loan", amount: pagibigLoan, is_loan: true });
+  if (tax > 0) deductions.push({ code: "WHT", label: "Withholding Tax", amount: tax });
+  if (otherDed > 0) deductions.push({ code: "OTHER", label: "Other Deductions", amount: otherDed });
+  const monthlyBasicSalary = parseFloat(String(p.employee.hourlyRate || 0)) * MONTHLY_WORKING_HOURS;
+  const sssEmployerShare = await calculateSSSEmployerShare(monthlyBasicSalary);
+  const employerContributions = [
+    { code: "SSS_ER", label: "SSS (Employer Share)", amount: sssEmployerShare },
+    { code: "PH_ER", label: "PhilHealth (Employer Share)", amount: philHealth },
+    { code: "PB_ER", label: "Pag-IBIG (Employer Share)", amount: pagibig }
+  ].filter((c) => c.amount > 0);
+  const companyInfo = await getCompanyInfo();
+  const companyDbSettings = await storage4.getCompanySettings();
+  return {
+    payslip_id: p.payslipId,
+    company: companyInfo,
+    employee: {
+      id: `DM-EMP-${p.employee.id.substring(0, 6).toUpperCase()}`,
+      name: `${p.employee.firstName} ${p.employee.lastName}`,
+      position: p.employee.position,
+      department: "Operations",
+      tin: p.employee.tin ? `XXX-XXX-${p.employee.tin.slice(-4)}` : "\u2014",
+      sss: p.employee.sssNumber ? `XX-XXXX${p.employee.sssNumber.slice(-4)}` : "\u2014",
+      philhealth: p.employee.philhealthNumber ? `XX-XXXXXX${p.employee.philhealthNumber.slice(-4)}` : "\u2014",
+      pagibig: p.employee.pagibigNumber ? `XXXX-XXXX-${p.employee.pagibigNumber.slice(-4)}` : "\u2014",
+      is_mwe: p.employee.isMwe || false
+    },
+    pay_period: {
+      start: toLocalDateString(p.period.startDate),
+      end: toLocalDateString(p.period.endDate),
+      payment_date: p.entry.paidAt ? toLocalDateString(new Date(p.entry.paidAt)) : getPaymentDateString(p.period.endDate),
+      frequency: "semi-monthly"
+    },
+    earnings,
+    deductions,
+    gross: parseFloat(String(p.entry.grossPay || 0)),
+    total_deductions: parseFloat(String(p.entry.totalDeductions || p.entry.deductions || 0)),
+    net_pay: parseFloat(String(p.entry.netPay || 0)),
+    ytd: { gross: 0, deductions: 0, net: 0 },
+    employer_contributions: employerContributions,
+    payment_method: {
+      type: companyDbSettings?.paymentMethod || "Bank Transfer",
+      bank: companyDbSettings?.bankName || "",
+      account_last4: companyDbSettings?.bankAccountNo ? "****" + companyDbSettings.bankAccountNo.slice(-4) : "****"
+    },
+    verification_code: p.verificationHash,
+    generated_at: (/* @__PURE__ */ new Date()).toISOString(),
+    rates_effective_from: p.ratesEffectiveFrom,
+    tamper_hash: `sha256:${p.verificationHash}`
   };
 }
 var requireAuth5 = (req, res, next) => {
@@ -5739,135 +5863,7 @@ router4.get("/entry/:entryId", requireAuth5, async (req, res) => {
     const payslipId = `DM-${(/* @__PURE__ */ new Date()).getFullYear()}${String((/* @__PURE__ */ new Date()).getMonth() + 1).padStart(2, "0")}${String((/* @__PURE__ */ new Date()).getDate()).padStart(2, "0")}-${entryId.substring(0, 6).toUpperCase()}`;
     const timestamp2 = Date.now();
     const tamperHash = generatePayslipHash(payslipId, employee.id, timestamp2);
-    const earnings = [];
-    const basicPay = parseFloat(String(entry.basicPay || entry.grossPay || 0));
-    const overtimePay = parseFloat(String(entry.overtimePay || 0));
-    const nightDiffPay = parseFloat(String(entry.nightDiffPay || 0));
-    const holidayPay = parseFloat(String(entry.holidayPay || 0));
-    const restDayPay = parseFloat(String(entry.restDayPay || 0));
-    if (basicPay > 0) {
-      earnings.push({
-        code: "BASIC",
-        label: "Basic Salary",
-        hours: parseFloat(String(entry.regularHours || 0)),
-        rate: parseFloat(String(employee.hourlyRate || 0)),
-        amount: basicPay
-      });
-    }
-    const otMultiplierUsed = payBreakdown?.overtimeMultiplier ? Math.round(payBreakdown.overtimeMultiplier * 100) : 125;
-    earnings.push({
-      code: "OT",
-      label: `Overtime Pay (${otMultiplierUsed}%)`,
-      hours: parseFloat(String(entry.overtimeHours || 0)),
-      amount: overtimePay,
-      is_overtime: true,
-      multiplier: otMultiplierUsed
-    });
-    if (nightDiffPay > 0) {
-      earnings.push({
-        code: "ND",
-        label: "Night Differential (10%)",
-        hours: parseFloat(String(entry.nightDiffHours || 0)),
-        amount: nightDiffPay
-      });
-    }
-    earnings.push({
-      code: "HOL",
-      label: "Holiday Pay",
-      amount: holidayPay
-    });
-    if (restDayPay > 0) {
-      earnings.push({
-        code: "RD",
-        label: "Rest Day Premium",
-        amount: restDayPay
-      });
-    }
-    const serviceChargePay = parseFloat(String(entry.serviceCharge || 0));
-    if (serviceChargePay > 0) {
-      earnings.push({
-        code: "SC",
-        label: "Service Charge (RA 11360)",
-        amount: serviceChargePay
-      });
-    }
-    const deductions = [];
-    const sssContrib = parseFloat(String(entry.sssContribution || 0));
-    const sssLoan = parseFloat(String(entry.sssLoan || 0));
-    const philHealth = parseFloat(String(entry.philHealthContribution || 0));
-    const pagibig = parseFloat(String(entry.pagibigContribution || 0));
-    const pagibigLoan = parseFloat(String(entry.pagibigLoan || 0));
-    const tax = parseFloat(String(entry.withholdingTax || 0));
-    const otherDed = parseFloat(String(entry.otherDeductions || 0));
-    if (sssContrib > 0) {
-      deductions.push({ code: "SSS_EE", label: "SSS (Employee)", amount: sssContrib });
-    }
-    if (sssLoan > 0) {
-      deductions.push({ code: "SSS_LOAN", label: "SSS Loan", amount: sssLoan, is_loan: true });
-    }
-    if (philHealth > 0) {
-      deductions.push({ code: "PH_EE", label: "PhilHealth (Employee)", amount: philHealth });
-    }
-    if (pagibig > 0) {
-      deductions.push({ code: "PB_EE", label: "Pag-IBIG (Employee)", amount: pagibig });
-    }
-    if (pagibigLoan > 0) {
-      deductions.push({ code: "PB_LOAN", label: "Pag-IBIG Loan", amount: pagibigLoan, is_loan: true });
-    }
-    if (tax > 0) {
-      deductions.push({ code: "WHT", label: "Withholding Tax", amount: tax });
-    }
-    if (otherDed > 0) {
-      deductions.push({ code: "OTHER", label: "Other Deductions", amount: otherDed });
-    }
-    const employerContributions = [
-      { code: "SSS_ER", label: "SSS (Employer Share)", amount: Math.round(sssContrib * 2 * 100) / 100 },
-      { code: "PH_ER", label: "PhilHealth (Employer Share)", amount: philHealth },
-      { code: "PB_ER", label: "Pag-IBIG (Employer Share)", amount: pagibig }
-    ].filter((c) => c.amount > 0);
-    const companyInfo = await getCompanyInfo();
-    const companyDbSettings = await storage4.getCompanySettings();
-    const payslipData = {
-      payslip_id: payslipId,
-      company: companyInfo,
-      employee: {
-        id: `DM-EMP-${employee.id.substring(0, 6).toUpperCase()}`,
-        name: `${employee.firstName} ${employee.lastName}`,
-        position: employee.position,
-        department: "Operations",
-        tin: employee.tin ? `XXX-XXX-${employee.tin.slice(-4)}` : "\u2014",
-        sss: employee.sssNumber ? `XX-XXXX${employee.sssNumber.slice(-4)}` : "\u2014",
-        philhealth: employee.philhealthNumber ? `XX-XXXXXX${employee.philhealthNumber.slice(-4)}` : "\u2014",
-        pagibig: employee.pagibigNumber ? `XXXX-XXXX-${employee.pagibigNumber.slice(-4)}` : "\u2014",
-        is_mwe: employee.isMwe || false
-      },
-      pay_period: {
-        start: toLocalDateString(period.startDate),
-        end: toLocalDateString(period.endDate),
-        payment_date: entry.paidAt ? toLocalDateString(new Date(entry.paidAt)) : getPaymentDateString(period.endDate),
-        frequency: "semi-monthly"
-      },
-      earnings,
-      deductions,
-      gross: parseFloat(String(entry.grossPay || 0)),
-      total_deductions: parseFloat(String(entry.totalDeductions || entry.deductions || 0)),
-      net_pay: parseFloat(String(entry.netPay || 0)),
-      ytd: {
-        gross: 0,
-        deductions: 0,
-        net: 0
-      },
-      employer_contributions: employerContributions,
-      payment_method: {
-        type: companyDbSettings?.paymentMethod || "Bank Transfer",
-        bank: companyDbSettings?.bankName || "",
-        account_last4: companyDbSettings?.bankAccountNo ? "****" + companyDbSettings.bankAccountNo.slice(-4) : "****"
-      },
-      verification_code: tamperHash,
-      generated_at: (/* @__PURE__ */ new Date()).toISOString(),
-      rates_effective_from: ratesEffectiveFrom,
-      tamper_hash: `sha256:${tamperHash}`
-    };
+    const payslipData = await buildPayslipData({ entry, employee, period, ratesEffectiveFrom, payslipId, verificationHash: tamperHash });
     verificationRecords.set(payslipId, {
       payslip_id: payslipId,
       employee_id: employee.id,
@@ -5976,89 +5972,10 @@ router4.post("/generate-pdf", requireAuth5, async (req, res) => {
     }
     const deductionRates2 = await storage4.getAllDeductionRates();
     const ratesEffectiveFrom = deductionRates2.length > 0 && deductionRates2[0].createdAt ? toLocalDateString(deductionRates2[0].createdAt) : "2025-01-01";
-    let payBreakdown = {};
-    if (entry.payBreakdown) {
-      try {
-        payBreakdown = JSON.parse(entry.payBreakdown);
-      } catch {
-      }
-    }
     const payslipId = `DM-${(/* @__PURE__ */ new Date()).getFullYear()}${String((/* @__PURE__ */ new Date()).getMonth() + 1).padStart(2, "0")}${String((/* @__PURE__ */ new Date()).getDate()).padStart(2, "0")}-${entryId.substring(0, 6).toUpperCase()}`;
     const timestamp2 = Date.now();
     const hash = generatePayslipHash(payslipId, employee.id, timestamp2);
-    const basicPay = parseFloat(String(entry.basicPay || entry.grossPay || 0));
-    const overtimePay = parseFloat(String(entry.overtimePay || 0));
-    const nightDiffPay = parseFloat(String(entry.nightDiffPay || 0));
-    const holidayPay = parseFloat(String(entry.holidayPay || 0));
-    const restDayPay = parseFloat(String(entry.restDayPay || 0));
-    const serviceChargePay = parseFloat(String(entry.serviceCharge || 0));
-    const sssContrib = parseFloat(String(entry.sssContribution || 0));
-    const sssLoan = parseFloat(String(entry.sssLoan || 0));
-    const philHealth = parseFloat(String(entry.philHealthContribution || 0));
-    const pagibig = parseFloat(String(entry.pagibigContribution || 0));
-    const pagibigLoan = parseFloat(String(entry.pagibigLoan || 0));
-    const tax = parseFloat(String(entry.withholdingTax || 0));
-    const otherDed = parseFloat(String(entry.otherDeductions || 0));
-    const otMultiplierUsed = payBreakdown?.overtimeMultiplier ? Math.round(payBreakdown.overtimeMultiplier * 100) : 125;
-    const earnings = [];
-    if (basicPay > 0) earnings.push({ code: "BASIC", label: "Basic Salary", hours: parseFloat(String(entry.regularHours || 0)), rate: parseFloat(String(employee.hourlyRate || 0)), amount: basicPay });
-    earnings.push({ code: "OT", label: `Overtime Pay (${otMultiplierUsed}%)`, hours: parseFloat(String(entry.overtimeHours || 0)), amount: overtimePay, is_overtime: true, multiplier: otMultiplierUsed });
-    if (nightDiffPay > 0) earnings.push({ code: "ND", label: "Night Differential (10%)", hours: parseFloat(String(entry.nightDiffHours || 0)), amount: nightDiffPay });
-    earnings.push({ code: "HOL", label: "Holiday Pay", amount: holidayPay });
-    if (restDayPay > 0) earnings.push({ code: "RD", label: "Rest Day Premium", amount: restDayPay });
-    if (serviceChargePay > 0) earnings.push({ code: "SC", label: "Service Charge (RA 11360)", amount: serviceChargePay });
-    const deductions = [];
-    if (sssContrib > 0) deductions.push({ code: "SSS_EE", label: "SSS (Employee)", amount: sssContrib });
-    if (sssLoan > 0) deductions.push({ code: "SSS_LOAN", label: "SSS Loan", amount: sssLoan, is_loan: true });
-    if (philHealth > 0) deductions.push({ code: "PH_EE", label: "PhilHealth (Employee)", amount: philHealth });
-    if (pagibig > 0) deductions.push({ code: "PB_EE", label: "Pag-IBIG (Employee)", amount: pagibig });
-    if (pagibigLoan > 0) deductions.push({ code: "PB_LOAN", label: "Pag-IBIG Loan", amount: pagibigLoan, is_loan: true });
-    if (tax > 0) deductions.push({ code: "WHT", label: "Withholding Tax", amount: tax });
-    if (otherDed > 0) deductions.push({ code: "OTHER", label: "Other Deductions", amount: otherDed });
-    const employerContributions = [
-      { code: "SSS_ER", label: "SSS (Employer Share)", amount: Math.round(sssContrib * 2 * 100) / 100 },
-      { code: "PH_ER", label: "PhilHealth (Employer Share)", amount: philHealth },
-      { code: "PB_ER", label: "Pag-IBIG (Employer Share)", amount: pagibig }
-    ].filter((c) => c.amount > 0);
-    const companyInfo = await getCompanyInfo();
-    const companyDbSettings = await storage4.getCompanySettings();
-    const data = {
-      payslip_id: payslipId,
-      company: companyInfo,
-      employee: {
-        id: `DM-EMP-${employee.id.substring(0, 6).toUpperCase()}`,
-        name: `${employee.firstName} ${employee.lastName}`,
-        position: employee.position,
-        department: "Operations",
-        tin: employee.tin ? `XXX-XXX-${employee.tin.slice(-4)}` : "\u2014",
-        sss: employee.sssNumber ? `XX-XXXX${employee.sssNumber.slice(-4)}` : "\u2014",
-        philhealth: employee.philhealthNumber ? `XX-XXXXXX${employee.philhealthNumber.slice(-4)}` : "\u2014",
-        pagibig: employee.pagibigNumber ? `XXXX-XXXX-${employee.pagibigNumber.slice(-4)}` : "\u2014",
-        is_mwe: employee.isMwe || false
-      },
-      pay_period: {
-        start: toLocalDateString(period.startDate),
-        end: toLocalDateString(period.endDate),
-        payment_date: entry.paidAt ? toLocalDateString(new Date(entry.paidAt)) : getPaymentDateString(period.endDate),
-        frequency: "semi-monthly"
-      },
-      earnings,
-      deductions,
-      gross: parseFloat(String(entry.grossPay || 0)),
-      total_deductions: parseFloat(String(entry.totalDeductions || entry.deductions || 0)),
-      net_pay: parseFloat(String(entry.netPay || 0)),
-      ytd: { gross: 0, deductions: 0, net: 0 },
-      employer_contributions: employerContributions,
-      payment_method: {
-        type: companyDbSettings?.paymentMethod || "Bank Transfer",
-        bank: companyDbSettings?.bankName || "",
-        account_last4: companyDbSettings?.bankAccountNo ? "****" + companyDbSettings.bankAccountNo.slice(-4) : "****"
-      },
-      verification_code: hash,
-      generated_at: (/* @__PURE__ */ new Date()).toISOString(),
-      rates_effective_from: ratesEffectiveFrom,
-      tamper_hash: `sha256:${hash}`
-    };
+    const data = await buildPayslipData({ entry, employee, period, ratesEffectiveFrom, payslipId, verificationHash: hash });
     verificationRecords.set(payslipId, {
       payslip_id: payslipId,
       employee_id: employee.id,
@@ -11936,6 +11853,14 @@ async function registerRoutes(app2) {
         return res.status(403).json({ message: "Cannot process payroll for another branch" });
       }
       const existingEntries = await storage5.getPayrollEntriesByPeriod(id);
+      const finalizedEntries = existingEntries.filter(
+        (entry) => entry.status === "approved" || entry.status === "paid"
+      );
+      if (finalizedEntries.length > 0) {
+        return res.status(409).json({
+          message: `Cannot reprocess: ${finalizedEntries.length} payroll ${finalizedEntries.length === 1 ? "entry has" : "entries have"} already been approved or paid. Reprocessing would erase those payment records.`
+        });
+      }
       for (const entry of existingEntries) {
         await storage5.deletePayrollEntry(entry.id);
       }
@@ -12213,7 +12138,7 @@ async function registerRoutes(app2) {
         payrollEntries2.push(entry);
         createdEntryIds.push(entry.id);
         totalHours += employeeTotalHours;
-        totalPay += grossPay;
+        totalPay += netPay;
         const notification = await storage5.createNotification({
           userId: employee.id,
           type: "payroll",
@@ -12350,6 +12275,9 @@ async function registerRoutes(app2) {
       if (existing.userId === req.user.id && req.user.role !== "admin") {
         return res.status(403).json({ message: "Conflict of interest: You cannot approve your own payroll entry." });
       }
+      if (existing.status === "paid") {
+        return res.status(409).json({ message: "This entry has already been paid and cannot be re-approved." });
+      }
       const entry = await storage5.updatePayrollEntry(id, { status: "approved" });
       res.json({ entry });
       await createAuditLog({
@@ -12382,6 +12310,12 @@ async function registerRoutes(app2) {
       }
       if (existing.userId === req.user.id && req.user.role !== "admin") {
         return res.status(403).json({ message: "Conflict of interest: You cannot mark your own payroll as paid." });
+      }
+      if (existing.status === "paid") {
+        return res.status(409).json({ message: "This entry has already been marked as paid." });
+      }
+      if (existing.status !== "approved") {
+        return res.status(409).json({ message: "This entry must be approved before it can be marked as paid." });
       }
       const entry = await storage5.updatePayrollEntry(id, { status: "paid", paidAt: /* @__PURE__ */ new Date() });
       if (!entry) {
@@ -13245,11 +13179,14 @@ async function registerRoutes(app2) {
       if (overlappingShift) {
         return res.status(409).json({ message: "You already have an overlapping shift during this time" });
       }
-      const updatedTrade = await storage5.updateShiftTrade(id, {
-        toUserId: userId,
-        status: "accepted"
-        // Employee agreed; still needs manager approval
-      });
+      const takeResult = await db.update(shiftTrades).set({ toUserId: userId, status: "accepted" }).where(and4(
+        eq6(shiftTrades.id, id),
+        inArray2(shiftTrades.status, ["pending", "open"])
+      )).returning();
+      if (takeResult.length === 0) {
+        return res.status(409).json({ message: "This trade is no longer available \u2014 someone may have already taken it." });
+      }
+      const updatedTrade = takeResult[0];
       const shift = await storage5.getShift(trade.shiftId);
       const enrichedTrade = {
         ...updatedTrade,

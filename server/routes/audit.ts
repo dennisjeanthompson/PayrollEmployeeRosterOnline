@@ -48,11 +48,19 @@ router.get("/api/audit-logs", requireAuth, requireManagerRole, async (req, res) 
     const parsedLimit = Math.min(Math.max(parseInt(limit as string) || 50, 1), 500);
     const parsedOffset = Math.max(parseInt(offset as string) || 0, 0);
 
-    const logs = await storage.getAuditLogs({
+    // Managers see only their own branch; admins see everything.
+    const scopeBranchId = req.user?.role === "admin" ? undefined : req.user?.branchId;
+
+    const filters = {
+      branchId: scopeBranchId,
       entityType: entityType as string,
       action: action as string,
       startDate: startDate ? new Date(startDate as string) : undefined,
       endDate: endDate ? new Date(endDate as string) : undefined,
+    };
+
+    const logs = await storage.getAuditLogs({
+      ...filters,
       limit: parsedLimit,
       offset: parsedOffset,
     });
@@ -69,10 +77,10 @@ router.get("/api/audit-logs", requireAuth, requireManagerRole, async (req, res) 
       return { ...log, userName };
     }));
 
-    // Get total count for pagination
-    const stats = await storage.getAuditLogStats();
+    // Total count reflects the SAME filters as the fetched page (for correct pagination)
+    const total = await storage.getAuditLogsCount(filters);
 
-    res.json({ logs: enrichedLogs, total: stats.totalLogs });
+    res.json({ logs: enrichedLogs, total });
   } catch (error) {
     console.error("Error fetching audit logs:", error);
     res.status(500).json({ message: "Failed to fetch audit logs" });
@@ -121,7 +129,8 @@ router.post("/api/audit-logs", requireAuth, requireManagerRole, async (req, res)
 // GET /api/audit-logs/stats - Get audit log statistics
 router.get("/api/audit-logs/stats", requireAuth, requireManagerRole, async (req, res) => {
   try {
-    const stats = await storage.getAuditLogStats();
+    const scopeBranchId = req.user?.role === "admin" ? undefined : req.user?.branchId;
+    const stats = await storage.getAuditLogStats(scopeBranchId);
     res.json({ stats });
   } catch (error) {
     console.error("Error fetching audit log stats:", error);
@@ -134,7 +143,10 @@ router.get("/api/audit-logs/export", requireAuth, requireManagerRole, async (req
   try {
     const { entityType, action, startDate, endDate } = req.query;
 
+    const scopeBranchId = req.user?.role === "admin" ? undefined : req.user?.branchId;
+
     const logs = await storage.getAuditLogs({
+      branchId: scopeBranchId,
       entityType: entityType as string,
       action: action as string,
       startDate: startDate ? new Date(startDate as string) : undefined,

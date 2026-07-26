@@ -2598,8 +2598,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Cannot process payroll for another branch" });
       }
 
-      // Clear any existing entries for this period (e.g., from seed data or re-processing)
+      // Clear any existing entries for this period (e.g., from seed data or re-processing).
+      // Never destroy finalized records: if any entry has already been approved or paid,
+      // reprocessing would wipe those payment records (and their paidAt timestamps).
       const existingEntries = await storage.getPayrollEntriesByPeriod(id);
+      const finalizedEntries = existingEntries.filter(
+        (entry) => entry.status === 'approved' || entry.status === 'paid'
+      );
+      if (finalizedEntries.length > 0) {
+        return res.status(409).json({
+          message: `Cannot reprocess: ${finalizedEntries.length} payroll ${finalizedEntries.length === 1 ? 'entry has' : 'entries have'} already been approved or paid. Reprocessing would erase those payment records.`,
+        });
+      }
       for (const entry of existingEntries) {
         await storage.deletePayrollEntry(entry.id);
       }
@@ -3189,6 +3199,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Conflict of interest: You cannot approve your own payroll entry." });
       }
 
+      // Guard against state regression: a paid entry must not be moved back to 'approved'.
+      if (existing.status === 'paid') {
+        return res.status(409).json({ message: "This entry has already been paid and cannot be re-approved." });
+      }
+
       const entry = await storage.updatePayrollEntry(id, { status: 'approved' });
 
       res.json({ entry });
@@ -3229,6 +3244,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
       if (existing.userId === req.user!.id && req.user!.role !== 'admin') {
         return res.status(403).json({ message: "Conflict of interest: You cannot mark your own payroll as paid." });
+      }
+
+      // Enforce workflow order: an entry must be approved before it can be paid,
+      // and an already-paid entry cannot be paid again.
+      if (existing.status === 'paid') {
+        return res.status(409).json({ message: "This entry has already been marked as paid." });
+      }
+      if (existing.status !== 'approved') {
+        return res.status(409).json({ message: "This entry must be approved before it can be marked as paid." });
       }
 
       const entry = await storage.updatePayrollEntry(id, { status: 'paid', paidAt: new Date() });
@@ -4354,10 +4378,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ message: "You already have an overlapping shift during this time" });
       }
 
-      const updatedTrade = await storage.updateShiftTrade(id, {
-        toUserId: userId,
-        status: "accepted", // Employee agreed; still needs manager approval
-      });
+      // Conditional update: only transition if still open/pending — prevents two
+      // employees from both taking the same open trade in a race.
+      const takeResult = await db.update(shiftTradesTable)
+        .set({ toUserId: userId, status: "accepted" }) // Employee agreed; still needs manager approval
+        .where(and(
+          eq(shiftTradesTable.id, id),
+          inArray(shiftTradesTable.status, ['pending', 'open'])
+        ))
+        .returning();
+      if (takeResult.length === 0) {
+        return res.status(409).json({ message: "This trade is no longer available — someone may have already taken it." });
+      }
+      const updatedTrade = takeResult[0];
 
       // Enrich with shift data
       const shift = await storage.getShift(trade.shiftId);

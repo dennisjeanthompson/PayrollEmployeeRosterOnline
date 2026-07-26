@@ -1261,46 +1261,61 @@ export class DatabaseStorage implements IStorage {
     return log;
   }
 
-  async getAuditLogs(params: { branchId?: string; entityType?: string; action?: string; entityId?: string; userId?: string; startDate?: Date; endDate?: Date; limit?: number; offset?: number }): Promise<AuditLog[]> {
+  // Build the WHERE conditions shared by getAuditLogs / getAuditLogsCount.
+  // When branchId is supplied, scope to logs whose acting user belongs to that branch.
+  private buildAuditLogConditions(params: { branchId?: string; entityType?: string; action?: string; entityId?: string; userId?: string; startDate?: Date; endDate?: Date }) {
     const conditions = [];
-
-    // Filter by branch via join with users if branchId is provided
-    // For now, simpler implementation: ignore branchId if not strictly required or use subquery
-    // Since we can't easily join in this structure without changing return type significantly or mapping
-    // We'll filter by other params first.
-    
+    if (params.branchId) conditions.push(eq(users.branchId, params.branchId));
     if (params.entityType) conditions.push(eq(auditLogs.entityType, params.entityType));
     if (params.action) conditions.push(eq(auditLogs.action, params.action));
     if (params.entityId) conditions.push(eq(auditLogs.entityId, params.entityId));
     if (params.userId) conditions.push(eq(auditLogs.userId, params.userId));
     if (params.startDate) conditions.push(gte(auditLogs.createdAt, params.startDate));
     if (params.endDate) conditions.push(lte(auditLogs.createdAt, params.endDate));
+    return conditions.length > 0 ? and(...conditions) : undefined;
+  }
 
-    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+  async getAuditLogs(params: { branchId?: string; entityType?: string; action?: string; entityId?: string; userId?: string; startDate?: Date; endDate?: Date; limit?: number; offset?: number }): Promise<AuditLog[]> {
+    const whereClause = this.buildAuditLogConditions(params);
 
-    const logs = await db.select().from(auditLogs)
+    // Join users so branch scoping can filter on the acting user's branch.
+    const rows = await db.select({ log: auditLogs }).from(auditLogs)
+      .leftJoin(users, eq(auditLogs.userId, users.id))
       .where(whereClause)
       .orderBy(desc(auditLogs.createdAt))
       .limit(params.limit || 50)
       .offset(params.offset || 0);
 
-    return logs;
+    return rows.map(r => r.log);
   }
 
-  async getAuditLogStats(): Promise<{ totalLogs: number; byAction: Record<string, number>; byEntityType: Record<string, number> }> {
-    // Global stats if no branchId provided in interface
-    const actionCounts = await db.select({ 
-      action: auditLogs.action, 
-      count: sql<number>`count(*)` 
+  async getAuditLogsCount(params: { branchId?: string; entityType?: string; action?: string; entityId?: string; userId?: string; startDate?: Date; endDate?: Date }): Promise<number> {
+    const whereClause = this.buildAuditLogConditions(params);
+    const [row] = await db.select({ count: sql<number>`count(*)` }).from(auditLogs)
+      .leftJoin(users, eq(auditLogs.userId, users.id))
+      .where(whereClause);
+    return Number(row?.count ?? 0);
+  }
+
+  async getAuditLogStats(branchId?: string): Promise<{ totalLogs: number; byAction: Record<string, number>; byEntityType: Record<string, number> }> {
+    const whereClause = branchId ? eq(users.branchId, branchId) : undefined;
+
+    const actionCounts = await db.select({
+      action: auditLogs.action,
+      count: sql<number>`count(*)`
     })
     .from(auditLogs)
+    .leftJoin(users, eq(auditLogs.userId, users.id))
+    .where(whereClause)
     .groupBy(auditLogs.action);
 
-    const entityTypeCounts = await db.select({ 
-      entityType: auditLogs.entityType, 
-      count: sql<number>`count(*)` 
+    const entityTypeCounts = await db.select({
+      entityType: auditLogs.entityType,
+      count: sql<number>`count(*)`
     })
     .from(auditLogs)
+    .leftJoin(users, eq(auditLogs.userId, users.id))
+    .where(whereClause)
     .groupBy(auditLogs.entityType);
 
     const byAction: Record<string, number> = {};

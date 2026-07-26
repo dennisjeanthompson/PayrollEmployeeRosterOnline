@@ -165,7 +165,7 @@ export default function MuiBranches({ isEmbedded = false }: { isEmbedded?: boole
       const ok = await switchBranch(branchId);
       if (ok) {
         invalidateQueries.branchSwitch();
-        toast({ title: `Switched to branch â€” all pages updated` });
+        toast({ title: `Switched to branch — all pages updated` });
       } else {
         toast({ title: 'Failed to switch branch', variant: 'destructive' });
       }

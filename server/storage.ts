@@ -89,6 +89,7 @@ export interface IStorage {
   // Audit Logs
   createAuditLog(log: InsertAuditLog & { id: string }): Promise<AuditLog>;
   getAuditLogs(params: {
+    branchId?: string;
     entityType?: string;
     action?: string;
     entityId?: string;
@@ -98,7 +99,16 @@ export interface IStorage {
     limit?: number;
     offset?: number;
   }): Promise<AuditLog[]>;
-  getAuditLogStats(): Promise<{ totalLogs: number; byAction: Record<string, number>; byEntityType: Record<string, number> }>;
+  getAuditLogsCount(params: {
+    branchId?: string;
+    entityType?: string;
+    action?: string;
+    entityId?: string;
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<number>;
+  getAuditLogStats(branchId?: string): Promise<{ totalLogs: number; byAction: Record<string, number>; byEntityType: Record<string, number> }>;
 
   // Reports helpers
   getPayrollEntriesForDateRange(branchId: string, startDate: Date, endDate: Date): Promise<PayrollEntry[]>;
@@ -915,21 +925,34 @@ export class MemStorage implements IStorage {
     return log;
   }
 
-  async getAuditLogs(params: {
+  private filterAuditLogs(params: {
+    branchId?: string;
     entityType?: string;
     action?: string;
+    entityId?: string;
+    userId?: string;
     startDate?: Date;
     endDate?: Date;
-    limit?: number;
-    offset?: number;
-  }): Promise<AuditLog[]> {
+  }): AuditLog[] {
     let logs = Array.from(this.auditLogs.values());
-    
+
+    if (params.branchId) {
+      logs = logs.filter(log => {
+        const actor = this.users.get(log.userId);
+        return actor?.branchId === params.branchId;
+      });
+    }
     if (params.entityType) {
       logs = logs.filter(log => log.entityType === params.entityType);
     }
     if (params.action) {
       logs = logs.filter(log => log.action === params.action);
+    }
+    if (params.entityId) {
+      logs = logs.filter(log => log.entityId === params.entityId);
+    }
+    if (params.userId) {
+      logs = logs.filter(log => log.userId === params.userId);
     }
     if (params.startDate) {
       logs = logs.filter(log => log.createdAt && new Date(log.createdAt) >= params.startDate!);
@@ -937,29 +960,57 @@ export class MemStorage implements IStorage {
     if (params.endDate) {
       logs = logs.filter(log => log.createdAt && new Date(log.createdAt) <= params.endDate!);
     }
-    
+
+    return logs;
+  }
+
+  async getAuditLogs(params: {
+    branchId?: string;
+    entityType?: string;
+    action?: string;
+    entityId?: string;
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+    limit?: number;
+    offset?: number;
+  }): Promise<AuditLog[]> {
+    const logs = this.filterAuditLogs(params);
+
     // Sort by date descending
     logs.sort((a, b) => {
       const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
       return dateB - dateA;
     });
-    
+
     const offset = params.offset || 0;
     const limit = params.limit || 50;
     return logs.slice(offset, offset + limit);
   }
 
-  async getAuditLogStats(): Promise<{ totalLogs: number; byAction: Record<string, number>; byEntityType: Record<string, number> }> {
-    const logs = Array.from(this.auditLogs.values());
+  async getAuditLogsCount(params: {
+    branchId?: string;
+    entityType?: string;
+    action?: string;
+    entityId?: string;
+    userId?: string;
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<number> {
+    return this.filterAuditLogs(params).length;
+  }
+
+  async getAuditLogStats(branchId?: string): Promise<{ totalLogs: number; byAction: Record<string, number>; byEntityType: Record<string, number> }> {
+    const logs = this.filterAuditLogs({ branchId });
     const byAction: Record<string, number> = {};
     const byEntityType: Record<string, number> = {};
-    
+
     for (const log of logs) {
       byAction[log.action] = (byAction[log.action] || 0) + 1;
       byEntityType[log.entityType] = (byEntityType[log.entityType] || 0) + 1;
     }
-    
+
     return { totalLogs: logs.length, byAction, byEntityType };
   }
 
