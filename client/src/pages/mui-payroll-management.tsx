@@ -66,6 +66,7 @@ import Warning from '@mui/icons-material/Warning';
 import Cancel from '@mui/icons-material/Cancel';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExportIcon from '@mui/icons-material/FileDownload';
+import RefreshIcon from '@mui/icons-material/Restore';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
@@ -167,6 +168,19 @@ export default function MuiPayrollManagement() {
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [menuPeriod, setMenuPeriod] = useState<PayrollPeriod | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{ isOpen: boolean; overlapping: any[] }>({ isOpen: false, overlapping: [] });
+  // Period the manager is about to Process / Reopen — drives the confirmation dialogs.
+  const [confirmProcessPeriod, setConfirmProcessPeriod] = useState<PayrollPeriod | null>(null);
+  const [confirmReopenPeriod, setConfirmReopenPeriod] = useState<PayrollPeriod | null>(null);
+
+  // A period is considered "ended" only once its whole end date has passed. Payroll
+  // may only be processed after that, since future days have no logged shifts yet.
+  const getPeriodDaysLeft = (p: { endDate: string | Date } | null): number => {
+    if (!p) return 0;
+    const end = new Date(p.endDate);
+    end.setHours(23, 59, 59, 999);
+    return Math.ceil((end.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+  };
+  const periodHasEnded = (p: { endDate: string | Date } | null): boolean => getPeriodDaysLeft(p) <= 0;
   const openPeriodMenu = (e: React.MouseEvent<HTMLElement>, period: PayrollPeriod) => {
     e.stopPropagation();
     setMenuAnchorEl(e.currentTarget);
@@ -416,6 +430,25 @@ export default function MuiPayrollManagement() {
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
       closePeriodMenu();
+    },
+  });
+
+  const reopenPeriodMutation = useMutation({
+    mutationFn: async (periodId: string) => {
+      const response = await apiRequest("POST", `/api/payroll/periods/${periodId}/reopen`);
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({ message: "Failed to reopen period" }));
+        throw new Error(err.message || "Failed to reopen period");
+      }
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "✓ Period Reopened", description: data.message || "Entries cleared" });
+      queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
+      queryClient.invalidateQueries({ queryKey: ["payroll-entries-branch"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1157,7 +1190,7 @@ export default function MuiPayrollManagement() {
                             }
                             onClick={(e) => {
                               e.stopPropagation();
-                              processPayrollMutation.mutate(period.id);
+                              setConfirmProcessPeriod(period);
                             }}
                             disabled={processPayrollMutation.isPending}
                             sx={{ borderRadius: 2, textTransform: "none", fontWeight: 600 }}
@@ -1290,7 +1323,7 @@ export default function MuiPayrollManagement() {
                 <Button
                   variant="contained"
                   startIcon={<PlayArrow />}
-                  onClick={() => processPayrollMutation.mutate(selectedPeriod.id)}
+                  onClick={() => setConfirmProcessPeriod(selectedPeriod)}
                   sx={{ borderRadius: 2, textTransform: "none" }}
                 >
                   Process Payroll Now
@@ -2169,7 +2202,7 @@ export default function MuiPayrollManagement() {
         {menuPeriod?.status === 'open' && (
           <MenuItem
             onClick={() => {
-              if (menuPeriod) processPayrollMutation.mutate(menuPeriod.id);
+              if (menuPeriod) setConfirmProcessPeriod(menuPeriod);
               closePeriodMenu();
             }}
           >
@@ -2177,6 +2210,15 @@ export default function MuiPayrollManagement() {
             <ListItemText primary="Process Payroll" secondary="Calculate & generate entries" />
           </MenuItem>
         )}
+        <MenuItem
+          onClick={() => {
+            if (menuPeriod) setConfirmReopenPeriod(menuPeriod);
+            closePeriodMenu();
+          }}
+        >
+          <ListItemIcon><RefreshIcon fontSize="small" color="warning" /></ListItemIcon>
+          <ListItemText primary="Reopen & Clear" secondary="Undo processing, wipe entries" />
+        </MenuItem>
         <MenuItem
           onClick={() => {
             if (menuPeriod) {
@@ -2223,6 +2265,111 @@ export default function MuiPayrollManagement() {
           <ListItemText primary="Delete Period" secondary="Remove this payroll period" />
         </MenuItem>
       </Menu>
+
+      {/* Process Confirmation Dialog */}
+      <Dialog
+        open={Boolean(confirmProcessPeriod)}
+        onClose={() => setConfirmProcessPeriod(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 700 }}>
+          <PlayArrow color="success" />
+          Process this payroll period?
+        </DialogTitle>
+        <DialogContent>
+          {confirmProcessPeriod && (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {format(new Date(confirmProcessPeriod.startDate), "MMM d")} – {format(new Date(confirmProcessPeriod.endDate), "MMM d, yyyy")}
+              </Typography>
+              {!periodHasEnded(confirmProcessPeriod) ? (
+                <Alert severity="error" icon={<Warning />}>
+                  This period hasn't ended yet — it ends{" "}
+                  <strong>{format(new Date(confirmProcessPeriod.endDate), "MMM d, yyyy")}</strong>{" "}
+                  ({getPeriodDaysLeft(confirmProcessPeriod)} day{getPeriodDaysLeft(confirmProcessPeriod) === 1 ? "" : "s"} left).
+                  Future days have no logged hours yet, so payroll can only be processed
+                  <strong> once the period is over.</strong>
+                </Alert>
+              ) : (
+                <Alert severity="info">
+                  This generates <strong>pending</strong> payroll entries for all active employees.
+                  Nothing is paid yet — you review each entry, approve it, then mark it paid.
+                </Alert>
+              )}
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 1 }}>
+          <Button onClick={() => setConfirmProcessPeriod(null)} sx={{ textTransform: 'none' }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="success"
+            disabled={!periodHasEnded(confirmProcessPeriod) || processPayrollMutation.isPending}
+            startIcon={processPayrollMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <PlayArrow />}
+            onClick={() => {
+              if (confirmProcessPeriod) {
+                processPayrollMutation.mutate(confirmProcessPeriod.id);
+                setConfirmProcessPeriod(null);
+              }
+            }}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Process Payroll
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Reopen & Clear Confirmation Dialog */}
+      <Dialog
+        open={Boolean(confirmReopenPeriod)}
+        onClose={() => setConfirmReopenPeriod(null)}
+        maxWidth="sm"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3 } }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 700 }}>
+          <RefreshIcon color="warning" />
+          Reopen &amp; clear this period?
+        </DialogTitle>
+        <DialogContent>
+          {confirmReopenPeriod && (
+            <>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                {format(new Date(confirmReopenPeriod.startDate), "MMM d")} – {format(new Date(confirmReopenPeriod.endDate), "MMM d, yyyy")}
+              </Typography>
+              <Alert severity="warning" icon={<Warning />}>
+                This <strong>deletes every generated entry</strong> for this period — including any
+                already approved or paid — and returns it to an <strong>open, unprocessed</strong> state.
+                Use this to undo a processing done by mistake. This cannot be undone.
+              </Alert>
+            </>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 1 }}>
+          <Button onClick={() => setConfirmReopenPeriod(null)} sx={{ textTransform: 'none' }}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="warning"
+            disabled={reopenPeriodMutation.isPending}
+            startIcon={reopenPeriodMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
+            onClick={() => {
+              if (confirmReopenPeriod) {
+                reopenPeriodMutation.mutate(confirmReopenPeriod.id);
+                setConfirmReopenPeriod(null);
+              }
+            }}
+            sx={{ textTransform: 'none', fontWeight: 600 }}
+          >
+            Reopen &amp; Clear
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Duplicate Warning Dialog */}
       <Dialog

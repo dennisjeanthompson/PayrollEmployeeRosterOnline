@@ -11852,6 +11852,15 @@ async function registerRoutes(app2) {
       if (period.branchId !== req.user.branchId) {
         return res.status(403).json({ message: "Cannot process payroll for another branch" });
       }
+      const periodEnd = new Date(period.endDate);
+      periodEnd.setHours(23, 59, 59, 999);
+      const now = /* @__PURE__ */ new Date();
+      if (now < periodEnd) {
+        const daysLeft = Math.ceil((periodEnd.getTime() - now.getTime()) / (1e3 * 60 * 60 * 24));
+        return res.status(409).json({
+          message: `This payroll period hasn't ended yet \u2014 it ends ${format3(new Date(period.endDate), "MMM d, yyyy")} (${daysLeft} day${daysLeft === 1 ? "" : "s"} left). You can process it once the period is over.`
+        });
+      }
       const existingEntries = await storage5.getPayrollEntriesByPeriod(id);
       const finalizedEntries = existingEntries.filter(
         (entry) => entry.status === "approved" || entry.status === "paid"
@@ -12153,13 +12162,9 @@ async function registerRoutes(app2) {
         realTimeManager.broadcastNotification(notification);
       }
       await storage5.updatePayrollPeriod(id, {
-        status: "closed",
         totalHours: totalHours.toString(),
         totalPay: totalPay.toString()
       });
-      for (const entry of payrollEntries2) {
-        await storage5.updatePayrollEntry(entry.id, { status: "paid", paidAt: /* @__PURE__ */ new Date() });
-      }
       res.json({
         message: `Payroll processed successfully for ${payrollEntries2.length} employees`,
         entriesCreated: payrollEntries2.length,
@@ -12194,6 +12199,46 @@ async function registerRoutes(app2) {
       res.status(500).json({
         message: error.message || "Failed to process payroll. All changes have been rolled back."
       });
+    }
+  }));
+  app2.post("/api/payroll/periods/:id/reopen", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
+    try {
+      const { id } = req.params;
+      const period = await storage5.getPayrollPeriod(id);
+      if (!period) {
+        return res.status(404).json({ message: "Payroll period not found" });
+      }
+      if (period.branchId !== req.user.branchId) {
+        return res.status(403).json({ message: "Access denied to this payroll period" });
+      }
+      const entries = await storage5.getPayrollEntriesByPeriod(id);
+      for (const entry of entries) {
+        await storage5.deletePayrollEntry(entry.id);
+      }
+      await storage5.updatePayrollPeriod(id, {
+        status: "open",
+        totalHours: "0",
+        totalPay: "0"
+      });
+      await createAuditLog({
+        action: "payroll_period_reopen",
+        entityType: "payroll_period",
+        entityId: id,
+        userId: req.user.id,
+        oldValues: { status: period.status, entriesCleared: entries.length },
+        newValues: { status: "open" },
+        reason: "Manager reopened the period and cleared its entries",
+        ipAddress: req.ip || req.socket?.remoteAddress,
+        userAgent: req.headers["user-agent"]
+      });
+      const updated = await storage5.getPayrollPeriod(id);
+      res.json({
+        message: `Period reopened \u2014 ${entries.length} ${entries.length === 1 ? "entry" : "entries"} cleared. It is now open and unprocessed.`,
+        period: updated
+      });
+    } catch (error) {
+      console.error("Reopen payroll period error:", error);
+      res.status(500).json({ message: error.message || "Failed to reopen payroll period" });
     }
   }));
   app2.get("/api/payroll/entries/branch", requireAuth9, requireRole3(["manager"]), asyncHandler(async (req, res) => {
