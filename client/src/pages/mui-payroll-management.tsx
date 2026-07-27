@@ -135,6 +135,59 @@ const getStatusColor = (status: string) => {
 
 type PeriodType = 'semi-monthly' | 'month' | 'custom';
 
+// Live "accrued so far" preview shown on open period cards. Fetches hours worked and
+// estimated gross earnings for the elapsed part of the period (informational only —
+// this is NOT processed payroll and nobody is paid from it).
+function AccruedPreview({ periodId }: { periodId: string }) {
+  const { data } = useQuery<{ accruedHours: number; accruedPay: number; asOf: string; employeeCount: number; started: boolean; ended: boolean }>({
+    queryKey: ["payroll-accrued", periodId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/payroll/periods/${periodId}/accrued`);
+      return res.json();
+    },
+    staleTime: 60 * 1000,
+    refetchOnWindowFocus: false,
+  });
+
+  if (!data?.started || (!data.accruedHours && !data.accruedPay)) return null;
+
+  return (
+    <Box
+      sx={{
+        display: "flex",
+        flexWrap: "wrap",
+        alignItems: "center",
+        gap: 1,
+        mb: 1.5,
+        px: 1.5,
+        py: 1,
+        borderRadius: 2,
+        bgcolor: (t) => alpha(t.palette.info.main, 0.06),
+        border: (t) => `1px dashed ${alpha(t.palette.info.main, 0.3)}`,
+      }}
+    >
+      <Speed sx={{ fontSize: 16, color: "info.main" }} />
+      <Typography variant="caption" fontWeight={600} color="info.main">
+        Accrued so far
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        as of {format(new Date(data.asOf), "MMM d")}{data.ended ? " · period ended" : ""}
+        {data.employeeCount ? ` · ${data.employeeCount} staff` : ""}
+      </Typography>
+      <Box sx={{ flexGrow: 1 }} />
+      <Typography variant="body2" fontWeight={600}>
+        {data.accruedHours.toFixed(1)}h
+      </Typography>
+      <Typography variant="body2" fontWeight={700} color="info.main">
+        ≈ ₱{data.accruedPay.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+      </Typography>
+      <Typography variant="caption" color="text.secondary">
+        est. gross
+      </Typography>
+    </Box>
+  );
+}
+
 export default function MuiPayrollManagement() {
   const theme = useTheme();
   const { toast } = useToast();
@@ -1153,6 +1206,8 @@ export default function MuiPayrollManagement() {
                       </Box>
 
                       <Divider sx={{ my: 1.5 }} />
+
+                      {period.status === "open" && <AccruedPreview periodId={period.id} />}
 
                       <Stack direction="row" spacing={1} justifyContent="flex-end">
                         {period.status === "open" && (

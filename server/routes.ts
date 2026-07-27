@@ -3109,6 +3109,65 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
+  // Live "accrued so far" preview for a period: hours worked and estimated GROSS
+  // earnings for the elapsed part of the period (start → today, capped at the end
+  // date). Informational only — it does NOT create entries or change payroll.
+  app.get("/api/payroll/periods/:id/accrued", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
+    try {
+      const { id } = req.params;
+      const period = await storage.getPayrollPeriod(id);
+      if (!period) {
+        return res.status(404).json({ message: "Payroll period not found" });
+      }
+      if (period.branchId !== req.user!.branchId) {
+        return res.status(403).json({ message: "Access denied to this payroll period" });
+      }
+
+      const start = new Date(period.startDate);
+      const end = new Date(period.endDate);
+      end.setHours(23, 59, 59, 999);
+      const now = new Date();
+      const asOf = now < end ? now : end;
+
+      // Period hasn't started yet — nothing accrued.
+      if (asOf < start) {
+        return res.json({ accruedHours: 0, accruedPay: 0, asOf: start.toISOString(), employeeCount: 0, started: false, ended: false });
+      }
+
+      const employees = await storage.getUsersByBranch(period.branchId);
+      const holidays = await storage.getHolidays(start, asOf);
+
+      let accruedHours = 0;
+      let accruedPay = 0;
+      let employeesWithShifts = 0;
+      for (const emp of employees) {
+        if (!emp.isActive) continue;
+        const rate = parseFloat(emp.hourlyRate);
+        if (isNaN(rate) || rate <= 0) continue;
+        const shifts = await storage.getShiftsByUser(emp.id, start, asOf);
+        if (shifts.length === 0) continue;
+        employeesWithShifts++;
+        const calc = calculatePeriodPay(shifts, rate, holidays, -1, false, start, asOf);
+        for (const day of calc.breakdown) {
+          accruedHours += day.regularHours + day.overtimeHours;
+        }
+        accruedPay += calc.totalGrossPay;
+      }
+
+      res.json({
+        accruedHours: Math.round(accruedHours * 100) / 100,
+        accruedPay: Math.round(accruedPay * 100) / 100,
+        asOf: asOf.toISOString(),
+        employeeCount: employeesWithShifts,
+        started: true,
+        ended: now >= end,
+      });
+    } catch (error: any) {
+      console.error('Accrued preview error:', error);
+      res.status(500).json({ message: error.message || "Failed to compute accrued totals" });
+    }
+  }));
+
   // Get all payroll entries for a branch (Manager only)
   app.get("/api/payroll/entries/branch", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {
