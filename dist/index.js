@@ -4432,7 +4432,7 @@ function registerBranchesRoutes(router11) {
 init_db_storage();
 import { Router as Router2 } from "express";
 var storage = dbStorage;
-var MIN_HOURLY_RATE = 50;
+var MIN_HOURLY_RATE = 60;
 var MAX_HOURLY_RATE = 1e4;
 function createEmployeeRouter(realTimeManager) {
   const router11 = Router2();

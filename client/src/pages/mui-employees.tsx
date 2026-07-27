@@ -188,8 +188,8 @@ const initialFormData: EmployeeFormData = {
   isMwe: false,
 };
 
-// Smallest allowed hourly rate. ₱0/negative and the ₱1–₱49 range are rejected.
-const MIN_HOURLY_RATE = 50;
+// Smallest allowed hourly rate. ₱0/negative and anything below the floor are rejected.
+const MIN_HOURLY_RATE = 60;
 
 export default function MuiEmployees() {
   const theme = useTheme();

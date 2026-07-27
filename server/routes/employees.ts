@@ -5,9 +5,9 @@ import { createAuditLog } from './audit';
 
 const storage = dbStorage;
 
-// Minimum allowed hourly rate. Rates of ₱0 or below, and the "ridiculously low"
-// ₱1–₱49 range, are rejected — the smallest valid rate is ₱50/hour.
-const MIN_HOURLY_RATE = 50;
+// Minimum allowed hourly rate. Rates of ₱0 or below, and anything below the
+// floor, are rejected — the smallest valid rate is ₱60/hour.
+const MIN_HOURLY_RATE = 60;
 const MAX_HOURLY_RATE = 10000;
 
 import RealTimeManager from '../services/realtime-manager';
