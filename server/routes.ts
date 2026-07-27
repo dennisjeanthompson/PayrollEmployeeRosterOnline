@@ -2598,18 +2598,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Cannot process payroll for another branch" });
       }
 
-      // Block processing a period that hasn't ended yet. Future days have no logged
-      // shifts, so the payroll would be incomplete. The period is "over" only once the
-      // whole end date has passed.
-      const periodEnd = new Date(period.endDate);
-      periodEnd.setHours(23, 59, 59, 999);
-      const now = new Date();
-      if (now < periodEnd) {
-        const daysLeft = Math.ceil((periodEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        return res.status(409).json({
-          message: `This payroll period hasn't ended yet — it ends ${format(new Date(period.endDate), "MMM d, yyyy")} (${daysLeft} day${daysLeft === 1 ? "" : "s"} left). You can process it once the period is over.`,
-        });
-      }
+      // NOTE: Processing an in-progress period is allowed. Days that haven't happened
+      // yet have no logged shifts, so they contribute ₱0 — i.e. only the accrued
+      // (worked-so-far) portion is processed. The UI warns before doing this.
 
       // Clear any existing entries for this period (e.g., from seed data or re-processing).
       // Never destroy finalized records: if any entry has already been approved or paid,

@@ -2310,12 +2310,12 @@ export default function MuiPayrollManagement() {
                 {format(new Date(confirmProcessPeriod.startDate), "MMM d")} – {format(new Date(confirmProcessPeriod.endDate), "MMM d, yyyy")}
               </Typography>
               {!periodHasEnded(confirmProcessPeriod) ? (
-                <Alert severity="error" icon={<Warning />}>
+                <Alert severity="warning" icon={<Warning />}>
                   This period hasn't ended yet — it ends{" "}
                   <strong>{format(new Date(confirmProcessPeriod.endDate), "MMM d, yyyy")}</strong>{" "}
                   ({getPeriodDaysLeft(confirmProcessPeriod)} day{getPeriodDaysLeft(confirmProcessPeriod) === 1 ? "" : "s"} left).
-                  Future days have no logged hours yet, so payroll can only be processed
-                  <strong> once the period is over.</strong>
+                  You can still process it, but only the <strong>hours worked so far</strong> will
+                  be included — the remaining days will be ₱0. You can re-process after the period ends.
                 </Alert>
               ) : (
                 <Alert severity="info">
@@ -2332,8 +2332,8 @@ export default function MuiPayrollManagement() {
           </Button>
           <Button
             variant="contained"
-            color="success"
-            disabled={!periodHasEnded(confirmProcessPeriod) || processPayrollMutation.isPending}
+            color={confirmProcessPeriod && !periodHasEnded(confirmProcessPeriod) ? "warning" : "success"}
+            disabled={processPayrollMutation.isPending}
             startIcon={processPayrollMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <PlayArrow />}
             onClick={() => {
               if (confirmProcessPeriod) {
@@ -2343,7 +2343,7 @@ export default function MuiPayrollManagement() {
             }}
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >
-            Process Payroll
+            {confirmProcessPeriod && !periodHasEnded(confirmProcessPeriod) ? "Process Anyway" : "Process Payroll"}
           </Button>
         </DialogActions>
       </Dialog>

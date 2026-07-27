@@ -11860,15 +11860,6 @@ async function registerRoutes(app2) {
       if (period.branchId !== req.user.branchId) {
         return res.status(403).json({ message: "Cannot process payroll for another branch" });
       }
-      const periodEnd = new Date(period.endDate);
-      periodEnd.setHours(23, 59, 59, 999);
-      const now = /* @__PURE__ */ new Date();
-      if (now < periodEnd) {
-        const daysLeft = Math.ceil((periodEnd.getTime() - now.getTime()) / (1e3 * 60 * 60 * 24));
-        return res.status(409).json({
-          message: `This payroll period hasn't ended yet \u2014 it ends ${format3(new Date(period.endDate), "MMM d, yyyy")} (${daysLeft} day${daysLeft === 1 ? "" : "s"} left). You can process it once the period is over.`
-        });
-      }
       const existingEntries = await storage5.getPayrollEntriesByPeriod(id);
       const finalizedEntries = existingEntries.filter(
         (entry) => entry.status === "approved" || entry.status === "paid"
