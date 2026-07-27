@@ -4432,6 +4432,8 @@ function registerBranchesRoutes(router11) {
 init_db_storage();
 import { Router as Router2 } from "express";
 var storage = dbStorage;
+var MIN_HOURLY_RATE = 50;
+var MAX_HOURLY_RATE = 1e4;
 function createEmployeeRouter(realTimeManager) {
   const router11 = Router2();
   const requireAuth9 = (req, res, next) => {
@@ -4646,8 +4648,11 @@ function createEmployeeRouter(realTimeManager) {
       if (isNaN(parsedRate) || parsedRate <= 0) {
         return res.status(400).json({ message: "Hourly rate must be greater than \u20B10." });
       }
-      if (parsedRate > 1e4) {
-        return res.status(400).json({ message: "Hourly rate cannot exceed \u20B110,000 per hour." });
+      if (parsedRate < MIN_HOURLY_RATE) {
+        return res.status(400).json({ message: `Hourly rate of \u20B1${parsedRate} is too low. The minimum allowed is \u20B1${MIN_HOURLY_RATE} per hour.` });
+      }
+      if (parsedRate > MAX_HOURLY_RATE) {
+        return res.status(400).json({ message: `Hourly rate cannot exceed \u20B1${MAX_HOURLY_RATE.toLocaleString()} per hour.` });
       }
       const calculatedDailyRate = parsedRate * 8;
       const allowedRoles = req.session.user?.role === "admin" ? ["employee", "manager", "admin"] : ["employee"];
@@ -4764,8 +4769,11 @@ function createEmployeeRouter(realTimeManager) {
         if (isNaN(rate) || rate <= 0) {
           return res.status(400).json({ message: "Hourly rate must be greater than \u20B10." });
         }
-        if (rate > 1e4) {
-          return res.status(400).json({ message: "Hourly rate cannot exceed \u20B110,000 per hour." });
+        if (rate < MIN_HOURLY_RATE) {
+          return res.status(400).json({ message: `Hourly rate of \u20B1${rate} is too low. The minimum allowed is \u20B1${MIN_HOURLY_RATE} per hour.` });
+        }
+        if (rate > MAX_HOURLY_RATE) {
+          return res.status(400).json({ message: `Hourly rate cannot exceed \u20B1${MAX_HOURLY_RATE.toLocaleString()} per hour.` });
         }
         const calculatedDailyRate = rate * 8;
         updates.hourlyRate = String(rate);

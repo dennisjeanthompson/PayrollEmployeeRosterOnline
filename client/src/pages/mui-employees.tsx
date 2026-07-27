@@ -82,6 +82,7 @@ import PhoneIcon from '@mui/icons-material/Phone';
 import CloseIcon from '@mui/icons-material/Close';
 import SaveIcon from '@mui/icons-material/Save';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import WarningIcon from '@mui/icons-material/Warning';
 import DownloadIcon from '@mui/icons-material/Download';
 import UploadIcon from '@mui/icons-material/Upload';
 import ScheduleIcon from '@mui/icons-material/Schedule';
@@ -187,6 +188,9 @@ const initialFormData: EmployeeFormData = {
   isMwe: false,
 };
 
+// Smallest allowed hourly rate. ₱0/negative and the ₱1–₱49 range are rejected.
+const MIN_HOURLY_RATE = 50;
+
 export default function MuiEmployees() {
   const theme = useTheme();
   const { toast } = useToast();
@@ -217,6 +221,9 @@ export default function MuiEmployees() {
   const [deductionsFormData, setDeductionsFormData] = useState({
     otherDeductions: "0",
   });
+  // Rate-floor validation popup + edit double-confirmation
+  const [rateError, setRateError] = useState<string | null>(null);
+  const [confirmEditOpen, setConfirmEditOpen] = useState(false);
 
   // Context menu
   const [contextMenu, setContextMenu] = useState<{ mouseX: number; mouseY: number; employee: Employee } | null>(null);
@@ -568,19 +575,42 @@ export default function MuiEmployees() {
     setDeductionsDialogOpen(true);
   }, []);
 
+  // Actually persist an edit — called only after the confirmation dialog is accepted.
+  const performEmployeeUpdate = () => {
+    if (!currentEmployee) return;
+    const updateData = { ...formData };
+    if (!updateData.password || updateData.password === "password123" || updateData.password === "********") {
+      delete (updateData as any).password;
+    }
+    setConfirmEditOpen(false);
+    startTransition(() => {
+      updateEmployee.mutate({ id: currentEmployee.id, data: updateData });
+    });
+  };
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    startTransition(() => {
-      if (isEditing && currentEmployee) {
-        const updateData = { ...formData };
-        if (!updateData.password || updateData.password === "password123" || updateData.password === "********") {
-          delete (updateData as any).password;
-        }
-        updateEmployee.mutate({ id: currentEmployee.id, data: updateData });
-      } else {
+
+    // Guard the hourly rate: never ₱0 or below, and never the "ridiculously low"
+    // ₱1–₱49 range. Smallest valid rate is ₱50/hour.
+    const rate = parseFloat(formData.hourlyRate);
+    if (isNaN(rate) || rate <= 0) {
+      setRateError(`The hourly rate can't be ₱0 or negative. Please enter at least ₱${MIN_HOURLY_RATE} per hour.`);
+      return;
+    }
+    if (rate < MIN_HOURLY_RATE) {
+      setRateError(`₱${rate}/hour is too low. Employees must be paid at least ₱${MIN_HOURLY_RATE} per hour — please enter ₱${MIN_HOURLY_RATE} or more.`);
+      return;
+    }
+
+    if (isEditing && currentEmployee) {
+      // Double confirmation before applying edits
+      setConfirmEditOpen(true);
+    } else {
+      startTransition(() => {
         createEmployee.mutate(formData);
-      }
-    });
+      });
+    }
   };
 
   const handleDeductionsSubmit = (e: React.FormEvent) => {
@@ -1138,8 +1168,13 @@ export default function MuiEmployees() {
                       type="number"
                       value={formData.hourlyRate}
                       onChange={(e) => setFormData({ ...formData, hourlyRate: e.target.value })}
-                      inputProps={{ step: "0.01", min: "1", max: "10000" }}
-                      helperText=""
+                      inputProps={{ step: "0.01", min: String(MIN_HOURLY_RATE), max: "10000" }}
+                      error={formData.hourlyRate !== "" && parseFloat(formData.hourlyRate) < MIN_HOURLY_RATE}
+                      helperText={
+                        formData.hourlyRate !== "" && parseFloat(formData.hourlyRate) < MIN_HOURLY_RATE
+                          ? `Minimum is ₱${MIN_HOURLY_RATE}/hour`
+                          : `At least ₱${MIN_HOURLY_RATE}/hour`
+                      }
                       required
                     />
                   </Grid>
@@ -1247,6 +1282,49 @@ export default function MuiEmployees() {
               </Button>
             </DialogActions>
           </form>
+        </Dialog>
+
+        {/* Rate-too-low popup */}
+        <Dialog open={Boolean(rateError)} onClose={() => setRateError(null)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ display: "flex", alignItems: "center", gap: 1, color: "error.main", fontWeight: 700 }}>
+            <WarningIcon color="error" />
+            Hourly rate too low
+          </DialogTitle>
+          <DialogContent>
+            <DialogContentText>{rateError}</DialogContentText>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button variant="contained" onClick={() => setRateError(null)} sx={{ textTransform: "none" }}>
+              Got it
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Edit double-confirmation */}
+        <Dialog open={confirmEditOpen} onClose={() => setConfirmEditOpen(false)} maxWidth="xs" fullWidth>
+          <DialogTitle sx={{ fontWeight: 700 }}>Save changes to this employee?</DialogTitle>
+          <DialogContent>
+            <DialogContentText>
+              You're about to update{" "}
+              <strong>{currentEmployee?.firstName} {currentEmployee?.lastName}</strong>
+              {formData.hourlyRate ? <> at <strong>₱{formData.hourlyRate}/hour</strong></> : null}. Do you want to apply these changes?
+            </DialogContentText>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setConfirmEditOpen(false)} sx={{ textTransform: "none" }}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              color="primary"
+              onClick={performEmployeeUpdate}
+              disabled={updateEmployee.isPending}
+              startIcon={updateEmployee.isPending ? <CircularProgress size={16} color="inherit" /> : <SaveIcon />}
+              sx={{ textTransform: "none", fontWeight: 600 }}
+            >
+              Confirm &amp; Save
+            </Button>
+          </DialogActions>
         </Dialog>
 
         {/* View Details Dialog */}

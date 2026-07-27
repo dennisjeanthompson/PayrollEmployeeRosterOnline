@@ -5,6 +5,11 @@ import { createAuditLog } from './audit';
 
 const storage = dbStorage;
 
+// Minimum allowed hourly rate. Rates of ₱0 or below, and the "ridiculously low"
+// ₱1–₱49 range, are rejected — the smallest valid rate is ₱50/hour.
+const MIN_HOURLY_RATE = 50;
+const MAX_HOURLY_RATE = 10000;
+
 import RealTimeManager from '../services/realtime-manager';
 
 export function createEmployeeRouter(realTimeManager: RealTimeManager) {
@@ -282,13 +287,16 @@ router.post('/api/employees', requireAuth, requireRole(['manager', 'admin']), as
       return res.status(400).json({ message: 'Missing required fields' });
     }
 
-    // Validate hourlyRate: must be > 0 and ≤ ₱10,000/hr
+    // Validate hourlyRate: must be at least ₱50/hr and ≤ ₱10,000/hr
     const parsedRate = parseFloat(String(hourlyRate));
     if (isNaN(parsedRate) || parsedRate <= 0) {
       return res.status(400).json({ message: 'Hourly rate must be greater than ₱0.' });
     }
-    if (parsedRate > 10000) {
-      return res.status(400).json({ message: 'Hourly rate cannot exceed ₱10,000 per hour.' });
+    if (parsedRate < MIN_HOURLY_RATE) {
+      return res.status(400).json({ message: `Hourly rate of ₱${parsedRate} is too low. The minimum allowed is ₱${MIN_HOURLY_RATE} per hour.` });
+    }
+    if (parsedRate > MAX_HOURLY_RATE) {
+      return res.status(400).json({ message: `Hourly rate cannot exceed ₱${MAX_HOURLY_RATE.toLocaleString()} per hour.` });
     }
 
     const calculatedDailyRate = parsedRate * 8;
@@ -445,8 +453,11 @@ router.put('/api/employees/:id', requireAuth, requireRole(['manager', 'admin']),
       if (isNaN(rate) || rate <= 0) {
         return res.status(400).json({ message: 'Hourly rate must be greater than ₱0.' });
       }
-      if (rate > 10000) {
-        return res.status(400).json({ message: 'Hourly rate cannot exceed ₱10,000 per hour.' });
+      if (rate < MIN_HOURLY_RATE) {
+        return res.status(400).json({ message: `Hourly rate of ₱${rate} is too low. The minimum allowed is ₱${MIN_HOURLY_RATE} per hour.` });
+      }
+      if (rate > MAX_HOURLY_RATE) {
+        return res.status(400).json({ message: `Hourly rate cannot exceed ₱${MAX_HOURLY_RATE.toLocaleString()} per hour.` });
       }
 
       const calculatedDailyRate = rate * 8;
