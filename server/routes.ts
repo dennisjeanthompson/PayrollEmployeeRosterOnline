@@ -3109,58 +3109,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   }));
 
-  // Reopen a payroll period: revert it to 'open' and delete all of its entries.
-  // This is the "undo" for an accidental/premature Process. It deliberately clears
-  // entries even if they were approved/paid — that is the whole point of undoing —
-  // so it is gated behind an explicit manager action + confirmation in the UI.
-  app.post("/api/payroll/periods/:id/reopen", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
-    try {
-      const { id } = req.params;
-
-      const period = await storage.getPayrollPeriod(id);
-      if (!period) {
-        return res.status(404).json({ message: "Payroll period not found" });
-      }
-      if (period.branchId !== req.user!.branchId) {
-        return res.status(403).json({ message: "Access denied to this payroll period" });
-      }
-
-      // Delete every entry for this period
-      const entries = await storage.getPayrollEntriesByPeriod(id);
-      for (const entry of entries) {
-        await storage.deletePayrollEntry(entry.id);
-      }
-
-      // Revert the period to a fresh, unprocessed state
-      await storage.updatePayrollPeriod(id, {
-        status: 'open',
-        totalHours: '0',
-        totalPay: '0',
-      });
-
-      await createAuditLog({
-        action: 'payroll_period_reopen',
-        entityType: 'payroll_period',
-        entityId: id,
-        userId: req.user!.id,
-        oldValues: { status: period.status, entriesCleared: entries.length },
-        newValues: { status: 'open' },
-        reason: 'Manager reopened the period and cleared its entries',
-        ipAddress: req.ip || req.socket?.remoteAddress,
-        userAgent: req.headers["user-agent"],
-      });
-
-      const updated = await storage.getPayrollPeriod(id);
-      res.json({
-        message: `Period reopened — ${entries.length} ${entries.length === 1 ? "entry" : "entries"} cleared. It is now open and unprocessed.`,
-        period: updated,
-      });
-    } catch (error: any) {
-      console.error('Reopen payroll period error:', error);
-      res.status(500).json({ message: error.message || "Failed to reopen payroll period" });
-    }
-  }));
-
   // Get all payroll entries for a branch (Manager only)
   app.get("/api/payroll/entries/branch", requireAuth, requireRole(["manager"]), asyncHandler(async (req, res) => {
     try {

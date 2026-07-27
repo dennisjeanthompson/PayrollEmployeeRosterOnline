@@ -66,7 +66,6 @@ import Warning from '@mui/icons-material/Warning';
 import Cancel from '@mui/icons-material/Cancel';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExportIcon from '@mui/icons-material/FileDownload';
-import RefreshIcon from '@mui/icons-material/Restore';
 import SettingsIcon from '@mui/icons-material/Settings';
 import ToggleOnIcon from '@mui/icons-material/ToggleOn';
 import ToggleOffIcon from '@mui/icons-material/ToggleOff';
@@ -168,9 +167,8 @@ export default function MuiPayrollManagement() {
   const [menuAnchorEl, setMenuAnchorEl] = useState<null | HTMLElement>(null);
   const [menuPeriod, setMenuPeriod] = useState<PayrollPeriod | null>(null);
   const [duplicateWarning, setDuplicateWarning] = useState<{ isOpen: boolean; overlapping: any[] }>({ isOpen: false, overlapping: [] });
-  // Period the manager is about to Process / Reopen — drives the confirmation dialogs.
+  // Period the manager is about to Process — drives the confirmation dialog.
   const [confirmProcessPeriod, setConfirmProcessPeriod] = useState<PayrollPeriod | null>(null);
-  const [confirmReopenPeriod, setConfirmReopenPeriod] = useState<PayrollPeriod | null>(null);
 
   // A period is considered "ended" only once its whole end date has passed. Payroll
   // may only be processed after that, since future days have no logged shifts yet.
@@ -430,25 +428,6 @@ export default function MuiPayrollManagement() {
     onError: (error: any) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
       closePeriodMenu();
-    },
-  });
-
-  const reopenPeriodMutation = useMutation({
-    mutationFn: async (periodId: string) => {
-      const response = await apiRequest("POST", `/api/payroll/periods/${periodId}/reopen`);
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ message: "Failed to reopen period" }));
-        throw new Error(err.message || "Failed to reopen period");
-      }
-      return response.json();
-    },
-    onSuccess: (data) => {
-      toast({ title: "✓ Period Reopened", description: data.message || "Entries cleared" });
-      queryClient.invalidateQueries({ queryKey: ["payroll-periods"] });
-      queryClient.invalidateQueries({ queryKey: ["payroll-entries-branch"] });
-    },
-    onError: (error: any) => {
-      toast({ title: "Error", description: error.message, variant: "destructive" });
     },
   });
 
@@ -2212,15 +2191,6 @@ export default function MuiPayrollManagement() {
         )}
         <MenuItem
           onClick={() => {
-            if (menuPeriod) setConfirmReopenPeriod(menuPeriod);
-            closePeriodMenu();
-          }}
-        >
-          <ListItemIcon><RefreshIcon fontSize="small" color="warning" /></ListItemIcon>
-          <ListItemText primary="Reopen & Clear" secondary="Undo processing, wipe entries" />
-        </MenuItem>
-        <MenuItem
-          onClick={() => {
             if (menuPeriod) {
               setSelectedPeriod(menuPeriod);
               setActiveTab(1);
@@ -2319,54 +2289,6 @@ export default function MuiPayrollManagement() {
             sx={{ textTransform: 'none', fontWeight: 600 }}
           >
             Process Payroll
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Reopen & Clear Confirmation Dialog */}
-      <Dialog
-        open={Boolean(confirmReopenPeriod)}
-        onClose={() => setConfirmReopenPeriod(null)}
-        maxWidth="sm"
-        fullWidth
-        PaperProps={{ sx: { borderRadius: 3 } }}
-      >
-        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1, fontWeight: 700 }}>
-          <RefreshIcon color="warning" />
-          Reopen &amp; clear this period?
-        </DialogTitle>
-        <DialogContent>
-          {confirmReopenPeriod && (
-            <>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-                {format(new Date(confirmReopenPeriod.startDate), "MMM d")} – {format(new Date(confirmReopenPeriod.endDate), "MMM d, yyyy")}
-              </Typography>
-              <Alert severity="warning" icon={<Warning />}>
-                This <strong>deletes every generated entry</strong> for this period — including any
-                already approved or paid — and returns it to an <strong>open, unprocessed</strong> state.
-                Use this to undo a processing done by mistake. This cannot be undone.
-              </Alert>
-            </>
-          )}
-        </DialogContent>
-        <DialogActions sx={{ p: 3, pt: 1 }}>
-          <Button onClick={() => setConfirmReopenPeriod(null)} sx={{ textTransform: 'none' }}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            color="warning"
-            disabled={reopenPeriodMutation.isPending}
-            startIcon={reopenPeriodMutation.isPending ? <CircularProgress size={16} color="inherit" /> : <RefreshIcon />}
-            onClick={() => {
-              if (confirmReopenPeriod) {
-                reopenPeriodMutation.mutate(confirmReopenPeriod.id);
-                setConfirmReopenPeriod(null);
-              }
-            }}
-            sx={{ textTransform: 'none', fontWeight: 600 }}
-          >
-            Reopen &amp; Clear
           </Button>
         </DialogActions>
       </Dialog>
